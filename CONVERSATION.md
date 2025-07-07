@@ -79,6 +79,19 @@
 3. Implementacja web scrapingu
 4. Integracja z OpenAI do analizy danych
 
+## Sesja 3: Refaktoryzacja endpointów
+- Data: [Data sesji]
+- Status: ✅ Zakończona
+
+### Zmiany
+1. Refaktoryzacja endpointu POST /companies:
+   - Zamiast ręcznego mapowania pól, użyto rozpakowywania słownika z company.dict() przy tworzeniu obiektu Company.
+   - Kod jest bardziej czytelny i mniej podatny na błędy przy zmianach modelu wejściowego.
+
+### Następne Kroki
+- Implementacja endpointów dla wskaźników finansowych
+- Podpięcie bazy danych (SQLAlchemy)
+
 ## Uwagi do Synchronizacji
 - Projekt jest w repozytorium Git
 - Wszystkie zmienne środowiskowe są w pliku `.env` (ignorowanym przez Git)

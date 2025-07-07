@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 
 from app.core.config import settings
+from app.api.companies import router as companies_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -57,6 +58,8 @@ async def test_config() -> Dict:
     }
     
     return config_status
+
+app.include_router(companies_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     uvicorn.run(
