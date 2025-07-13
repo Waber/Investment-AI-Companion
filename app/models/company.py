@@ -1,39 +1,39 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from pydantic import BaseModel, Field, HttpUrl
 
 
 class CompanyBase(BaseModel):
-    """Podstawowy model firmy."""
-    name: str = Field(..., description="Nazwa firmy")
-    ticker: str = Field(..., description="Symbol giełdowy")
-    sector: Optional[str] = Field(None, description="Sektor gospodarki")
-    industry: Optional[str] = Field(None, description="Branża")
-    description: Optional[str] = Field(None, description="Krótki opis firmy")
-    website: Optional[HttpUrl] = Field(None, description="Strona internetowa firmy")
-    country: Optional[str] = Field(None, description="Kraj pochodzenia")
-    exchange: Optional[str] = Field(None, description="Giełda, na której notowana jest spółka")
-    currency: Optional[str] = Field("USD", description="Waluta, w której podawane są dane finansowe")
+    """Base company model."""
+    name: str = Field(..., description="Company name")
+    ticker: str = Field(..., description="Stock ticker symbol")
+    sector: Optional[str] = Field(None, description="Economic sector")
+    industry: Optional[str] = Field(None, description="Industry")
+    description: Optional[str] = Field(None, description="Brief company description")
+    website: HttpUrl | None = Field(None, description="Company website")
+    country: Optional[str] = Field(None, description="Country of origin")
+    exchange: Optional[str] = Field(None, description="Stock exchange where the company is listed")
+    currency: Optional[str] = Field("USD", description="Currency for financial data")
 
 
 class CompanyCreate(CompanyBase):
-    """Model do tworzenia nowej firmy."""
+    """Model for creating a new company."""
     pass
 
 
 class CompanyUpdate(CompanyBase):
-    """Model do aktualizacji danych firmy."""
+    """Model for updating company data."""
     name: Optional[str] = None
     ticker: Optional[str] = None
 
 
 class Company(CompanyBase):
-    """Pełny model firmy z dodatkowymi polami."""
-    id: int = Field(..., description="Unikalny identyfikator firmy")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    is_active: bool = Field(default=True, description="Czy firma jest aktywna w systemie")
-    last_data_update: Optional[datetime] = Field(None, description="Data ostatniej aktualizacji danych")
+    """Full company model with additional fields."""
+    id: int = Field(..., description="Unique company identifier")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_active: bool = Field(default=True, description="Whether the company is active in the system")
+    last_data_update: Optional[datetime] = Field(None, description="Date of last data update")
     
     class Config:
-        from_attributes = True  # dla kompatybilności z SQLAlchemy 
+        from_attributes = True  # for SQLAlchemy compatibility 

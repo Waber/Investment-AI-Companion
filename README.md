@@ -1,79 +1,79 @@
 # Investment AI Companion
 
-Aplikacja do analizy spółek giełdowych wykorzystująca sztuczną inteligencję do zbierania i analizy danych z różnych źródeł.
+Application for stock market analysis using artificial intelligence to collect and analyze data from various sources.
 
-## Funkcjonalności
+## Features
 
-- Zbieranie danych o spółkach z giełd amerykańskich, polskich i europejskich
-- Integracja z ChatGPT do analizy danych
-- Web scraping newsów i social media
-- Analiza sentymentu i generowanie raportów
-- Dashboard do prezentacji danych
+- Collecting data about companies from American, Polish and European stock exchanges
+- Integration with ChatGPT for data analysis
+- Web scraping of news and social media
+- Sentiment analysis and report generation
+- Dashboard for data presentation
 
-## Struktura projektu
+## Project Structure
 
 ```
 investment_ai_companion/
 ├── app/
-│   ├── api/                 # Endpointy API
-│   ├── core/               # Konfiguracja i stałe
-│   ├── data_collectors/    # Moduły zbierania danych
-│   ├── ai/                 # Integracja z AI i analiza
-│   ├── models/             # Modele danych
-│   └── services/           # Logika biznesowa
-├── tests/                  # Testy
-├── scripts/                # Skrypty pomocnicze
-├── config/                 # Pliki konfiguracyjne
-└── docs/                   # Dokumentacja
+│   ├── api/                 # API endpoints
+│   ├── core/               # Configuration and constants
+│   ├── data_collectors/    # Data collection modules
+│   ├── ai/                 # AI integration and analysis
+│   ├── models/             # Data models
+│   └── services/           # Business logic
+├── tests/                  # Tests
+├── scripts/                # Helper scripts
+├── config/                 # Configuration files
+└── docs/                   # Documentation
 ```
 
-## Wymagania
+## Requirements
 
 - Python 3.9+
 - PostgreSQL
 - Redis
-- Elasticsearch (opcjonalnie)
+- Elasticsearch (optional)
 
-## Instalacja
+## Installation
 
-1. Sklonuj repozytorium:
+1. Clone the repository:
 ```bash
-git clone [url_repozytorium]
+git clone [repository_url]
 cd investment_ai_companion
 ```
 
-2. Utwórz i aktywuj środowisko wirtualne:
+2. Create and activate virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# lub
+# or
 .\venv\Scripts\activate  # Windows
 ```
 
-3. Zainstaluj zależności:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Skonfiguruj zmienne środowiskowe:
+4. Configure environment variables:
 ```bash
 cp .env.example .env
-# Edytuj plik .env i ustaw odpowiednie wartości
+# Edit .env file and set appropriate values
 ```
 
-5. Uruchom aplikację:
+5. Run the application:
 ```bash
 python main.py
 ```
 
-## Konfiguracja
+## Configuration
 
-Aplikacja wymaga skonfigurowania następujących zmiennych środowiskowych:
-- `OPENAI_API_KEY` - klucz API do ChatGPT
-- `DATABASE_URL` - URL do bazy danych PostgreSQL
-- `REDIS_URL` - URL do Redis
-- `ELASTICSEARCH_URL` - URL do Elasticsearch (opcjonalnie)
+The application requires configuring the following environment variables:
+- `OPENAI_API_KEY` - API key for ChatGPT
+- `DATABASE_URL` - PostgreSQL database URL
+- `REDIS_URL` - Redis URL
+- `ELASTICSEARCH_URL` - Elasticsearch URL (optional)
 
-## Licencja
+## License
 
 MIT

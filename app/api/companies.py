@@ -1,15 +1,15 @@
 from fastapi import APIRouter, HTTPException, status
-from typing import List
+from typing import List, Optional
 from app.models.company import Company, CompanyCreate, CompanyUpdate
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
-# In-memory storage (tymczasowo, do podmiany na bazę danych)
+# In-memory storage (temporarily, to be replaced with database)
 companies_db: List[Company] = []
 company_id_seq = 1
 
-def is_unique_company(name: str, ticker: str, exclude_id: int = None) -> bool:
+def is_unique_company(name: str, ticker: str, exclude_id: Optional[int] = None) -> bool:
     for c in companies_db:
         if exclude_id is not None and c.id == exclude_id:
             continue
@@ -35,11 +35,11 @@ def create_company(company: CompanyCreate):
         raise HTTPException(status_code=400, detail="Company name or ticker must be unique")
     new_company = Company(
         id=company_id_seq,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
         is_active=True,
         last_data_update=None,
-        **company.dict()
+        **company.model_dump()
     )
     companies_db.append(new_company)
     company_id_seq += 1
@@ -49,11 +49,11 @@ def create_company(company: CompanyCreate):
 def update_company(company_id: int, company: CompanyUpdate):
     for idx, c in enumerate(companies_db):
         if c.id == company_id:
-            # Walidacja unikalności (pomijamy aktualizowaną firmę)
+            # Uniqueness validation (excluding the company being updated)
             if not is_unique_company(company.name or c.name, company.ticker or c.ticker, exclude_id=company_id):
                 raise HTTPException(status_code=400, detail="Company name or ticker must be unique")
-            updated = c.copy(update=company.dict(exclude_unset=True))
-            updated.updated_at = datetime.utcnow()
+            updated = c.copy(update=company.model_dump(exclude_unset=True))
+            updated.updated_at = datetime.now(timezone.utc)
             companies_db[idx] = updated
             return updated
     raise HTTPException(status_code=404, detail="Company not found")

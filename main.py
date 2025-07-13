@@ -5,6 +5,7 @@ from typing import Dict
 
 from app.core.config import settings
 from app.api.companies import router as companies_router
+from app.api.financial_metrics import router as financial_metrics_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -32,8 +33,8 @@ async def root():
 @app.get("/api/v1/test-config")
 async def test_config() -> Dict:
     """
-    Endpoint do testowania konfiguracji środowiska.
-    Dostępny tylko w trybie DEBUG.
+    Endpoint for testing environment configuration.
+    Available only in DEBUG mode.
     """
     if not settings.DEBUG:
         raise HTTPException(status_code=403, detail="This endpoint is only available in debug mode")
@@ -60,6 +61,7 @@ async def test_config() -> Dict:
     return config_status
 
 app.include_router(companies_router, prefix=settings.API_V1_STR)
+app.include_router(financial_metrics_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     uvicorn.run(

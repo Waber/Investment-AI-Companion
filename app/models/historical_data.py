@@ -1,51 +1,52 @@
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
 class HistoricalDataBase(BaseModel):
-    """Podstawowy model danych historycznych."""
-    date: datetime = Field(..., description="Data notowania")
-    open_price: Decimal = Field(..., description="Cena otwarcia")
-    high_price: Decimal = Field(..., description="Najwyższa cena")
-    low_price: Decimal = Field(..., description="Najniższa cena")
-    close_price: Decimal = Field(..., description="Cena zamknięcia")
-    volume: int = Field(..., description="Wolumen obrotu")
-    adjusted_close: Optional[Decimal] = Field(None, description="Skorygowana cena zamknięcia")
+    """Base historical data model."""
+    date: datetime = Field(..., description="Trading date")
+    open_price: Decimal = Field(..., description="Opening price")
+    high_price: Decimal = Field(..., description="Highest price")
+    low_price: Decimal = Field(..., description="Lowest price")
+    close_price: Decimal = Field(..., description="Closing price")
+    volume: int = Field(..., description="Trading volume")
+    adjusted_close: Optional[Decimal] = Field(None, description="Adjusted closing price")
     
-    # Dodatkowe dane rynkowe
-    market_cap: Optional[Decimal] = Field(None, description="Kapitalizacja rynkowa")
-    enterprise_value: Optional[Decimal] = Field(None, description="Wartość przedsiębiorstwa")
-    shares_outstanding: Optional[int] = Field(None, description="Liczba akcji w obrocie")
-    avg_volume: Optional[int] = Field(None, description="Średni dzienny wolumen")
+    # Additional market data
+    market_cap: Optional[Decimal] = Field(None, description="Market capitalization")
+    enterprise_value: Optional[Decimal] = Field(None, description="Enterprise value")
+    shares_outstanding: Optional[int] = Field(None, description="Shares outstanding")
+    avg_volume: Optional[int] = Field(None, description="Average daily volume")
     
-    # Wskaźniki techniczne
-    sma_20: Optional[Decimal] = Field(None, description="20-dniowa średnia krocząca")
-    sma_50: Optional[Decimal] = Field(None, description="50-dniowa średnia krocząca")
-    sma_200: Optional[Decimal] = Field(None, description="200-dniowa średnia krocząca")
-    rsi_14: Optional[Decimal] = Field(None, description="14-dniowy wskaźnik RSI")
-    macd: Optional[Decimal] = Field(None, description="Wskaźnik MACD")
-    macd_signal: Optional[Decimal] = Field(None, description="Linia sygnałowa MACD")
-    macd_hist: Optional[Decimal] = Field(None, description="Histogram MACD")
+    # Technical indicators
+    sma_20: Optional[Decimal] = Field(None, description="20-day simple moving average")
+    sma_50: Optional[Decimal] = Field(None, description="50-day simple moving average")
+    sma_200: Optional[Decimal] = Field(None, description="200-day simple moving average")
+    rsi_14: Optional[Decimal] = Field(None, description="14-day RSI indicator")
+    macd: Optional[Decimal] = Field(None, description="MACD indicator")
+    macd_signal: Optional[Decimal] = Field(None, description="MACD signal line")
+    macd_hist: Optional[Decimal] = Field(None, description="MACD histogram")
 
 
 class HistoricalDataCreate(HistoricalDataBase):
-    """Model do tworzenia nowych danych historycznych."""
-    company_id: int = Field(..., description="ID firmy")
+    """Model for creating new historical data."""
+    company_id: int = Field(..., description="Company ID")
 
 
 class HistoricalDataUpdate(HistoricalDataBase):
-    """Model do aktualizacji danych historycznych."""
+    """Model for updating historical data."""
     pass
 
 
 class HistoricalData(HistoricalDataBase):
-    """Pełny model danych historycznych z dodatkowymi polami."""
-    id: int = Field(..., description="Unikalny identyfikator")
-    company_id: int = Field(..., description="ID firmy")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    """Full historical data model with additional fields."""
+    id: int = Field(..., description="Unique identifier")
+    company_id: int = Field(..., description="Company ID")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Config:
-        from_attributes = True  # dla kompatybilności z SQLAlchemy 
+        from_attributes = True  # for SQLAlchemy compatibility 
