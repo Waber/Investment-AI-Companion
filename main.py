@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 
 from app.core.config import settings
+from app.core.database import engine
+from app.models.database_models import Base
 from app.api.companies import router as companies_router
 from app.api.financial_metrics import router as financial_metrics_router
 
@@ -21,6 +23,22 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    This function runs when the FastAPI application starts up.
+    It's used to initialize the database and perform any other startup tasks.
+    """
+    try:
+        # Create all database tables if they don't exist
+        # This ensures the database schema is ready when the app starts
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created/verified successfully!")
+    except Exception as e:
+        print(f"❌ Error creating database tables: {e}")
+        # In production, you might want to exit here if the database is critical
+        # For development, we'll continue and let the app start
 
 @app.get("/")
 async def root():
