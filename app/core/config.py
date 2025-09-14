@@ -19,7 +19,7 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/investment_ai"
+    DATABASE_URL: str = "postgresql://przemkowy@localhost:5432/investment_ai"
     REDIS_URL: str = "redis://localhost:6379/0"
     ELASTICSEARCH_URL: Optional[str] = None
 

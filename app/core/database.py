@@ -7,7 +7,7 @@ from app.core.config import settings
 # The URL format is: postgresql://username:password@host:port/database_name
 # We get these values from environment variables via settings
 engine = create_engine(
-    settings.database_url,
+    settings.DATABASE_URL,
     # echo=True  # Uncomment to see SQL queries in console (useful for debugging)
 )
 
