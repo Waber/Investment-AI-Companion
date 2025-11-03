@@ -250,10 +250,52 @@
   curl http://127.0.0.1:8000/financial-metrics/company/1
   ```
 
+## Sesja 5: Integracja Yahoo Finance API
+- Data: [Data sesji]
+- Status: ✅ Zakończona
+
+### Zaimplementowane Funkcjonalności
+
+#### 1. Yahoo Finance Collector (app/data_collectors/yahoo_finance.py)
+- **Klasa YahooFinanceCollector**: Moduł do pobierania danych z Yahoo Finance używając biblioteki `yfinance`
+- **fetch_company_info()**: Pobiera podstawowe informacje o firmie (nazwa, sektor, branża, etc.)
+- **fetch_historical_data()**: Pobiera historyczne ceny akcji (OHLCV)
+- **fetch_financial_statements()**: Pobiera sprawozdania finansowe (income, balance sheet, cash flow)
+- **fetch_key_metrics()**: Pobiera kluczowe wskaźniki finansowe (P/E, ROE, ROA, etc.)
+- **fetch_news()**: Pobiera najnowsze wiadomości o firmie
+- **fetch_recommendations()**: Pobiera rekomendacje analityków
+
+#### 2. Data Collection API (app/api/data_collection.py)
+- **POST /data-collection/fetch-company**: Pobiera dane firmy z Yahoo Finance i zapisuje do bazy
+  - Automatycznie tworzy nową firmę lub aktualizuje istniejącą
+  - Obsługuje walidację i obsługę błędów
+  - Zwraca company_id po utworzeniu/aktualizacji
+- **POST /data-collection/fetch-financial-metrics**: Placeholder dla pobierania wskaźników finansowych
+
+#### 3. Integracja z istniejącą infrastrukturą
+- Endpointy wykorzystują warstwę repozytoriów (CompanyRepository)
+- Automatyczne zarządzanie sesjami bazodanowymi przez dependency injection
+- Proper error handling z HTTPException
+- Logging operacji dla debugowania
+
+### Korzyści
+1. **Automatyzacja**: Zamiast ręcznego wprowadzania danych, teraz pobieramy je bezpośrednio z Yahoo Finance
+2. **Dokładność**: Dane są zawsze aktualne i zgodne z źródłem
+3. **Skalowalność**: Możemy pobierać dane dla wielu firm jednocześnie
+4. **Kompletność**: Mamy dostęp do szerokiego zakresu danych finansowych
+
+### Następne Kroki
+1. Ukończenie implementacji pobierania wskaźników finansowych do bazy
+2. Dodanie scheduler do automatycznego pobierania danych (np. co godzinę/dzień)
+3. Obsługa błędów dla firm, których nie ma w Yahoo Finance
+4. Implementacja web scrapingu dla dodatkowych źródeł danych
+5. Integracja z OpenAI do analizy pobranych danych
+
 ## Co teraz (najbliższe zadania)
 
-1. Podłączyć SQLAlchemy (modele, sesja, migracje Alembic).
-2. Zastąpić listy w RAM operacjami na bazie (repozytoria/serwisy).
-3. Dodać ograniczenia unikalności na poziomie bazy i odpowiednie obsługi błędów (HTTP 400/409).
-4. Dodać testy (pytest + httpx) i zacząć pokrywać krytyczne ścieżki.
-5. Uzupełnić dokumentację przypadków brzegowych i przykładów żądań.
+1. Zakończyć integrację wskaźników finansowych z bazą danych
+2. Dodać scheduler do automatycznego pobierania danych z Yahoo Finance
+3. Implementacja web scrapingu dla newsów i social media
+4. Integracja z OpenAI do analizy i insights
+5. Dodać testy jednostkowe i integracyjne (pytest + httpx)
+6. Rozwój algorytmu oceny potencjału inwestycyjnego

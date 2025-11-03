@@ -8,6 +8,7 @@ from app.core.database import engine
 from app.models.database_models import Base
 from app.api.companies import router as companies_router
 from app.api.financial_metrics import router as financial_metrics_router
+from app.api.data_collection import router as data_collection_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -80,6 +81,7 @@ async def test_config() -> Dict:
 
 app.include_router(companies_router, prefix=settings.API_V1_STR)
 app.include_router(financial_metrics_router, prefix=settings.API_V1_STR)
+app.include_router(data_collection_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     uvicorn.run(
