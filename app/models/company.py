@@ -10,7 +10,7 @@ class CompanyBase(BaseModel):
     sector: Optional[str] = Field(None, description="Economic sector")
     industry: Optional[str] = Field(None, description="Industry")
     description: Optional[str] = Field(None, description="Brief company description")
-    website: HttpUrl | None = Field(None, description="Company website")
+    website: Optional[HttpUrl] = Field(None, description="Company website")
     country: Optional[str] = Field(None, description="Country of origin")
     exchange: Optional[str] = Field(None, description="Stock exchange where the company is listed")
     currency: Optional[str] = Field("USD", description="Currency for financial data")
