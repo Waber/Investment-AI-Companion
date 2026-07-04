@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data-collection", tags=["data-collection"])
 
 
+def get_yahoo_finance_collector() -> YahooFinanceCollector:
+    return YahooFinanceCollector()
+
+
 class FetchCompanyRequest(BaseModel):
     """Request model for fetching company data."""
     ticker: str
@@ -44,7 +48,8 @@ class FetchCompanyResponse(BaseModel):
 @router.post("/fetch-company", response_model=FetchCompanyResponse)
 def fetch_company_data(
     request: FetchCompanyRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    collector: YahooFinanceCollector = Depends(get_yahoo_finance_collector),
 ):
     """
     Fetch company data from Yahoo Finance and create/update it in the database.
@@ -72,8 +77,7 @@ def fetch_company_data(
         ticker = request.ticker.upper()
         logger.info(f"Fetching company data for ticker: {ticker}")
         
-        # Initialize collector and repository
-        collector = YahooFinanceCollector()
+        # Initialize repository
         company_repo = CompanyRepository(db)
         
         # Fetch company info from Yahoo Finance
