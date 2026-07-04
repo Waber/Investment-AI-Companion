@@ -1,78 +1,98 @@
 # Investment AI Companion
 
-Application for stock market analysis using artificial intelligence to collect and analyze data from various sources.
+Investment AI Companion is a FastAPI service for investment research workflows. It stores company data, financial metrics, and market-data collection results that can support analysis and decision hygiene.
 
-## Features
+The application must not present generated output as financial advice. Analysis features should show sources, data freshness, assumptions, risks, and uncertainty.
 
-- Collecting data about companies from American, Polish and European stock exchanges
-- Integration with ChatGPT for data analysis
-- Web scraping of news and social media
-- Sentiment analysis and report generation
-- Dashboard for data presentation
+## Current Scope
+
+- FastAPI backend with API routes under `/api/v1`.
+- SQLAlchemy persistence for companies and financial metrics.
+- Yahoo Finance data collection code for market-data ingestion.
+- Repository-level guidance in `AGENTS.md` and forward-looking delivery notes in `docs/development-journal.md`.
+- Baseline API tests in `tests/` after this iteration, run with `.venv/bin/python -m pytest -q`.
+
+## Planned Or Configured Integrations
+
+The environment template includes configuration keys for Redis, Elasticsearch, OpenAI, news, and social-media providers. Treat these as planned or configured integrations unless the corresponding application code exists and is covered by tests.
 
 ## Project Structure
 
-```
+```text
 investment_ai_companion/
 ├── app/
-│   ├── api/                 # API endpoints
-│   ├── core/               # Configuration and constants
-│   ├── data_collectors/    # Data collection modules
-│   ├── ai/                 # AI integration and analysis
-│   ├── models/             # Data models
-│   └── services/           # Business logic
-├── tests/                  # Tests
-├── scripts/                # Helper scripts
-├── config/                 # Configuration files
-└── docs/                   # Documentation
+│   ├── api/                 # API endpoints, mounted under /api/v1
+│   ├── core/                # Configuration, database, and startup helpers
+│   ├── data_collectors/     # Market-data collection modules
+│   ├── models/              # Pydantic and SQLAlchemy models
+│   └── repositories/        # Persistence access helpers
+├── docs/                    # Project documentation and delivery journal
+├── tests/                   # Automated tests for API and behavior coverage
+├── main.py                  # FastAPI application entrypoint
+├── requirements.txt         # Python dependencies
+└── setup_database.py        # Local database setup helper
 ```
 
 ## Requirements
 
-- Python 3.9+
-- PostgreSQL
-- Redis
-- Elasticsearch (optional)
+- Python 3.12 for local development.
+- PostgreSQL for the default application database.
+- A local virtual environment at `.venv`.
+- Redis, Elasticsearch, OpenAI, news, and social-media credentials only when working on features that use them.
 
-## Installation
+## Setup
 
-1. Clone the repository:
+1. Create and activate the virtual environment:
+
 ```bash
-git clone [repository_url]
-cd investment_ai_companion
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-2. Create and activate virtual environment:
+2. Install dependencies:
+
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-.\venv\Scripts\activate  # Windows
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+3. Create local environment configuration:
 
-4. Configure environment variables:
 ```bash
 cp .env.example .env
-# Edit .env file and set appropriate values
 ```
 
-5. Run the application:
+Edit `.env` for local credentials and service URLs. Do not commit real secrets.
+
+4. Start the API:
+
 ```bash
-python main.py
+python -m uvicorn main:app --reload
 ```
 
-## Configuration
+Open API docs at `http://127.0.0.1:8000/docs`.
 
-The application requires configuring the following environment variables:
-- `OPENAI_API_KEY` - API key for ChatGPT
-- `DATABASE_URL` - PostgreSQL database URL
-- `REDIS_URL` - Redis URL
-- `ELASTICSEARCH_URL` - Elasticsearch URL (optional)
+## API Routes
+
+- Root metadata: `GET /`
+- Company endpoints: `/api/v1/companies`
+- Financial metrics endpoints: `/api/v1/financial-metrics`
+- Data collection endpoints: `/api/v1/data-collection`
+
+## Tests And Quality Checks
+
+Run the baseline test suite with:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+Useful lint and formatting checks:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m black --check app main.py setup_database.py
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m isort --check-only app main.py setup_database.py
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m flake8 app main.py setup_database.py
+```
 
 ## License
 
