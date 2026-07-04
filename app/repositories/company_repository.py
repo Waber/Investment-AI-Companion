@@ -5,6 +5,11 @@ from app.models.database_models import CompanyDB
 from app.models.company import CompanyCreate, CompanyUpdate
 from datetime import datetime, timezone
 
+
+def _serialize_optional_url(value):
+    return str(value) if value is not None else None
+
+
 class CompanyRepository:
     """
     Repository class for company-related database operations.
@@ -40,7 +45,7 @@ class CompanyRepository:
             sector=company.sector,
             industry=company.industry,
             description=company.description,
-            website=company.website,
+            website=_serialize_optional_url(company.website),
             country=company.country,
             exchange=company.exchange,
             currency=company.currency or "USD"
@@ -121,6 +126,8 @@ class CompanyRepository:
         
         # Update only the fields that were provided
         update_data = company_update.model_dump(exclude_unset=True)
+        if "website" in update_data:
+            update_data["website"] = _serialize_optional_url(update_data["website"])
         
         # Handle special case for name and ticker uniqueness
         if 'name' in update_data or 'ticker' in update_data:

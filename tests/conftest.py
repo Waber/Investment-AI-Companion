@@ -30,12 +30,14 @@ async def client():
             db.close()
 
     app = create_app(init_database_on_startup=False)
+    app.state.testing_session_local = testing_session_local
     app.dependency_overrides[get_db] = override_get_db
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as test_client:
+        test_client.app = app
         yield test_client
 
     app.dependency_overrides.clear()
