@@ -19,9 +19,9 @@ class FakeYahooFinanceCollector:
 
 @pytest.mark.asyncio
 async def test_fetch_company_uses_injected_collector(client):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeYahooFinanceCollector()
-    )
+    client.app.dependency_overrides[
+        get_yahoo_finance_collector
+    ] = lambda: FakeYahooFinanceCollector()
 
     response = await client.post(
         "/api/v1/data-collection/fetch-company",
