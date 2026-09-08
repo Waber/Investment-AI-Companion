@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## About me
+
+- I am a experienced test automation engineer who wants to expand his programming knowledge and skills. I code mostly in Java but want to learn Python so either you should 
+- explain to me how your code works and/or document it in a way that a junior developer can understand. 
+
 ## Working Agreements
 
 - Answer in the language used by the user. Keep code, identifiers, and technical documentation in English.
