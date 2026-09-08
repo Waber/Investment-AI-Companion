@@ -1,6 +1,6 @@
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -15,6 +15,16 @@ async def client():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(dbapi_connection, connection_record):
+        # SQLite requires foreign key enforcement on each physical connection.
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+
     testing_session_local = sessionmaker(
         autocommit=False,
         autoflush=False,
@@ -42,3 +52,4 @@ async def client():
 
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()
