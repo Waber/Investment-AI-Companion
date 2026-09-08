@@ -21,7 +21,7 @@ No trading execution, brokerage accounts, automatic web research, or inference o
 ## Backend hardening
 
 - Replace `on_event` startup with an async lifespan context. Preserve the startup-disabled test mode. Database initialization failures must be logged and propagated rather than reporting a healthy startup with a missing critical dependency.
-- Provide narrow optional application settings/engine injection where needed to test lifespan and CORS without touching the developer's database.
+- The lifespan calls the existing `init_db()` boundary, whose implementation becomes Alembic-based in the database task. Allow an optional no-argument database initializer callback and application settings override to test lifespan/CORS without touching the developer's database.
 - Register a RequestValidationError handler that keeps the usual error locations/types/messages but sanitizes non-JSON-safe inputs and context. Overflowing raw JSON numbers must yield HTTP 422 without persistence or exposing internal exceptions.
 - Normalize configured CORS origins to actual browser origins, without Pydantic's artificial root-path slash. Test preflight/actual allowed and disallowed origins with credentials.
 - Replace class-based Pydantic Config and the deprecated SQLAlchemy declarative import while preserving existing API schemas and finite-number validation.
@@ -31,8 +31,11 @@ No trading execution, brokerage accounts, automatic web research, or inference o
 
 - PostgreSQL binaries are locally available (Homebrew PostgreSQL 14). Test only a new temporary cluster or a purpose-created CI database, never the user's configured database.
 - A local runner creates a temporary cluster and Unix-socket directory, disables TCP listening, creates a test database, runs integration tests, and stops the server in a finally block.
-- PostgreSQL tests verify timestamps, unique constraints, foreign keys, cascade behavior, transactions, and migration upgrades. Explicit opt-in is required for externally supplied test DSNs.
+- PostgreSQL tests verify timestamps, unique constraints, foreign keys, cascade behavior, transactions, and migration upgrades. Explicit opt-in is required for externally supplied test DSNs. Tests pass their validated SQLAlchemy connection through Alembic config attributes; that path must never fall back to application settings or create another engine.
 - Add a baseline Alembic revision for the two existing tables, then additive revisions for new profile/analysis tables. Document adoption for an existing create_all-managed database; do not automatically stamp or migrate the user's database.
+- Alembic is the sole production schema-creation/update mechanism. The database agent replaces `app/core/init_db.py:init_db()` and `setup_database.py` initialization, keeping the no-argument entrypoint and adding an explicit engine/connection option for tests. Startup uses this boundary. `create_all()` remains only for isolated SQLite fixtures and construction of legacy test fixtures.
+- A fresh database upgrades to head. A legacy unversioned database must fail with actionable adoption guidance until an explicit setup option is supplied; that option validates the baseline columns, types, nullability, keys, and required constraints before stamping baseline and upgrading. Test both paths with existing data preserved. No automatic adoption of arbitrary schemas.
+- The runner isolates environment/CWD before importing the application; failure-path tests cover migration failure, pytest failure, and interruption, and prove that only its own temporary cluster is stopped in cleanup.
 - Keep SQLite tests deterministic and fast. PostgreSQL tests are separately marked and skipped only when their explicit test configuration is absent; the local runner must actually execute them during delivery verification.
 
 ## Editable investor profiles
@@ -46,7 +49,7 @@ Schema/module contracts:
 - `app/repositories/investor_profile_repository.py`: CRUD and `get_or_create_demo()`.
 - `app/api/investor_profiles.py`: router; parent integrates its registration in `main.py`.
 
-Profile fields: name, investment horizon, risk tolerance, markets, allowed instruments, excluded instruments, optional research notes, id and timestamps. Use bounded strings/lists and explicit enum values; reject overlapping allowed/excluded instruments. Validate updates against the resulting full profile so partial requests cannot bypass invariants.
+Profile fields: name, investment horizon, risk tolerance, markets, allowed instruments, excluded instruments, optional research notes, id and timestamps. Use bounded strings/lists and explicit enum values; reject overlapping allowed/excluded instruments. Allowed instruments must be nonempty; analysis requires membership in the allowed list and absence from the excluded list. Validate updates against the resulting full profile so partial requests cannot bypass invariants.
 
 Demo preferences come only from the user's explicit statements:
 
@@ -60,13 +63,15 @@ Other profiles can select different horizons, risks, markets, and instruments. D
 
 ## Source-aware AI analysis
 
-New `/api/v1/analyses/` create/list/get surface. Creation selects a stored profile, names the instrument and its type, and supplies bounded evidence items with stable IDs, source names/URLs, observation dates, and excerpts. Evidence is supplied data, not automatically verified by a scraper. No provider call occurs for a missing profile or excluded instrument.
+New `/api/v1/analyses/` create/list/get surface. Creation selects a stored profile, names the instrument and its type, and supplies 1-20 bounded evidence items with unique nonempty IDs, source names/URLs, observation dates, and excerpts. Evidence is supplied data, not automatically verified by a scraper. No provider call occurs for a missing profile, an excluded instrument, or one absent from the allowed list.
 
-The service snapshots the chosen profile and supplied evidence so later profile edits cannot rewrite historical analysis. It builds provider input from that snapshot, validates the structured result and all referenced source IDs, attaches source metadata/freshness warnings itself, and persists only a successfully validated analysis. Unsupported source references or malformed output fail visibly without a success record.
+The service snapshots the chosen profile and supplied evidence so later profile edits cannot rewrite historical analysis. It builds provider input from that snapshot, validates the structured result and all referenced source IDs, attaches source metadata/freshness warnings itself, and persists only a successfully validated analysis. Unsupported source references or malformed output fail visibly without a success record. Analysis rows keep a nullable profile FK with ON DELETE SET NULL; deleting a profile preserves the report and immutable snapshot.
 
-The report contains a summary, evidence-linked observations and risks, base/upside/downside scenarios, assumptions, thesis-breakers, open questions, and uncertainty. It supports research rather than imperative buy/sell instructions. Evidence text and profile notes are untrusted data and cannot override application rules.
+The report contains a summary, evidence-linked observations and risks, base/upside/downside scenarios, assumptions, thesis-breakers, open questions, and uncertainty. Every factual observation requires at least one known evidence ID; assumptions and inferences are distinct report fields. Citation validation establishes referential integrity, not truth or entailment. Reports explicitly retain that evidence was user-supplied and not independently verified.
 
-Use a small injectable provider interface and the official OpenAI Python SDK Responses API with structured output. Configure API key/model/timeout/output limit through settings; keep provider calls lazy and bounded. Model configuration remains editable. The documented small-model example is GPT-5.4 Mini, whose official documentation confirms Responses and Structured Outputs support.
+Evidence `as_of` is a timezone-aware observation date, distinct from generation time. Compute age using an injected clock; report an advisory warning for evidence older than 180 days and flag future-dated evidence rather than claiming it is current. Store provider model, generation timestamp, and prompt/contract version with each report. It supports research rather than imperative buy/sell instructions. Evidence text and profile notes are untrusted data and cannot override application rules.
+
+Use a small injectable provider interface and the official OpenAI Python SDK Responses API with structured output. Configure API key/model/timeout/output limit through settings; keep provider calls lazy and bounded. Model configuration remains editable. The documented small-model example is GPT-5.4 Mini, whose official documentation confirms Responses and Structured Outputs support. Prepare and verify the isolated SDK environment before the AI developer tests the adapter; the coordinator owns settings/requirements integration before those tests. Start its worktree from the reviewed profile-contract commit.
 
 Tests inject deterministic fakes and mock provider HTTP behavior. Missing configuration, refusal, timeout, rate limiting, malformed responses, and unknown citations have explicit failure paths. There is no production fake provider or silent fallback. A live paid call is not required to validate the backend contract and must not be claimed without evidence.
 
