@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FinancialMetricsBase(BaseModel):
     """Base financial metrics model."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     # Statement values
     revenue: Optional[float] = Field(None, description="Revenue")
