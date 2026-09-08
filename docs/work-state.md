@@ -31,12 +31,14 @@ The user requested continuing all remaining work from [the baseline review](revi
 - The user supplied explicit demo-profile preferences: investment horizon over ten years; broad geographic scope including Poland, the United States, Europe, and Asia; moderate-to-high risk tolerance; stocks, bonds, ETFs, and ETCs; no direct derivatives such as futures or CFDs.
 - These preferences are an editable demo profile, not global application policy. The user explicitly requires changing parameters and supporting other investor profiles in future. Do not invent holdings, allocations, or a private portfolio.
 - Preserve the existing untracked `.python-version` in the primary checkout.
-- Continue with separate developer agents and an independent reviewer, on isolated branches/worktrees. No agents have been dispatched for this new iteration yet.
+- Continue with separate developer agents and an independent reviewer, on isolated branches/worktrees. Russell is reviewing the design/plan; implementation agents have not been dispatched yet.
 - No PostgreSQL server or live AI-provider call has been verified for this iteration. Do not describe those checks as complete.
 
 ## Next Action
 
-Finish inspecting the current configuration, persistence, collectors, and local database/runtime availability. Write a scoped design and implementation plan that separates backend hardening, PostgreSQL verification, and the investor-analysis workflow. Dispatch independent technical tasks with disjoint file ownership, then integrate and independently review them. Update this file at each meaningful handoff or interruption.
+Resolve Russell's design/plan feedback, then dispatch Tasks 1-4 with disjoint ownership. Follow [the implementation plan](superpowers/plans/2026-09-08-research-workflow-and-hardening.md) and [the design](superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md). PostgreSQL 14.19 binaries are available locally. Task 5 follows the profile interface; final formatting and verification follow integration.
+
+Active reviewer: Russell (`01a08259-7cd2-7f22-be5c-b08e5a713644`). No production code edits have started in this iteration.
 
 ## Verification For This Checkpoint
 
