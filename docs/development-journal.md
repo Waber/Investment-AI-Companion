@@ -98,3 +98,37 @@
 - Product clarification received: horizon over ten years, broad markets including Poland/US/Europe/Asia, moderate-to-high risk, stocks/bonds/ETFs/ETCs, excluding direct derivatives such as futures/CFDs. The user requires an editable demo profile and support for different preferences, not hardcoded personal assumptions.
 - Coordinator: Codex (GPT-6). No implementation agents dispatched for this new iteration yet. Precise elapsed time is not being measured; implementation and verification will be logged at delivery.
 - No application or test files changed in this checkpoint. The previously published baseline passed 537 test cases; tests are not being represented as a new run for documentation-only changes.
+
+## 2026-09-08 - WIP partial checkpoint: Task 2 CRUD regressions (paused)
+
+### State and stop reason
+- Worktree: `/private/tmp/investment-crud-regressions`.
+- Branch: `fix/crud-update-regressions`; pre-checkpoint HEAD: `10ab10d6bf1ba15e9105dc85d86b32c1816a5835`.
+- User-requested pause to preserve state before the next iteration after context/usage pressure. The user reports that the previous run encountered a usage-limit error and that credits have now been reset. No credit balance or reset result was independently checked in this task.
+- Task 2 remains incomplete and paused. The checkpoint is not approval to resume implementation or integrate changes.
+
+### Actual work and decisions
+- Confirmed the requested worktree, branch, and base commit; located AGENTS, the approved plan/design, and relevant source/test paths.
+- Read the workflow skills for TDD, systematic debugging, plan execution, and verification; read AGENTS and the existing journal for this checkpoint.
+- No application or test edits were made. Neither `tests/test_updates_api.py` nor `tests/test_collection_updates.py` was created. The only checkpoint edit is this journal entry.
+- No implementation/design decisions or behavior corrections have been established. No delegation, integration, push, or worktree deletion was performed.
+- All commands launched by this task had exited; no owned implementation or testing process remained running.
+
+### Verification actually performed
+- `pwd`: confirmed `/private/tmp/investment-crud-regressions`.
+- `git status --short --branch`: clean worktree on `fix/crud-update-regressions` before the journal edit.
+- `git log -1 --format='%H %s'`: confirmed the pre-checkpoint HEAD above (`docs: clarify migration and analysis contracts`).
+- `git diff --stat`, `git diff`, and `git diff --cached`: all empty before the journal edit.
+- `git diff --check`: passed after adding this checkpoint entry.
+- No pytest, red/green cycle, full suite, formatter, or linter was run. Earlier journal test results are historical, not verification of Task 2.
+
+### Pending work, blockers, and exact next action
+- The intentional user pause is the current stop condition; implementation blockers have not yet been investigated. Parent and Russell reviews remain pending before any final implementation commit or integration; the user separately authorized this WIP checkpoint commit.
+- On explicit resumption, first inspect git status, read `docs/work-state.md`, the latest journal entry, `docs/superpowers/plans/2026-09-08-research-workflow-and-hardening.md` (Task 2), and `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`. Then inspect the assigned APIs/repositories, existing tests/conftest, and configuration without reading `.env` or a private database.
+- Write the first failing regression test before production edits. Cover missing-update 404, company URL omitted/changed/null, metrics partial updates/null, conflicts, rollback/recovery, relevant cascade behavior, and fake-collector existing-company/404 paths. Investigate deterministic duplicate-ticker 400 semantics only as supported by regression evidence and existing constraints.
+- Implementation ownership remains limited to `app/api/companies.py`, `app/api/financial_metrics.py`, `app/repositories/company_repository.py`, `app/repositories/financial_metrics_repository.py`, `tests/test_updates_api.py`, and `tests/test_collection_updates.py`. Do not edit data collection API, main, models, conftest, or unrelated files.
+- Pending test invocation after confirming isolation: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider`, from this worktree. Use deterministic fakes, no live providers, no `.env`, and no private database. Record exact red/green and full-suite results when actually run.
+
+### Model and time tracking
+- Agent: Codex (GPT-6); no subagents used.
+- Exact elapsed time was not measured. This entry records a partial checkpoint, not delivery of Task 2.
