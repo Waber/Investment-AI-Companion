@@ -21,6 +21,16 @@
 - For deeper tasks, use PM/Analyst, Engineer, and QA/Reviewer roles or subagents.
 - If priorities change, record what is implemented and what remains in the backlog.
 
+## Session Continuity And Checkpoints
+
+- At the start of a new session, read `docs/work-state.md`, the latest development journal entry, and the linked plan or review before choosing the next task.
+- Before an anticipated context handoff, context compaction, usage-limit interruption, or user-requested pause, checkpoint at a safe boundary while tools are still available.
+- Commit only the current task's deliberate changes on its working branch. A partial checkpoint must be clearly labeled WIP and must not be merged or described as finished. Preserve unrelated changes, secrets, local configuration, and untracked user files.
+- Update `docs/work-state.md` with the branch, completed work, incomplete work, test results and unrun checks, active agents, blockers, and the exact next action. Keep this file current rather than accumulating conflicting snapshots.
+- Record the actual checkpoint or stop reason. For an approaching usage limit, explicitly record that reason; use available usage information and do not invent a limit, credit balance, or reset time. Distinguish an anticipated pause from a limit already reached.
+- Context compaction alone does not cancel the task. Resume from the checkpoint and continue authorized work when capacity is available; do not ask for approval again solely because context was compacted.
+- When a session is interrupted too abruptly to commit, the next session must inspect the working tree and preserve unfinished changes before resuming.
+
 ## Investment Domain Rules
 
 - This app supports investment research and decision hygiene; it must not present outputs as financial advice.

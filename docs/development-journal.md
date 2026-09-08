@@ -88,3 +88,13 @@
 - Re-ran the full isolated suite on `master`: **537 passed, 6 existing warnings**.
 - Pushed `master` and independently confirmed the remote ref at `08fc2fe72fa6dce61b5856d36a120c6d99b52bc5`.
 - This documentation-only follow-up records that completed publication; it does not change the tested application or test files.
+
+## 2026-09-08 - Remaining-work iteration (in progress)
+
+- User authorized continuing the remaining work listed in the baseline review.
+- Created `feature/research-workflow-and-hardening` from published `master` at `6e1f2fc` in an isolated worktree.
+- Added explicit session checkpoint rules and `docs/work-state.md` at the user's request, so later sessions can identify what is done, what is unfinished, and why work stopped.
+- This is a documentation checkpoint while work continues, not a usage-limit stop. The current usage check did not indicate a reached limit.
+- Product clarification received: horizon over ten years, broad markets including Poland/US/Europe/Asia, moderate-to-high risk, stocks/bonds/ETFs/ETCs, excluding direct derivatives such as futures/CFDs. The user requires an editable demo profile and support for different preferences, not hardcoded personal assumptions.
+- Coordinator: Codex (GPT-6). No implementation agents dispatched for this new iteration yet. Precise elapsed time is not being measured; implementation and verification will be logged at delivery.
+- No application or test files changed in this checkpoint. The previously published baseline passed 537 test cases; tests are not being represented as a new run for documentation-only changes.
