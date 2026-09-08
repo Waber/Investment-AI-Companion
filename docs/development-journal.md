@@ -58,7 +58,7 @@
 - Linnaeus: database/QA fix on `fix/test-database-integrity` (source commit `00d346b`).
 - Ohm: financial validation fix on `fix/finite-financial-metrics` (source commit `bc7c724`).
 - Developers worked in separate worktrees; the database and validation fixes ran in parallel. Agents inherited the coordinator model.
-- Integrated application commits: `5597a00`, `5f1b2fb`, and `719f691`. No merge into `master` or remote publication was performed.
+- Integrated application commits: `5597a00`, `5f1b2fb`, and `719f691`. At review delivery these were on the development branch; subsequent publication is recorded below.
 
 ### Verification
 - Combined suite at `719f691`: **537 passed, 6 existing deprecation warnings**. This includes parameterized unit cases and API regression tests, not 537 distinct workflows.
@@ -80,3 +80,11 @@
 - Exact per-agent durations were not measured; no synthetic effort totals are reported.
 - A usage-limit interruption stopped Ohm before final verification; work resumed from the existing files after the user reset the limit.
 - The existing untracked `.python-version` was preserved.
+
+### Publication after user approval
+- On 2026-09-08 the user authorized committing, pushing, and merging the reviewed iteration into the default branch.
+- Confirmed GitHub's default branch is `master`; fetching showed no divergent remote commits.
+- Pushed `feature/project-guidance-and-baseline-tests`, then fast-forwarded local `master` through all 14 iteration commits to `08fc2fe` without conflicts.
+- Re-ran the full isolated suite on `master`: **537 passed, 6 existing warnings**.
+- Pushed `master` and independently confirmed the remote ref at `08fc2fe72fa6dce61b5856d36a120c6d99b52bc5`.
+- This documentation-only follow-up records that completed publication; it does not change the tested application or test files.
