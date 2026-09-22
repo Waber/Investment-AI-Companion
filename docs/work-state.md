@@ -3,28 +3,29 @@
 ## Checkpoint
 
 - Date: 2026-09-22.
-- Status: bounded missing-update fix implemented, reviewed, and verified; delivered with this local commit. Other remaining-work tasks stay paused.
-- User authorized: fix missing-company and missing-financial-metrics update responses, regression tests, independent review, local commit, and journal update. No push or merge requested.
-- Branch: `fix/missing-update-not-found`, based on `83bb7ed` (prior CRUD checkpoint).
-- Worktree: `/private/tmp/investment-update-404`.
+- Status: website-update regression task completed locally with this delivery commit. Other remaining-work tasks stay paused; no push or merge.
+- User authorized the next small task with usage checks: verify website omission, replacement, explicit null, and invalid URL rejection; independent review, local commit, and journal. No push or merge requested.
+- Branch: `test/company-website-updates`, based on verified `3a2b0af` (missing-update fix).
+- Worktree: `/private/tmp/investment-website-updates`.
 - Primary repository: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`. The saved project directory under `PycharmProjects` is not this repository.
 - Previous temporary worktrees are absent and Git marks their registrations prunable. Their committed checkpoints remain recoverable from Git. No old branch or registration was deleted.
 
 ## Current Iteration
 
-1. Preparation completed: routes inspected; baseline 537 passed, six existing deprecation warnings.
-2. Implementation completed by Carson: two routes now re-raise HTTPException before their broad exception handlers. Eight regression cases cover missing records without writes, successful persisted updates, and unchanged 400/generic-500 handling.
-3. Independent review completed by Hume: spec and code quality approved, no actionable findings; independently ran all eight focused cases.
-4. Coordinator final verification: 545 passed, six existing warnings; default Black/isort/flake8 checks passed for all nine test files. Journal updated for the local delivery commit; no push or merge.
+1. Preparation: inspected existing website serialization and `exclude_unset` behavior. The parent revision passed 545 tests with six legacy warnings in this session.
+2. Ohm owns only `tests/test_company_website_updates.py`: response, read-back, and stored-value checks for omission/replacement/null and rejection without mutation for invalid URLs. Existing behavior is expected to pass; these are characterization tests, not a newly claimed bug fix.
+3. Dalton independently approved specification and quality with no findings; four focused cases passed. Coordinator full suite: 549 passed, six existing warnings.
+4. Production code unchanged. Coordinator corrected one import-group blank line after review; final style/test checks accompany the local commit.
 
-Both agents were closed after their final reports. Stop reason: the user-authorized bounded scope is complete, not a usage-limit interruption.
+Previous slice `3a2b0af` is complete and included in this branch: missing updates return404, eight added cases, independent Hume approval, 545 total passing. Carson and Hume were closed.
 
 The coordinator owns this file and the journal. No repository/model changes, provider calls, real database migrations, dependency upgrades, or broad formatting cleanup belong to this iteration.
 
 ## Usage And Continuity
 
-- User requested usage checks after every stage. Preparation: 14% five-hour and 3% weekly allowance used. These are account usage windows, not remaining conversation context.
-- After implementation: 33%/6% used; initial verification: 40%/7%; review and formatting completion: 48%/9%. These snapshots are account-wide, not task cost attribution.
+- User requested usage checks after every stage. Website-task start: 59% five-hour and 10% weekly allowance used. Account usage windows are not remaining conversation context or per-task cost attribution.
+- After preparation: 65%/11% used; implementation and full verification: 78%/13%. Scope was not expanded so there remained capacity for review and checkpointing.
+- After review and final verification: 85%/14% used. Final suite 549 passed with six existing warnings; all ten test files pass default Black/isort/flake8. Both agents closed. No further task started.
 - No exact remaining-context counter is available; do not infer guaranteed completion from usage percentages. No reset or purchase is authorized.
 - Last full pause was user-requested after context/usage pressure on September 8. All previous agents were closed. Only this small scope is now resumed.
 
@@ -39,7 +40,7 @@ The coordinator owns this file and the journal. No repository/model changes, pro
 
 ## Remaining Work After This Slice
 
-- Other Task 2 regressions: URL omission/change/null, metric partial updates, uniqueness and rollback, collection update paths.
+- Other Task 2 regressions: metric partial updates, uniqueness and rollback, collection update paths. URL omission/change/null and invalid-URL rejection coverage is complete in this branch.
 - Task 1: JSON overflow validation, lifespan/startup modernization, CORS, deprecations.
 - Task 3: migration-only initialization, guarded legacy adoption, isolated PostgreSQL tests and cleanup.
 - Task 4: persistent editable investor profiles. Demo preferences: horizon over ten years, Poland/US/Europe/Asia, moderate-to-high risk, stocks/bonds/ETFs/ETCs, no direct derivatives such as futures/CFDs. These are editable defaults, never inferred holdings or global restrictions.
@@ -53,9 +54,9 @@ The approved [plan](superpowers/plans/2026-09-08-research-workflow-and-hardening
 - Interpreter: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python`.
 - Run from `/private/tmp` with a clean environment, this worktree on `PYTHONPATH`, `PYTHONDONTWRITEBYTECODE=1`, and pytest cache disabled. Tests use in-memory SQLite and no live providers.
 - Preserve the primary checkout's unrelated untracked `.python-version`.
-- Developer reported RED: two missing-record cases failed (500 instead of 404), six passed; GREEN: eight passed. Coordinator independently reran all 545 cases after formatting. Review did not independently repeat RED.
+- Previous missing-update slice: developer reported RED two failed/six passed, then GREEN eight passed; coordinator verified full 545 tests after formatting. Website characterization: four passing cases for already-correct behavior, not a new red/green bug fix.
 - Residual limits: SQLite only, injected repository exceptions for error mapping, six pre-existing deprecation warnings. No real PostgreSQL/provider checks or full application lint cleanup in this slice.
 
 ## Next Action
 
-Read this branch's latest journal and verify Git status. This missing-update fix is complete locally, but not merged into `master` or the wider integration branch. Do not repeat it or mark the entire Task 2 complete. A future authorized iteration should integrate the reviewed commit as appropriate, then start the remaining Task 2 URL omission/change/null regressions with failing tests. Other scopes require separate resumption. If this temporary worktree disappears, recover this file from `fix/missing-update-not-found` with Git.
+Stop at this completed task boundary to conserve usage; no limit failure occurred. Neither slice is merged into `master` or the wider integration branch. The entire Task 2 is not complete. A future separately authorized slice can cover metric partial updates/null. If this temporary worktree disappears, recover this file from `test/company-website-updates` with Git. The developer Ohm and reviewer Dalton are closed at delivery.
