@@ -2,46 +2,60 @@
 
 ## Checkpoint
 
-- Date: 2026-09-08.
-- Reason: user-requested session continuity checkpoint while work continues. No current usage-limit stop.
-- Working branch: `feature/research-workflow-and-hardening`.
-- Base: published `master` at `6e1f2fc`.
-- Primary repository: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`.
-- Current isolated worktree: `/private/tmp/investment-remaining-work`.
-- The saved Codex project named `InvestmentAiCompanion` still points at an older directory under `PycharmProjects`; it is not the repository above.
+- Date: 2026-09-22.
+- Status: bounded missing-update fix implemented, reviewed, and verified; delivered with this local commit. Other remaining-work tasks stay paused.
+- User authorized: fix missing-company and missing-financial-metrics update responses, regression tests, independent review, local commit, and journal update. No push or merge requested.
+- Branch: `fix/missing-update-not-found`, based on `83bb7ed` (prior CRUD checkpoint).
+- Worktree: `/private/tmp/investment-update-404`.
+- Primary repository: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`. The saved project directory under `PycharmProjects` is not this repository.
+- Previous temporary worktrees are absent and Git marks their registrations prunable. Their committed checkpoints remain recoverable from Git. No old branch or registration was deleted.
 
-## Completed
+## Current Iteration
 
-- Baseline guidance, refactoring, tests, and all three review fixes were reviewed, committed, merged into `master`, and pushed to GitHub.
-- Baseline verification: 537 pytest cases passed, with six known deprecation warnings. Default Black/isort/flake8 checks pass for tests.
-- Added the checkpoint rules in `AGENTS.md` and this continuation file. This checkpoint changes documentation only.
+1. Preparation completed: routes inspected; baseline 537 passed, six existing deprecation warnings.
+2. Implementation completed by Carson: two routes now re-raise HTTPException before their broad exception handlers. Eight regression cases cover missing records without writes, successful persisted updates, and unchanged 400/generic-500 handling.
+3. Independent review completed by Hume: spec and code quality approved, no actionable findings; independently ran all eight focused cases.
+4. Coordinator final verification: 545 passed, six existing warnings; default Black/isort/flake8 checks passed for all nine test files. Journal updated for the local delivery commit; no push or merge.
 
-## Authorized Work In Progress
+Both agents were closed after their final reports. Stop reason: the user-authorized bounded scope is complete, not a usage-limit interruption.
 
-The user requested continuing all remaining work from [the baseline review](reviews/2026-09-08-baseline-review.md#remaining-work):
+The coordinator owns this file and the journal. No repository/model changes, provider calls, real database migrations, dependency upgrades, or broad formatting cleanup belong to this iteration.
 
-1. Return a valid validation error for overflowing JSON numbers without saving invalid data.
-2. Modernize deprecated FastAPI/Pydantic/SQLAlchemy usage and resolve existing application formatting/import debt.
-3. Add and run isolated PostgreSQL integration tests.
-4. Add regression coverage for startup/lifespan, update paths, and relevant configuration/CORS behavior.
-5. Implement explicit, editable investor preferences and a source-aware AI analysis workflow.
+## Usage And Continuity
 
-## Open Questions And Constraints
+- User requested usage checks after every stage. Preparation: 14% five-hour and 3% weekly allowance used. These are account usage windows, not remaining conversation context.
+- After implementation: 33%/6% used; initial verification: 40%/7%; review and formatting completion: 48%/9%. These snapshots are account-wide, not task cost attribution.
+- No exact remaining-context counter is available; do not infer guaranteed completion from usage percentages. No reset or purchase is authorized.
+- Last full pause was user-requested after context/usage pressure on September 8. All previous agents were closed. Only this small scope is now resumed.
 
-- The user supplied explicit demo-profile preferences: investment horizon over ten years; broad geographic scope including Poland, the United States, Europe, and Asia; moderate-to-high risk tolerance; stocks, bonds, ETFs, and ETCs; no direct derivatives such as futures or CFDs.
-- These preferences are an editable demo profile, not global application policy. The user explicitly requires changing parameters and supporting other investor profiles in future. Do not invent holdings, allocations, or a private portfolio.
-- Preserve the existing untracked `.python-version` in the primary checkout.
-- Continue with separate developer agents and an independent reviewer, on isolated branches/worktrees. Russell is reviewing the design/plan; implementation agents have not been dispatched yet.
-- No PostgreSQL server or live AI-provider call has been verified for this iteration. Do not describe those checks as complete.
+## Previous Checkpoints
+
+- `d3dcbaf` on `feature/research-workflow-and-hardening`: full prior checkpoint and failed dependency-upgrade attempt. Recover with `git show d3dcbaf:docs/work-state.md`.
+- `1d203c3` on `fix/runtime-validation-lifespan`: runtime task journal only.
+- `83bb7ed` on `fix/crud-update-regressions`: CRUD task journal only; base of this iteration.
+- `55bc514` on `test/postgresql-migrations`: database task journal only.
+- `10ab10d`: approved design/plan after Russell's six findings were resolved; not implementation approval.
+- The WIP OpenAI 3.9.0 pin conflicts with FastAPI 0.104.1's AnyIO requirement. It is NOT included in this branch; do not merge it blindly.
+
+## Remaining Work After This Slice
+
+- Other Task 2 regressions: URL omission/change/null, metric partial updates, uniqueness and rollback, collection update paths.
+- Task 1: JSON overflow validation, lifespan/startup modernization, CORS, deprecations.
+- Task 3: migration-only initialization, guarded legacy adoption, isolated PostgreSQL tests and cleanup.
+- Task 4: persistent editable investor profiles. Demo preferences: horizon over ten years, Poland/US/Europe/Asia, moderate-to-high risk, stocks/bonds/ETFs/ETCs, no direct derivatives such as futures/CFDs. These are editable defaults, never inferred holdings or global restrictions.
+- Task 5: source-aware AI analysis after profile contracts and a verified compatible dependency set.
+- Task 6: integrated verification, remaining style debt, and independent review before future merge.
+
+The approved [plan](superpowers/plans/2026-09-08-research-workflow-and-hardening.md) and [design](superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md) remain the broader reference. This slice does not complete the entire CRUD task.
+
+## Verification Environment
+
+- Interpreter: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python`.
+- Run from `/private/tmp` with a clean environment, this worktree on `PYTHONPATH`, `PYTHONDONTWRITEBYTECODE=1`, and pytest cache disabled. Tests use in-memory SQLite and no live providers.
+- Preserve the primary checkout's unrelated untracked `.python-version`.
+- Developer reported RED: two missing-record cases failed (500 instead of 404), six passed; GREEN: eight passed. Coordinator independently reran all 545 cases after formatting. Review did not independently repeat RED.
+- Residual limits: SQLite only, injected repository exceptions for error mapping, six pre-existing deprecation warnings. No real PostgreSQL/provider checks or full application lint cleanup in this slice.
 
 ## Next Action
 
-Resolve Russell's design/plan feedback, then dispatch Tasks 1-4 with disjoint ownership. Follow [the implementation plan](superpowers/plans/2026-09-08-research-workflow-and-hardening.md) and [the design](superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md). PostgreSQL 14.19 binaries are available locally. Task 5 follows the profile interface; final formatting and verification follow integration.
-
-Active reviewer: Russell (`01a08259-7cd2-7f22-be5c-b08e5a713644`). No production code edits have started in this iteration.
-
-## Verification For This Checkpoint
-
-- Documentation-only change; no application test run required.
-- Check staged whitespace and scope before commit.
-- When updating this file after an interruption, replace this snapshot with the actual state and state the exact stop reason.
+Read this branch's latest journal and verify Git status. This missing-update fix is complete locally, but not merged into `master` or the wider integration branch. Do not repeat it or mark the entire Task 2 complete. A future authorized iteration should integrate the reviewed commit as appropriate, then start the remaining Task 2 URL omission/change/null regressions with failing tests. Other scopes require separate resumption. If this temporary worktree disappears, recover this file from `fix/missing-update-not-found` with Git.

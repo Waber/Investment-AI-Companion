@@ -140,6 +140,8 @@ def update_company(company_id: int, company: CompanyUpdate, db: Session = Depend
             raise HTTPException(status_code=404, detail="Company not found")
         
         return db_to_company_model(db_company)
+    except HTTPException:
+        raise
     except ValueError as e:
         # Handle business logic errors
         raise HTTPException(status_code=400, detail=str(e))

@@ -132,3 +132,39 @@
 ### Model and time tracking
 - Agent: Codex (GPT-6); no subagents used.
 - Exact elapsed time was not measured. This entry records a partial checkpoint, not delivery of Task 2.
+
+## 2026-09-22 - Missing-update responses (bounded iteration, completed locally)
+
+### Scope and plan
+- User authorized only the missing-record update fix, regression tests, independent review, a local commit, and journal. Other remaining-work tasks stay paused.
+- Created `fix/missing-update-not-found` at `/private/tmp/investment-update-404` from CRUD checkpoint `83bb7ed`. Old temporary worktrees are absent, but commits remain in Git. No old registrations/branches removed.
+- Both update routes raise intended HTTP 404 inside a broad exception handler that converts it to 500. Start with failing API regressions, apply the smallest fix, verify 400/500 and successful-update behavior remains intact.
+- Carson implements two routes and focused tests. Coordinator handles baseline/final verification, usage checks, and documentation; separate review follows implementation.
+- No migrations, dependency updates, profiles, broad formatting, push, or merge.
+
+### Baseline and resource checks
+- Fresh baseline: 537 passed, six existing warnings. Command, from `/private/tmp`:
+
+```bash
+/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-update-404 /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-update-404/tests
+```
+
+- Usage: before work, 8% five-hour and 2% weekly used; after preparation, 14% and 3%. These are not remaining-context measurements. No exact context counter is exposed; no reset/purchase performed.
+- After implementation usage: 33% five-hour/6% weekly used; initial verification: 40%/7%; review and formatting completion: 48%/9%. These account-wide snapshots do not measure task cost or context capacity.
+- Coordinator and agents use the configured inherited Codex model; exact model identity and elapsed effort were not independently measured in this iteration.
+
+### Changes and verification
+- Both update routes now re-raise HTTPException before the broad exception handlers. Missing company and financial-metrics updates preserve their existing 404 messages rather than returning 500. No repository/model/dependency changes.
+- Added eight cases in `tests/test_missing_updates_api.py`: missing-record exact 404 and no DML/data changes, existing successful persisted updates, business errors mapped to 400, unexpected errors mapped to generic 500 without leaking their message.
+- Carson reported RED: two tests failed with 500 instead of 404, six passed. After the fix, eight passed; full suite 545 passed. The coordinator did not independently reproduce RED.
+- Hume independently reviewed specification compliance and code quality: approved, no actionable findings. His focused test run passed all eight cases.
+- Coordinator's first style check found new-test formatting/import/line-length issues. Carson corrected only test formatting; no functional changes.
+- Coordinator reran the full command above after formatting: **545 passed, six existing deprecation warnings**.
+- Default checks passed for all nine test files: `.venv/bin/python -m black --check tests`, `-m isort --check-only tests`, `-m flake8 tests` (using the primary repository interpreter from this worktree).
+- Tests use isolated SQLite, with repository exceptions injected only for error mapping. No live database/provider verification or application-wide lint cleanup was performed. Legacy warnings remain out of scope.
+
+### Delivery and next action
+- Carson and Hume were closed after final reports. No owned long-running process remains from this iteration.
+- This change and documentation are saved together in a local commit on `fix/missing-update-not-found`; no push or merge. Primary `master` and the user's untracked `.python-version` remain unchanged.
+- Stop reason: approved bounded scope completed, not resource exhaustion. No account reset or credit purchase was needed or performed.
+- Next authorized iteration: integrate this reviewed fix as appropriate, then add failing Task 2 regressions for URL omission/change/null. Broader CRUD, lifecycle, PostgreSQL, profiles, and AI work remain unfinished; see [work-state](work-state.md).
