@@ -188,3 +188,19 @@
 - SQLite-only characterization; no PostgreSQL/provider calls and no claim of fixing a newly reproduced bug. Existing warnings remain.
 - Next separately authorized slice: metric partial-update/null regression coverage. The full Task 2 remains incomplete. Keep this local branch for later integration; no automatic push/merge.
 - Final post-format verification: 549 passed, six existing warnings; default Black/isort/flake8 passed for all ten test files. After review and final verification, usage was 85% five-hour/14% weekly consumed. Scope completed with remaining allowance; both agent shutdowns confirmed.
+
+## 2026-09-26 - Local API demo and request guide
+
+- User approved running the latest tested backend with an isolated database and documenting API requests. Worktree `/private/tmp/investment-api-demo`, branch `chore/local-api-demo`, base `731c513`. No production behavior/dependency changes or merge/push.
+- Design: reuse installed Python environment and existing app; fresh owner-only PostgreSQL cluster, Unix socket only, loopback HTTP, synthetic data. Avoid real `.env`, API credentials and developer database. Provide a curl walkthrough and repeatable HTTP smoke client; review them independently.
+- Coordinator initialized PostgreSQL14.19 at `/private/tmp/iac-demo.h7TbGw/data`, role `demo`, DB `investment_demo`, socket directory `/private/tmp/iac-demo.h7TbGw`, port15432, host authentication rejected and TCP listening disabled.
+- API runs detached on `127.0.0.1:8081` with clean environment and DEBUG=False. Logs/PID reside in the runtime directory; these intentionally running services remain available to the user. Temporary files are not durable storage or backups.
+- Verified startup schema creation, company POST and financial-metrics POST on PostgreSQL, Swagger HTML200, and diagnostic endpoint403. Seeded one synthetic `DEMO` company and one metrics row (IDs1 initially); no external providers called.
+- Fresh isolated regression suite: 549 passed, six existing deprecation warnings. Command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-api-demo /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-api-demo/tests`.
+- Curie develops only `docs/api-demo.md` and `scripts/smoke_demo.py`; coordinator owns runtime, README and state/journal. Independent review and final live smoke results follow below.
+- Initial usage60% five-hour/26% weekly; after launch73%/28%. No context-capacity inference, reset or purchase. Exact agent model/effort duration not independently measured.
+- This manually tested local PostgreSQL runtime does not replace the remaining automated migration/integration-test work. AI/profile functionality remains unimplemented; provider metrics route remains a placeholder.
+- Curie's smoke and coordinator repeat passed against live PostgreSQL, including CRUD, persisted updates, 422/404 and own-record cleanup. Script passed Black79/isort/flake8.
+- Ohm's review found one proxy/config inheritance concern; all curl examples now use `-q --noproxy '*'`. Otherwise approved by static review. Restart commands documented but not exercised.
+- A usage-limit error blocked the final documentation/commit on the previous turn. Existing files and running services were preserved. User then authorized continuation; limits now report 0% used. No reset was redeemed by the coordinator.
+- Demo documentation checkpoint completed before adding reusable fixtures. No production code changed, no push/merge. Intentional API/PostgreSQL services remain available; agents are closed after their reports.
