@@ -77,6 +77,9 @@ For the isolated local demo, curl examples, and lifecycle commands, see
 [API demo guide](docs/api-demo.md). The demo runs on loopback only and uses
 synthetic data; it is not a production deployment.
 
+See [Reusable Synthetic Demo Data](docs/demo-data.md) for the versioned fixture,
+read-only preview, and explicit, non-overwriting seed command.
+
 - Root metadata: `GET /`
 - Company endpoints: `/api/v1/companies`
 - Financial metrics endpoints: `/api/v1/financial-metrics`

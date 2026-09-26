@@ -14,6 +14,10 @@ There is no authentication. Keep HTTP bound to loopback; do not expose this demo
 through a public interface or tunnel. Use only the isolated demo database, never
 the developer database or repository `.env`.
 
+For a repeatable dataset of six synthetic companies and 20 financial records,
+see [Reusable Synthetic Demo Data](demo-data.md). It includes missing-data and
+loss-making scenarios and preserves existing records on repeated application.
+
 ## Open And Check
 
 After the coordinator confirms the demo is ready:

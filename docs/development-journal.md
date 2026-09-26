@@ -204,3 +204,28 @@
 - Ohm's review found one proxy/config inheritance concern; all curl examples now use `-q --noproxy '*'`. Otherwise approved by static review. Restart commands documented but not exercised.
 - A usage-limit error blocked the final documentation/commit on the previous turn. Existing files and running services were preserved. User then authorized continuation; limits now report 0% used. No reset was redeemed by the coordinator.
 - Demo documentation checkpoint completed before adding reusable fixtures. No production code changed, no push/merge. Intentional API/PostgreSQL services remain available; agents are closed after their reports.
+
+## 2026-09-26 - Reusable synthetic demo fixtures (completed locally)
+
+- User requested persistent/reproducible test data for API and future frontend testing. Worktree `/private/tmp/investment-demo-fixtures`, branch `feature/reusable-demo-fixtures`, base `83940ea`.
+- Decision: versioned JSON plus create-only HTTP seeder; keep the running API unchanged and avoid direct DB/private settings access. Default preview is GET-only; --apply explicit. Existing records/values remain unchanged; partial failures can be resumed by rerun, not rolled back across requests.
+- Coordinator fixture: six explicitly synthetic companies, five currencies, 20 financial rows across2023-2025 annual/Q12026. Profit/loss/zero/null/no-reports scenarios. No real security data or unsupported ETF/bond claims.
+- Existing live records include original `DEMO` and a user-created `string` ticker. Neither may be modified or removed by seeding.
+- Developer Laplace owns `scripts/seed_demo.py` and `tests/test_seed_demo.py`; coordinator owns fixture/schema tests/documentation. Independent review follows before live writes.
+- Fixture schema/scenario verification: two tests passed, six existing warnings. Full seed behavior tests/review/live application pending.
+- Usage restarted at0% five-hour/weekly as reported by tool, not reset by coordinator; after preparation24% five-hour/4% weekly used. No exact context counter available.
+
+### Verification and review
+- Laplace implemented only seeder and unit tests. Initial TDD run failed collection because the implementation module did not exist; subsequent60 focused cases passed. This is new functionality, not a claim of reproducing an old application bug.
+- Volta independently reviewed fixture, script, tests and guide: approved without actionable findings; 62 focused cases passed. Tests cover dry run, creation, repeatability, edits/unrelated records, timezone equivalence, pagination, collisions before writes, invalid fixtures and partial-failure resumption.
+- Coordinator reran full isolated suite: **611 passed, six existing warnings**. Exact command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-demo-fixtures /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-demo-fixtures/tests`.
+- Default Black/isort/flake8 checks passed for `scripts/seed_demo.py`, `tests/test_seed_demo.py`, and `tests/test_demo_fixture.py` from the worktree. No production app/style/dependency changes.
+- Live CLI dry run against verified loopback demo planned6companies/20metrics and performed no writes. First `--apply` created6companies/20metrics; second `--apply` created0/0 and skipped all6/20. UTC matching worked against PostgreSQL's offset timestamps.
+- Compared pre-seed JSON snapshots against fresh API reads: both preexisting companies (including user-created ticker `string`) and original metrics row were unchanged. At verification total8companies/21metrics; fixture IDs6-11. IDs are not portable and docs do not rely on them.
+- One initial coordinator curl snapshot command was rejected by shell globbing before any request; quoting the URL corrected the launcher. No data writes were involved in that error.
+
+### Delivery and continuity
+- Both agents closed. API and PostgreSQL intentionally remain running for the user. No other long-running process.
+- Dataset/scenarios and commands: [demo-data](demo-data.md). API request/lifecycle examples: [api-demo](api-demo.md). JSON fixture is versioned and can repopulate a new isolated demo; temporary DB files are not backups.
+- At final verification70% five-hour/11% weekly allowance was used. Completed this scope without another limit failure; no reset/purchase. Exact effort/model identity not independently measured; agents used inherited model.
+- Work saved locally on `feature/reusable-demo-fixtures`; no push/merge. Remaining technical tasks are unchanged. Next separately authorized task can cover metric partial updates/null; do not reset the user's running demo to develop it.
