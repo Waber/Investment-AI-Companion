@@ -1,5 +1,25 @@
 # Development Journal
 
+## 2026-10-04 - JSON overflow validation fix
+
+- Started from `2374acf` at50% five-hour/8% weekly usage. Dedicated branch
+  `fix/json-overflow-validation`; bounded part of approved Task1, not full hardening.
+- Plan: failing raw-overflow POST/PUT tests, minimal JSON-safe422 handler preserving
+  ordinary error structure, persistence checks, full tests and independent review.
+- Developer owns new validation module/tests and minimal main registration;
+  coordinator owns documentation. No live calls, migrations or dependency changes.
+- Faraday RED evidence:5 failed/4 passed, including four raw overflow500 responses
+  and a nested nonfinite serialization failure. GREEN9 focused passed; coordinator
+  independently ran full717 passed with six existing warnings using the clean-env
+  command from prior entries. New-file Black/isort/flake8 checks passed.
+- Nash approved independent spec/quality review and ran9 focused tests. Ordinary
+  error detail structure remains unchanged; nonfinite float values become strings
+  after jsonable encoding. No request body added to error responses. Main changes
+  limited to registering the handler; no broad legacy formatting.
+- Both agents closed at commit. Final review usage77% (below session90% ceiling).
+  Stop at three completed slices with checkpoint buffer; do not start lifecycle
+  work now. No push/merge or reset redemption. Inherited model, effort not timed.
+
 ## 2026-10-04 - Fake collector refresh regressions
 
 - Separate branch `test/collector-refresh-regressions` based on reviewed `d9e56ce`.

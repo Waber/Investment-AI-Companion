@@ -1,5 +1,31 @@
 # Current Work State
 
+## Delivery Checkpoint: 2026-10-04
+
+- All work below is complete through the JSON overflow slice on
+  `fix/json-overflow-validation` in `/private/tmp/investment-metric-updates`.
+- This session: `d9e56ce` metric creation conflicts (6 cases), `2374acf` collector
+  refresh (6 cases), plus JSON-safe validation fix (9 cases). Earlier ancestors
+  `569a89e` and `0008b0c` remain included. Local commits only, no push/merge.
+- Final full suite717 passed, six legacy warnings. Scoped new-file Black/isort/
+  flake8 and independent reviews passed. JSON overflow reproduced500 before fix,
+  now422 without writes. Reviewer independently ran9 focused tests successfully.
+- Agents closed at delivery. No services, real providers, private DBs or reset
+  credits touched. Account77% at final review; wrap up now to leave a buffer before
+  user90% session limit. Stop reason: three completed slices, no partial code.
+- Next bounded work: lifespan/startup failure propagation and CORS fixes from
+  September Task1; migrations/PostgreSQL, profiles/AI remain later. Check usage
+  and branch publication status before starting. Earlier active/pause entries
+  below are historical progress notes, not unfinished workers.
+
+## Active Slice: JSON Overflow Validation
+
+- Branch `fix/json-overflow-validation`, base completed collector `2374acf`.
+- User-approved continuation; usage50% five-hour on starting. Stop near90%.
+- Reproduce raw JSON numeric overflow500 and return JSON-safe422 instead. Minimal
+  RequestValidationError handler; no lifecycle/CORS/dependency edits in this slice.
+- Developer owns handler, registration and tests; coordinator docs/review/checkpoint.
+
 ## Active Slice: Collector Refresh
 
 - Branch `test/collector-refresh-regressions`, base metric-creation commit `d9e56ce`.

@@ -2,10 +2,12 @@ import uvicorn
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import engine
+from app.core.validation import request_validation_exception_handler
 from app.api.companies import router as companies_router
 from app.api.data_collection import router as data_collection_router
 from app.api.financial_metrics import router as financial_metrics_router
@@ -16,6 +18,9 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     application = FastAPI(
         title=settings.PROJECT_NAME,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    )
+    application.add_exception_handler(
+        RequestValidationError, request_validation_exception_handler
     )
 
     # Set up CORS middleware
