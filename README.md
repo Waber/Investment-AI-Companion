@@ -42,6 +42,9 @@ investment_ai_companion/
 
 ## Setup
 
+For step-by-step IDE configuration, see [Run and debug in PyCharm](docs/ide-startup.md).
+The application currently has a backend and Swagger UI, not a separate frontend.
+
 1. Create and activate the virtual environment:
 
 ```bash

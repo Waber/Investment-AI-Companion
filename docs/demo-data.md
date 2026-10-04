@@ -1,5 +1,10 @@
 # Reusable Synthetic Demo Data
 
+> Commands using `/private/tmp/investment-demo-fixtures` refer to the original
+> temporary checkout. Substitute your current checkout containing this file.
+> Provision a local API with the [IDE startup guide](ide-startup.md) first;
+> the old demo runtime is not guaranteed to survive cleanup.
+
 The versioned source is [demo-v1.json](../fixtures/demo-v1.json), not a download
 of real securities or financial statements. All names, tickers, exchanges, and
 amounts are invented. No data-provider keys or investment decisions are involved.

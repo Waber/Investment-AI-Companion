@@ -1,5 +1,23 @@
 # Current Work State
 
+## 2026-10-04 Recovery And Publication
+
+- Current branch: `docs/demo-and-ide-delivery`; recovered committed base `69258b9`
+  into `/private/tmp/investment-pr-delivery` for the user-requested commit/push/PR.
+- The former temporary worktree was emptied; uncommitted IDE documentation was
+  lost after both agents hit the usage limit. The guide is reconstructed with
+  explicit database prerequisites and without assuming the old runtime survives.
+- The September runtime/process statements below are historical, not current
+  service status. No database or service was restarted during recovery.
+- Primary checkout has a user-selected branch and untracked `.python-version`;
+  neither was changed. PR targets `master`; no merge is authorized in this task.
+- Verified:611 tests passed, six existing warnings; independent documentation
+  review approved without findings. Push and PR target `master`, not a merge.
+  Next development work starts from this PR branch after checking its GitHub
+  status. Development backlog below remains outside this publication task.
+
+## Historical September Snapshot
+
 - Date: 2026-09-26. User requested continuation and reusable test data for API/future frontend testing.
 - Current branch: `feature/reusable-demo-fixtures`, based on demo documentation commit `83940ea`. Tooling worktree: `/private/tmp/investment-demo-fixtures`. Running application remains in `/private/tmp/investment-api-demo`; no restart needed for HTTP-based seeding.
 - Primary repo remains `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`; its `master` and untracked `.python-version` are untouched.

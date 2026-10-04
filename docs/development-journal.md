@@ -1,5 +1,27 @@
 # Development Journal
 
+## 2026-10-04 - Recover and publish recent work
+
+- User requested commit, push and PR. Recovered committed fixture/API/test work
+  from `69258b9` onto `docs/demo-and-ide-delivery` in a new temporary worktree.
+- Previous IDE documentation agents hit the usage limit before commit/review.
+  The old temporary worktree now contains no files. Reconstructed the guide;
+  do not describe it as an exact recovery of the uncommitted file.
+- README links the guide. Current-state notes distinguish historical runtime
+  observations from the present, unverified service state.
+- No production behavior, dependency, database or primary-checkout changes.
+  GUI startup and fresh installation remain untested. Verification and review
+  results will be recorded before publication. No merge requested.
+- Model inherited from session; exact identity and elapsed effort not measured.
+- Verification: full isolated pytest suite passed611 cases with six existing
+  warnings; `git diff --check` passed. Independent reviewer Ptolemy approved
+  reconstructed documentation without actionable findings. Review was read-only;
+  no GUI/provisioning/live provider validation is claimed.
+- Publication includes the prior unpublished ancestor commits (404 behavior,
+  website-update tests, API demo, fixtures and planning docs), but excludes the
+  separate dependency-conflict WIP branch. Latest usage12% five-hour/2% weekly
+  consumed; no reset redeemed. Scope ends with push and PR, not merge.
+
 `CONVERSATION.md` contains legacy project history. This journal is the forward-looking delivery log for new agentic development.
 
 ## 2026-07-04 - Iteration 1 (project guidance and baseline tests)

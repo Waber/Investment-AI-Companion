@@ -1,5 +1,10 @@
 # Local API Demo
 
+> Historical runtime: the absolute `/private/tmp` paths below describe the
+> September 26 session and may no longer exist. They are not a current health
+> check or a fresh-install procedure. For a new local run, start with the
+> [IDE startup guide](ide-startup.md).
+
 This is the existing FastAPI backend, not a frontend. AI analysis and investor
 profiles are not implemented. All company names, tickers, and financial values
 below are synthetic, not market data or investment advice. Example website URLs
