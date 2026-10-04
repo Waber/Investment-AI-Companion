@@ -24,6 +24,7 @@
 ## Session Continuity And Checkpoints
 
 - Check account usage before work and after each meaningful stage. At 80% consumed
+  (or a different threshold explicitly set by the user for the current session)
   in either available usage window, stop starting tasks, checkpoint current work,
   and notify the user before continuing. Begin wrapping up earlier when needed
   to leave room for verification, review and commits. These are account limits,

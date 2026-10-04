@@ -1,5 +1,21 @@
 # Development Journal
 
+## 2026-10-04 - Resume after user reset: metric creation conflicts
+
+- User performed reset (coordinator did not redeem credit), usage0% both windows.
+  Session-specific limit90%; AGENTS now permits an explicit session override.
+- Branch `test/metric-creation-conflicts`, base `0008b0c`. Helmholtz owns a bounded
+  test file: duplicate tuple rejection, each key component distinguishing records,
+  real FK/unique constraint rollback with same-session reuse and persisted state.
+- No production edits planned; characterize correct behavior. Coordinator owns
+  continuity/full verification; independent review before commit. Collector follows
+  as a separately committed slice if usage permits. Inherited model, time not timed.
+- Results:6 new cases passed against unchanged production code. Full702 passed,
+  six existing warnings, using prior clean-env pytest command. Poincare approved
+  spec/quality with no findings. Black/flake8 passed; coordinator worktree-local
+  isort found grouping drift from developer's temporary CWD check and corrected it.
+  Usage20% five-hour/3% weekly; commit before starting collector work.
+
 ## 2026-10-04 - Company update conflicts and rollback
 
 - Continued at60% five-hour usage with a small characterization slice on

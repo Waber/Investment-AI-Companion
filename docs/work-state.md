@@ -1,5 +1,19 @@
 # Current Work State
 
+## Resumed Session: Metric Creation And Collector Coverage
+
+- User reset usage and authorized continuation with a90% threshold for this session;
+  default80% remains for future sessions unless overridden. Initial account usage0%.
+- Branch `test/metric-creation-conflicts` based on `0008b0c`, same worktree.
+- Helmholtz owns metric creation conflict/rollback tests. Coordinator handles docs,
+  full tests and independent review. Then proceed to fake-collector refresh coverage
+  only after this slice is committed and usage permits. No live providers or DBs.
+- Earlier pause statements below are historical. Previous completed slices remain
+  local ancestors; no automatic push/merge. Start wrapping up before90%.
+- Metric creation slice completed:6 new cases, full702 passed/six existing warnings;
+  Poincare approved spec and quality. Coordinator corrected import grouping using
+  worktree-local isort. No production changes. Usage20% at verification.
+
 ## Active Slice: Company Update Conflicts
 
 - Branch `test/company-update-conflicts`, based on completed `569a89e`, same
