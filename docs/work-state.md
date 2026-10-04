@@ -1,5 +1,23 @@
 # Current Work State
 
+## Active Slice: 2026-10-04 Metric Updates
+
+- PR1 merged as `1e05ab1`; older sections below describe historical states.
+- Branch `test/financial-metric-updates`, `/private/tmp/investment-metric-updates`.
+- Scope: partial metric updates, explicit null, zero, omission and invalid payloads.
+  [Slice plan](superpowers/plans/2026-10-04-metric-updates.md). Hubble owns tests;
+  coordinator handles docs/full tests. Completed:82 new cases, full693 passed
+  with six existing warnings. Black/isort/flake8 passed for the new file;
+  Aristotle approved spec and quality. No production changes needed.
+- Start usage29% five-hour/4% weekly; preparation35%/5%. User requires closing
+  work at80% consumed, then notification and waiting for continuation; no reset
+  without authorization. Policy recorded in AGENTS.
+- No live database/runtime/provider changes; preserve primary checkout/user files.
+- Next after this slice: uniqueness/rollback and fake-collector regressions.
+- Completed slice saved locally; no automatic push/merge. Agents closed at delivery.
+  Usage at verification50% five-hour/8% weekly; no reset needed. Stop reason:
+  bounded slice complete with review/commit, not reaching the80% limit.
+
 ## 2026-10-04 Recovery And Publication
 
 - Current branch: `docs/demo-and-ide-delivery`; recovered committed base `69258b9`
@@ -40,8 +58,8 @@
 ## Remaining Work
 
 - Missing-update404 and website-update regressions are complete in ancestors `3a2b0af` and `731c513`.
-- Metric partial-update/null, uniqueness/rollback and collection regression coverage; JSON overflow handling; lifecycle/CORS/deprecation cleanup; guarded migrations and automated PostgreSQL integration tests remain pending.
+- Metric partial-update/null coverage is complete in the active slice. Uniqueness/rollback and collection regression coverage; JSON overflow handling; lifecycle/CORS/deprecation cleanup; guarded migrations and automated PostgreSQL integration tests remain pending.
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- Next authorized development slice: metric partial-update/null regressions. Keep the running demo stable; develop in another isolated worktree.
+- Next development slice: uniqueness/rollback regressions, then fake-collector refresh coverage. Do not assume the old demo runtime still exists.

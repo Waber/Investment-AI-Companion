@@ -1,5 +1,28 @@
 # Development Journal
 
+## 2026-10-04 - Financial metric update characterization
+
+- User confirmed PR1 merged and authorized continuation with an80% account-usage
+  stop threshold. Recorded this policy in AGENTS; no reset may be redeemed without
+  authorization. Start usage29% five-hour/4% weekly consumed.
+- New branch `test/financial-metric-updates`, base `1e05ab1`, worktree
+  `/private/tmp/investment-metric-updates`. Primary checkout/user files untouched.
+- Hubble owns only new update tests; coordinator handles docs and full verification;
+  independent reviewer follows. Scope: partial updates/null/zero/omission and invalid
+  updates, not all remaining Task2 work. Existing correct code need not change.
+- Inherited agent model; exact model identity and elapsed effort not measured.
+- Results:82 new API characterization cases across all20 numeric fields. All pass
+  against existing production code; no newly reproduced/fixed defect is claimed.
+  Tests compare PUT/GET, fresh persisted snapshots, identity and unrelated rows;
+  rejected422 payloads preserve timestamps as well as values.
+- Coordinator full suite:693 passed, six existing warnings. Command from
+  `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-metric-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests`.
+- Black/isort/flake8 checks passed for the new test file. Independent Aristotle
+  review approved spec compliance and quality without actionable findings.
+- Hubble and Aristotle closed at delivery. Verification usage50% five-hour/8%
+  weekly consumed; no reset. Stop at completed bounded scope, not exhaustion.
+  Local commit only; remaining Task2 uniqueness/rollback/collector work not complete.
+
 ## 2026-10-04 - Recover and publish recent work
 
 - User requested commit, push and PR. Recovered committed fixture/API/test work

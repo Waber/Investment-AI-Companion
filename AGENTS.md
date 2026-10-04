@@ -23,6 +23,13 @@
 
 ## Session Continuity And Checkpoints
 
+- Check account usage before work and after each meaningful stage. At 80% consumed
+  in either available usage window, stop starting tasks, checkpoint current work,
+  and notify the user before continuing. Begin wrapping up earlier when needed
+  to leave room for verification, review and commits. These are account limits,
+  not a measurement of remaining conversation context. Never redeem a reset
+  without explicit authorization; wait for the user's continuation after reset.
+
 - At the start of a new session, read `docs/work-state.md`, the latest development journal entry, and the linked plan or review before choosing the next task.
 - Before an anticipated context handoff, context compaction, usage-limit interruption, or user-requested pause, checkpoint at a safe boundary while tools are still available.
 - Commit only the current task's deliberate changes on its working branch. A partial checkpoint must be clearly labeled WIP and must not be merged or described as finished. Preserve unrelated changes, secrets, local configuration, and untracked user files.
