@@ -1,5 +1,15 @@
 # Current Work State
 
+## Active Slice: Collector Refresh
+
+- Branch `test/collector-refresh-regressions`, base metric-creation commit `d9e56ce`.
+  Same worktree. Fake-provider refresh/not-found tests in progress; no live calls.
+- Metric creation conflict/rollback stage completed and committed. Current session
+  threshold90% remains; check usage before choosing any subsequent work.
+- Collector complete:6 new cases, full708 passed/six warnings. Epicurus approved
+  spec/quality; coordinator Black/isort/flake8 passed. No production changes.
+  Both developer/reviewer closed. Next candidate: JSON overflow validation errors.
+
 ## Resumed Session: Metric Creation And Collector Coverage
 
 - User reset usage and authorized continuation with a90% threshold for this session;

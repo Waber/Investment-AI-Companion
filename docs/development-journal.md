@@ -1,5 +1,17 @@
 # Development Journal
 
+## 2026-10-04 - Fake collector refresh regressions
+
+- Separate branch `test/collector-refresh-regressions` based on reviewed `d9e56ce`.
+  Developer owns only `tests/test_collection_updates.py`; no live provider calls.
+- Scope: existing-company refresh, identity preservation, repeat without duplicates,
+  missing provider result404 without writes, unrelated company/metrics preservation.
+  Coordinator handles full tests/docs, followed by independent spec/quality review.
+- Cicero delivered6 cases; coordinator full708 passed/six legacy warnings and
+  scoped Black/isort/flake8 passed. Epicurus approved spec/quality without findings.
+  No production changes or live provider calls. Both agents closed at commit.
+  Characterization completes the planned collector refresh/not-found coverage.
+
 ## 2026-10-04 - Resume after user reset: metric creation conflicts
 
 - User performed reset (coordinator did not redeem credit), usage0% both windows.

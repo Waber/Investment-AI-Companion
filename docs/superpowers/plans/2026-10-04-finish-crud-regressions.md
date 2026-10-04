@@ -1,5 +1,10 @@
 # Finish CRUD Regression Coverage
 
+Completed: metric creation6 cases (full702), collector6 cases (full708), both
+independently reviewed and scoped style checks passed. Six legacy warnings remain.
+No production changes needed. Full September Task2 targeted scenarios are covered
+across the prior commits and these two slices; PostgreSQL verification is separate.
+
 Continue the approved September Task2 from `0008b0c` in two bounded commits.
 
 1. Metric creation: duplicate tuple rejects without mutation; changing each key
