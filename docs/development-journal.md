@@ -1,5 +1,22 @@
 # Development Journal
 
+## 2026-10-04 - Company update conflicts and rollback
+
+- Continued at60% five-hour usage with a small characterization slice on
+  `test/company-update-conflicts`, based on `569a89e`. Same isolated worktree.
+- Kant owns only the new conflict tests. Scope: duplicate name/ticker API
+  rejection without mutation, then successful update; real constraint failure
+  and recovery using the SAME repository session. No collector/metrics expansion.
+- Coordinator will run full tests and independent review before local commit.
+  At80% stop and notify user; no automatic reset. Inherited model, effort not timed.
+- Completed3 characterization cases without production changes; coordinator full
+  isolated pytest run696 passed, six existing warnings. Same env-i command as
+  metric slice. Kant reports scoped Black/isort/flake8 passed; Raman static review
+  approved specification/quality with no findings. No live database/provider calls.
+- Usage rose60% ->75% ->82% between checks. Stop reason: user80% threshold reached;
+  save local checkpoint and wait for explicit continuation, no reset redeemed.
+  Agents closed. Next scope: metrics creation conflicts/rollback, then collector.
+
 ## 2026-10-04 - Financial metric update characterization
 
 - User confirmed PR1 merged and authorized continuation with an80% account-usage

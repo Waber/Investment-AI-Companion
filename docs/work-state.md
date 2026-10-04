@@ -1,5 +1,18 @@
 # Current Work State
 
+## Active Slice: Company Update Conflicts
+
+- Branch `test/company-update-conflicts`, based on completed `569a89e`, same
+  `/private/tmp/investment-metric-updates` worktree. Start usage60% five-hour.
+- Kant implements narrow duplicate-name/ticker and same-session rollback tests.
+  Completed3 cases; full696 tests passed with six existing warnings. Raman approved
+  specification and quality. No production changes. Developer scoped format/lint
+  checks passed. Saved as local commit, no push/merge.
+- Last usage82% five-hour/13% weekly, crossing80% between checks. Pausing after
+  checkpoint; wait for user reset/continuation. No reset redeemed. Agents closed.
+- Previous metric slice below is complete. Collector and metric-creation
+  uniqueness/rollback remain separate follow-up work. Stop at80% consumption.
+
 ## Active Slice: 2026-10-04 Metric Updates
 
 - PR1 merged as `1e05ab1`; older sections below describe historical states.
