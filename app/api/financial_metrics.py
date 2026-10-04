@@ -161,6 +161,8 @@ def update_financial_metrics(metrics_id: int, metrics: FinancialMetricsUpdate, d
             raise HTTPException(status_code=404, detail="Financial metrics not found")
         
         return db_to_metrics_model(db_metrics)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "marker": "[IAC-DEMO-V1]",
+  "companies": [
+    {
+      "company": {
+        "name": "Demo Vistula Software", "ticker": "DEMO_PL_TECH",
+        "description": "[IAC-DEMO-V1] Synthetic Polish software company with profitable growth. Not market data.",
+        "sector": "Technology", "industry": "Software", "country": "Poland",
+        "exchange": "DEMO-WSE", "currency": "PLN", "website": "https://vistula.example.com/"
+      },
+      "metrics": [
+        {"period_end": "2023-12-31T00:00:00Z", "period_type": "annual", "revenue": 10000000, "net_income": 1000000, "total_assets": 18000000, "total_liabilities": 6000000, "total_equity": 12000000},
+        {"period_end": "2024-12-31T00:00:00Z", "period_type": "annual", "revenue": 12500000, "net_income": 1500000, "total_assets": 20000000, "total_liabilities": 6500000, "total_equity": 13500000},
+        {"period_end": "2025-12-31T00:00:00Z", "period_type": "annual", "revenue": 15000000, "net_income": 2100000, "total_assets": 24000000, "total_liabilities": 7500000, "total_equity": 16500000},
+        {"period_end": "2026-03-31T00:00:00Z", "period_type": "quarterly", "revenue": 4200000, "net_income": 600000, "total_assets": 25000000, "total_liabilities": 7800000, "total_equity": 17200000}
+      ]
+    },
+    {
+      "company": {
+        "name": "Demo Pacific Growth", "ticker": "DEMO_US_GROWTH",
+        "description": "[IAC-DEMO-V1] Synthetic US growth company moving from losses toward profit. Not market data.",
+        "sector": "Technology", "industry": "Cloud Services", "country": "USA",
+        "exchange": "DEMO-NASDAQ", "currency": "USD", "website": "https://pacific.example.com/"
+      },
+      "metrics": [
+        {"period_end": "2023-12-31T00:00:00Z", "period_type": "annual", "revenue": 20000000, "net_income": -8000000, "total_assets": 40000000, "total_liabilities": 10000000, "total_equity": 30000000, "pe_ratio": null},
+        {"period_end": "2024-12-31T00:00:00Z", "period_type": "annual", "revenue": 32000000, "net_income": -4000000, "total_assets": 46000000, "total_liabilities": 20000000, "total_equity": 26000000, "pe_ratio": null},
+        {"period_end": "2025-12-31T00:00:00Z", "period_type": "annual", "revenue": 47000000, "net_income": -1000000, "total_assets": 52000000, "total_liabilities": 27000000, "total_equity": 25000000, "pe_ratio": null},
+        {"period_end": "2026-03-31T00:00:00Z", "period_type": "quarterly", "revenue": 14000000, "net_income": 300000, "total_assets": 55000000, "total_liabilities": 29700000, "total_equity": 25300000, "pe_ratio": null}
+      ]
+    },
+    {
+      "company": {
+        "name": "Demo Rhine Industry", "ticker": "DEMO_DE_INDUSTRY",
+        "description": "[IAC-DEMO-V1] Synthetic German industrial company with declining sales. Not market data.",
+        "sector": "Industrials", "industry": "Machinery", "country": "Germany",
+        "exchange": "DEMO-XETRA", "currency": "EUR", "website": "https://rhine.example.com/"
+      },
+      "metrics": [
+        {"period_end": "2023-12-31T00:00:00Z", "period_type": "annual", "revenue": 80000000, "net_income": 6000000, "total_assets": 100000000, "total_liabilities": 55000000, "total_equity": 45000000},
+        {"period_end": "2024-12-31T00:00:00Z", "period_type": "annual", "revenue": 72000000, "net_income": 3500000, "total_assets": 97000000, "total_liabilities": 52000000, "total_equity": 45000000},
+        {"period_end": "2025-12-31T00:00:00Z", "period_type": "annual", "revenue": 65000000, "net_income": 1000000, "total_assets": 93000000, "total_liabilities": 48000000, "total_equity": 45000000},
+        {"period_end": "2026-03-31T00:00:00Z", "period_type": "quarterly", "revenue": 14000000, "net_income": -500000, "total_assets": 90000000, "total_liabilities": 45500000, "total_equity": 44500000}
+      ]
+    },
+    {
+      "company": {
+        "name": "Demo Sakura Consumer", "ticker": "DEMO_JP_STABLE",
+        "description": "[IAC-DEMO-V1] Synthetic Japanese consumer company with stable positive earnings. Not market data.",
+        "sector": "Consumer Staples", "industry": "Household Products", "country": "Japan",
+        "exchange": "DEMO-TSE", "currency": "JPY", "website": "https://sakura.example.com/"
+      },
+      "metrics": [
+        {"period_end": "2023-12-31T00:00:00Z", "period_type": "annual", "revenue": 1000000000, "net_income": 80000000, "total_assets": 1800000000, "total_liabilities": 600000000, "total_equity": 1200000000},
+        {"period_end": "2024-12-31T00:00:00Z", "period_type": "annual", "revenue": 1030000000, "net_income": 82000000, "total_assets": 1850000000, "total_liabilities": 620000000, "total_equity": 1230000000},
+        {"period_end": "2025-12-31T00:00:00Z", "period_type": "annual", "revenue": 1050000000, "net_income": 85000000, "total_assets": 1900000000, "total_liabilities": 640000000, "total_equity": 1260000000},
+        {"period_end": "2026-03-31T00:00:00Z", "period_type": "quarterly", "revenue": 270000000, "net_income": 22000000, "total_assets": 1920000000, "total_liabilities": 640000000, "total_equity": 1280000000}
+      ]
+    },
+    {
+      "company": {
+        "name": "Demo Merlion Research", "ticker": "DEMO_SG_EARLY",
+        "description": "[IAC-DEMO-V1] Synthetic Singapore research startup with zero revenue and sparse financial fields. Not market data.",
+        "sector": "Healthcare", "industry": "Research", "country": "Singapore",
+        "exchange": "DEMO-SGX", "currency": "SGD", "website": null
+      },
+      "metrics": [
+        {"period_end": "2023-12-31T00:00:00Z", "period_type": "annual", "revenue": 0, "net_income": -2000000, "total_assets": null, "total_liabilities": null, "total_equity": null},
+        {"period_end": "2024-12-31T00:00:00Z", "period_type": "annual", "revenue": 0, "net_income": -2500000, "total_assets": 6000000, "total_liabilities": 2000000, "total_equity": 4000000},
+        {"period_end": "2025-12-31T00:00:00Z", "period_type": "annual", "revenue": 200000, "net_income": -1800000, "total_assets": 4200000, "total_liabilities": 2000000, "total_equity": 2200000},
+        {"period_end": "2026-03-31T00:00:00Z", "period_type": "quarterly", "revenue": 100000, "net_income": null, "total_assets": null, "total_liabilities": null, "total_equity": null}
+      ]
+    },
+    {
+      "company": {
+        "name": "Demo Baltic Unreported", "ticker": "DEMO_PL_EMPTY",
+        "description": "[IAC-DEMO-V1] Synthetic Polish company with no financial reports for empty-state testing. Not market data.",
+        "sector": null, "industry": null, "country": "Poland",
+        "exchange": "DEMO-WSE", "currency": "PLN", "website": null
+      },
+      "metrics": []
+    }
+  ]
+}

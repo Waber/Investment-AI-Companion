@@ -42,6 +42,9 @@ investment_ai_companion/
 
 ## Setup
 
+For step-by-step IDE configuration, see [Run and debug in PyCharm](docs/ide-startup.md).
+The application currently has a backend and Swagger UI, not a separate frontend.
+
 1. Create and activate the virtual environment:
 
 ```bash
@@ -72,6 +75,13 @@ python -m uvicorn main:app --reload
 Open API docs at `http://127.0.0.1:8000/docs`.
 
 ## API Routes
+
+For the isolated local demo, curl examples, and lifecycle commands, see
+[API demo guide](docs/api-demo.md). The demo runs on loopback only and uses
+synthetic data; it is not a production deployment.
+
+See [Reusable Synthetic Demo Data](docs/demo-data.md) for the versioned fixture,
+read-only preview, and explicit, non-overwriting seed command.
 
 - Root metadata: `GET /`
 - Company endpoints: `/api/v1/companies`
