@@ -18,7 +18,9 @@
   production files from the cleanup still have the same pre-existing
   Black/flake8 debt; isort still fails only `app/api/data_collection.py`
   among them. None were reformatted.
-- Next action for this slice: open the pull request for review. Do not merge.
+- Next action for this slice: review
+  [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15).
+  Do not merge.
 - The resume instructions below are the deprecation cleanup's own snapshot.
   They are kept, including the "not merged" line that was true when that
   pull request was opened. PR #13 is merged now.
