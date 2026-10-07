@@ -74,5 +74,9 @@ class FinancialMetrics(FinancialMetricsBase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    class Config:
-        from_attributes = True  # for SQLAlchemy compatibility
+    # from_attributes reads SQLAlchemy rows. allow_inf_nan stays False
+    # so this response model still rejects Infinity and NaN.
+    model_config = ConfigDict(
+        allow_inf_nan=False,
+        from_attributes=True,
+    )

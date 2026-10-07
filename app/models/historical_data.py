@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HistoricalDataBase(BaseModel):
@@ -47,6 +47,6 @@ class HistoricalData(HistoricalDataBase):
     company_id: int = Field(..., description="Company ID")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
-    class Config:
-        from_attributes = True  # for SQLAlchemy compatibility 
+
+    # No SQLAlchemy model yet; from_attributes reads row-like objects.
+    model_config = ConfigDict(from_attributes=True)
