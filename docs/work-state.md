@@ -3,8 +3,9 @@
 ## Resume Instructions
 
 Deprecation cleanup (GitHub issue #4) is implemented on
-`cursor/deprecation-cleanup-7154` and is ready for review. Do not merge
-unless the user explicitly authorizes it.
+`cursor/deprecation-cleanup-7154` and published as
+[PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13).
+Do not merge unless the user explicitly authorizes it.
 
 - Base: `origin/master` `a58dc8a` (PR #3, rebase workflow, rebase-merged).
   PR #2 is merged as `b10d06e`.
@@ -22,7 +23,8 @@ unless the user explicitly authorizes it.
   files still have pre-existing Black/flake8 debt; isort fails only
   `app/api/data_collection.py` among the edited files. `git diff --check`
   passed. Repo-wide lint was not run.
-- Next action: review the pull request. After merge, guarded Alembic baseline
+- Next action: review [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13).
+  After merge, guarded Alembic baseline
   and isolated PostgreSQL tests. Editable profiles and source-aware AI stay
   later. Tooling config (PR #6) and minimal CI (PR #5) are separate work and
   do not own this journal or work-state.
@@ -184,7 +186,8 @@ review/merge next-action line below was the state when this snapshot was written
 - Metric partial-update/null, uniqueness/rollback and collector regression coverage
   and JSON overflow handling are complete. Lifespan/CORS is merged (PR #2,
   `b10d06e`). Pydantic/SQLAlchemy deprecation cleanup is implemented on
-  `cursor/deprecation-cleanup-7154` and is awaiting review, not merged.
+  `cursor/deprecation-cleanup-7154` ([PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13))
+  and is awaiting review, not merged.
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
