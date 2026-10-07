@@ -6,12 +6,12 @@ Active slice: minimal pytest CI for issue #5 on branch
 `cursor/minimal-pytest-ci-ed2f`, pull request
 [#14](https://github.com/Waber/Investment-AI-Companion/pull/14). Workflow is
 `.github/workflows/tests.yml`. Local suite on Python 3.12.3 with no `.env`:
-`742 passed, 4 warnings in 6.83s`. Actions run 37680648250 (Python 3.12.14)
-succeeded with `742 passed, 4 warnings in 4.84s`. Counts match. QA's check
-list is a local draft, not a GitHub comment. Fixed draft items are in
-the workflow; `--cov-fail-under=70` and `MIN_TESTS` stay out until Raul
-decides. Next action: prove a red demo run, revert it, leave PR #14 open,
-and do not merge. Lint and format stay out of this workflow (issue #6).
+`742 passed, 4 warnings in 6.83s`. The draft QA spec is applied.
+Pending Raul: the coverage threshold (`--cov-fail-under=70`), JUnit XML,
+and the `MIN_TESTS` gate. Red demo run 37681557386 failed on purpose and
+was reverted. Next action: confirm the updated head is green, re-run it
+for a pip cache hit, leave PR #14 open, and do not merge. Lint and format
+stay out of this workflow (issue #6).
 Deprecation cleanup (issue #4) is recorded below and stays in this file.
 
 Deprecation cleanup (GitHub issue #4) is implemented on
