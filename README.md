@@ -101,7 +101,11 @@ error. The coverage report does not fail the job.
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing
 ```
 
-Useful lint and formatting checks:
+Useful lint and formatting checks, run from the repository root. Black and
+isort read `pyproject.toml`. flake8 does not read that file, so it reads
+`.flake8`. All three use line length 79 from that configuration, so these
+commands do not pass `--line-length`. Older application files still contain
+formatting debt; the commands report it and do not reformat those files.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m black --check app main.py setup_database.py
