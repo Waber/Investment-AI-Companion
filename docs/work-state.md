@@ -12,12 +12,11 @@ Do not merge unless the user explicitly authorizes it.
 - Change: `declarative_base` now comes from `sqlalchemy.orm`. Response models
   use `ConfigDict` with `from_attributes=True`. Financial metrics still set
   `allow_inf_nan=False`. `FetchCompanyRequest` still documents ticker `AAPL`.
-- Baseline before the edit: 742 passed, 4 warnings. After the change, after
-  rebasing onto `origin/master` (`a58dc8a`, already current), and again
-  after the QA nits: 758 passed, no pytest warnings summary. The
-  warning-as-error test still fails on the pre-cleanup sources and passes
-  on this branch. Its child process uses a temporary working directory so a
-  repo-root `.env` is not loaded.
+- Baseline before the edit: 742 passed, 4 warnings. After the change and
+  the review follow-ups: 758 passed, no pytest warnings summary. The
+  warning check fails on the pre-cleanup sources and passes here. Its child
+  uses a temporary directory and checks that directory is not the project
+  root. The test does not write into the repo.
 - Verification used a clean environment and pinned `requirements.txt`
   (`pydantic==2.6.1`, `sqlalchemy==2.0.23`). No private `.env`, live
   provider, or dependency upgrade.
@@ -26,14 +25,13 @@ Do not merge unless the user explicitly authorizes it.
   `app/api/data_collection.py` among the edited files. `git diff --check`
   passed. Repo-wide lint was not run.
 - Next action: re-review [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
-  after the QA nits.
+  after the warning check stopped writing into the repo.
   After merge, guarded Alembic baseline
   and isolated PostgreSQL tests. Editable profiles and source-aware AI stay
   later. Tooling config (issue #6) and minimal CI (issue #5) are separate
   work and do not own this journal or work-state.
-- Account usage was not available in this Cursor session. No percentage was
-  recorded and no reset was redeemed. Stop reason: bounded cleanup completed,
-  not quota.
+- Account usage was not available in this Cursor session. Stop reason:
+  bounded cleanup completed, not quota.
 
 ## Previous Iteration: 2026-10-07 rebase workflow rule
 
