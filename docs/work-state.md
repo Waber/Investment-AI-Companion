@@ -5,19 +5,20 @@
 Active slice: minimal pytest CI for issue #5 on branch
 `cursor/minimal-pytest-ci-ed2f`, pull request
 [#14](https://github.com/Waber/Investment-AI-Companion/pull/14). Workflow is
-`.github/workflows/tests.yml`. Local suite on Python 3.12.3 with no `.env`:
-`742 passed, 4 warnings in 6.83s`. The draft QA spec is applied.
+`.github/workflows/tests.yml`. Rebased onto `origin/master` `a10e196`.
+Local suite on Python 3.12.3 with no `.env` and
+`-W error::DeprecationWarning`: `758 passed in 13.56s`, no warnings
+summary, coverage total `76%`. The draft QA spec is applied.
 Pending Raul: the coverage threshold (`--cov-fail-under=70`), JUnit XML,
 and the `MIN_TESTS` gate. Red demo run 37681557386 failed on purpose and
-was reverted. Next action: confirm the updated head is green, re-run it
-for a pip cache hit, leave PR #14 open, and do not merge. Lint and format
-stay out of this workflow (issue #6).
-Deprecation cleanup (issue #4) is recorded below and stays in this file.
+was reverted. Next action: confirm the rebased head is green with the
+warning flag, leave PR #14 open, and do not merge. Lint and format stay
+out of this workflow (issue #6).
+Deprecation cleanup is on master and is also recorded below.
 
-Deprecation cleanup (GitHub issue #4) is implemented on
-`cursor/deprecation-cleanup-7154` and published as
-[PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13).
-Do not merge unless the user explicitly authorizes it.
+Deprecation cleanup (GitHub issue #4) is on `origin/master` as `a10e196`
+(rebase merge of [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)).
+The bullets below are that delivery's record.
 
 Latest earlier delivery is the 2026-10-07 rebase workflow rule (docs only; see
 the journal). No production code changed in that delivery. Account usage from

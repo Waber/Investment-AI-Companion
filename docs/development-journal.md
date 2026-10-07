@@ -109,11 +109,14 @@
   `master`. Python 3.12, `python -m pip install -r requirements.txt` with
   the setup-python pip cache, `PYTHONDONTWRITEBYTECODE=1`, the job fails if
   `.env` exists, and the workflow does not read GitHub Actions secrets.
-  Command adds a coverage report and does not write JUnit XML. Four
-  existing deprecation warnings stay allowed. `-W error::DeprecationWarning`
-  waits until whichever of #13 and #14 merges second.
+  Command adds a coverage report and does not write JUnit XML.
+  PR #13 is rebase-merged, so the command now includes
+  `-W error::DeprecationWarning`.
 - The draft QA spec is applied. Pending Raul: the coverage threshold
   (`--cov-fail-under=70`), JUnit XML, and the `MIN_TESTS` gate.
+- After rebase onto `origin/master` `a10e196`, local Python 3.12.3 with
+  no `.env`: `758 passed in 13.56s`, no warnings summary, coverage total
+  `76%`.
   Negative check: commit `806faef` failed on purpose
   (https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386,
   `1 failed, 742 passed, 4 warnings`) and was reverted.

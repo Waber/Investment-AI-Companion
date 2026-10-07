@@ -10,7 +10,7 @@ The application must not present generated output as financial advice. Analysis 
 - SQLAlchemy persistence for companies and financial metrics.
 - Yahoo Finance data collection code for market-data ingestion.
 - Repository-level guidance in `AGENTS.md` and forward-looking delivery notes in `docs/development-journal.md`.
-- Baseline API tests in `tests/`, run from the repository root. The command in Tests And Quality Checks also prints a coverage report.
+- Baseline API tests in `tests/`, run from the repository root. The command in Tests And Quality Checks prints a coverage report and treats `DeprecationWarning` as an error.
 
 ## Planned Or Configured Integrations
 
@@ -93,11 +93,12 @@ read-only preview, and explicit, non-overwriting seed command.
 From the repository root, after the virtual environment in Setup exists, run
 the test suite. No `.env` file is required. Tests use the in-memory SQLite
 database in `tests/conftest.py` and do not call market-data or AI providers.
-GitHub Actions on Python 3.12 runs pytest and prints a coverage report
-for `app`, `main`, and `scripts`. The report does not fail the job.
+GitHub Actions on Python 3.12 runs pytest, prints a coverage report
+for `app`, `main`, and `scripts`, and treats `DeprecationWarning` as an
+error. The coverage report does not fail the job.
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing
 ```
 
 Useful lint and formatting checks:

@@ -67,8 +67,10 @@ jobs:
         # -q prints the pass/fail summary. -p no:cacheprovider skips
         # .pytest_cache. Coverage is a report, not a failing threshold.
         # JUnit XML, the coverage threshold, and the test-count gate stay
-        # out until that decision is made. Warnings stay allowed for now.
+        # out until that decision is made. DeprecationWarning is an error
+        # now that the deprecation cleanup is on master.
         run: >
           python -m pytest -q -p no:cacheprovider
+          -W error::DeprecationWarning
           --cov=app --cov=main --cov=scripts
           --cov-branch --cov-report=term-missing
