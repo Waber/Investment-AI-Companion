@@ -120,17 +120,15 @@
   Negative check: commit `806faef` failed on purpose
   (https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386,
   `1 failed, 742 passed, 4 warnings`) and was reverted.
-- Verification: `pip install -r requirements.txt` succeeded on Python 3.12.3.
-  From the repo root, with no `.env`:
-  `PYTHONDONTWRITEBYTECODE=1 /tmp/iac-pytest-venv/bin/python -m pytest -q -p no:cacheprovider`
-  -> `742 passed, 4 warnings in 6.83s`.
-  GitHub Actions run 37680648250 on Python 3.12.14 succeeded. Job log summary:
-  `742 passed, 4 warnings in 4.84s`. Passed and warning counts match; only the
-  duration differs.
+- Verification: with `-W error::DeprecationWarning` and the coverage report,
+  the suite is `758 passed`, 0 warnings, and `76%` coverage. GitHub Actions
+  run 37682560920 is green:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37682560920
+  Job log: `758 passed in 13.67s` and `TOTAL ... 76%`.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
 - Delivery: [PR #14](https://github.com/Waber/Investment-AI-Companion/pull/14)
   on `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the user authorizes
-  it. Issue #4 still owns the deprecation handoff below.
+  it.
 
 ## 2026-10-07 - Rebase workflow rule
 

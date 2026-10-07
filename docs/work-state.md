@@ -11,8 +11,8 @@ Local suite on Python 3.12.3 with no `.env` and
 summary, coverage total `76%`. The draft QA spec is applied.
 Pending Raul: the coverage threshold (`--cov-fail-under=70`), JUnit XML,
 and the `MIN_TESTS` gate. Red demo run 37681557386 failed on purpose and
-was reverted. Next action: confirm the rebased head is green with the
-warning flag, leave PR #14 open, and do not merge. Lint and format stay
+was reverted. Next action: awaiting Code Reviewer and Raul's decision
+on coverage threshold/JUnit/MIN_TESTS. Lint and format stay
 out of this workflow (issue #6).
 Deprecation cleanup is on master and is also recorded below.
 
