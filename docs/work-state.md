@@ -1,6 +1,22 @@
 # Current Work State
 
-## Delivery Checkpoint: 2026-10-04
+## Current Iteration: 2026-10-07
+
+- Branch `fix/startup-lifespan-cors`, worktree `/private/tmp/investment-metric-updates`.
+- Scope and delivery gates: [lifespan/CORS plan](superpowers/plans/2026-10-07-lifespan-cors.md).
+- User authorized implementation, push and PR, not merge. Five previous local
+  commits from `569a89e` through `cc54057` are included in this branch.
+- Implementation complete: lifespan calls existing init_db, startup errors
+  propagate, initialization can be disabled and CORS matches exact browser origins.
+- 25 new cases, full suite 742 passed / four existing deprecation warnings.
+  Scoped Black (79 columns), isort, flake8 and diff whitespace checks passed.
+- Carver independently approved code/tests and ancestor integration scan, and
+  ran the 25 focused cases. No real database/provider or service checks performed.
+- Ready for commit/push/PR against master; no merge. Agents finished. Stop reason:
+  approved bounded scope completed, not quota. Usage 29% after implementation.
+- Older entries below are historical, not active workers or current service state.
+
+## Historical Delivery Checkpoint: 2026-10-04
 
 - All work below is complete through the JSON overflow slice on
   `fix/json-overflow-validation` in `/private/tmp/investment-metric-updates`.
@@ -118,11 +134,14 @@
 - Local fixture commit only; no push/merge. Next session starts from this branch's journal. Temporary runtime is still disposable; committed fixture can reproduce baseline data in a fresh demo, but not user edits.
 - Temporary directories can disappear after cleanup/reboot. Git preserves code/docs, not the temporary demo database. Do not keep valuable data here.
 
-## Remaining Work
+## Remaining Work (Updated 2026-10-07)
 
 - Missing-update404 and website-update regressions are complete in ancestors `3a2b0af` and `731c513`.
-- Metric partial-update/null coverage is complete in the active slice. Uniqueness/rollback and collection regression coverage; JSON overflow handling; lifecycle/CORS/deprecation cleanup; guarded migrations and automated PostgreSQL integration tests remain pending.
+- Metric partial-update/null, uniqueness/rollback and collector regression coverage
+  and JSON overflow handling are complete. Lifespan/CORS is now complete;
+  Pydantic/SQLAlchemy deprecation cleanup remains deferred.
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- Next development slice: uniqueness/rollback regressions, then fake-collector refresh coverage. Do not assume the old demo runtime still exists.
+- After lifespan/CORS delivery: guarded migrations and automated PostgreSQL
+  integration tests. Do not assume the old demo runtime still exists.

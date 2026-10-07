@@ -105,10 +105,11 @@ for database errors and make a database-backed request:
 curl -q --noproxy '*' -fsS 'http://127.0.0.1:8082/api/v1/companies/?skip=0&limit=100'
 ```
 
-An empty new database should return `[]`. Startup currently calls
-`Base.metadata.create_all`; it can log database errors while leaving HTTP running.
-The root endpoint alone is therefore not a database health check. This is not
-an Alembic migration workflow.
+An empty new database should return `[]`. Startup initializes tables through
+`init_db()` during the application lifespan. A database initialization failure
+aborts startup; fix the connection or permissions before restarting. Initialization
+still uses `Base.metadata.create_all`, not Alembic migrations. The root endpoint
+is not a continuous database health check after startup.
 
 For debugging, set a breakpoint in a GET handler in `app/api/companies.py`, use
 **Debug**, and request that endpoint. Resume execution to receive the response.

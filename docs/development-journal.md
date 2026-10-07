@@ -1,5 +1,28 @@
 # Development Journal
 
+## 2026-10-07 - Lifespan, CORS And Publication
+
+- Dedicated branch `fix/startup-lifespan-cors` in the existing isolated worktree.
+  User requested completion, push and PR; no merge. Includes five unpublished
+  ancestor commits from the October 4 regression/validation work.
+- Kierkegaard implemented lifespan using existing `init_db()`, propagation of
+  initialization failures, disabled initialization mode and exact CORS matching
+  without the URL-added root slash. No new database creation path or migrations.
+- RED: 7 failed / 18 passed before implementation. GREEN: 25 focused cases;
+  coordinator full isolated suite 742 passed with four preexisting warnings
+  (SQLAlchemy and Pydantic). Deprecated FastAPI startup warnings are gone.
+- Full command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-metric-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests`.
+- Scoped checks: `black --check --line-length 79 main.py tests/test_lifespan_cors.py`,
+  `isort --check-only` and `flake8` on the same files, plus `git diff --check`.
+  Black's default 88-column check differs; explicit 79 matches default flake8.
+- Updated IDE startup guide and stale remaining-work items. No user database,
+  live provider, dependency upgrade or service restart. Migration/PG integration,
+  profiles, AI and remaining deprecations deferred.
+- Carver independently approved code/tests and the ancestor integration scan;
+  reviewer reran 25 focused cases. Stop at completed scope, not quota. Commit,
+  push and PR follow verification; no merge. Usage 6% at start, 29% after implementation.
+  Agent model inherited; precise model identifier and elapsed time not measured.
+
 ## 2026-10-04 - JSON overflow validation fix
 
 - Started from `2374acf` at50% five-hour/8% weekly usage. Dedicated branch
