@@ -1,5 +1,38 @@
 # Development Journal
 
+## 2026-10-07 - Rebase workflow rule
+
+- Scope: documentation only. Record that this project keeps a linear history
+  with rebase. No production code, tests, or GitHub repository settings.
+- Decision: add a dedicated `## Git Workflow` section to AGENTS.md, after
+  Working Agreements. Feature branches rebase onto `origin/master`
+  (`git fetch`, then `git rebase origin/master`). Pulls use `git pull --rebase`.
+  Own unpublished or feature-branch commits may be tidied with interactive
+  rebase before a pull request. After rebasing an already-pushed feature
+  branch, push only with `--force-with-lease`, and only on that author's own
+  feature branch. Never rewrite `master` or shared branches. Pull requests
+  are integrated with GitHub "Rebase and merge". That option is enforceable
+  only when the repository has "Allow rebase merging" enabled; changing
+  repository settings is the user's decision, not an agent's. Agents still
+  must not merge a pull request unless the user explicitly authorizes it.
+  `git config pull.rebase true` in this repository makes later pulls rebase.
+  On a branch someone else also pushes to, coordinate before rebasing, or
+  rebase only right before merge. Rebase conflicts are resolved by preserving
+  both sides' intent, then the relevant tests are rerun; if unsure, stop and
+  report.
+- Why, for learning: a straight line of commits is easier to read, bisect,
+  and review than merge-commit knots.
+- Verification: reviewed the documentation diff. Pytest was not run because
+  no code behavior changed. Account usage from the previous ChatGPT tooling
+  was not available in this Cursor session; no usage percentage was recorded.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+- Delivery: one commit on `cursor/rebase-workflow-rule-0803`, based on
+  `origin/master` (`b10d06e`, merge of pull request #2). Pull request opened
+  against `master` and left unmerged. Deprecation cleanup is in progress on
+  a separate Developer branch. This pull request and that one both edit the
+  top of the journal and work-state; whichever merges second rebases and
+  resolves those conflicts carefully.
+
 ## Next Iteration Handoff - 2026-10-07
 
 ### Resume Here

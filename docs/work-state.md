@@ -2,13 +2,30 @@
 
 ## Resume Instructions
 
-The authoritative next-step checklist is **Next Iteration Handoff - 2026-10-07**
-at the top of [the development journal](development-journal.md). Next bounded
-task: Pydantic/SQLAlchemy deprecation cleanup, followed by migrations/PostgreSQL.
-No implementation started for that task. User requested this handoff only;
-wait for continuation. PR #2 was verified open before publishing the handoff.
+Latest delivery is the 2026-10-07 rebase workflow rule (docs only; see the
+journal entry above the handoff). No production code changed. Account usage
+from the previous ChatGPT tooling was not available in that Cursor session.
 
-## Current Iteration: 2026-10-07
+Pydantic/SQLAlchemy deprecation cleanup is in progress on a separate branch
+by the Developer. Migrations/PostgreSQL still follow that cleanup. The
+**Next Iteration Handoff - 2026-10-07** in [the development journal](development-journal.md)
+remains the checklist for that work.
+
+This pull request and the Developer's deprecation-cleanup pull request both
+edit the top of the journal and `docs/work-state.md`. Whichever merges second
+must rebase onto the updated `origin/master` and resolve those conflicts
+carefully, keeping both sides' intent.
+
+`origin/master` contains `b10d06e` (Merge pull request #2 from
+`Waber/fix/startup-lifespan-cors`). The note below that PR #2 was still open
+is historical. Branch new work from updated `origin/master` and rebase feature
+branches onto it. Do not merge the rebase-workflow pull request unless the
+user explicitly authorizes it.
+
+## Previous Iteration: 2026-10-07 lifespan and CORS
+
+Historical delivery, now on `origin/master` as merge commit `b10d06e`. The
+review/merge next-action line below was the state when this snapshot was written.
 
 - Branch `fix/startup-lifespan-cors`, worktree `/private/tmp/investment-metric-updates`.
 - Scope and delivery gates: [lifespan/CORS plan](superpowers/plans/2026-10-07-lifespan-cors.md).
