@@ -1,5 +1,79 @@
 # Development Journal
 
+## 2026-10-07 - Pydantic and SQLAlchemy deprecation cleanup
+
+- Scope: remove project-owned deprecated configuration without changing
+  validation, ORM conversion, response fields, or OpenAPI examples.
+  Tracked as GitHub issue #4. Branch `cursor/deprecation-cleanup-7154`,
+  based on `origin/master` `a58dc8a`. No dependency upgrade, migration,
+  schema redesign, live provider call, or private `.env`.
+- Why this shape, for learning: Pydantic v1 stored model options in a nested
+  `class Config`. Pydantic 2.6 still accepts that nested class, but warns and
+  will remove it in v3. `model_config = ConfigDict(...)` is the same map of
+  options, declared directly on the class. `from_attributes=True` is what
+  lets `model_validate` read a SQLAlchemy row (or any object with attributes)
+  instead of only a dict. Financial metrics already set
+  `allow_inf_nan=False` on the shared base model. The response model sets
+  that flag again next to `from_attributes=True`, so replacing the nested
+  `Config` class cannot drop the Infinity/NaN ban. Pydantic 2.6 merges a
+  subclass `model_config` with its parent; setting the flag explicitly does
+  not rely on that merge. `FetchCompanyRequest` keeps
+  `json_schema_extra={"example": {"ticker": "AAPL"}}`, which is the example
+  FastAPI copies into the OpenAPI component. SQLAlchemy 2 moved
+  `declarative_base` to `sqlalchemy.orm`. The function still builds one
+  shared `Base`; only the import path changed. `CompanyDB` and
+  `FinancialMetricsDB` still use that same `Base.metadata`.
+- Decisions: do not reformat untouched legacy lines. `class Config` remains
+  only where it existed. Create and update metric models stay without
+  `from_attributes`. Historical prices still have no SQLAlchemy model; the
+  new test uses a plain attribute object for that schema. The warning check
+  runs in a fresh interpreter and turns the two targeted messages into
+  errors. It does not ignore warnings.
+- RED, before any production edit: `tests/test_model_config_compatibility.py::test_project_imports_do_not_emit_targeted_deprecations`
+  failed. The child process raised `sqlalchemy.exc.MovedIn20Warning` at
+  `app/core/database.py` while importing `declarative_base` from
+  `sqlalchemy.ext.declarative`. A separate import of the five modules, with
+  warnings recorded, showed five warnings: that SQLAlchemy warning plus four
+  `PydanticDeprecatedSince20` warnings (`company`, `financial_metrics`,
+  `historical_data`, `data_collection`). The normal suite showed four because
+  it did not import `historical_data`. The other new behavior tests passed
+  against the old code.
+- GREEN: the warning check passes, and importing those five modules records
+  zero warnings. Focused file plus JSON-overflow, lifespan/CORS, financial
+  metric validation, and data-collection tests: 580 passed before the final
+  unused-import cleanup. Final full suite is below.
+- Baseline, clean environment, no `.env`, pinned requirements
+  (`pydantic==2.6.1`, `sqlalchemy==2.0.23`), Python 3.12.3:
+  `742 passed, 4 warnings in 5.67s`.
+- Final full suite on this branch before the pre-PR rebase:
+  `758 passed in 6.50s`, and pytest printed no warnings summary.
+  Sixteen new tests. Post-rebase rerun is recorded in the publication note
+  if the result changes.
+- Command (from `/workspace`, interpreter `/tmp/iac-venv`):
+  `/usr/bin/env -i PATH="/tmp/iac-venv/bin:/usr/bin:/bin" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/workspace /tmp/iac-venv/bin/python -m pytest -q -p no:cacheprovider /workspace/tests`
+- Style: `black --check --line-length 79`, `isort --check-only`, and
+  `flake8` pass for `tests/test_model_config_compatibility.py`. `isort`
+  passes for `app/core/database.py`, `app/models/company.py`,
+  `app/models/financial_metrics.py`, and `app/models/historical_data.py`.
+  `isort` still fails `app/api/data_collection.py` for pre-existing import
+  order. `black --line-length 79` still wants to reformat the five production
+  files, and `flake8` still reports pre-existing long lines, whitespace, and
+  unused imports on those files. None of the new lines are in that flake8
+  list. `git diff --check` is clean. Repo-wide lint was not run. Full-file
+  reformatting was skipped because it would rewrite untouched lines.
+- Status corrections kept alongside the older entries below: PR #2
+  (`fix/startup-lifespan-cors`) is merged as `b10d06e`. PR #3 (rebase
+  workflow) is rebase-merged as `a58dc8a`. Sentences below that still say
+  those pull requests were open are the record of that moment, not the
+  current state.
+- AI model: Grok 4.7 (Cursor cloud agent). Wall clock about 19:49-20:20 UTC.
+  Not a stopwatch measurement. Account usage was not available in this
+  Cursor session; no percentage was recorded and no reset was redeemed.
+- Next: review this pull request. Do not merge unless the user authorizes it.
+  After merge, guarded Alembic baseline and isolated PostgreSQL tests.
+  Parallel tooling-config and minimal-CI pull requests do not own this
+  journal or `docs/work-state.md`.
+
 ## 2026-10-07 - Rebase workflow rule
 
 - Scope: documentation only. Record that this project keeps a linear history
@@ -32,8 +106,15 @@
   a separate Developer branch. This pull request and that one both edit the
   top of the journal and work-state; whichever merges second rebases and
   resolves those conflicts carefully.
+- Update: PR #3 was rebase-merged as `a58dc8a` on 2026-10-07. The deprecation
+  cleanup entry above is the later edit to these docs.
 
 ## Next Iteration Handoff - 2026-10-07
+
+Status update: PR #2 is merged as `b10d06e`. PR #3 is rebase-merged as
+`a58dc8a`. The deprecation cleanup this handoff describes is implemented on
+`cursor/deprecation-cleanup-7154`; see the 2026-10-07 cleanup entry above.
+The bullets below stay as the original handoff.
 
 ### Resume Here
 

@@ -2,25 +2,42 @@
 
 ## Resume Instructions
 
-Latest delivery is the 2026-10-07 rebase workflow rule (docs only; see the
-journal entry above the handoff). No production code changed. Account usage
-from the previous ChatGPT tooling was not available in that Cursor session.
+Deprecation cleanup (GitHub issue #4) is implemented on
+`cursor/deprecation-cleanup-7154` and is ready for review. Do not merge
+unless the user explicitly authorizes it.
 
-Pydantic/SQLAlchemy deprecation cleanup is in progress on a separate branch
-by the Developer. Migrations/PostgreSQL still follow that cleanup. The
-**Next Iteration Handoff - 2026-10-07** in [the development journal](development-journal.md)
-remains the checklist for that work.
+- Base: `origin/master` `a58dc8a` (PR #3, rebase workflow, rebase-merged).
+  PR #2 is merged as `b10d06e`.
+- Change: `declarative_base` now comes from `sqlalchemy.orm`. Response models
+  use `ConfigDict` with `from_attributes=True`. Financial metrics still set
+  `allow_inf_nan=False`. `FetchCompanyRequest` still documents ticker `AAPL`.
+- Baseline before the edit: 742 passed, 4 warnings. Final suite on this
+  branch: 758 passed, no pytest warnings summary. The warning-as-error test
+  failed before the migration (see the journal). Post-rebase rerun is the
+  number to trust if `origin/master` moved.
+- Verification used a clean environment and pinned `requirements.txt`
+  (`pydantic==2.6.1`, `sqlalchemy==2.0.23`). No private `.env`, live
+  provider, or dependency upgrade.
+- Style: the new test file passes Black 79, isort, and flake8. Production
+  files still have pre-existing Black/flake8 debt; isort fails only
+  `app/api/data_collection.py` among the edited files. `git diff --check`
+  passed. Repo-wide lint was not run.
+- Next action: review the pull request. After merge, guarded Alembic baseline
+  and isolated PostgreSQL tests. Editable profiles and source-aware AI stay
+  later. Tooling config (PR #6) and minimal CI (PR #5) are separate work and
+  do not own this journal or work-state.
+- Account usage was not available in this Cursor session. No percentage was
+  recorded and no reset was redeemed. Stop reason: bounded cleanup completed,
+  not quota.
 
-This pull request and the Developer's deprecation-cleanup pull request both
-edit the top of the journal and `docs/work-state.md`. Whichever merges second
-must rebase onto the updated `origin/master` and resolve those conflicts
-carefully, keeping both sides' intent.
+## Previous Iteration: 2026-10-07 rebase workflow rule
 
-`origin/master` contains `b10d06e` (Merge pull request #2 from
-`Waber/fix/startup-lifespan-cors`). The note below that PR #2 was still open
-is historical. Branch new work from updated `origin/master` and rebase feature
-branches onto it. Do not merge the rebase-workflow pull request unless the
-user explicitly authorizes it.
+Documentation only. Now on `origin/master` as `a58dc8a` (rebase merge of
+PR #3). Wording below that said the rebase pull request was left unmerged
+was true when that pull request was opened. It is merged. No production code
+changed in that pull request. Account usage was not available in that Cursor
+session. This cleanup and that pull request both edit the journal and
+work-state; both entries are kept.
 
 ## Previous Iteration: 2026-10-07 lifespan and CORS
 
@@ -165,10 +182,11 @@ review/merge next-action line below was the state when this snapshot was written
 
 - Missing-update404 and website-update regressions are complete in ancestors `3a2b0af` and `731c513`.
 - Metric partial-update/null, uniqueness/rollback and collector regression coverage
-  and JSON overflow handling are complete. Lifespan/CORS is now complete;
-  Pydantic/SQLAlchemy deprecation cleanup remains deferred.
+  and JSON overflow handling are complete. Lifespan/CORS is merged (PR #2,
+  `b10d06e`). Pydantic/SQLAlchemy deprecation cleanup is implemented on
+  `cursor/deprecation-cleanup-7154` and is awaiting review, not merged.
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- After lifespan/CORS delivery: guarded migrations and automated PostgreSQL
-  integration tests. Do not assume the old demo runtime still exists.
+- Next after the deprecation-cleanup review: guarded migrations and automated
+  PostgreSQL integration tests. Do not assume the old demo runtime still exists.

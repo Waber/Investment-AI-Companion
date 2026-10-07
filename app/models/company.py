@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
-from typing import Optional, List
-from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class CompanyBase(BaseModel):
@@ -34,6 +35,6 @@ class Company(CompanyBase):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_active: bool = Field(default=True, description="Whether the company is active in the system")
     last_data_update: Optional[datetime] = Field(None, description="Date of last data update")
-    
-    class Config:
-        from_attributes = True  # for SQLAlchemy compatibility 
+
+    # from_attributes lets model_validate read SQLAlchemy rows.
+    model_config = ConfigDict(from_attributes=True)

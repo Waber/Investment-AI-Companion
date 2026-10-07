@@ -8,7 +8,7 @@ financial data providers like Yahoo Finance.
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.repositories.company_repository import CompanyRepository
@@ -29,13 +29,10 @@ def get_yahoo_finance_collector() -> YahooFinanceCollector:
 class FetchCompanyRequest(BaseModel):
     """Request model for fetching company data."""
     ticker: str
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "ticker": "AAPL"
-            }
-        }
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"ticker": "AAPL"}}
+    )
 
 
 class FetchCompanyResponse(BaseModel):

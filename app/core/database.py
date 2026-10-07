@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 from app.core.config import settings
 
 # Create SQLAlchemy engine - this manages the connection pool to the database
@@ -15,7 +15,8 @@ engine = create_engine(
 # Each session represents a conversation with the database
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for all database models (tables)
+# Base class for all database models (tables).
+# SQLAlchemy 2 provides declarative_base from sqlalchemy.orm.
 # This allows us to define models as Python classes that SQLAlchemy will convert to database tables
 Base = declarative_base()
 
