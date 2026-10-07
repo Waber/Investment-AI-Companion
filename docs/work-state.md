@@ -3,16 +3,18 @@
 ## Tooling Config Slice: 2026-10-07
 
 - Branch `cursor/tooling-config-black-isort-flake8-pytest-48d8`, rebased onto
-  `origin/master` `a10e196` (PR #13, deprecation cleanup, rebase-merged).
+  `origin/master` `db0cc12` (PR #14, minimal CI, rebase-merged).
   Config and docs only (`pyproject.toml`, `.flake8`, README lint section,
-  this note, and a short journal entry). No `.py` edits.
+  this note, and a short journal entry). No `.py` edits and no workflow edits.
 - Black 79 / target py312, isort profile black at 79, flake8 max line length
   79 with no `extend-ignore`. pytest registers `integration`, uses
   `--strict-markers`, and the default run passes `-m "not integration"`.
   `pyproject.toml` does not pin pytest or set `filterwarnings`.
 - `pytest -q` on `a10e196` before this config, no `.env`: 758 passed, no
-  warnings summary. After this config: 758 passed, no warnings summary,
-  758 collected. `pytest --markers` lists `integration`.
+  warnings summary. After this config, including CI's
+  `-W error::DeprecationWarning`, `-p no:cacheprovider`, and coverage flags:
+  758 passed, no warnings summary, coverage total 76%.
+  `pytest --markers` lists `integration`.
 - `tests/test_model_config_compatibility.py` passes the configured checks.
   `tests/test_company_update_conflicts.py` still fails isort. The five
   production files from the cleanup still have the same pre-existing
@@ -21,24 +23,23 @@
 - Next action for this slice: review
   [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15).
   Do not merge.
-- The resume instructions below are the deprecation cleanup's own snapshot.
-  They are kept, including the "not merged" line that was true when that
-  pull request was opened. PR #13 is merged now.
+- The resume instructions below keep the merged CI note, then the
+  deprecation cleanup's own snapshot. That snapshot still includes the
+  "not merged" line that was true when PR #13 was opened. PR #13 is merged.
 
 ## Resume Instructions
 
-Active slice: minimal pytest CI for issue #5 on branch
-`cursor/minimal-pytest-ci-ed2f`, pull request
-[#14](https://github.com/Waber/Investment-AI-Companion/pull/14). Workflow is
-`.github/workflows/tests.yml`. Rebased onto `origin/master` `a10e196`.
+Minimal pytest CI (issue #5) is merged as
+[PR #14](https://github.com/Waber/Investment-AI-Companion/pull/14)
+on `origin/master` `db0cc12`. Workflow is `.github/workflows/tests.yml`.
 Local suite on Python 3.12.3 with no `.env` and
 `-W error::DeprecationWarning`: `758 passed in 13.56s`, no warnings
 summary, coverage total `76%`. The draft QA spec is applied.
-Pending Raul: the coverage threshold (`--cov-fail-under=70`), JUnit XML,
-and the `MIN_TESTS` gate. Red demo run 37681557386 failed on purpose and
-was reverted. Next action: awaiting Code Reviewer and Raul's decision
-on coverage threshold/JUnit/MIN_TESTS. Lint and format stay
-out of this workflow (issue #6).
+Raul's decision on the coverage threshold (`--cov-fail-under=70`), JUnit
+XML, and the `MIN_TESTS` gate is still pending. Red demo run
+[37681557386](https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386)
+failed on purpose. Commit `806faef` was dropped before merge, so that SHA
+is not on master. Lint and format stay out of this workflow (issue #6).
 Deprecation cleanup is on master and is also recorded below.
 
 Deprecation cleanup (GitHub issue #4) is on `origin/master` as `a10e196`
