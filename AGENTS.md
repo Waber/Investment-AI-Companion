@@ -14,6 +14,17 @@
 - Prefer small domain/service boundaries over broad rewrites.
 - Do not remove user changes or untracked files unless explicitly requested.
 
+## Git Workflow
+
+Use rebase so history stays a straight line. Linear history is easier to read, bisect, and review than a graph of merge commits.
+
+- Update a feature branch by rebasing onto the latest `origin/master` (`git fetch`, then `git rebase origin/master`). Never merge `master` into the feature branch.
+- Pull with rebase (`git pull --rebase`, or `git config pull.rebase true` in this repository so later pulls rebase by default) so a routine update does not create a local merge commit.
+- Before opening or updating a pull request, keep the branch's commits focused and meaningful. Tidying your own unpublished or feature-branch commits with interactive rebase is fine.
+- After rebasing a feature branch that was already pushed, push only with `--force-with-lease`, and only on the agent's or author's own feature branch. Never force-push or rewrite history on `master` or on shared branches. On a branch someone else also pushes to, coordinate before rebasing, or rebase only right before merge.
+- Integrate pull requests with GitHub's "Rebase and merge" so `master` stays linear. "Rebase and merge" is enforceable only when the repository has "Allow rebase merging" enabled (optionally with merge commits disabled); changing those repository settings is the user's decision, not an agent's. Agents must not merge a pull request unless the user explicitly authorizes it.
+- If a rebase hits conflicts, resolve them carefully so both sides' intent is preserved, rerun the relevant tests, and if unsure stop and report rather than guessing.
+
 ## Journal And Delivery
 
 - Update `docs/development-journal.md` for each delivered iteration.
