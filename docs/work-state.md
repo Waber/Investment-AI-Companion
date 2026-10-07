@@ -1,5 +1,112 @@
 # Current Work State
 
+## Resume Instructions
+
+The authoritative next-step checklist is **Next Iteration Handoff - 2026-10-07**
+at the top of [the development journal](development-journal.md). Next bounded
+task: Pydantic/SQLAlchemy deprecation cleanup, followed by migrations/PostgreSQL.
+No implementation started for that task. User requested this handoff only;
+wait for continuation. PR #2 was verified open before publishing the handoff.
+
+## Current Iteration: 2026-10-07
+
+- Branch `fix/startup-lifespan-cors`, worktree `/private/tmp/investment-metric-updates`.
+- Scope and delivery gates: [lifespan/CORS plan](superpowers/plans/2026-10-07-lifespan-cors.md).
+- User authorized implementation, push and PR, not merge. Five previous local
+  commits from `569a89e` through `cc54057` are included in this branch.
+- Implementation complete: lifespan calls existing init_db, startup errors
+  propagate, initialization can be disabled and CORS matches exact browser origins.
+- 25 new cases, full suite 742 passed / four existing deprecation warnings.
+  Scoped Black (79 columns), isort, flake8 and diff whitespace checks passed.
+- Carver independently approved code/tests and ancestor integration scan, and
+  ran the 25 focused cases. No real database/provider or service checks performed.
+- Published as [PR #2](https://github.com/Waber/Investment-AI-Companion/pull/2)
+  against master; implementation commit `5bd286c`. No merge. Agents closed.
+  Stop reason: approved bounded scope completed, not quota. Final usage 40%
+  five-hour / 6% weekly. Next action: review/merge PR before subsequent development.
+- Older entries below are historical, not active workers or current service state.
+
+## Historical Delivery Checkpoint: 2026-10-04
+
+- All work below is complete through the JSON overflow slice on
+  `fix/json-overflow-validation` in `/private/tmp/investment-metric-updates`.
+- This session: `d9e56ce` metric creation conflicts (6 cases), `2374acf` collector
+  refresh (6 cases), plus JSON-safe validation fix (9 cases). Earlier ancestors
+  `569a89e` and `0008b0c` remain included. Local commits only, no push/merge.
+- Final full suite717 passed, six legacy warnings. Scoped new-file Black/isort/
+  flake8 and independent reviews passed. JSON overflow reproduced500 before fix,
+  now422 without writes. Reviewer independently ran9 focused tests successfully.
+- Agents closed at delivery. No services, real providers, private DBs or reset
+  credits touched. Account77% at final review; wrap up now to leave a buffer before
+  user90% session limit. Stop reason: three completed slices, no partial code.
+- Next bounded work: lifespan/startup failure propagation and CORS fixes from
+  September Task1; migrations/PostgreSQL, profiles/AI remain later. Check usage
+  and branch publication status before starting. Earlier active/pause entries
+  below are historical progress notes, not unfinished workers.
+
+## Active Slice: JSON Overflow Validation
+
+- Branch `fix/json-overflow-validation`, base completed collector `2374acf`.
+- User-approved continuation; usage50% five-hour on starting. Stop near90%.
+- Reproduce raw JSON numeric overflow500 and return JSON-safe422 instead. Minimal
+  RequestValidationError handler; no lifecycle/CORS/dependency edits in this slice.
+- Developer owns handler, registration and tests; coordinator docs/review/checkpoint.
+
+## Active Slice: Collector Refresh
+
+- Branch `test/collector-refresh-regressions`, base metric-creation commit `d9e56ce`.
+  Same worktree. Fake-provider refresh/not-found tests in progress; no live calls.
+- Metric creation conflict/rollback stage completed and committed. Current session
+  threshold90% remains; check usage before choosing any subsequent work.
+- Collector complete:6 new cases, full708 passed/six warnings. Epicurus approved
+  spec/quality; coordinator Black/isort/flake8 passed. No production changes.
+  Both developer/reviewer closed. Next candidate: JSON overflow validation errors.
+
+## Resumed Session: Metric Creation And Collector Coverage
+
+- User reset usage and authorized continuation with a90% threshold for this session;
+  default80% remains for future sessions unless overridden. Initial account usage0%.
+- Branch `test/metric-creation-conflicts` based on `0008b0c`, same worktree.
+- Helmholtz owns metric creation conflict/rollback tests. Coordinator handles docs,
+  full tests and independent review. Then proceed to fake-collector refresh coverage
+  only after this slice is committed and usage permits. No live providers or DBs.
+- Earlier pause statements below are historical. Previous completed slices remain
+  local ancestors; no automatic push/merge. Start wrapping up before90%.
+- Metric creation slice completed:6 new cases, full702 passed/six existing warnings;
+  Poincare approved spec and quality. Coordinator corrected import grouping using
+  worktree-local isort. No production changes. Usage20% at verification.
+
+## Active Slice: Company Update Conflicts
+
+- Branch `test/company-update-conflicts`, based on completed `569a89e`, same
+  `/private/tmp/investment-metric-updates` worktree. Start usage60% five-hour.
+- Kant implements narrow duplicate-name/ticker and same-session rollback tests.
+  Completed3 cases; full696 tests passed with six existing warnings. Raman approved
+  specification and quality. No production changes. Developer scoped format/lint
+  checks passed. Saved as local commit, no push/merge.
+- Last usage82% five-hour/13% weekly, crossing80% between checks. Pausing after
+  checkpoint; wait for user reset/continuation. No reset redeemed. Agents closed.
+- Previous metric slice below is complete. Collector and metric-creation
+  uniqueness/rollback remain separate follow-up work. Stop at80% consumption.
+
+## Active Slice: 2026-10-04 Metric Updates
+
+- PR1 merged as `1e05ab1`; older sections below describe historical states.
+- Branch `test/financial-metric-updates`, `/private/tmp/investment-metric-updates`.
+- Scope: partial metric updates, explicit null, zero, omission and invalid payloads.
+  [Slice plan](superpowers/plans/2026-10-04-metric-updates.md). Hubble owns tests;
+  coordinator handles docs/full tests. Completed:82 new cases, full693 passed
+  with six existing warnings. Black/isort/flake8 passed for the new file;
+  Aristotle approved spec and quality. No production changes needed.
+- Start usage29% five-hour/4% weekly; preparation35%/5%. User requires closing
+  work at80% consumed, then notification and waiting for continuation; no reset
+  without authorization. Policy recorded in AGENTS.
+- No live database/runtime/provider changes; preserve primary checkout/user files.
+- Next after this slice: uniqueness/rollback and fake-collector regressions.
+- Completed slice saved locally; no automatic push/merge. Agents closed at delivery.
+  Usage at verification50% five-hour/8% weekly; no reset needed. Stop reason:
+  bounded slice complete with review/commit, not reaching the80% limit.
+
 ## 2026-10-04 Recovery And Publication
 
 - Current branch: `docs/demo-and-ide-delivery`; recovered committed base `69258b9`
@@ -37,11 +144,14 @@
 - Local fixture commit only; no push/merge. Next session starts from this branch's journal. Temporary runtime is still disposable; committed fixture can reproduce baseline data in a fresh demo, but not user edits.
 - Temporary directories can disappear after cleanup/reboot. Git preserves code/docs, not the temporary demo database. Do not keep valuable data here.
 
-## Remaining Work
+## Remaining Work (Updated 2026-10-07)
 
 - Missing-update404 and website-update regressions are complete in ancestors `3a2b0af` and `731c513`.
-- Metric partial-update/null, uniqueness/rollback and collection regression coverage; JSON overflow handling; lifecycle/CORS/deprecation cleanup; guarded migrations and automated PostgreSQL integration tests remain pending.
+- Metric partial-update/null, uniqueness/rollback and collector regression coverage
+  and JSON overflow handling are complete. Lifespan/CORS is now complete;
+  Pydantic/SQLAlchemy deprecation cleanup remains deferred.
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- Next authorized development slice: metric partial-update/null regressions. Keep the running demo stable; develop in another isolated worktree.
+- After lifespan/CORS delivery: guarded migrations and automated PostgreSQL
+  integration tests. Do not assume the old demo runtime still exists.

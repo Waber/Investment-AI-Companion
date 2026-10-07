@@ -1,5 +1,198 @@
 # Development Journal
 
+## Next Iteration Handoff - 2026-10-07
+
+### Resume Here
+
+- User requested documentation only for this handoff. Do not treat it as an
+  instruction to start implementation now. PR #2 is open against master:
+  https://github.com/Waber/Investment-AI-Companion/pull/2
+- Delivered branch: `fix/startup-lifespan-cors`, last implementation `5bd286c`,
+  publication checkpoint `4fa939d`. This documentation commit follows both.
+- Primary repository: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`.
+  Current worktree: `/private/tmp/investment-metric-updates`. The configured
+  PycharmProjects directory is not the authoritative repository. Temporary
+  worktrees may disappear; recover committed work from Git, not stale paths.
+- Read AGENTS.md and docs/work-state.md, inspect status/worktrees, fetch origin
+  and check PR #2 before editing. If merged, branch from updated origin/master.
+  If still open, use an explicit dependent branch from its current head and
+  document the dependency; do not assume master contains these changes.
+- Preserve user changes and the primary checkout's untracked `.python-version`.
+  Do not assume any historical demo server/database remains available.
+- No agents or implementation tasks remain active. Stop reason: user chose to
+  defer further implementation and requested a reusable handoff, not exhaustion.
+  Last checked usage before handoff: 42% five-hour / 7% weekly. Recheck live usage
+  on resume; default checkpoint threshold is 80% unless explicitly overridden.
+
+### Next Bounded Task: Deprecation Cleanup
+
+Goal: remove project-owned Pydantic/SQLAlchemy deprecated configuration/imports
+without changing validation, ORM conversion, response fields or OpenAPI examples.
+Use a dedicated branch, a developer agent and an independent reviewer.
+
+Files to inspect (do not mechanically replace configuration without tests):
+- `app/core/database.py`: import declarative_base from sqlalchemy.orm; preserve
+  the shared Base, engine and session behavior.
+- `app/models/company.py`, `app/models/financial_metrics.py`,
+  `app/models/historical_data.py`: migrate class Config to ConfigDict while
+  retaining from_attributes. Financial metrics already inherits
+  ConfigDict(allow_inf_nan=False); preserve that restriction when adding config.
+- `app/api/data_collection.py`: migrate FetchCompanyRequest's json_schema_extra
+  and retain its ticker example in generated schema.
+
+Execution and acceptance:
+1. Establish the full-suite baseline: last verified 742 passed, four warnings.
+   Explicitly import historical_data in focused tests; it may not be loaded by
+   the normal app suite, so four warnings are not an exhaustive file count.
+2. Add regression coverage for model_validate on attribute/ORM objects, response
+   serialization, rejection of nonfinite metrics and schema example preservation.
+   Add a warning-as-error check for the targeted deprecations and demonstrate
+   failure before migration. Do not suppress warnings to make tests pass.
+3. Apply only minimal configuration/import changes; no dependency upgrades,
+   migrations, schema redesign, provider calls or unrelated formatting.
+4. Run focused tests, full suite, targeted warning checks and scoped style checks.
+   Existing JSON-overflow, lifespan and CORS regressions must remain green.
+5. Independent review, fix findings, then commit and update this journal and
+   work-state with actual results, remaining warnings, branch and next action.
+   Confirm publication scope with the next user instruction; this handoff only
+   authorizes adding documentation to the existing PR.
+
+Known test command (run from `/private/tmp`, replace worktree path if changed):
+```bash
+/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
+  PYTHONPATH=/private/tmp/investment-metric-updates \
+  /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python \
+  -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests
+```
+This avoids loading private .env configuration. Verify the interpreter still
+exists. Run style checks from the worktree, not /tmp; the previous scoped checks
+used Black with explicit --line-length 79, isort and flake8. Do not claim default
+Black or repository-wide lint passed unless actually verified.
+
+### Subsequent Backlog
+
+After the small cleanup: guarded Alembic baseline/adoption and automated isolated
+PostgreSQL tests, then editable investor profiles, then source-aware AI analysis.
+Use the September research-workflow plan/spec for requirements, but reconcile its
+old checkboxes with current code and this journal. CRUD/collector regressions,
+JSON-safe overflow errors and lifespan/CORS are already delivered in PR #2.
+Never merge the historical dependency WIP blindly: its OpenAI pin conflicted
+with the FastAPI dependency set. Financial-metrics ingestion remains a placeholder.
+
+## 2026-10-07 - Lifespan, CORS And Publication
+
+- Dedicated branch `fix/startup-lifespan-cors` in the existing isolated worktree.
+  User requested completion, push and PR; no merge. Includes five unpublished
+  ancestor commits from the October 4 regression/validation work.
+- Kierkegaard implemented lifespan using existing `init_db()`, propagation of
+  initialization failures, disabled initialization mode and exact CORS matching
+  without the URL-added root slash. No new database creation path or migrations.
+- RED: 7 failed / 18 passed before implementation. GREEN: 25 focused cases;
+  coordinator full isolated suite 742 passed with four preexisting warnings
+  (SQLAlchemy and Pydantic). Deprecated FastAPI startup warnings are gone.
+- Full command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-metric-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests`.
+- Scoped checks: `black --check --line-length 79 main.py tests/test_lifespan_cors.py`,
+  `isort --check-only` and `flake8` on the same files, plus `git diff --check`.
+  Black's default 88-column check differs; explicit 79 matches default flake8.
+- Updated IDE startup guide and stale remaining-work items. No user database,
+  live provider, dependency upgrade or service restart. Migration/PG integration,
+  profiles, AI and remaining deprecations deferred.
+- Carver independently approved code/tests and the ancestor integration scan;
+  reviewer reran 25 focused cases. Stop at completed scope, not quota. Commit,
+  push and PR follow verification; no merge. Usage 6% at start, 29% after implementation.
+  Agent model inherited; precise model identifier and elapsed time not measured.
+- Published implementation `5bd286c` and prior slices in
+  [PR #2](https://github.com/Waber/Investment-AI-Companion/pull/2) targeting master.
+  No merge; agents closed. Final account usage 40% five-hour / 6% weekly.
+
+## 2026-10-04 - JSON overflow validation fix
+
+- Started from `2374acf` at50% five-hour/8% weekly usage. Dedicated branch
+  `fix/json-overflow-validation`; bounded part of approved Task1, not full hardening.
+- Plan: failing raw-overflow POST/PUT tests, minimal JSON-safe422 handler preserving
+  ordinary error structure, persistence checks, full tests and independent review.
+- Developer owns new validation module/tests and minimal main registration;
+  coordinator owns documentation. No live calls, migrations or dependency changes.
+- Faraday RED evidence:5 failed/4 passed, including four raw overflow500 responses
+  and a nested nonfinite serialization failure. GREEN9 focused passed; coordinator
+  independently ran full717 passed with six existing warnings using the clean-env
+  command from prior entries. New-file Black/isort/flake8 checks passed.
+- Nash approved independent spec/quality review and ran9 focused tests. Ordinary
+  error detail structure remains unchanged; nonfinite float values become strings
+  after jsonable encoding. No request body added to error responses. Main changes
+  limited to registering the handler; no broad legacy formatting.
+- Both agents closed at commit. Final review usage77% (below session90% ceiling).
+  Stop at three completed slices with checkpoint buffer; do not start lifecycle
+  work now. No push/merge or reset redemption. Inherited model, effort not timed.
+
+## 2026-10-04 - Fake collector refresh regressions
+
+- Separate branch `test/collector-refresh-regressions` based on reviewed `d9e56ce`.
+  Developer owns only `tests/test_collection_updates.py`; no live provider calls.
+- Scope: existing-company refresh, identity preservation, repeat without duplicates,
+  missing provider result404 without writes, unrelated company/metrics preservation.
+  Coordinator handles full tests/docs, followed by independent spec/quality review.
+- Cicero delivered6 cases; coordinator full708 passed/six legacy warnings and
+  scoped Black/isort/flake8 passed. Epicurus approved spec/quality without findings.
+  No production changes or live provider calls. Both agents closed at commit.
+  Characterization completes the planned collector refresh/not-found coverage.
+
+## 2026-10-04 - Resume after user reset: metric creation conflicts
+
+- User performed reset (coordinator did not redeem credit), usage0% both windows.
+  Session-specific limit90%; AGENTS now permits an explicit session override.
+- Branch `test/metric-creation-conflicts`, base `0008b0c`. Helmholtz owns a bounded
+  test file: duplicate tuple rejection, each key component distinguishing records,
+  real FK/unique constraint rollback with same-session reuse and persisted state.
+- No production edits planned; characterize correct behavior. Coordinator owns
+  continuity/full verification; independent review before commit. Collector follows
+  as a separately committed slice if usage permits. Inherited model, time not timed.
+- Results:6 new cases passed against unchanged production code. Full702 passed,
+  six existing warnings, using prior clean-env pytest command. Poincare approved
+  spec/quality with no findings. Black/flake8 passed; coordinator worktree-local
+  isort found grouping drift from developer's temporary CWD check and corrected it.
+  Usage20% five-hour/3% weekly; commit before starting collector work.
+
+## 2026-10-04 - Company update conflicts and rollback
+
+- Continued at60% five-hour usage with a small characterization slice on
+  `test/company-update-conflicts`, based on `569a89e`. Same isolated worktree.
+- Kant owns only the new conflict tests. Scope: duplicate name/ticker API
+  rejection without mutation, then successful update; real constraint failure
+  and recovery using the SAME repository session. No collector/metrics expansion.
+- Coordinator will run full tests and independent review before local commit.
+  At80% stop and notify user; no automatic reset. Inherited model, effort not timed.
+- Completed3 characterization cases without production changes; coordinator full
+  isolated pytest run696 passed, six existing warnings. Same env-i command as
+  metric slice. Kant reports scoped Black/isort/flake8 passed; Raman static review
+  approved specification/quality with no findings. No live database/provider calls.
+- Usage rose60% ->75% ->82% between checks. Stop reason: user80% threshold reached;
+  save local checkpoint and wait for explicit continuation, no reset redeemed.
+  Agents closed. Next scope: metrics creation conflicts/rollback, then collector.
+
+## 2026-10-04 - Financial metric update characterization
+
+- User confirmed PR1 merged and authorized continuation with an80% account-usage
+  stop threshold. Recorded this policy in AGENTS; no reset may be redeemed without
+  authorization. Start usage29% five-hour/4% weekly consumed.
+- New branch `test/financial-metric-updates`, base `1e05ab1`, worktree
+  `/private/tmp/investment-metric-updates`. Primary checkout/user files untouched.
+- Hubble owns only new update tests; coordinator handles docs and full verification;
+  independent reviewer follows. Scope: partial updates/null/zero/omission and invalid
+  updates, not all remaining Task2 work. Existing correct code need not change.
+- Inherited agent model; exact model identity and elapsed effort not measured.
+- Results:82 new API characterization cases across all20 numeric fields. All pass
+  against existing production code; no newly reproduced/fixed defect is claimed.
+  Tests compare PUT/GET, fresh persisted snapshots, identity and unrelated rows;
+  rejected422 payloads preserve timestamps as well as values.
+- Coordinator full suite:693 passed, six existing warnings. Command from
+  `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-metric-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests`.
+- Black/isort/flake8 checks passed for the new test file. Independent Aristotle
+  review approved spec compliance and quality without actionable findings.
+- Hubble and Aristotle closed at delivery. Verification usage50% five-hour/8%
+  weekly consumed; no reset. Stop at completed bounded scope, not exhaustion.
+  Local commit only; remaining Task2 uniqueness/rollback/collector work not complete.
+
 ## 2026-10-04 - Recover and publish recent work
 
 - User requested commit, push and PR. Recovered committed fixture/API/test work
