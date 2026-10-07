@@ -8,8 +8,10 @@ Active slice: minimal pytest CI for issue #5 on branch
 `.github/workflows/tests.yml`. Local suite on Python 3.12.3 with no `.env`:
 `742 passed, 4 warnings in 6.83s`. Actions run 37680648250 (Python 3.12.14)
 succeeded with `742 passed, 4 warnings in 4.84s`. Counts match. QA's check
-list is still not on issue #5. Next action: leave the pull request open and
-do not merge. Lint and format stay out of this workflow (issue #6).
+list is a local draft, not a GitHub comment. Fixed draft items are in
+the workflow; `--cov-fail-under=70` and `MIN_TESTS` stay out until Raul
+decides. Next action: prove a red demo run, revert it, leave PR #14 open,
+and do not merge. Lint and format stay out of this workflow (issue #6).
 Deprecation cleanup (issue #4) is recorded below and stays in this file.
 
 Deprecation cleanup (GitHub issue #4) is implemented on
