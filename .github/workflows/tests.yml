@@ -1,8 +1,9 @@
 # Minimal CI for the SQLite pytest suite.
 #
-# One job, on purpose. It installs the pins in requirements.txt and runs the
-# same command a developer runs from the repository root. It does not lint,
-# measure coverage, start Postgres, or build a Docker image.
+# One job. It installs the pins in requirements.txt and runs pytest with a
+# coverage report. It does not lint, start Postgres, or build a Docker image.
+# Coverage is reported only. A fail-under threshold and a minimum test-count
+# gate are waiting on a decision and are not in this file yet.
 name: Tests
 
 on:
@@ -11,46 +12,61 @@ on:
     branches:
       - master
 
-# Read-only checkout token. This file never references ${{ secrets.* }},
-# so repository secrets are not passed into the job.
+# Read-only checkout token. This workflow does not read repository credentials.
 permissions:
   contents: read
+
+# One group per workflow and pull request, or per ref when this is a branch
+# push. A newer commit on a pull request cancels the older run. A push to
+# master is never cancelled, so a finished master run stays in the log.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   pytest:
     name: pytest (Python 3.12, SQLite)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
-      # Same flag as the README command. Python then does not write .pyc
-      # files next to the source during collection and the test run.
+      # Stops Python from writing .pyc files next to the source. No database
+      # URL or provider keys are set. Settings in app/core/config.py already
+      # have defaults, and tests use in-memory SQLite.
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
       - name: Refuse to run when .env is present
-        # app/core/config.py loads .env automatically when that file exists.
-        # CI must use code defaults. Tests build their own in-memory SQLite
-        # database in tests/conftest.py and do not need local credentials.
-        run: |
-          if [ -e .env ]; then
-            echo "Refusing to run: .env is present. CI must not load local secrets."
-            exit 1
-          fi
+        # app/core/config.py loads .env when that file exists. CI must not.
+        run: test ! -e .env
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        # v7 is the newest major tag published for actions/setup-python
+        # (release v7.0.0). The floating v7 tag tracks that major line.
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements.txt
 
       - name: Install dependencies from requirements.txt
+        # Nothing else is installed. pytest, pytest-asyncio, and pytest-cov
+        # are already pinned in requirements.txt. An extra unpinned plugin
+        # can upgrade pytest and break pytest-asyncio 0.21.1.
         run: python -m pip install -r requirements.txt
 
+      - name: Check installed packages and pytest version
+        run: |
+          python -m pip check
+          python -m pytest --version
+
       - name: Run pytest
-        # -q prints the pass/fail summary line. -p no:cacheprovider skips
-        # .pytest_cache so the run does not depend on a previous cache.
-        # No API keys are set here. Provider tests use deterministic fakes.
-        run: python -m pytest -q -p no:cacheprovider
+        # -q prints the pass/fail summary. -p no:cacheprovider skips
+        # .pytest_cache. Coverage is a report, not a failing threshold.
+        # Warnings stay allowed until the deprecation cleanup lands.
+        run: >
+          python -m pytest -q -p no:cacheprovider
+          --junitxml=pytest-report.xml
+          --cov=app --cov=main --cov=scripts
+          --cov-branch --cov-report=term-missing
