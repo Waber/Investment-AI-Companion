@@ -3,12 +3,14 @@
 ## Resume Instructions
 
 Active slice: minimal pytest CI for issue #5 on branch
-`cursor/minimal-pytest-ci-ed2f`. Workflow is `.github/workflows/tests.yml`.
-Local suite on Python 3.12.3 with no `.env`: `742 passed, 4 warnings in 6.83s`.
-QA's check list was not on the issue yet. Next action: open the pull request
-against `master` (`Closes #5`), confirm the Actions run is green, do not merge.
-Lint and format stay out of this workflow (issue #6). Deprecation cleanup
-(issue #4) is recorded below and stays in this file.
+`cursor/minimal-pytest-ci-ed2f`, pull request
+[#14](https://github.com/Waber/Investment-AI-Companion/pull/14). Workflow is
+`.github/workflows/tests.yml`. Local suite on Python 3.12.3 with no `.env`:
+`742 passed, 4 warnings in 6.83s`. Actions run 37680648250 (Python 3.12.14)
+succeeded with `742 passed, 4 warnings in 4.84s`. Counts match. QA's check
+list is still not on issue #5. Next action: leave the pull request open and
+do not merge. Lint and format stay out of this workflow (issue #6).
+Deprecation cleanup (issue #4) is recorded below and stays in this file.
 
 Deprecation cleanup (GitHub issue #4) is implemented on
 `cursor/deprecation-cleanup-7154` and published as

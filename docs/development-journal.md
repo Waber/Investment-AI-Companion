@@ -112,15 +112,19 @@
   Command: `python -m pytest -q -p no:cacheprovider`. README documents that
   command via `.venv` from the repository root. Four existing deprecation
   warnings stay allowed; issue #4 owns that cleanup.
-- QA check list: not on issue #5 when this was written. The workflow follows
-  the issue body. Re-check comments before the pull request is finalized.
+- QA check list: still absent from issue #5 after the pull request opened.
+  The workflow follows the issue body.
 - Verification: `pip install -r requirements.txt` succeeded on Python 3.12.3.
   From the repo root, with no `.env`:
   `PYTHONDONTWRITEBYTECODE=1 /tmp/iac-pytest-venv/bin/python -m pytest -q -p no:cacheprovider`
   -> `742 passed, 4 warnings in 6.83s`.
+  GitHub Actions run 37680648250 on Python 3.12.14 succeeded. Job log summary:
+  `742 passed, 4 warnings in 4.84s`. Passed and warning counts match; only the
+  duration differs.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
-- Delivery: branch `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the
-  user authorizes it. Issue #4 still owns the deprecation handoff below.
+- Delivery: [PR #14](https://github.com/Waber/Investment-AI-Companion/pull/14)
+  on `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the user authorizes
+  it. Issue #4 still owns the deprecation handoff below.
 
 ## 2026-10-07 - Rebase workflow rule
 
