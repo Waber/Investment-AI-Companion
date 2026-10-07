@@ -1,5 +1,84 @@
 # Development Journal
 
+## Next Iteration Handoff - 2026-10-07
+
+### Resume Here
+
+- User requested documentation only for this handoff. Do not treat it as an
+  instruction to start implementation now. PR #2 is open against master:
+  https://github.com/Waber/Investment-AI-Companion/pull/2
+- Delivered branch: `fix/startup-lifespan-cors`, last implementation `5bd286c`,
+  publication checkpoint `4fa939d`. This documentation commit follows both.
+- Primary repository: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`.
+  Current worktree: `/private/tmp/investment-metric-updates`. The configured
+  PycharmProjects directory is not the authoritative repository. Temporary
+  worktrees may disappear; recover committed work from Git, not stale paths.
+- Read AGENTS.md and docs/work-state.md, inspect status/worktrees, fetch origin
+  and check PR #2 before editing. If merged, branch from updated origin/master.
+  If still open, use an explicit dependent branch from its current head and
+  document the dependency; do not assume master contains these changes.
+- Preserve user changes and the primary checkout's untracked `.python-version`.
+  Do not assume any historical demo server/database remains available.
+- No agents or implementation tasks remain active. Stop reason: user chose to
+  defer further implementation and requested a reusable handoff, not exhaustion.
+  Last checked usage before handoff: 42% five-hour / 7% weekly. Recheck live usage
+  on resume; default checkpoint threshold is 80% unless explicitly overridden.
+
+### Next Bounded Task: Deprecation Cleanup
+
+Goal: remove project-owned Pydantic/SQLAlchemy deprecated configuration/imports
+without changing validation, ORM conversion, response fields or OpenAPI examples.
+Use a dedicated branch, a developer agent and an independent reviewer.
+
+Files to inspect (do not mechanically replace configuration without tests):
+- `app/core/database.py`: import declarative_base from sqlalchemy.orm; preserve
+  the shared Base, engine and session behavior.
+- `app/models/company.py`, `app/models/financial_metrics.py`,
+  `app/models/historical_data.py`: migrate class Config to ConfigDict while
+  retaining from_attributes. Financial metrics already inherits
+  ConfigDict(allow_inf_nan=False); preserve that restriction when adding config.
+- `app/api/data_collection.py`: migrate FetchCompanyRequest's json_schema_extra
+  and retain its ticker example in generated schema.
+
+Execution and acceptance:
+1. Establish the full-suite baseline: last verified 742 passed, four warnings.
+   Explicitly import historical_data in focused tests; it may not be loaded by
+   the normal app suite, so four warnings are not an exhaustive file count.
+2. Add regression coverage for model_validate on attribute/ORM objects, response
+   serialization, rejection of nonfinite metrics and schema example preservation.
+   Add a warning-as-error check for the targeted deprecations and demonstrate
+   failure before migration. Do not suppress warnings to make tests pass.
+3. Apply only minimal configuration/import changes; no dependency upgrades,
+   migrations, schema redesign, provider calls or unrelated formatting.
+4. Run focused tests, full suite, targeted warning checks and scoped style checks.
+   Existing JSON-overflow, lifespan and CORS regressions must remain green.
+5. Independent review, fix findings, then commit and update this journal and
+   work-state with actual results, remaining warnings, branch and next action.
+   Confirm publication scope with the next user instruction; this handoff only
+   authorizes adding documentation to the existing PR.
+
+Known test command (run from `/private/tmp`, replace worktree path if changed):
+```bash
+/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
+  PYTHONPATH=/private/tmp/investment-metric-updates \
+  /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python \
+  -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests
+```
+This avoids loading private .env configuration. Verify the interpreter still
+exists. Run style checks from the worktree, not /tmp; the previous scoped checks
+used Black with explicit --line-length 79, isort and flake8. Do not claim default
+Black or repository-wide lint passed unless actually verified.
+
+### Subsequent Backlog
+
+After the small cleanup: guarded Alembic baseline/adoption and automated isolated
+PostgreSQL tests, then editable investor profiles, then source-aware AI analysis.
+Use the September research-workflow plan/spec for requirements, but reconcile its
+old checkboxes with current code and this journal. CRUD/collector regressions,
+JSON-safe overflow errors and lifespan/CORS are already delivered in PR #2.
+Never merge the historical dependency WIP blindly: its OpenAI pin conflicted
+with the FastAPI dependency set. Financial-metrics ingestion remains a placeholder.
+
 ## 2026-10-07 - Lifespan, CORS And Publication
 
 - Dedicated branch `fix/startup-lifespan-cors` in the existing isolated worktree.

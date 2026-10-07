@@ -1,5 +1,13 @@
 # Current Work State
 
+## Resume Instructions
+
+The authoritative next-step checklist is **Next Iteration Handoff - 2026-10-07**
+at the top of [the development journal](development-journal.md). Next bounded
+task: Pydantic/SQLAlchemy deprecation cleanup, followed by migrations/PostgreSQL.
+No implementation started for that task. User requested this handoff only;
+wait for continuation. PR #2 was verified open before publishing the handoff.
+
 ## Current Iteration: 2026-10-07
 
 - Branch `fix/startup-lifespan-cors`, worktree `/private/tmp/investment-metric-updates`.
