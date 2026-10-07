@@ -23,6 +23,12 @@ testpaths = ["tests"]
 # not fail when no database was configured. Run them with:
 #   pytest -m integration
 # That command-line -m replaces the addopts expression above.
+# A node id does not turn the marker off. This still deselects the test
+# and exits 5 ("1 deselected") unless -m integration is also passed:
+#   pytest -m integration tests/integration/test_postgres.py::test_name
+# Any future CI -m expression replaces this addopts -m as well, so that
+# expression must still contain "not integration". Otherwise the default
+# job would collect the opt-in PostgreSQL tests.
 markers = [
     "integration: opt-in tests that require an explicitly configured PostgreSQL database.",
 ]

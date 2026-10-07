@@ -56,6 +56,19 @@
     `app/models/financial_metrics.py`, and `app/models/historical_data.py`.
     isort fails `app/api/data_collection.py`. Black 79 and flake8 still fail
     all five for pre-existing debt.
+- `python3 -m isort --check-only .` with this profile fails 12 files, not
+  only the cleanup files. None were reformatted. The list is
+  `alembic/env.py`, `setup_database.py`, `app/api/companies.py`,
+  `app/api/data_collection.py`, `app/api/financial_metrics.py`,
+  `app/core/config.py`, `app/core/init_db.py`,
+  `app/data_collectors/yahoo_finance.py`, `app/models/database_models.py`,
+  `app/repositories/company_repository.py`,
+  `app/repositories/financial_metrics_repository.py`, and
+  `tests/test_company_update_conflicts.py`.
+  `black --check tests` leaves 19 files unchanged and `flake8 tests`
+  passes. `isort --check-only tests` fails only
+  `tests/test_company_update_conflicts.py`. README lint commands now
+  include `tests`.
 - Default Black (88 columns) would reformat `main.py` and
   `tests/test_lifespan_cors.py`. Configured 79 leaves both unchanged.
 - Verification, from the repository root, no `.env` (only `.env.example`):
@@ -89,7 +102,7 @@
   `-W error::DeprecationWarning`.
 - The draft QA spec is applied. Pending Raul: the coverage threshold
   (`--cov-fail-under=70`), JUnit XML, and the `MIN_TESTS` gate.
-- After rebase onto `origin/master` `a10e196`, local Python 3.12.3 with
+- PR #14 is merged into master as `db0cc12`. Local Python 3.12.3 with
   no `.env`: `758 passed in 13.56s`, no warnings summary, coverage total
   `76%`.
   Negative check: commit `806faef` failed on purpose
@@ -102,8 +115,8 @@
   Job log: `758 passed in 13.67s` and `TOTAL ... 76%`.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
 - Delivery: [PR #14](https://github.com/Waber/Investment-AI-Companion/pull/14)
-  on `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the user authorizes
-  it.
+  on `cursor/minimal-pytest-ci-ed2f`. PR #14 is merged into master as
+  `db0cc12`.
 
 ## 2026-10-07 - QA nits on the deprecation cleanup
 

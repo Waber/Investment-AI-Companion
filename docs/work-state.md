@@ -23,9 +23,9 @@
 - Next action for this slice: review
   [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15).
   Do not merge.
-- The resume instructions below keep the merged CI note, then the
-  deprecation cleanup's own snapshot. That snapshot still includes the
-  "not merged" line that was true when PR #13 was opened. PR #13 is merged.
+- The Resume Instructions section immediately below is the merged
+  minimal-CI note from PR #14, not the deprecation cleanup. The
+  deprecation record follows that CI note.
 
 ## Resume Instructions
 
