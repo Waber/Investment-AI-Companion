@@ -10,7 +10,7 @@ The application must not present generated output as financial advice. Analysis 
 - SQLAlchemy persistence for companies and financial metrics.
 - Yahoo Finance data collection code for market-data ingestion.
 - Repository-level guidance in `AGENTS.md` and forward-looking delivery notes in `docs/development-journal.md`.
-- Baseline API tests in `tests/` after this iteration, run with `.venv/bin/python -m pytest -q`.
+- Baseline API tests in `tests/`, run from the repository root with `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider`.
 
 ## Planned Or Configured Integrations
 
@@ -90,10 +90,13 @@ read-only preview, and explicit, non-overwriting seed command.
 
 ## Tests And Quality Checks
 
-Run the baseline test suite with:
+From the repository root, after the virtual environment in Setup exists, run
+the test suite. No `.env` file is required. Tests use the in-memory SQLite
+database in `tests/conftest.py` and do not call market-data or AI providers.
+GitHub Actions runs the same pytest command on Python 3.12.
 
 ```bash
-.venv/bin/python -m pytest -q
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider
 ```
 
 Useful lint and formatting checks:
