@@ -1,0 +1,37 @@
+# Tooling settings shared by Black, isort, and pytest.
+# flake8 does not read this file; its settings live in .flake8.
+#
+# Line length is 79 so Black agrees with flake8's default. Black's own
+# default is 88, which reformats files this repository already checked at 79.
+
+[tool.black]
+line-length = 79
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 79
+
+[tool.pytest.ini_options]
+# Versions stay in requirements.txt. Do not pin pytest or pytest-asyncio
+# here: pytest-asyncio 0.21.1 does not run on pytest 8 or later.
+# Do not set filterwarnings. Turning warnings into errors is a separate
+# decision; CI can pass -W on the command line until that is settled.
+testpaths = ["tests"]
+# PostgreSQL checks are opt-in. The default SQLite run uses
+# "-m not integration", so a test with this marker does not run and does
+# not fail when no database was configured. Run them with:
+#   pytest -m integration
+# That command-line -m replaces the addopts expression above.
+markers = [
+    "integration: opt-in tests that require an explicitly configured PostgreSQL database.",
+]
+# --strict-markers: an unregistered marker is a collection error.
+# The suite already uses pytest-asyncio's registered "asyncio" marker and
+# pytest's built-in parametrize. A typo of "integration" must not slip into
+# the default run.
+addopts = [
+    "--strict-markers",
+    "-m",
+    "not integration",
+]

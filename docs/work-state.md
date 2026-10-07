@@ -1,5 +1,28 @@
 # Current Work State
 
+## Tooling Config Slice: 2026-10-07
+
+- Branch `cursor/tooling-config-black-isort-flake8-pytest-48d8`, rebased onto
+  `origin/master` `a10e196` (PR #13, deprecation cleanup, rebase-merged).
+  Config and docs only (`pyproject.toml`, `.flake8`, README lint section,
+  this note, and a short journal entry). No `.py` edits.
+- Black 79 / target py312, isort profile black at 79, flake8 max line length
+  79 with no `extend-ignore`. pytest registers `integration`, uses
+  `--strict-markers`, and the default run passes `-m "not integration"`.
+  `pyproject.toml` does not pin pytest or set `filterwarnings`.
+- `pytest -q` on `a10e196` before this config, no `.env`: 758 passed, no
+  warnings summary. After this config: 758 passed, no warnings summary,
+  758 collected. `pytest --markers` lists `integration`.
+- `tests/test_model_config_compatibility.py` passes the configured checks.
+  `tests/test_company_update_conflicts.py` still fails isort. The five
+  production files from the cleanup still have the same pre-existing
+  Black/flake8 debt; isort still fails only `app/api/data_collection.py`
+  among them. None were reformatted.
+- Next action for this slice: open the pull request for review. Do not merge.
+- The resume instructions below are the deprecation cleanup's own snapshot.
+  They are kept, including the "not merged" line that was true when that
+  pull request was opened. PR #13 is merged now.
+
 ## Resume Instructions
 
 Active slice: minimal pytest CI for issue #5 on branch

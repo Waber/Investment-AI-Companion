@@ -1,0 +1,17 @@
+# flake8 does not read pyproject.toml. This file is the project config.
+# max-line-length matches Black and isort (79).
+
+[flake8]
+max-line-length = 79
+
+# No extend-ignore, and no per-file-ignores.
+#
+# flake8 6 already ignores W503 and W504 by default. Those are the
+# "line break before/after a binary operator" codes. Black breaks before
+# the operator, so W503 would be noise, but it is already ignored.
+#
+# E203 (whitespace before ':') is the other code Black can trigger, for
+# example in a slice. The files that currently pass Black at 79 columns do
+# not report E203, so it is not ignored here. Add "extend-ignore = E203"
+# later only if a formatting change introduces that finding. Do not hide
+# existing lint debt with a blanket per-file suppression.

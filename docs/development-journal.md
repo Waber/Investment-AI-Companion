@@ -1,5 +1,70 @@
 # Development Journal
 
+## 2026-10-07 - Tooling configuration
+
+- Scope: configuration and docs only. Black line length 79 with target
+  Python 3.12, isort profile `black` at line length 79, flake8 max line
+  length 79, and pytest `testpaths` plus a registered `integration` marker.
+  No `.py` files edited. No new tools, dependency changes, or CI.
+  Rebased onto `origin/master` `a10e196` after PR #13 (issue #4) was
+  rebase-merged. The deprecation entries below are kept as written.
+- Why a separate `.flake8`: Black, isort, and pytest read `pyproject.toml`.
+  flake8 does not. Putting its settings in `.flake8` is what makes
+  `flake8` with no extra flags use 79 columns.
+- Decision, `--strict-markers`: adopted, in pytest `addopts`. An unregistered
+  marker is a collection error instead of a warning the run can still pass.
+  Checked with a throwaway test using `not_a_registered_marker`: collection
+  stopped with that name not found in `markers`. The suite uses
+  pytest-asyncio's registered `asyncio` marker and built-in `parametrize`
+  only, including `tests/test_model_config_compatibility.py`. A misspelled
+  `integration` marker cannot silently join the SQLite suite.
+- Decision, default selection: `addopts` also passes `-m "not integration"`.
+  A test marked `integration` is deselected unless the command line passes
+  `-m integration` (that later `-m` replaces the addopts expression). A
+  throwaway marked test was deselected by `pytest -q` and ran only with
+  `-m integration`. There are no integration tests in the tree yet.
+- Decision, flake8 `extend-ignore`: not set. flake8 6 already ignores W503
+  and W504. E203 does not occur on the files that pass Black at 79 columns.
+  No per-file ignores.
+- Decision, pytest config boundary: `pyproject.toml` does not declare a
+  pytest version, dependencies, or `filterwarnings`. pytest-asyncio 0.21.1
+  breaks on pytest 8 or later, so versions stay in `requirements.txt`.
+  `filterwarnings = error` is a pending decision and is not set here.
+- Files checked with `black --check`, `isort --check-only`, and `flake8`
+  and no extra flags. Results match `black --check --line-length 79`,
+  default isort, and default flake8 on the same files, including isort
+  `--profile black --line-length 79`. Pass means exit 0. Not reformatted.
+  - Pass all three: `main.py`, `app/core/validation.py`,
+    `tests/test_lifespan_cors.py`, `tests/test_validation_errors.py`,
+    `tests/test_collection_updates.py`,
+    `tests/test_metric_creation_conflicts.py`,
+    `tests/test_financial_metric_updates.py`,
+    `tests/test_model_config_compatibility.py`.
+  - `tests/test_company_update_conflicts.py`: Black and flake8 pass. isort
+    fails because `sqlalchemy.exc` is imported after the application
+    imports. The black profile asks for the same move as default isort.
+  - Production files from the deprecation cleanup, same before and after
+    this config: isort passes `app/core/database.py`, `app/models/company.py`,
+    `app/models/financial_metrics.py`, and `app/models/historical_data.py`.
+    isort fails `app/api/data_collection.py`. Black 79 and flake8 still fail
+    all five for pre-existing debt.
+- Default Black (88 columns) would reformat `main.py` and
+  `tests/test_lifespan_cors.py`. Configured 79 leaves both unchanged.
+- Verification, from the repository root, no `.env` (only `.env.example`):
+  - Before this config, on `origin/master` `a10e196`:
+    `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q` -> 758 passed, no
+    warnings summary. `python3 -m pytest --collect-only -q` -> 758 collected.
+  - After this config: the same command -> 758 passed in 9.34s, no warnings
+    summary. `python3 -m pytest --collect-only -q` -> 758 collected.
+    `python3 -m pytest --markers` lists `integration`.
+  - This environment has no project `.venv`. The interpreter was Python 3.12
+    with the pinned Black 23.11.0, isort 5.12.0, flake8 6.1.0, and
+    pytest 7.4.3 from `requirements.txt`. README lint commands were run the
+    same way via `python3 -m` and read the new config. `app/` and
+    `setup_database.py` still fail those checks because of older debt.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+  Account usage was not available in this session; no percentage recorded.
+
 ## 2026-10-07 - QA nits on the deprecation cleanup
 
 - QA approved [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
