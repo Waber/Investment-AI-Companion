@@ -109,13 +109,14 @@
   `master`. Python 3.12, `python -m pip install -r requirements.txt` with
   the setup-python pip cache, `PYTHONDONTWRITEBYTECODE=1`, the job fails if
   `.env` exists, and the workflow does not read GitHub Actions secrets.
-  Command: `python -m pytest -q -p no:cacheprovider`. README documents that
-  command via `.venv` from the repository root. Four existing deprecation
-  warnings stay allowed; issue #4 owns that cleanup.
-- QA draft spec (not on GitHub yet; Raul still has open decisions):
-  applied the fixed items (ubuntu-24.04, timeout 15, read-only token,
-  PR-only cancel-in-progress, setup-python v7, pip check, pytest coverage
-  report). Held back `--cov-fail-under=70` and the `MIN_TESTS` gate.
+  Command adds a coverage report and does not write JUnit XML. Four
+  existing deprecation warnings stay allowed. `-W error::DeprecationWarning`
+  waits until whichever of #13 and #14 merges second.
+- The draft QA spec is applied. Pending Raul: the coverage threshold
+  (`--cov-fail-under=70`), JUnit XML, and the `MIN_TESTS` gate.
+  Negative check: commit `806faef` failed on purpose
+  (https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386,
+  `1 failed, 742 passed, 4 warnings`) and was reverted.
 - Verification: `pip install -r requirements.txt` succeeded on Python 3.12.3.
   From the repo root, with no `.env`:
   `PYTHONDONTWRITEBYTECODE=1 /tmp/iac-pytest-venv/bin/python -m pytest -q -p no:cacheprovider`

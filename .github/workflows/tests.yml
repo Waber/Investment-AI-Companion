@@ -1,9 +1,8 @@
 # Minimal CI for the SQLite pytest suite.
 #
-# One job. It installs the pins in requirements.txt and runs pytest with a
-# coverage report. It does not lint, start Postgres, or build a Docker image.
-# Coverage is reported only. A fail-under threshold and a minimum test-count
-# gate are waiting on a decision and are not in this file yet.
+# One job. It installs requirements.txt and runs pytest with a coverage
+# report for app, main, and scripts. It does not lint or start Postgres.
+# The coverage threshold, JUnit XML, and MIN_TESTS gate are not enabled yet.
 name: Tests
 
 on:
@@ -16,11 +15,11 @@ on:
 permissions:
   contents: read
 
-# One group per workflow and pull request, or per ref when this is a branch
-# push. A newer commit on a pull request cancels the older run. A push to
-# master is never cancelled, so a finished master run stays in the log.
+# Pull requests share one group, so a newer commit cancels the older run.
+# A push has no pull request number, so the group is the commit SHA and
+# cancel-in-progress is false. A master push is never cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -35,7 +34,9 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        # v7 is the newest major tag for actions/checkout (v7.0.1) and runs
+        # on Node 24. v5 would also, and v4 is the one that warns about Node 20.
+        uses: actions/checkout@v7
 
       - name: Refuse to run when .env is present
         # app/core/config.py loads .env when that file exists. CI must not.
@@ -56,17 +57,18 @@ jobs:
         # can upgrade pytest and break pytest-asyncio 0.21.1.
         run: python -m pip install -r requirements.txt
 
-      - name: Check installed packages and pytest version
-        run: |
-          python -m pip check
-          python -m pytest --version
+      - name: Check installed packages
+        run: python -m pip check
+
+      - name: Show pytest version
+        run: python -m pytest --version
 
       - name: Run pytest
         # -q prints the pass/fail summary. -p no:cacheprovider skips
         # .pytest_cache. Coverage is a report, not a failing threshold.
-        # Warnings stay allowed until the deprecation cleanup lands.
+        # JUnit XML, the coverage threshold, and the test-count gate stay
+        # out until that decision is made. Warnings stay allowed for now.
         run: >
           python -m pytest -q -p no:cacheprovider
-          --junitxml=pytest-report.xml
           --cov=app --cov=main --cov=scripts
           --cov-branch --cov-report=term-missing
