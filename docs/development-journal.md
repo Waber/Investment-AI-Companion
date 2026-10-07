@@ -45,10 +45,10 @@
 - Baseline, clean environment, no `.env`, pinned requirements
   (`pydantic==2.6.1`, `sqlalchemy==2.0.23`), Python 3.12.3:
   `742 passed, 4 warnings in 5.67s`.
-- Final full suite on this branch before the pre-PR rebase:
-  `758 passed in 6.50s`, and pytest printed no warnings summary.
-  Sixteen new tests. Post-rebase rerun is recorded in the publication note
-  if the result changes.
+- Final full suite: `758 passed in 6.50s` before the pre-PR rebase, and
+  `758 passed in 6.74s` after `git fetch` and `git rebase origin/master`.
+  The branch was already on `a58dc8a`, so the rebase did not change files.
+  Pytest printed no warnings summary either time. Sixteen new tests.
 - Command (from `/workspace`, interpreter `/tmp/iac-venv`):
   `/usr/bin/env -i PATH="/tmp/iac-venv/bin:/usr/bin:/bin" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/workspace /tmp/iac-venv/bin/python -m pytest -q -p no:cacheprovider /workspace/tests`
 - Style: `black --check --line-length 79`, `isort --check-only`, and
@@ -66,9 +66,10 @@
   workflow) is rebase-merged as `a58dc8a`. Sentences below that still say
   those pull requests were open are the record of that moment, not the
   current state.
-- AI model: Grok 4.7 (Cursor cloud agent). Wall clock about 19:49-20:20 UTC.
-  Not a stopwatch measurement. Account usage was not available in this
-  Cursor session; no percentage was recorded and no reset was redeemed.
+- AI model: Grok 4.7 (Cursor cloud agent). Wall clock started about
+  19:49 UTC; elapsed time was not stopwatch-measured. Account usage was not
+  available in this Cursor session; no percentage was recorded and no reset
+  was redeemed.
 - Next: review this pull request. Do not merge unless the user authorizes it.
   After merge, guarded Alembic baseline and isolated PostgreSQL tests.
   Parallel tooling-config and minimal-CI pull requests do not own this
