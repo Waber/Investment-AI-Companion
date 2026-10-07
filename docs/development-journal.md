@@ -6,8 +6,13 @@
   Python 3.12, isort profile `black` at line length 79, flake8 max line
   length 79, and pytest `testpaths` plus a registered `integration` marker.
   No `.py` files edited. No new tools, dependency changes, or CI.
-  Rebased onto `origin/master` `a10e196` after PR #13 (issue #4) was
-  rebase-merged. The deprecation entries below are kept as written.
+  Rebased onto `origin/master` `db0cc12` after PR #14 (minimal CI) was
+  rebase-merged. The CI entry is next, then the deprecation entries.
+  Both are kept. CI's `-W error::DeprecationWarning` and
+  `-p no:cacheprovider` still apply: this config sets neither
+  `filterwarnings` nor a cache plugin. With those flags and the coverage
+  report, local `pytest -q` is 758 passed, no warnings summary, coverage
+  total 76%. `addopts` `-m "not integration"` does not drop any current test.
 - Why a separate `.flake8`: Black, isort, and pytest read `pyproject.toml`.
   flake8 does not. It only looks at `setup.cfg`, `tox.ini`, and `.flake8`.
   flake8 6 already defaults to 79 columns, so a no-flag `flake8` run is 79
@@ -69,6 +74,36 @@
   Account usage was not available in this session; no percentage recorded.
 - Published as [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
   against master. Not merged.
+
+## 2026-10-07 - Minimal pytest CI
+
+- Scope: one GitHub Actions workflow for the existing SQLite pytest suite
+  (issue #5). No lint gate, Postgres, Docker, dependency changes,
+  or `pyproject.toml`. Coverage is reported and does not fail the job.
+- Decision: `.github/workflows/tests.yml` on `pull_request` and `push` to
+  `master`. Python 3.12, `python -m pip install -r requirements.txt` with
+  the setup-python pip cache, `PYTHONDONTWRITEBYTECODE=1`, the job fails if
+  `.env` exists, and the workflow does not read GitHub Actions secrets.
+  Command adds a coverage report and does not write JUnit XML.
+  PR #13 is rebase-merged, so the command now includes
+  `-W error::DeprecationWarning`.
+- The draft QA spec is applied. Pending Raul: the coverage threshold
+  (`--cov-fail-under=70`), JUnit XML, and the `MIN_TESTS` gate.
+- After rebase onto `origin/master` `a10e196`, local Python 3.12.3 with
+  no `.env`: `758 passed in 13.56s`, no warnings summary, coverage total
+  `76%`.
+  Negative check: commit `806faef` failed on purpose
+  (https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386,
+  `1 failed, 742 passed, 4 warnings`) and was dropped before merge.
+- Verification: with `-W error::DeprecationWarning` and the coverage report,
+  the suite is `758 passed`, 0 warnings, and `76%` coverage. GitHub Actions
+  run 37682560920 is green:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37682560920
+  Job log: `758 passed in 13.67s` and `TOTAL ... 76%`.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+- Delivery: [PR #14](https://github.com/Waber/Investment-AI-Companion/pull/14)
+  on `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the user authorizes
+  it.
 
 ## 2026-10-07 - QA nits on the deprecation cleanup
 
@@ -169,36 +204,6 @@
   After merge, guarded Alembic baseline and isolated PostgreSQL tests.
   Issues #5 (minimal CI) and #6 (tooling config) are separate and do not
   own this journal or `docs/work-state.md`.
-
-## 2026-10-07 - Minimal pytest CI
-
-- Scope: one GitHub Actions workflow for the existing SQLite pytest suite
-  (issue #5). No lint gate, Postgres, Docker, dependency changes,
-  or `pyproject.toml`. Coverage is reported and does not fail the job.
-- Decision: `.github/workflows/tests.yml` on `pull_request` and `push` to
-  `master`. Python 3.12, `python -m pip install -r requirements.txt` with
-  the setup-python pip cache, `PYTHONDONTWRITEBYTECODE=1`, the job fails if
-  `.env` exists, and the workflow does not read GitHub Actions secrets.
-  Command adds a coverage report and does not write JUnit XML.
-  PR #13 is rebase-merged, so the command now includes
-  `-W error::DeprecationWarning`.
-- The draft QA spec is applied. Pending Raul: the coverage threshold
-  (`--cov-fail-under=70`), JUnit XML, and the `MIN_TESTS` gate.
-- After rebase onto `origin/master` `a10e196`, local Python 3.12.3 with
-  no `.env`: `758 passed in 13.56s`, no warnings summary, coverage total
-  `76%`.
-  Negative check: commit `806faef` failed on purpose
-  (https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386,
-  `1 failed, 742 passed, 4 warnings`) and was reverted.
-- Verification: with `-W error::DeprecationWarning` and the coverage report,
-  the suite is `758 passed`, 0 warnings, and `76%` coverage. GitHub Actions
-  run 37682560920 is green:
-  https://github.com/Waber/Investment-AI-Companion/actions/runs/37682560920
-  Job log: `758 passed in 13.67s` and `TOTAL ... 76%`.
-- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
-- Delivery: [PR #14](https://github.com/Waber/Investment-AI-Companion/pull/14)
-  on `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the user authorizes
-  it.
 
 ## 2026-10-07 - Rebase workflow rule
 
