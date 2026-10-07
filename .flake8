@@ -1,5 +1,6 @@
-# flake8 does not read pyproject.toml. This file is the project config.
-# max-line-length matches Black and isort (79).
+# flake8 does not read pyproject.toml. It reads this file, setup.cfg, or
+# tox.ini. max-line-length 79 matches Black and isort. It is also flake8 6's
+# own default, so this line records the policy rather than changing flake8.
 
 [flake8]
 max-line-length = 79

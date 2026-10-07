@@ -9,8 +9,11 @@
   Rebased onto `origin/master` `a10e196` after PR #13 (issue #4) was
   rebase-merged. The deprecation entries below are kept as written.
 - Why a separate `.flake8`: Black, isort, and pytest read `pyproject.toml`.
-  flake8 does not. Putting its settings in `.flake8` is what makes
-  `flake8` with no extra flags use 79 columns.
+  flake8 does not. It only looks at `setup.cfg`, `tox.ini`, and `.flake8`.
+  flake8 6 already defaults to 79 columns, so a no-flag `flake8` run is 79
+  even without this file. `.flake8` records that 79 in a file flake8 reads.
+  Black is the tool whose default (88) changes results unless
+  `line-length = 79` is set.
 - Decision, `--strict-markers`: adopted, in pytest `addopts`. An unregistered
   marker is a collection error instead of a warning the run can still pass.
   Checked with a throwaway test using `not_a_registered_marker`: collection
