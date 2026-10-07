@@ -2,10 +2,22 @@
 
 ## Resume Instructions
 
+Active slice: minimal pytest CI for issue #5 on branch
+`cursor/minimal-pytest-ci-ed2f`. Workflow is `.github/workflows/tests.yml`.
+Local suite on Python 3.12.3 with no `.env`: `742 passed, 4 warnings in 6.83s`.
+QA's check list was not on the issue yet. Next action: open the pull request
+against `master` (`Closes #5`), confirm the Actions run is green, do not merge.
+Lint and format stay out of this workflow (issue #6). Deprecation cleanup
+(issue #4) is recorded below and stays in this file.
+
 Deprecation cleanup (GitHub issue #4) is implemented on
 `cursor/deprecation-cleanup-7154` and published as
 [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13).
 Do not merge unless the user explicitly authorizes it.
+
+Latest earlier delivery is the 2026-10-07 rebase workflow rule (docs only; see
+the journal). No production code changed in that delivery. Account usage from
+the previous ChatGPT tooling was not available in that Cursor session.
 
 - Base: `origin/master` `a58dc8a` (PR #3, rebase workflow, rebase-merged).
   PR #2 is merged as `b10d06e`.

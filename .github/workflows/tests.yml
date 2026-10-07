@@ -1,0 +1,56 @@
+# Minimal CI for the SQLite pytest suite.
+#
+# One job, on purpose. It installs the pins in requirements.txt and runs the
+# same command a developer runs from the repository root. It does not lint,
+# measure coverage, start Postgres, or build a Docker image.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+# Read-only checkout token. This file never references ${{ secrets.* }},
+# so repository secrets are not passed into the job.
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (Python 3.12, SQLite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Same flag as the README command. Python then does not write .pyc
+      # files next to the source during collection and the test run.
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Refuse to run when .env is present
+        # app/core/config.py loads .env automatically when that file exists.
+        # CI must use code defaults. Tests build their own in-memory SQLite
+        # database in tests/conftest.py and do not need local credentials.
+        run: |
+          if [ -e .env ]; then
+            echo "Refusing to run: .env is present. CI must not load local secrets."
+            exit 1
+          fi
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies from requirements.txt
+        run: python -m pip install -r requirements.txt
+
+      - name: Run pytest
+        # -q prints the pass/fail summary line. -p no:cacheprovider skips
+        # .pytest_cache so the run does not depend on a previous cache.
+        # No API keys are set here. Provider tests use deterministic fakes.
+        run: python -m pytest -q -p no:cacheprovider

@@ -100,6 +100,28 @@
   Issues #5 (minimal CI) and #6 (tooling config) are separate and do not
   own this journal or `docs/work-state.md`.
 
+## 2026-10-07 - Minimal pytest CI
+
+- Scope: one GitHub Actions workflow for the existing SQLite pytest suite
+  (issue #5). No lint gate, Postgres, coverage, Docker, dependency changes,
+  or `pyproject.toml`.
+- Decision: `.github/workflows/tests.yml` on `pull_request` and `push` to
+  `master`. Python 3.12, `python -m pip install -r requirements.txt` with
+  the setup-python pip cache, `PYTHONDONTWRITEBYTECODE=1`, the job fails if
+  `.env` exists, and the workflow does not read GitHub Actions secrets.
+  Command: `python -m pytest -q -p no:cacheprovider`. README documents that
+  command via `.venv` from the repository root. Four existing deprecation
+  warnings stay allowed; issue #4 owns that cleanup.
+- QA check list: not on issue #5 when this was written. The workflow follows
+  the issue body. Re-check comments before the pull request is finalized.
+- Verification: `pip install -r requirements.txt` succeeded on Python 3.12.3.
+  From the repo root, with no `.env`:
+  `PYTHONDONTWRITEBYTECODE=1 /tmp/iac-pytest-venv/bin/python -m pytest -q -p no:cacheprovider`
+  -> `742 passed, 4 warnings in 6.83s`.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+- Delivery: branch `cursor/minimal-pytest-ci-ed2f`. Do not merge unless the
+  user authorizes it. Issue #4 still owns the deprecation handoff below.
+
 ## 2026-10-07 - Rebase workflow rule
 
 - Scope: documentation only. Record that this project keeps a linear history
