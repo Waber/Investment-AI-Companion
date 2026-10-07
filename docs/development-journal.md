@@ -64,6 +64,8 @@
     `setup_database.py` still fail those checks because of older debt.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
+- Published as [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
+  against master. Not merged.
 
 ## 2026-10-07 - QA nits on the deprecation cleanup
 
