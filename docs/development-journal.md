@@ -9,20 +9,18 @@
   GitHub issues, not pull requests. The pull request body matches.
 - The suite command in the cleanup entry below is the portable form, run
   from the repository root: `.venv/bin/python -m pytest -q -p no:cacheprovider`.
-- The warning check starts its interpreter in a temporary directory.
-  `Settings` reads `.env` from the working directory, so a file in the repo
-  root is not applied. `PYTHONPATH` still points at the repository. When the
-  repo has no `.env`, the test plants an invalid `BACKEND_CORS_ORIGINS`
-  value and deletes it afterwards. The child must ignore that file.
+- Code review of `330c1bd` asked to stop writing `.env` into the repo.
+  The warning check still starts in a temporary directory with a minimal
+  environment. The child asserts that its working directory is not the
+  project root. `Settings` reads `.env` from that directory, so a repo-root
+  `.env` is not loaded. The test does not write any file into the repo.
+  `PYTHONPATH` still points at the repo.
 - RED, with the pre-cleanup sources restored and this test kept: the check
   failed. The child raised `MovedIn20Warning` from `declarative_base()` in
-  `app/core/database.py`. The planted `.env` did not cause that failure.
-- GREEN and full suite on the restored cleanup, from the repo root with the
-  project interpreter: `758 passed in 6.76s`. Pytest printed no warnings
-  summary. The targeted warning check is included in that count.
-- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
-  stopwatch-measured. Account usage was not available in this Cursor
-  session; no percentage was recorded and no reset was redeemed.
+  `app/core/database.py`.
+- Full suite on the current sources: `758 passed in 6.39s`, no warnings
+  summary. The targeted warning check is included.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
 - Next: re-review PR #13. Do not merge unless the user authorizes it.
 
 ## 2026-10-07 - Pydantic and SQLAlchemy deprecation cleanup

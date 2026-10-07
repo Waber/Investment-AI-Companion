@@ -285,17 +285,25 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
     when the class or function is first defined.
 
     Settings reads `.env` from the process working directory. The child
-    starts in a temporary directory so a developer's file in the repo
-    root is not applied. PYTHONPATH still points at this repository.
-    A broken `.env` is planted in the repo when one is not already
-    there; the child must ignore it.
+    starts in a temporary directory, with a minimal environment, so a
+    developer's `.env` in the repo root is not applied. The child checks
+    that its working directory is not the project root. PYTHONPATH still
+    points at this repository. This test does not write into the repo.
     """
     script = textwrap.dedent(
         r"""
+        import os
         import warnings
+        from pathlib import Path
 
         from pydantic.warnings import PydanticDeprecatedSince20
         from sqlalchemy.exc import MovedIn20Warning
+
+        project_root = Path(os.environ["PYTHONPATH"]).resolve()
+        if Path.cwd().resolve() == project_root:
+            raise SystemExit(
+                "warning check must not run from the project root"
+            )
 
         # Match the start of the warning text. Python's filter is a
         # start-anchored regex, and these warnings are ignored by default
@@ -321,29 +329,18 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
         import app.models.historical_data
         """
     )
-    # Settings loads ".env" from the working directory only. A file in
-    # the repository must not change this check.
-    repo_env = PROJECT_ROOT / ".env"
-    wrote_env = False
-    if not repo_env.exists():
-        repo_env.write_text("BACKEND_CORS_ORIGINS=not-a-valid-origin\n")
-        wrote_env = True
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-c", script],
-            cwd=tmp_path,
-            env={
-                "PATH": "/usr/bin:/bin",
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PYTHONPATH": str(PROJECT_ROOT),
-            },
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    finally:
-        if wrote_env:
-            repo_env.unlink()
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONPATH": str(PROJECT_ROOT),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     assert completed.returncode == 0, (
         "Targeted deprecations were raised as errors.\n"
