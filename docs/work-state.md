@@ -12,8 +12,10 @@
   Scoped Black (79 columns), isort, flake8 and diff whitespace checks passed.
 - Carver independently approved code/tests and ancestor integration scan, and
   ran the 25 focused cases. No real database/provider or service checks performed.
-- Ready for commit/push/PR against master; no merge. Agents finished. Stop reason:
-  approved bounded scope completed, not quota. Usage 29% after implementation.
+- Published as [PR #2](https://github.com/Waber/Investment-AI-Companion/pull/2)
+  against master; implementation commit `5bd286c`. No merge. Agents closed.
+  Stop reason: approved bounded scope completed, not quota. Final usage 40%
+  five-hour / 6% weekly. Next action: review/merge PR before subsequent development.
 - Older entries below are historical, not active workers or current service state.
 
 ## Historical Delivery Checkpoint: 2026-10-04

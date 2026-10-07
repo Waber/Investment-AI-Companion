@@ -22,6 +22,9 @@
   reviewer reran 25 focused cases. Stop at completed scope, not quota. Commit,
   push and PR follow verification; no merge. Usage 6% at start, 29% after implementation.
   Agent model inherited; precise model identifier and elapsed time not measured.
+- Published implementation `5bd286c` and prior slices in
+  [PR #2](https://github.com/Waber/Investment-AI-Companion/pull/2) targeting master.
+  No merge; agents closed. Final account usage 40% five-hour / 6% weekly.
 
 ## 2026-10-04 - JSON overflow validation fix
 
