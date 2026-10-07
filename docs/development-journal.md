@@ -70,7 +70,9 @@
   19:49 UTC; elapsed time was not stopwatch-measured. Account usage was not
   available in this Cursor session; no percentage was recorded and no reset
   was redeemed.
-- Next: review this pull request. Do not merge unless the user authorizes it.
+- Published as [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
+  against `master`. Not merged.
+- Next: review PR #13. Do not merge unless the user authorizes it.
   After merge, guarded Alembic baseline and isolated PostgreSQL tests.
   Parallel tooling-config and minimal-CI pull requests do not own this
   journal or `docs/work-state.md`.
@@ -114,7 +116,9 @@
 
 Status update: PR #2 is merged as `b10d06e`. PR #3 is rebase-merged as
 `a58dc8a`. The deprecation cleanup this handoff describes is implemented on
-`cursor/deprecation-cleanup-7154`; see the 2026-10-07 cleanup entry above.
+`cursor/deprecation-cleanup-7154`
+([PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13));
+see the 2026-10-07 cleanup entry above.
 The bullets below stay as the original handoff.
 
 ### Resume Here
