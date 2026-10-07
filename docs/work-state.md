@@ -11,10 +11,10 @@ unless the user explicitly authorizes it.
 - Change: `declarative_base` now comes from `sqlalchemy.orm`. Response models
   use `ConfigDict` with `from_attributes=True`. Financial metrics still set
   `allow_inf_nan=False`. `FetchCompanyRequest` still documents ticker `AAPL`.
-- Baseline before the edit: 742 passed, 4 warnings. Final suite on this
-  branch: 758 passed, no pytest warnings summary. The warning-as-error test
-  failed before the migration (see the journal). Post-rebase rerun is the
-  number to trust if `origin/master` moved.
+- Baseline before the edit: 742 passed, 4 warnings. After the change, and
+  again after rebasing onto `origin/master` (`a58dc8a`, already current):
+  758 passed, no pytest warnings summary. The warning-as-error test failed
+  before the migration (see the journal).
 - Verification used a clean environment and pinned `requirements.txt`
   (`pydantic==2.6.1`, `sqlalchemy==2.0.23`). No private `.env`, live
   provider, or dependency upgrade.
