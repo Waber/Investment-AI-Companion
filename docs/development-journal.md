@@ -1,5 +1,30 @@
 # Development Journal
 
+## 2026-10-07 - QA nits on the deprecation cleanup
+
+- QA approved [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
+  at `b05c79a` with three non-blocking notes. Fixed on
+  `cursor/deprecation-cleanup-7154`. Not merged.
+- `docs/work-state.md` now says issue #5 and issue #6. Those numbers are
+  GitHub issues, not pull requests. The pull request body matches.
+- The suite command in the cleanup entry below is the portable form, run
+  from the repository root: `.venv/bin/python -m pytest -q -p no:cacheprovider`.
+- The warning check starts its interpreter in a temporary directory.
+  `Settings` reads `.env` from the working directory, so a file in the repo
+  root is not applied. `PYTHONPATH` still points at the repository. When the
+  repo has no `.env`, the test plants an invalid `BACKEND_CORS_ORIGINS`
+  value and deletes it afterwards. The child must ignore that file.
+- RED, with the pre-cleanup sources restored and this test kept: the check
+  failed. The child raised `MovedIn20Warning` from `declarative_base()` in
+  `app/core/database.py`. The planted `.env` did not cause that failure.
+- GREEN and full suite on the restored cleanup, from the repo root with the
+  project interpreter: `758 passed in 6.76s`. Pytest printed no warnings
+  summary. The targeted warning check is included in that count.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  stopwatch-measured. Account usage was not available in this Cursor
+  session; no percentage was recorded and no reset was redeemed.
+- Next: re-review PR #13. Do not merge unless the user authorizes it.
+
 ## 2026-10-07 - Pydantic and SQLAlchemy deprecation cleanup
 
 - Scope: remove project-owned deprecated configuration without changing
@@ -49,8 +74,8 @@
   `758 passed in 6.74s` after `git fetch` and `git rebase origin/master`.
   The branch was already on `a58dc8a`, so the rebase did not change files.
   Pytest printed no warnings summary either time. Sixteen new tests.
-- Command (from `/workspace`, interpreter `/tmp/iac-venv`):
-  `/usr/bin/env -i PATH="/tmp/iac-venv/bin:/usr/bin:/bin" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/workspace /tmp/iac-venv/bin/python -m pytest -q -p no:cacheprovider /workspace/tests`
+- Command, from the repository root:
+  `.venv/bin/python -m pytest -q -p no:cacheprovider`
 - Style: `black --check --line-length 79`, `isort --check-only`, and
   `flake8` pass for `tests/test_model_config_compatibility.py`. `isort`
   passes for `app/core/database.py`, `app/models/company.py`,
@@ -74,8 +99,8 @@
   against `master`. Not merged.
 - Next: review PR #13. Do not merge unless the user authorizes it.
   After merge, guarded Alembic baseline and isolated PostgreSQL tests.
-  Parallel tooling-config and minimal-CI pull requests do not own this
-  journal or `docs/work-state.md`.
+  Issues #5 (minimal CI) and #6 (tooling config) are separate and do not
+  own this journal or `docs/work-state.md`.
 
 ## 2026-10-07 - Rebase workflow rule
 

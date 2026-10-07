@@ -278,12 +278,17 @@ def test_fetch_company_request_keeps_ticker_schema_example():
         assert body["content"]["application/json"]["schema"] == schema_ref
 
 
-def test_project_imports_do_not_emit_targeted_deprecations():
+def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
     """Importing project models must not emit the deprecations we remove.
 
-    The check runs in a fresh interpreter. Python emits these warnings
-    once, when the class or function is first defined, so a process that
-    already imported the app would hide them.
+    A fresh interpreter is required. Python emits these warnings once,
+    when the class or function is first defined.
+
+    Settings reads `.env` from the process working directory. The child
+    starts in a temporary directory so a developer's file in the repo
+    root is not applied. PYTHONPATH still points at this repository.
+    A broken `.env` is planted in the repo when one is not already
+    there; the child must ignore it.
     """
     script = textwrap.dedent(
         r"""
@@ -316,18 +321,29 @@ def test_project_imports_do_not_emit_targeted_deprecations():
         import app.models.historical_data
         """
     )
-    completed = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=PROJECT_ROOT,
-        env={
-            "PATH": "/usr/bin:/bin",
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "PYTHONPATH": str(PROJECT_ROOT),
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # Settings loads ".env" from the working directory only. A file in
+    # the repository must not change this check.
+    repo_env = PROJECT_ROOT / ".env"
+    wrote_env = False
+    if not repo_env.exists():
+        repo_env.write_text("BACKEND_CORS_ORIGINS=not-a-valid-origin\n")
+        wrote_env = True
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=tmp_path,
+            env={
+                "PATH": "/usr/bin:/bin",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONPATH": str(PROJECT_ROOT),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        if wrote_env:
+            repo_env.unlink()
 
     assert completed.returncode == 0, (
         "Targeted deprecations were raised as errors.\n"
