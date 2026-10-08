@@ -6,16 +6,16 @@ describes local development, not a public deployment: there is no authentication
 
 ## 1. Open The Correct Source And Interpreter
 
-Open the checkout containing this guide in PyCharm (**File > Open**). Before
-the PR is merged, use its branch rather than the older `master`. The recovery
-worktree on this machine is `/private/tmp/investment-pr-delivery`; temporary
-directories can disappear, so prefer a persistent checkout for ongoing work.
+Open the checkout containing this guide in PyCharm (**File > Open**). The
+recovery worktree from the September session is
+`$TMPDIR/investment-pr-delivery`; temporary directories can disappear, so
+prefer a persistent checkout for ongoing work.
 
 In **Settings > Project > Python Interpreter**, select an existing Python 3.12
 interpreter. On the original development machine it is:
 
 ```text
-/Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python
+~/projects/Investment-AI-Companion/.venv/bin/python
 ```
 
 Reusing this interpreter does not select its source checkout. For another
@@ -87,9 +87,9 @@ individual entries, with literal values and no shell quoting:
 | `PYTHONDONTWRITEBYTECODE` | `1` |
 | `DATABASE_URL` | Your dedicated PostgreSQL URL from step 2 |
 | `DEBUG` | `False` |
-| `BACKEND_CORS_ORIGINS` | `[]` |
+| `BACKEND_CORS_ORIGINS` | `[]`, or a comma-separated origin list |
 | `OPENAI_API_KEY` | Empty |
-| `SECRET_KEY` | A locally generated random value |
+| `SECRET_KEY` | Required. A locally generated random value |
 
 Generate the secret using the selected interpreter:
 
@@ -101,8 +101,13 @@ Paste the result into the field; IDE fields do not evaluate shell commands.
 Keep this configuration local, not committed. Other Python IDEs need the same
 interpreter, module, arguments, working directory and environment values.
 
-Do not run `main.py` directly: its script entrypoint binds to `0.0.0.0:8000`.
-Do not add `--reload` for debugging. `DEBUG=False` does not disable IDE breakpoints.
+`python main.py` binds `127.0.0.1:8000`. This IDE configuration uses port
+8082 on the same loopback address. `BACKEND_CORS_ORIGINS` accepts a
+comma-separated list (`http://localhost:3000,http://127.0.0.1:3000`) or a
+JSON list. `[]` means no browser origins. Startup fails when `SECRET_KEY`
+is missing. `ALLOWED_HOSTS` defaults to `localhost` and `127.0.0.1` and is
+enforced. Do not add `--reload` for debugging. `DEBUG=False` does not
+disable IDE breakpoints.
 
 ## 4. Run And Verify
 

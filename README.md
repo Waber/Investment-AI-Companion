@@ -93,13 +93,23 @@ cp .env.example .env
 
 Edit `.env` for local credentials and service URLs. Do not commit real secrets.
 
-4. Start the API:
+`SECRET_KEY` is required. The process refuses to start when it is missing
+or still a known placeholder. Generate one with
+`python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+`DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need
+`/api/v1/test-config`. `BACKEND_CORS_ORIGINS` is a comma-separated list
+of http(s) origins. A JSON list works too. The code default for
+`DATABASE_URL` is
+`postgresql://investment_ai@localhost:5432/investment_ai`.
+
+4. Start the API on loopback:
 
 ```bash
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open API docs at `http://127.0.0.1:8000/docs`.
+`python main.py` binds `127.0.0.1:8000` as well. Open API docs at
+`http://127.0.0.1:8000/docs`.
 
 ## API Routes
 

@@ -1,5 +1,142 @@
 # Development Journal
 
+## 2026-10-08 - Secure defaults, neutral paths, and provider hygiene (#45, #47, #50)
+
+- Scope: #45 (secure config defaults), #47 (neutral defaults and a
+  personal-path guard), and #50 (provider-data hygiene and ticker
+  validation) in one pull request. Branch
+  `cursor/secure-config-provider-hygiene-c91c`, based on master
+  `d568663`. Blank tickers on company create and fetch-company are
+  rejected, which is the remaining #17 case, so this pull request
+  also closes #17. Out of scope: auth (#48), the collector interface
+  (#24), negative pagination (#19), duplicate ticker (#16),
+  pip-audit/Dependabot (#52), and universal locks (#53).
+  `docs/product-requirements.md` was not edited.
+- Decision, ALLOWED_HOSTS: enforced with Starlette
+  `TrustedHostMiddleware`. The default is `localhost` and
+  `127.0.0.1`. The middleware is added after CORS so it is the
+  outermost layer. A host that is not in the list gets HTTP 400
+  and the plain text `Invalid host header`. The port is stripped
+  before the comparison, so `127.0.0.1:8000` is accepted. Test
+  clients use `base_url="http://127.0.0.1"`. The setting stays
+  because an unused security-looking list would be misleading.
+- Decision, SECRET_KEY: kept and required. Nothing signs tokens
+  with it yet, but `GET /api/v1/test-config` reports whether it is
+  set, and a default or a placeholder would look like a real
+  secret. There is no default. Empty, whitespace, `your-secret-key-here`,
+  and `replace-this-in-local-env` fail settings construction.
+  Tests and the demo set their own value. `.env.example` leaves
+  the key empty and shows how to generate one.
+- Decision, DEBUG and test-config: `DEBUG` defaults to false.
+  `/api/v1/test-config` stays registered. When DEBUG is off the
+  route returns 403. When DEBUG is on the body is presence flags
+  only (check marks), never secret values or the database URL.
+- Decision, CORS: pydantic-settings stays at 2.1.0. `NoDecode` is
+  not in that release, and both hashed locks are unchanged. The
+  field `BACKEND_CORS_ORIGINS` is a `str`. A validator accepts a
+  comma-separated string, a JSON list string, and a Python list,
+  then stores canonical origin strings. `settings.cors_origins`
+  is the list the app reads. An invalid URL fails settings
+  construction with a clear error. An empty string means no
+  origins. This is the fix for the startup crash on a
+  comma-separated value: pydantic-settings JSON-decodes `list`
+  fields before validators run.
+- Decision, bind address: `python main.py` and the documented
+  uvicorn commands bind `127.0.0.1`, not every interface.
+- Decision, DATABASE_URL: the code default is
+  `postgresql://investment_ai@localhost:5432/investment_ai`.
+  Tests and the demo still pass their own SQLite URLs. The value
+  is not required from the environment.
+- Decision, personal paths: tracked files use
+  `~/projects/Investment-AI-Companion` and `$TMPDIR`. Historical
+  journal and plan text was edited for those paths only. A pytest
+  test runs `git grep` for a personal home-directory prefix, the
+  old macOS temporary-directory prefix, and the previous local
+  account name. The needles are built from string pieces so the
+  test file itself does not contain them. After the docs edit
+  there are zero matches, so there is no allowlist.
+- Decision, ticker pattern: `^[A-Z0-9._\-^=]{1,20}$` after a
+  control-character check, then strip and uppercase. The issue
+  example was `{1,15}` without underscore. The demo fixture uses
+  underscores (`DEMO_PL_TECH`) and `DEMO_DE_INDUSTRY` is 16
+  characters. The database column is `String(20)`. The pattern
+  matches the column and keeps the fixture loadable. It accepts
+  `PKN.WA`, `CDR.WA`, `VWCE.DE`, `BRK-B`, `^GSPC`, `EURUSD=X`,
+  and a 20-character symbol. It rejects 21 characters, blank,
+  whitespace-only, CR/LF, and other control characters. Control
+  characters are rejected before strip, so `"AAPL\n"` is not
+  turned into `AAPL`. `None` still means "field omitted" on
+  update. Currency is stripped and uppercased before the
+  3-character check, so `usd` is stored as `USD`.
+- Decision, provider errors: in `fetch_company_data`, pydantic
+  `ValidationError` is caught before `ValueError` (it is a
+  subclass) and returned as HTTP 502 with the fixed detail
+  `Provider returned invalid company data`. The body does not
+  include provider input. The log records field names and error
+  types, and the ticker with `%r`. It does not call
+  `logger.exception` on that error, because the exception text
+  includes the input. Uniqueness `ValueError` stays HTTP 400
+  with the business message. `update` returning `None` stays
+  HTTP 500 with `Failed to update company`, and that path now
+  logs the ticker. Unexpected exceptions stay HTTP 500 with
+  `Error fetching company data`.
+- `fetch-financial-metrics` was checked. It has no
+  `ValidationError` or `ValueError` handler. It is still a
+  placeholder. It uses the same `FetchCompanyRequest`, so a bad
+  ticker is HTTP 422 before the handler runs.
+- Length limits match the database columns: name 255, ticker 20,
+  sector, industry, and country 100, website 500, exchange 50,
+  currency 3. `description` is text and has no limit.
+  `period_type` is 20 on the financial-metrics create and
+  response models. Over-length user input is HTTP 422 on company
+  create and update. Over-length or invalid provider data on
+  fetch-company is HTTP 502.
+- Log calls in `data_collection.py` and `yahoo_finance.py` pass
+  the ticker as a `%r` argument. A CR/LF inside a ticker cannot
+  forge a second log line. Request validation blocks those
+  tickers at the API. The log tests bypass that validation and
+  call the collector and the handler directly.
+- History: three commits, and each one passes the CI pytest
+  command. Tests are first and marked `xfail(strict=True)`, so
+  the suite exits 0 while `--runxfail` shows assertion failures
+  (not import errors). The fix commit removes those markers
+  except the personal-path test, which still failed until the
+  docs commit. Docs are last, and that test is no longer xfail.
+- Client-visible behaviour: startup fails without a real
+  `SECRET_KEY`. `DEBUG` defaults to false, so
+  `/api/v1/test-config` is 403 until a local `.env` turns DEBUG
+  on. A bad `Host` header is HTTP 400. The process binds
+  `127.0.0.1`. A comma-separated `BACKEND_CORS_ORIGINS` no longer
+  crashes startup. Blank, whitespace, and control-character
+  tickers are HTTP 422 on company create, company update,
+  fetch-company, and fetch-financial-metrics, and no row is
+  written. Accepted tickers are stored uppercased and stripped.
+  Over-length company fields and `period_type` are HTTP 422.
+  Provider data that fails the company schema on fetch-company
+  is HTTP 502 with the fixed detail above. Uniqueness is still
+  HTTP 400. A missing company on update is still HTTP 500 with
+  `Failed to update company`.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3, packages from
+  `pip install --require-hashes -r requirements-dev.lock`
+  (the venv started on pip 24.0 and the lock upgraded pip):
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`.
+  Test commit `e352413`: 865 passed, 51 xfailed, 14.91s, TOTAL
+  92.93%. `--runxfail` failures were `AssertionError` or
+  `pytest.fail`, not import errors. Fix commit `849b08a`: 918
+  passed, 1 xfailed, 14.44s, exact coverage 93.41% (1035
+  statements, 65 missed, 194 branches, 6 partial). Docs tree: 919
+  passed in 14.56s, no xfailed, exact coverage 93.41%. Collector
+  tests stay offline. `black
+  --check` passed on the touched Python files. CI runs pytest
+  only. `setup_database.py` still has the pre-existing flake8
+  unused-import and E402 findings; those were not drive-by
+  fixes. isort was applied to that file because the run command
+  string changed.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available, so no percentage is
+  recorded. No subagents.
+
 ## 2026-10-08 - Module-level skips fail the PostgreSQL job (#9)
 
 - Scope: QA approved `5aa1ccf` and sent it to Code Reviewer.
@@ -1205,8 +1342,8 @@ The bullets below stay as the original handoff.
   https://github.com/Waber/Investment-AI-Companion/pull/2
 - Delivered branch: `fix/startup-lifespan-cors`, last implementation `5bd286c`,
   publication checkpoint `4fa939d`. This documentation commit follows both.
-- Primary repository: `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`.
-  Current worktree: `/private/tmp/investment-metric-updates`. The configured
+- Primary repository: `~/projects/Investment-AI-Companion`.
+  Current worktree: `$TMPDIR/investment-metric-updates`. The configured
   PycharmProjects directory is not the authoritative repository. Temporary
   worktrees may disappear; recover committed work from Git, not stale paths.
 - Read AGENTS.md and docs/work-state.md, inspect status/worktrees, fetch origin
@@ -1253,12 +1390,12 @@ Execution and acceptance:
    Confirm publication scope with the next user instruction; this handoff only
    authorizes adding documentation to the existing PR.
 
-Known test command (run from `/private/tmp`, replace worktree path if changed):
+Known test command (run from `$TMPDIR`, replace worktree path if changed):
 ```bash
 /usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
-  PYTHONPATH=/private/tmp/investment-metric-updates \
-  /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python \
-  -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests
+  PYTHONPATH=$TMPDIR/investment-metric-updates \
+  ~/projects/Investment-AI-Companion/.venv/bin/python \
+  -m pytest -q -p no:cacheprovider $TMPDIR/investment-metric-updates/tests
 ```
 This avoids loading private .env configuration. Verify the interpreter still
 exists. Run style checks from the worktree, not /tmp; the previous scoped checks
@@ -1286,7 +1423,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 - RED: 7 failed / 18 passed before implementation. GREEN: 25 focused cases;
   coordinator full isolated suite 742 passed with four preexisting warnings
   (SQLAlchemy and Pydantic). Deprecated FastAPI startup warnings are gone.
-- Full command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-metric-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests`.
+- Full command from `$TMPDIR`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$TMPDIR/investment-metric-updates ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider $TMPDIR/investment-metric-updates/tests`.
 - Scoped checks: `black --check --line-length 79 main.py tests/test_lifespan_cors.py`,
   `isort --check-only` and `flake8` on the same files, plus `git diff --check`.
   Black's default 88-column check differs; explicit 79 matches default flake8.
@@ -1372,7 +1509,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
   stop threshold. Recorded this policy in AGENTS; no reset may be redeemed without
   authorization. Start usage29% five-hour/4% weekly consumed.
 - New branch `test/financial-metric-updates`, base `1e05ab1`, worktree
-  `/private/tmp/investment-metric-updates`. Primary checkout/user files untouched.
+  `$TMPDIR/investment-metric-updates`. Primary checkout/user files untouched.
 - Hubble owns only new update tests; coordinator handles docs and full verification;
   independent reviewer follows. Scope: partial updates/null/zero/omission and invalid
   updates, not all remaining Task2 work. Existing correct code need not change.
@@ -1382,7 +1519,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
   Tests compare PUT/GET, fresh persisted snapshots, identity and unrelated rows;
   rejected422 payloads preserve timestamps as well as values.
 - Coordinator full suite:693 passed, six existing warnings. Command from
-  `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-metric-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-metric-updates/tests`.
+  `$TMPDIR`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$TMPDIR/investment-metric-updates ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider $TMPDIR/investment-metric-updates/tests`.
 - Black/isort/flake8 checks passed for the new test file. Independent Aristotle
   review approved spec compliance and quality without actionable findings.
 - Hubble and Aristotle closed at delivery. Verification usage50% five-hour/8%
@@ -1477,10 +1614,10 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m isort --check-only tests`: passed with default settings.
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m flake8 tests`: passed with default settings.
 - Each corrective code commit passed `git diff --cached --check` before commit.
-- The combined suite ran from `/private/tmp` with a clean environment and the repository on `PYTHONPATH`, without reading the developer's `.env`. Exact command:
+- The combined suite ran from `$TMPDIR` with a clean environment and the repository on `PYTHONPATH`, without reading the developer's `.env`. Exact command:
 
 ```bash
-/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/przemkowy/IdeaProjects/Investment-AI-Companion /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /Users/przemkowy/IdeaProjects/Investment-AI-Companion/tests
+/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=~/projects/Investment-AI-Companion ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider ~/projects/Investment-AI-Companion/tests
 ```
 
 - An earlier coordinator test launcher disabled dotenv loading globally and caused the template smoke test to fail. Removing that launcher override, without changing application code, produced the final result above.
@@ -1513,7 +1650,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 ## 2026-09-08 - WIP partial checkpoint: Task 2 CRUD regressions (paused)
 
 ### State and stop reason
-- Worktree: `/private/tmp/investment-crud-regressions`.
+- Worktree: `$TMPDIR/investment-crud-regressions`.
 - Branch: `fix/crud-update-regressions`; pre-checkpoint HEAD: `10ab10d6bf1ba15e9105dc85d86b32c1816a5835`.
 - User-requested pause to preserve state before the next iteration after context/usage pressure. The user reports that the previous run encountered a usage-limit error and that credits have now been reset. No credit balance or reset result was independently checked in this task.
 - Task 2 remains incomplete and paused. The checkpoint is not approval to resume implementation or integrate changes.
@@ -1526,7 +1663,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 - All commands launched by this task had exited; no owned implementation or testing process remained running.
 
 ### Verification actually performed
-- `pwd`: confirmed `/private/tmp/investment-crud-regressions`.
+- `pwd`: confirmed `$TMPDIR/investment-crud-regressions`.
 - `git status --short --branch`: clean worktree on `fix/crud-update-regressions` before the journal edit.
 - `git log -1 --format='%H %s'`: confirmed the pre-checkpoint HEAD above (`docs: clarify migration and analysis contracts`).
 - `git diff --stat`, `git diff`, and `git diff --cached`: all empty before the journal edit.
@@ -1538,7 +1675,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 - On explicit resumption, first inspect git status, read `docs/work-state.md`, the latest journal entry, `docs/superpowers/plans/2026-09-08-research-workflow-and-hardening.md` (Task 2), and `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`. Then inspect the assigned APIs/repositories, existing tests/conftest, and configuration without reading `.env` or a private database.
 - Write the first failing regression test before production edits. Cover missing-update 404, company URL omitted/changed/null, metrics partial updates/null, conflicts, rollback/recovery, relevant cascade behavior, and fake-collector existing-company/404 paths. Investigate deterministic duplicate-ticker 400 semantics only as supported by regression evidence and existing constraints.
 - Implementation ownership remains limited to `app/api/companies.py`, `app/api/financial_metrics.py`, `app/repositories/company_repository.py`, `app/repositories/financial_metrics_repository.py`, `tests/test_updates_api.py`, and `tests/test_collection_updates.py`. Do not edit data collection API, main, models, conftest, or unrelated files.
-- Pending test invocation after confirming isolation: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider`, from this worktree. Use deterministic fakes, no live providers, no `.env`, and no private database. Record exact red/green and full-suite results when actually run.
+- Pending test invocation after confirming isolation: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider`, from this worktree. Use deterministic fakes, no live providers, no `.env`, and no private database. Record exact red/green and full-suite results when actually run.
 
 ### Model and time tracking
 - Agent: Codex (GPT-6); no subagents used.
@@ -1548,16 +1685,16 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 
 ### Scope and plan
 - User authorized only the missing-record update fix, regression tests, independent review, a local commit, and journal. Other remaining-work tasks stay paused.
-- Created `fix/missing-update-not-found` at `/private/tmp/investment-update-404` from CRUD checkpoint `83bb7ed`. Old temporary worktrees are absent, but commits remain in Git. No old registrations/branches removed.
+- Created `fix/missing-update-not-found` at `$TMPDIR/investment-update-404` from CRUD checkpoint `83bb7ed`. Old temporary worktrees are absent, but commits remain in Git. No old registrations/branches removed.
 - Both update routes raise intended HTTP 404 inside a broad exception handler that converts it to 500. Start with failing API regressions, apply the smallest fix, verify 400/500 and successful-update behavior remains intact.
 - Carson implements two routes and focused tests. Coordinator handles baseline/final verification, usage checks, and documentation; separate review follows implementation.
 - No migrations, dependency updates, profiles, broad formatting, push, or merge.
 
 ### Baseline and resource checks
-- Fresh baseline: 537 passed, six existing warnings. Command, from `/private/tmp`:
+- Fresh baseline: 537 passed, six existing warnings. Command, from `$TMPDIR`:
 
 ```bash
-/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-update-404 /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-update-404/tests
+/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$TMPDIR/investment-update-404 ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider $TMPDIR/investment-update-404/tests
 ```
 
 - Usage: before work, 8% five-hour and 2% weekly used; after preparation, 14% and 3%. These are not remaining-context measurements. No exact context counter is exposed; no reset/purchase performed.
@@ -1583,7 +1720,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 ## 2026-09-22 - Company website updates (bounded test-only task, completed locally)
 
 - User authorized the next small task with resource checks; scope is only website omission, replacement, null clearing, and invalid URL rejection. No broader CRUD/migration/AI work.
-- Branch `test/company-website-updates` at `/private/tmp/investment-website-updates`, based on reviewed `3a2b0af`; parent suite verified in this session: 545 passed, six legacy warnings.
+- Branch `test/company-website-updates` at `$TMPDIR/investment-website-updates`, based on reviewed `3a2b0af`; parent suite verified in this session: 545 passed, six legacy warnings.
 - Existing update code already handles `exclude_unset` and optional URL serialization. Contrary to the earlier generic next-step wording, characterization tests can legitimately pass immediately; do not invent a failing bug or change correct production behavior.
 - Ohm owns only `tests/test_company_website_updates.py`; coordinator owns documentation and final verification. Separate independent review follows.
 - Initial resource check: 59% five-hour and 10% weekly used. These account-wide percentages are not a context measurement or a completion guarantee. No reset/purchase.
@@ -1592,7 +1729,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 ### Results and handoff
 - Added only `tests/test_company_website_updates.py` plus coordinator documentation. Four cases verify omission, normalized replacement, null clearing, and invalid URL rejection without mutation through PUT responses, GET readback, and fresh database sessions. Production code was already correct and remains unchanged.
 - Ohm reported focused four passed/full 549 passed, six existing warnings. Dalton independently approved spec and quality, no findings, and ran all four focused cases successfully.
-- Coordinator independently ran the full suite: 549 passed, six existing warnings. Command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-website-updates /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-website-updates/tests`.
+- Coordinator independently ran the full suite: 549 passed, six existing warnings. Command from `$TMPDIR`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$TMPDIR/investment-website-updates ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider $TMPDIR/investment-website-updates/tests`.
 - Coordinator's repository-local isort check required one blank line between third-party and application imports despite the developer's reported pass; corrected that formatting-only issue after review. Default Black/isort/flake8 checks and the suite are rerun before commit.
 - Usage after preparation: 65% five-hour/11% weekly used; after implementation and full verification: 78%/13%. No exact context counter, reset, or purchase. Stop at completed scope to conserve the remaining allowance, not because a limit was reached.
 - Agents Ohm and Dalton closed at delivery. Same configured inherited model; exact identity and elapsed effort not independently measured. No agent-owned long-running process.
@@ -1602,12 +1739,12 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 
 ## 2026-09-26 - Local API demo and request guide
 
-- User approved running the latest tested backend with an isolated database and documenting API requests. Worktree `/private/tmp/investment-api-demo`, branch `chore/local-api-demo`, base `731c513`. No production behavior/dependency changes or merge/push.
+- User approved running the latest tested backend with an isolated database and documenting API requests. Worktree `$TMPDIR/investment-api-demo`, branch `chore/local-api-demo`, base `731c513`. No production behavior/dependency changes or merge/push.
 - Design: reuse installed Python environment and existing app; fresh owner-only PostgreSQL cluster, Unix socket only, loopback HTTP, synthetic data. Avoid real `.env`, API credentials and developer database. Provide a curl walkthrough and repeatable HTTP smoke client; review them independently.
-- Coordinator initialized PostgreSQL14.19 at `/private/tmp/iac-demo.h7TbGw/data`, role `demo`, DB `investment_demo`, socket directory `/private/tmp/iac-demo.h7TbGw`, port15432, host authentication rejected and TCP listening disabled.
+- Coordinator initialized PostgreSQL14.19 at `$TMPDIR/iac-demo.h7TbGw/data`, role `demo`, DB `investment_demo`, socket directory `$TMPDIR/iac-demo.h7TbGw`, port15432, host authentication rejected and TCP listening disabled.
 - API runs detached on `127.0.0.1:8081` with clean environment and DEBUG=False. Logs/PID reside in the runtime directory; these intentionally running services remain available to the user. Temporary files are not durable storage or backups.
 - Verified startup schema creation, company POST and financial-metrics POST on PostgreSQL, Swagger HTML200, and diagnostic endpoint403. Seeded one synthetic `DEMO` company and one metrics row (IDs1 initially); no external providers called.
-- Fresh isolated regression suite: 549 passed, six existing deprecation warnings. Command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-api-demo /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-api-demo/tests`.
+- Fresh isolated regression suite: 549 passed, six existing deprecation warnings. Command from `$TMPDIR`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$TMPDIR/investment-api-demo ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider $TMPDIR/investment-api-demo/tests`.
 - Curie develops only `docs/api-demo.md` and `scripts/smoke_demo.py`; coordinator owns runtime, README and state/journal. Independent review and final live smoke results follow below.
 - Initial usage60% five-hour/26% weekly; after launch73%/28%. No context-capacity inference, reset or purchase. Exact agent model/effort duration not independently measured.
 - This manually tested local PostgreSQL runtime does not replace the remaining automated migration/integration-test work. AI/profile functionality remains unimplemented; provider metrics route remains a placeholder.
@@ -1618,7 +1755,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 
 ## 2026-09-26 - Reusable synthetic demo fixtures (completed locally)
 
-- User requested persistent/reproducible test data for API and future frontend testing. Worktree `/private/tmp/investment-demo-fixtures`, branch `feature/reusable-demo-fixtures`, base `83940ea`.
+- User requested persistent/reproducible test data for API and future frontend testing. Worktree `$TMPDIR/investment-demo-fixtures`, branch `feature/reusable-demo-fixtures`, base `83940ea`.
 - Decision: versioned JSON plus create-only HTTP seeder; keep the running API unchanged and avoid direct DB/private settings access. Default preview is GET-only; --apply explicit. Existing records/values remain unchanged; partial failures can be resumed by rerun, not rolled back across requests.
 - Coordinator fixture: six explicitly synthetic companies, five currencies, 20 financial rows across2023-2025 annual/Q12026. Profit/loss/zero/null/no-reports scenarios. No real security data or unsupported ETF/bond claims.
 - Existing live records include original `DEMO` and a user-created `string` ticker. Neither may be modified or removed by seeding.
@@ -1629,7 +1766,7 @@ with the FastAPI dependency set. Financial-metrics ingestion remains a placehold
 ### Verification and review
 - Laplace implemented only seeder and unit tests. Initial TDD run failed collection because the implementation module did not exist; subsequent60 focused cases passed. This is new functionality, not a claim of reproducing an old application bug.
 - Volta independently reviewed fixture, script, tests and guide: approved without actionable findings; 62 focused cases passed. Tests cover dry run, creation, repeatability, edits/unrelated records, timezone equivalence, pagination, collisions before writes, invalid fixtures and partial-failure resumption.
-- Coordinator reran full isolated suite: **611 passed, six existing warnings**. Exact command from `/private/tmp`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/investment-demo-fixtures /Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider /private/tmp/investment-demo-fixtures/tests`.
+- Coordinator reran full isolated suite: **611 passed, six existing warnings**. Exact command from `$TMPDIR`: `/usr/bin/env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$TMPDIR/investment-demo-fixtures ~/projects/Investment-AI-Companion/.venv/bin/python -m pytest -q -p no:cacheprovider $TMPDIR/investment-demo-fixtures/tests`.
 - Default Black/isort/flake8 checks passed for `scripts/seed_demo.py`, `tests/test_seed_demo.py`, and `tests/test_demo_fixture.py` from the worktree. No production app/style/dependency changes.
 - Live CLI dry run against verified loopback demo planned6companies/20metrics and performed no writes. First `--apply` created6companies/20metrics; second `--apply` created0/0 and skipped all6/20. UTC matching worked against PostgreSQL's offset timestamps.
 - Compared pre-seed JSON snapshots against fresh API reads: both preexisting companies (including user-created ticker `string`) and original metrics row were unchanged. At verification total8companies/21metrics; fixture IDs6-11. IDs are not portable and docs do not rely on them.

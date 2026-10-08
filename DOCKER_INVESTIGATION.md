@@ -56,7 +56,7 @@ createdb investment_ai
 source venv/bin/activate
 pip install -r requirements.txt
 python setup_database.py --seed
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ## Target Docker Setup

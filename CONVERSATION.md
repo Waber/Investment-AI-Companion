@@ -152,7 +152,7 @@
   1. Sklonować repozytorium
   2. Skopiować plik `.env`
   3. Zainstalować zależności: `pip install -r requirements.txt`
-  4. Uruchomić aplikację: `python -m uvicorn main:app --reload`
+  4. Uruchomić aplikację: `python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload`
 
 ## Notatki: Pydantic v2 i mapowanie pól
 
@@ -193,7 +193,7 @@
 
 2. Uruchom serwer deweloperski:
    ```bash
-   python -m uvicorn main:app --reload
+   python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
    ```
    - Interaktywna dokumentacja: `http://127.0.0.1:8000/docs`
 
