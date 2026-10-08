@@ -297,6 +297,20 @@ def test_cors_origin_must_be_a_bare_http_origin(origin):
         )
 
 
+def test_ipv6_cors_origin_is_rejected_as_unsupported():
+    """IPv6 origins are not supported. The error should say so."""
+    with pytest.raises(ValidationError) as caught:
+        Settings(
+            _env_file=None,
+            SECRET_KEY=TEST_SECRET,
+            BACKEND_CORS_ORIGINS="http://[::1]:3000",
+        )
+
+    message = str(caught.value)
+    assert "IPv6" in message
+    assert "not supported" in message
+
+
 def test_cors_userinfo_error_does_not_echo_the_password():
     """The startup error must not repeat user:password from the origin."""
     marker = "cors-password-marker"
