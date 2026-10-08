@@ -4,9 +4,10 @@
 
 - Scope: [PR #43](https://github.com/Waber/Investment-AI-Companion/pull/43)
   on `cursor/reviewer-nits-minimal-c3a6`, rebased onto `origin/master`
-  `778735e`. [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
-  (80% coverage gate) is rebase-merged. Master's journal and work-state
-  sections from that pull request are kept. No production `.py` edits.
+  `07c30f6`. [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
+  is merged as `778735e`. [PR #41](https://github.com/Waber/Investment-AI-Companion/pull/41)
+  is merged as `07c30f6`. Master's journal and work-state sections from
+  those pull requests are kept. No production `.py` edits.
 - `actions/checkout` sets `persist-credentials: false`. The Tests job
   never pushes, so the checkout token is not stored in `.git/config`.
 - isort `known_first_party` is `app`, `main`, and `scripts`.
@@ -58,7 +59,11 @@
 - GitHub Actions Tests on `8ba25ee` succeeded:
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37756800118
   Job `pytest (Python 3.12, SQLite)` completed with conclusion success.
-  That run is from before this rebase.
+  That run is from before this rebase. The final run on `973330b`
+  succeeded:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37758000432
+  The same job completed with conclusion success. Rebase-merge recorded
+  that commit on master as `07c30f6`.
 - After the rebase onto `778735e`, from the repository root, no `.env`:
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 813 passed in 11.50s, no warnings summary, TOTAL 92% (exact 91.77%).
@@ -67,6 +72,7 @@
   Account usage was not available in this session; no percentage recorded.
 - Rebased onto `origin/master` `778735e`. PR #13 is merged as `a10e196`.
   PR #15 is merged as `b2541d7`. PR #22 is merged as `778735e`.
+  PR #41 is merged as `07c30f6`.
 
 ## 2026-10-08 - Review notes on the coverage tests
 

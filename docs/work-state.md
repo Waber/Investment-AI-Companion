@@ -21,7 +21,10 @@
   11.50s, no warnings summary, TOTAL 92% (exact 91.77%). The earlier
   docs-only run was 758 passed. GitHub Actions Tests on `8ba25ee`
   (https://github.com/Waber/Investment-AI-Companion/actions/runs/37756800118)
-  is from before this rebase.
+  is from before this rebase. The final run on `973330b` succeeded:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37758000432
+  Job `pytest (Python 3.12, SQLite)` completed with conclusion success.
+  Rebase-merge recorded that commit on master as `07c30f6`.
 - Active agents: none.
 - Blockers: none for starting Demo v1.
 - Next action: Demo v1 issue
@@ -64,9 +67,8 @@
   pull requests being opened are history; the sentences that called them
   open or awaiting review are corrected.
 - Reviewer nits from PRs #14 and #15 are in PR #43
-  (`cursor/reviewer-nits-minimal-c3a6`), rebased onto `778735e` after
-  PR #22 merged. PR #41 also edits this file and the journal.
-  Whichever of those pull requests merges second needs a rebase.
+  (`cursor/reviewer-nits-minimal-c3a6`). PR #22 is merged as `778735e`.
+  PR #41 is merged as `07c30f6`.
 - Review follow-up: missing test-config settings are isolated from the
   shell, statement keys are a subset, and company-shaped pins are marked
   `see #26`. `NEWS_API_KEY=x` no longer fails
