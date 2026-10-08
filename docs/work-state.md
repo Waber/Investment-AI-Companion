@@ -19,16 +19,24 @@
   suffix. The app engine enables SQLite foreign keys, and the tests
   reuse that hook.
   `python scripts/seed_demo.py --apply` succeeds twice on a fresh
-  SQLite file and does not insert duplicate rows.
-- Incomplete: PostgreSQL verification of the same-instant duplicate is
-  deferred to #9. Alembic (#8), the instrument model (#26), and bugs
-  #18, #19, and #21 are not in this branch. Code Reviewer approval is
-  still open.
+  SQLite file and does not insert duplicate rows. `PUT` can move
+  `period_end`. An explicit null is a 422 from the update model.
+  Omitting the field leaves the stored instant unchanged. Moving onto
+  an existing company, period, and type is 400.
+- Incomplete: the formal PostgreSQL harness is still #9. QA verified
+  #20 on PostgreSQL 16 (Europe/Warsaw) at the application level: the
+  same instant with `+02:00`, `Z`, or naive returns 400, and readback
+  has no double shift. Alembic (#8), the instrument model (#26), and
+  bugs #18, #19, and #21 are not in this branch. Code Reviewer
+  approval is still open.
 - Tests: no `.env`, the CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 822 passed in 14.80s, no warnings summary, TOTAL 92% (exact
-  92.36%). Before the fix, `tests/test_known_defects.py` was
+  -> 823 passed in 15.55s, no warnings summary, TOTAL 92% (exact
+  92.41%). The earlier rebased head `c3c8911` was 822 passed, exact
+  92.36%. Before the fix, `tests/test_known_defects.py` was
   `1 xfailed` and `tests/test_sqlite_utc_timestamps.py` was `8 failed`.
+  `PUT {"period_end": null}` failed that new test with 400
+  `constraint violation` before the model rejected null.
 - Active agents: none.
 - Blockers: none for bugs #18 and #21.
 - Next action, after this PR: bugs
@@ -68,11 +76,21 @@
   Rebase-merge recorded that commit on master as `07c30f6`.
 - Active agents: none.
 - Blockers: none for starting Demo v1.
-- The next-action line that started with issue #23 and bug #20 was
-  the state when this section was written. Those two are the slice
-  above. The live next action is the SQLite UTC section at the
-  top of this file: after this PR, bugs #18 and #21, then #24.
-  Bug #19 can be slotted in.
+- Next action: Demo v1 issue
+  [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
+  together with bug
+  [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
+  first, then bugs
+  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
+  and
+  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21),
+  then
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
+  then
+  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
+  then
+  [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
+  Issues #8, #9, and #10 come after the demo.
 
 ## Coverage Gate: 2026-10-08
 
@@ -104,9 +122,8 @@
   shell, statement keys are a subset, and company-shaped pins are marked
   `see #26`. `NEWS_API_KEY=x` no longer fails
   `test_test_config_marks_missing_settings`.
-- The live next action is the SQLite UTC section at the top of this
-  file: after this PR, bugs #18 and #21, then #24. Bug #19 can be
-  slotted in.
+- The live next action is the product-requirements section at the top
+  of this file.
 - Account usage was not available in this session. Stop reason: coverage
   gate delivered, not quota.
 
@@ -132,9 +149,8 @@
   among them. None were reformatted.
 - [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
   is merged as `b2541d7`. The next-action line that said to review it
-  was the state when this snapshot was written. The live next action
-  is the SQLite UTC section at the top of this file: after this PR,
-  bugs #18 and #21, then #24. Bug #19 can be slotted in.
+  was the state when this snapshot was written. The current next action
+  is in the product-requirements section at the top of this file.
 - The Resume Instructions section immediately below is the merged
   minimal-CI note from PR #14, not the deprecation cleanup. The
   deprecation record follows that CI note.
@@ -147,8 +163,8 @@ on `origin/master` `db0cc12`. Workflow is `.github/workflows/tests.yml`.
 Local suite on Python 3.12.3 with no `.env` and
 `-W error::DeprecationWarning`: `758 passed in 13.56s`, no warnings
 summary, coverage total `76%`. The draft QA spec is applied.
-The coverage threshold is now `--cov-fail-under=80` (Coverage Gate
-section below). JUnit XML and the `MIN_TESTS` gate are still not
+The coverage threshold is now `--cov-fail-under=80` (coverage-gate
+section at the top). JUnit XML and the `MIN_TESTS` gate are still not
 enabled. Red demo run
 [37681557386](https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386)
 failed on purpose. Commit `806faef` was dropped before merge, so that SHA
@@ -184,9 +200,8 @@ the previous ChatGPT tooling was not available in that Cursor session.
   is merged as `a10e196`. The next-action line that said to re-review it
   was the state when this snapshot was written. Tooling config (issue #6,
   PR #15, `b2541d7`) and minimal CI (issue #5, PR #14, `db0cc12`) are
-  merged too. The live next action is the SQLite UTC section at the
-  top of this file: after this PR, bugs #18 and #21, then #24. Bug
-  #19 can be slotted in. Editable profiles and source-aware AI stay
+  merged too. The current next action is in the product-requirements
+  section at the top of this file. Editable profiles and source-aware AI stay
   later.
 - Account usage was not available in this Cursor session. Stop reason:
   bounded cleanup completed, not quota.
@@ -350,6 +365,5 @@ review/merge next-action line below was the state when this snapshot was written
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is not in this branch.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- The live next action is the SQLite UTC section at the top of this
-  file: after this PR, bugs #18 and #21, then #24. Bug #19 can be
-  slotted in. The old demo runtime is not assumed to still exist.
+- The live next action is the product-requirements section at the top
+  of this file. The old demo runtime is not assumed to still exist.
