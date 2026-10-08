@@ -41,6 +41,65 @@
   completed with conclusion success.
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37833690203
 
+## 2026-10-08 - DSN query guard and merge-safe integration import (#9)
+
+- Scope: QA follow-up on `c9b7302`, applied on top of `1fc4edb`.
+  libpq query parameters and environment variables could point the
+  connection at a different database than the allowlist checked.
+  Issue #16 does not include case-insensitive tickers. Pull
+  request #61 requires `SECRET_KEY` before `Settings()` can be
+  built.
+- Decision, query and environment: `decide_test_dsn` refuses
+  `dbname`, `database`, `hostaddr`, and `service` in the query
+  string. A `host` query value is accepted only when every
+  comma-separated piece is localhost, `127.0.0.1`, `::1`, or an
+  absolute socket path (`?host=/socket/dir` still passes). When
+  the URL has no host, `PGHOST` must be local, `PGHOSTADDR` must
+  be loopback, and `PGSERVICE` is refused. `TEST_POSTGRES_ALLOW_REMOTE=1`
+  does not relax those checks. Only the exact value `1` enables
+  the remote-host override.
+- Decision, `.env` denylist: `dotenv_values` reads `DATABASE_URL`
+  from a `.env` file without applying it, and that URL is refused
+  as an application database. The root conftest also treats
+  `-qm integration`, an empty `-m` value, and `pytest.main` as
+  selecting the marker, using the marker expression pytest has
+  already parsed. If the marker is selected, a `.env` exists, and
+  isolation did not run, configuration raises `UsageError`.
+- Decision, secret: before the isolated import, the root conftest
+  sets `SECRET_KEY` with `setdefault` to a 34-character throwaway
+  that is not a known placeholder. A shell-exported secret is
+  left in place. The default SQLite command does not take this
+  path. `tests/conftest.py` was not modified.
+- Decision, #16: the current test still expects 500 for an exact
+  duplicate `DUP`, then a different ticker `OTHER` to show the
+  session recovered. It no longer asserts that `dup` is stored.
+  A strict xfail covers the #16 target (exact duplicate is 400 or
+  409 and one row). A second strict xfail covers case collision
+  and names ticker normalization, not #16. Both start from a
+  fixture that creates `DUP`, so a failed create is an error
+  rather than an expected failure.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3, packages from
+  `requirements-dev.lock`:
+  the CI pytest command -> 846 passed, 108 deselected in 13.83s,
+  exact 92.58%. Node id without the marker -> 1 deselected,
+  exit 5. `-m integration` with the local test DSN -> 106 passed,
+  2 xfailed, 846 deselected in 3.65s. Of those 108 integration
+  tests, 92 do not open PostgreSQL and 16 hit the database (14
+  passed, 2 xfailed). `black`, `isort --check-only`, and
+  `flake8` passed on the touched Python files. GitHub Actions
+  for this commit is recorded after the push.
+  The previous head `1fc4edb` is green in
+  [run 37837340255](https://github.com/Waber/Investment-AI-Companion/actions/runs/37837340255):
+  SQLite 846 passed, 68 deselected in 16.98s. PostgreSQL 67
+  passed, 1 xfailed, 846 deselected in 2.86s.
+- Work-state next action: unchanged. #45 and #47 together, with
+  #50 if that fix stays small, until #61 lands. Then #24, #19,
+  #25, and #26 (with #16 and #17). The sentence that the harness
+  stays later is updated when this branch rebases onto #61.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
 ## 2026-10-08 - Integration client host and neutral paths (#9)
 
 - Scope: follow-up on `cursor/postgres-integration-harness-fc54`
