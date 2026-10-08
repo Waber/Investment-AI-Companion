@@ -97,3 +97,27 @@ async def test_test_config_marks_missing_settings(client, monkeypatch):
         "SECRET_KEY": "✗",
     }
     assert set(body["optional_settings"].values()) == {"✗ (optional)"}
+
+
+@pytest.mark.asyncio
+async def test_test_config_does_not_echo_the_database_url(client, monkeypatch):
+    """Presence flags only. A password in DATABASE_URL stays off the wire."""
+    database_url = (
+        "postgresql://user:super-secret-db-password"
+        "@localhost:5432/investment_ai"
+    )
+    configured = Settings(
+        _env_file=None,
+        DEBUG=True,
+        SECRET_KEY="test-secret-key-value",
+        DATABASE_URL=database_url,
+        OPENAI_API_KEY="sk-test-openai-value",
+    )
+    monkeypatch.setattr(main, "settings", configured)
+
+    response = await client.get("/api/v1/test-config")
+
+    assert response.status_code == 200
+    assert response.json()["optional_settings"]["DATABASE_URL"] == "✓"
+    assert "super-secret-db-password" not in response.text
+    assert database_url not in response.text

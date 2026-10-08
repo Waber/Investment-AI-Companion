@@ -9,6 +9,10 @@ exception with the ticker. ``debt_to_assets`` (#21) is total debt
 divided by total assets when both numbers are already on the provider
 info, and None otherwise. It is never a per-share amount. Issue #19
 is not covered here.
+
+Blank tickers (#17) are pinned below. ``""`` and whitespace are still
+accepted on create and on fetch-company. The markers come off when
+those requests return 422 and write nothing.
 """
 
 import logging
@@ -302,3 +306,50 @@ def test_debt_to_assets_accepts_numpy_reals(monkeypatch):
     assert metrics is not None
     assert metrics["debt_to_assets"] == 0.25
     assert metrics["pe_ratio"] == 30.1
+
+
+def _company_count(client) -> int:
+    session = client.app.state.testing_session_local()
+    try:
+        from app.models.database_models import CompanyDB
+
+        return session.query(CompanyDB).count()
+    finally:
+        session.close()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="blank tickers are stored (#17)",
+)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ticker", ["", "   "])
+async def test_blank_ticker_is_rejected_on_create(client, ticker):
+    """POST /companies rejects an empty or whitespace ticker with 422."""
+    before = _company_count(client)
+
+    response = await client.post(
+        COMPANIES, json={"name": "C", "ticker": ticker}
+    )
+
+    assert response.status_code == 422
+    assert _company_count(client) == before
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="blank tickers reach fetch-company (#17)",
+)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ticker", ["", "   "])
+async def test_blank_ticker_is_rejected_by_fetch_company(client, ticker):
+    """fetch-company rejects an empty or whitespace ticker before Yahoo."""
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: FakeCollector()
+    )
+    before = _company_count(client)
+
+    response = await client.post(FETCH, json={"ticker": ticker})
+
+    assert response.status_code == 422
+    assert _company_count(client) == before
