@@ -16,9 +16,22 @@
   waiting on Raul. That line now says PR #22 is merged as `778735e`.
   The live next action is the product-requirements section at the top
   of `docs/work-state.md`.
-- Verification: no `.env`, Python 3.12.3, pytest 7.4.3:
-  `813 passed in 11.32s`, TOTAL exact `91.77%`. `--cov-fail-under=80`
-  passed.
+- Verification: no `.env`, Python 3.12.3, pytest 7.4.3. Command:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  Result on this head: `813 passed in 11.32s`, TOTAL exact `91.77%`.
+  `--cov-fail-under=80` passed.
+- Lint comparison, same interpreter, from the repository root.
+  `python -m isort --check-only --diff .` still fails 12 files, and the
+  diff is identical with or without `known_first_party`.
+  `python -m black --check .` would reformat 15 files, and
+  `python -m flake8 .` reports 388 findings. Those two counts do not
+  change when the isort setting is removed. The setting matters when
+  isort runs outside the repo root, for example an IDE or pre-commit
+  whose settings file is not this repository. Without
+  `known_first_party`, isort treats `app` as third-party and regroups
+  `app/api/companies.py`, placing the `app` imports in the same group
+  as FastAPI and SQLAlchemy. With the setting, those imports stay in
+  the first-party group.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 
