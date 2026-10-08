@@ -1,5 +1,31 @@
 # Development Journal
 
+## 2026-10-08 - Product requirements and research docs
+
+- Scope: documentation only. Add Raul's product requirements (draft v0.2,
+  2026-10-08) and the two research notes from the same day. Paths match
+  the Demo v1 issues (#23–#40, label `demo`):
+  `docs/product-requirements.md`,
+  `docs/research/market-data-sources.md`, and
+  `docs/research/llm-comparison.md`. No `.py` files, workflows, or config
+  files were edited.
+- Decision: the attached text is copied as given. Nothing in those three
+  files was rewritten. There were no markdown links to repair, no
+  `/workspace` paths, and the cross-references
+  `research/market-data-sources.md` and `research/llm-comparison.md` are
+  already the relative paths from `docs/product-requirements.md` to
+  `docs/research/`.
+- Work-state next action is Demo v1 issue #23 together with bug #20
+  first, then #24, then #25, then #26. That action does not wait on this
+  docs change.
+- Verification: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
+  from the repository root. Result recorded after the run.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+  Account usage was not available in this session; no percentage recorded.
+- PR #22 (`cursor/coverage-threshold-80-c3a6`) is also open and edits this
+  journal and `docs/work-state.md`. Whichever of the two merges second
+  needs a rebase.
+
 ## 2026-10-08 - Review notes on the coverage tests
 
 - Scope: one commit on `cursor/coverage-threshold-80-c3a6` on top of

@@ -1,5 +1,35 @@
 # Current Work State
 
+## Product requirements and research: 2026-10-08
+
+- Branch `cursor/product-requirements-research-301f`. Docs only. Adds
+  `docs/product-requirements.md` (draft v0.2) plus
+  `docs/research/market-data-sources.md` and
+  `docs/research/llm-comparison.md`. No `.py`, workflow, or config edits.
+  The attached text was copied unchanged.
+- Completed: those three files are on this branch. Demo issue links to
+  `docs/product-requirements.md` resolve here. The research notes are
+  under `docs/research/`, which is the relative path the requirements
+  file already uses.
+- Incomplete: Demo v1 issues #23–#40 are not started. QA bugs #16–#21
+  are still open. Coverage PR #22 is still open.
+- Tests: local pytest result is recorded in the journal after the run.
+  Unrun: GitHub Actions Tests on this branch, until that run finishes.
+- Active agents: none.
+- Blockers: none for starting Demo v1. This branch and PR #22
+  (`cursor/coverage-threshold-80-c3a6`) both edit this file and
+  `docs/development-journal.md`. Whichever merges second needs a rebase.
+- Next action: Demo v1 issue
+  [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
+  together with bug
+  [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
+  first, then
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
+  then
+  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
+  then
+  [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
+
 ## Coverage Gate: 2026-10-08
 
 - Branch `cursor/coverage-threshold-80-c3a6`, based on `origin/master`
