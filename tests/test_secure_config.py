@@ -107,11 +107,59 @@ def test_real_secret_key_is_accepted():
     assert settings.SECRET_KEY == TEST_SECRET
 
 
+def _hosts(settings):
+    """Parsed host list, once the field stops being a raw JSON list."""
+    parsed = getattr(settings, "allowed_hosts", None)
+    if parsed is not None:
+        return parsed
+    return settings.ALLOWED_HOSTS
+
+
 def test_allowed_hosts_default_is_loopback(monkeypatch):
     monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
     settings = Settings(_env_file=None, SECRET_KEY=TEST_SECRET)
 
-    assert settings.ALLOWED_HOSTS == ["localhost", "127.0.0.1"]
+    assert _hosts(settings) == ["localhost", "127.0.0.1"]
+
+
+def test_comma_separated_allowed_hosts_env_parses(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", TEST_SECRET)
+    monkeypatch.setenv("ALLOWED_HOSTS", "localhost,127.0.0.1")
+    try:
+        settings = Settings(_env_file=None)
+    except Exception as exc:
+        pytest.fail(
+            "comma-separated ALLOWED_HOSTS raised "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    assert _hosts(settings) == ["localhost", "127.0.0.1"]
+
+
+def test_json_list_allowed_hosts_env_parses(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", TEST_SECRET)
+    monkeypatch.setenv("ALLOWED_HOSTS", '["localhost","127.0.0.1"]')
+
+    settings = Settings(_env_file=None)
+
+    assert _hosts(settings) == ["localhost", "127.0.0.1"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [["*"], ["localhost:8000"], ["localhost", ""], ["localhost", "*"]],
+)
+def test_unsafe_allowed_hosts_are_rejected(value):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, SECRET_KEY=TEST_SECRET, ALLOWED_HOSTS=value)
+
+
+def test_star_allowed_host_from_env_is_rejected(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", TEST_SECRET)
+    monkeypatch.setenv("ALLOWED_HOSTS", '["*"]')
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
 
 
 @pytest.mark.asyncio

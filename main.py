@@ -49,7 +49,7 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     # rejected before the route runs. Added last so it wraps CORS.
     application.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=settings.ALLOWED_HOSTS,
+        allowed_hosts=settings.allowed_hosts,
     )
 
     @application.get("/")
@@ -95,7 +95,7 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
             "environment": {
                 "DEBUG": settings.DEBUG,
                 "LOG_LEVEL": settings.LOG_LEVEL,
-                "ALLOWED_HOSTS": settings.ALLOWED_HOSTS,
+                "ALLOWED_HOSTS": settings.allowed_hosts,
             },
         }
 

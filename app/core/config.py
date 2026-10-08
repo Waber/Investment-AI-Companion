@@ -72,6 +72,60 @@ def _cors_origin_parts(value: object) -> List[str]:
     return origins
 
 
+def _allowed_host_parts(value: object) -> List[str]:
+    """Split ALLOWED_HOSTS into hostnames with no port and no wildcard.
+
+    pydantic-settings 2.1 JSON-decodes a ``list`` field before any
+    validator, so ``localhost,127.0.0.1`` crashed startup. The field
+    stays a string. Starlette removes the port from the Host header
+    before it compares, so a configured host that includes a port
+    would never match. ``*`` would accept every Host header.
+    """
+    if value is None:
+        raise ValueError("ALLOWED_HOSTS must list at least one host")
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ValueError("ALLOWED_HOSTS must list at least one host")
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    "ALLOWED_HOSTS JSON list could not be parsed"
+                ) from exc
+            if not isinstance(parsed, list):
+                raise ValueError("ALLOWED_HOSTS JSON value must be a list")
+            raw_items = parsed
+        else:
+            # Keep empty pieces so "localhost,,127.0.0.1" is rejected.
+            raw_items = [part.strip() for part in text.split(",")]
+    elif isinstance(value, (list, tuple)):
+        raw_items = list(value)
+    else:
+        raise ValueError(
+            "ALLOWED_HOSTS must be a comma-separated string or a JSON list"
+        )
+
+    hosts: List[str] = []
+    for item in raw_items:
+        if not isinstance(item, str):
+            raise ValueError("ALLOWED_HOSTS entries must be strings")
+        host = item.strip()
+        if not host:
+            raise ValueError("ALLOWED_HOSTS entries must not be empty")
+        if "*" in host:
+            raise ValueError("ALLOWED_HOSTS must not contain '*'")
+        if ":" in host:
+            raise ValueError(
+                "ALLOWED_HOSTS entries must not include a port: " f"{host!r}"
+            )
+        hosts.append(host)
+    if not hosts:
+        raise ValueError("ALLOWED_HOSTS must list at least one host")
+    return hosts
+
+
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Investment AI Companion"
@@ -113,10 +167,23 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     # No default. A missing value or a known placeholder fails startup.
     SECRET_KEY: str
-    # Enforced by TrustedHostMiddleware in main.py. The test client
-    # sends Host: 127.0.0.1, which is in this list. Starlette strips
-    # the port before comparing.
-    ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
+    # Raw env text. allowed_hosts is the list TrustedHostMiddleware
+    # reads. See _allowed_host_parts. The test client sends
+    # Host: 127.0.0.1. Starlette strips the port before comparing,
+    # so this list must not include ports.
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1"
+
+    @field_validator("ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def assemble_allowed_hosts(cls, value: object) -> str:
+        return ",".join(_allowed_host_parts(value))
+
+    @property
+    def allowed_hosts(self) -> List[str]:
+        """Hostnames from ALLOWED_HOSTS."""
+        if not self.ALLOWED_HOSTS:
+            return []
+        return [part for part in self.ALLOWED_HOSTS.split(",") if part]
 
     @field_validator("SECRET_KEY")
     @classmethod
