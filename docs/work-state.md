@@ -2,15 +2,17 @@
 
 ## PostgreSQL integration harness: 2026-10-08
 
-- Branch `cursor/postgres-integration-harness-fc54`, based on
-  `origin/master` `d568663`. Implementation commit `e242341`.
-  Review follow-up `c9b7302` and the host commit `1fc4edb` are
-  green in GitHub Actions. The query-parameter guard and the
-  merge-safe secret are `64acc52`, green in
-  [run 37838815029](https://github.com/Waber/Investment-AI-Companion/actions/runs/37838815029).
-  Docs-only `3f9de18` records that run. The latest code change
-  refuses `PGHOSTADDR` and `PGSERVICE` even when the URL names a
-  host. `PGHOST` is still checked only for a host-less URL.
+- Branch `cursor/postgres-integration-harness-fc54`, rebased onto
+  `origin/master` `f66f26b` (#59). Code Reviewer approved the
+  pre-rebase head `4960a42`. This push adds the three review nits:
+  the PostgreSQL job fails if any test is skipped while
+  `REQUIRE_POSTGRES=1`; the case-collision expected failure cites
+  PRD question 10 and I1 #26; those tests create `DUP` in the
+  body and add the strict xfail marker only after that create
+  succeeds. Left for later: the private pytest frame walk in
+  `env_isolation`, and `PGPORT` in the denylist identity.
+  [run 37840094330](https://github.com/Waber/Investment-AI-Companion/actions/runs/37840094330)
+  was green on `4960a42` before this rebase.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
@@ -32,26 +34,28 @@
   #20 runs on PostgreSQL. #16 is recorded (exact duplicate
   `DUP` is 500, then `OTHER` shows the session recovered). A
   strict xfail records the #16 target (400 or 409, one row). A
-  second strict xfail records case collision as ticker
-  normalization, not #16. `tests/conftest.py` was not modified.
+  second strict xfail records case collision as PRD question
+  10 / I1 #26. `tests/conftest.py` was not modified.
   The PM dropped the disposable cluster runner. The README
   documents the pinned image.
 - Incomplete: Alembic baseline #8, including upgrade/downgrade on
   PostgreSQL. #16 is not fixed. #20 stays open until review
   accepts the PostgreSQL run. The queue in the next-action line
   is still open. The disposable runner is not remaining work.
+  Later, not in this push: the private pytest frame walk in
+  `env_isolation`, and `PGPORT` in the denylist identity.
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3, the CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 846 passed, 111 deselected in 13.37s, no warnings summary,
+  -> 846 passed, 116 deselected in 8.14s, no warnings summary,
   TOTAL 92% (exact 92.58%).
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
-  and `-m integration` -> 106 passed, 2 xfailed, 846 deselected
-  in 3.65s on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1),
-  before the three new environment checks. Those three do not
-  open PostgreSQL: `test_postgres_dsn.py -m integration` is 83
-  passed in 0.11s. Of the 111 integration tests, 95 do not open
-  PostgreSQL and 16 hit the database (14 passed, 2 xfailed).
+  and `-m integration` -> 114 passed, 2 xfailed, 846 deselected,
+  0 skipped in 3.06s on local PostgreSQL 16.15. Of the 116
+  integration tests, 100 do not open PostgreSQL and 16 hit the
+  database (14 passed, 2 xfailed). The two expected failures
+  create `DUP` first; without the DSN they skip (2 skipped),
+  and with `REQUIRE_POSTGRES=1` and no DSN they error (exit 1).
   A node id without
   `-m integration` -> 1 deselected, exit 5. GitHub Actions
   [run 37836507848](https://github.com/Waber/Investment-AI-Companion/actions/runs/37836507848)

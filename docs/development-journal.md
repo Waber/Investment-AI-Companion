@@ -1,5 +1,42 @@
 # Development Journal
 
+## 2026-10-08 - Rebase onto #59 and three review nits (#9)
+
+- Scope: rebase `cursor/postgres-integration-harness-fc54` onto
+  `origin/master` `f66f26b` (issue #59, requirements v0.3). The
+  journal keeps both histories, newest first. Code Reviewer
+  approved `4960a42` with three nits. Two items stay for later:
+  the private pytest frame walk in `env_isolation`, and `PGPORT`
+  in the denylist identity.
+- Decision, zero skips: `pytest_sessionfinish` in
+  `tests/integration/conftest.py` fails the session when
+  `REQUIRE_POSTGRES=1` and any test was skipped. Deselected tests
+  are not skips. An already failing session keeps its status.
+  The default SQLite job does not set `REQUIRE_POSTGRES`.
+- Decision, case collision: the expected failure cites PRD open
+  question 10 and I1 issue #26. It does not cite #17.
+- Decision, setup: the two expected-failure tests create `DUP`
+  in the test body and add the strict xfail marker only after
+  that create returns 201. Pytest reports a fixture failure
+  inside an already-marked xfail test as xfailed, so the marker
+  is added late. A failed create is a normal failure. A pass
+  after the marker is a strict XPASS.
+- Work-state next action: unchanged. #45 and #47 together, with
+  #50 if that fix stays small. Then #24, #19, #25, and #26 (with
+  #16 and #17).
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3: the CI pytest command
+  -> 846 passed, 116 deselected in 8.14s, exact 92.58%.
+  `-m integration` with the local test DSN -> 114 passed, 2
+  xfailed, 0 skipped in 3.06s. The two target tests with no DSN
+  -> 2 skipped. The same tests with `REQUIRE_POSTGRES=1` and no
+  DSN -> 1 error, exit 1. `black`, `isort --check-only`, and
+  `flake8` passed on the touched Python files. GitHub Actions
+  for this commit is recorded after the push.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Review follow-up on requirements v0.3
 
 - Scope: documentation only, one commit on top of `55cc070`. The

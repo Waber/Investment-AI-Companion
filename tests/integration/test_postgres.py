@@ -359,17 +359,49 @@ def test_session_accepts_a_write_after_a_constraint_rollback(
 
 @pytest_asyncio.fixture()
 async def created_dup_company(postgres_client):
-    """One company with ticker ``DUP``, or an error if create fails.
-
-    The xfail tests below start from this row. Keeping the create
-    out of those tests means a broken client fails setup instead of
-    counting as the expected failure.
-    """
+    """One company with ticker ``DUP`` for the current-behaviour test."""
     response = await postgres_client.post(
         COMPANIES, json={"name": "A", "ticker": "DUP"}
     )
     assert response.status_code == 201, response.text
     return response
+
+
+# Shown on the xfail line. The marker is added only after DUP exists,
+# so a failed create is a normal test failure.
+_EXACT_DUPLICATE_XFAIL = (
+    "Issue #16 is open. An exact duplicate ticker should be "
+    "400 or 409 and leave one row. Today the duplicate is 500. "
+    "Remove this marker when that behaviour lands. Case folding "
+    "is a separate test."
+)
+
+# PRD open question 10. I1 is issue #26.
+_CASE_FOLDING_XFAIL = (
+    "PRD open question 10: normalize ticker case in I1, "
+    "issue #26. dup should collide with DUP and return 400 or "
+    "409, leaving one row. Remove this marker when that "
+    "normalization lands."
+)
+
+
+async def _create_company(postgres_client, ticker: str, name: str):
+    response = await postgres_client.post(
+        COMPANIES, json={"name": name, "ticker": ticker}
+    )
+    return response
+
+
+def _mark_strict_xfail(request, reason: str) -> None:
+    """Expect the rest of this test to fail, and fail if it passes.
+
+    Pytest reads the marker when it builds the report, which is
+    after the test function returns. Adding it here means assertions
+    above this call are ordinary failures. A pass after this call
+    is a strict XPASS, so the marker has to be removed when the
+    behaviour lands.
+    """
+    request.node.add_marker(pytest.mark.xfail(strict=True, reason=reason))
 
 
 @pytest.mark.asyncio
@@ -396,23 +428,20 @@ async def test_duplicate_ticker_is_500(created_dup_company, postgres_client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Issue #16 is open. An exact duplicate ticker should be "
-        "400 or 409 and leave one row. Today the duplicate is 500. "
-        "Remove this marker when that behaviour lands. Case folding "
-        "is a separate test."
-    ),
-)
 async def test_duplicate_ticker_is_a_client_error(
-    created_dup_company, postgres_client, postgres_session_factory
+    request, postgres_client, postgres_session_factory
 ):
     """Target behaviour for issue #16: the same ticker is a client error.
 
-    ``strict=True`` fails the suite when this starts passing, so the
-    fix has to delete the marker in the same change.
+    The first create is ordinary. The strict xfail marker is added
+    only after it returns 201, so a broken client is an error.
+    ``strict=True`` fails the suite when the duplicate check starts
+    passing, so the fix has to delete the marker in the same change.
     """
+    created = await _create_company(postgres_client, "DUP", "A")
+    assert created.status_code == 201, created.text
+    _mark_strict_xfail(request, _EXACT_DUPLICATE_XFAIL)
+
     duplicate = await postgres_client.post(
         COMPANIES, json={"name": "B", "ticker": "DUP"}
     )
@@ -423,18 +452,18 @@ async def test_duplicate_ticker_is_a_client_error(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Ticker normalization is not issue #16. dup should collide "
-        "with DUP and return 400 or 409, leaving one row. Remove "
-        "this marker when tickers are normalized to one case."
-    ),
-)
 async def test_lowercase_ticker_collides_with_uppercase(
-    created_dup_company, postgres_client, postgres_session_factory
+    request, postgres_client, postgres_session_factory
 ):
-    """Target behaviour for ticker case folding, separate from #16."""
+    """Target behaviour for ticker case folding.
+
+    PRD open question 10 proposes that normalization in I1,
+    issue #26. This is not the exact-duplicate check from #16.
+    """
+    created = await _create_company(postgres_client, "DUP", "A")
+    assert created.status_code == 201, created.text
+    _mark_strict_xfail(request, _CASE_FOLDING_XFAIL)
+
     lower = await postgres_client.post(
         COMPANIES, json={"name": "C", "ticker": "dup"}
     )
