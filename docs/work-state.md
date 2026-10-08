@@ -13,15 +13,20 @@
   exception middleware.
   `debt_to_assets` is `totalDebt / totalAssets` when both values are
   real numbers already on the Yahoo `info` dict. Otherwise it is
-  `None`. Booleans are not treated as numbers, and total assets of
-  zero is `None`. The mapping never reads `totalDebtPerShare` and
-  makes no extra provider call. No other Yahoo field changed.
+  `None`. Booleans are not treated as numbers. NaN, infinity,
+  negative debt, and a non-positive asset total are `None`. A huge
+  int that would raise `OverflowError` is `None` and does not drop
+  the other metrics. NumPy reals are accepted. The mapping never
+  reads `totalDebtPerShare` and makes no extra provider call. No
+  other Yahoo field changed.
 - Incomplete: the queue in the next-action line is still open.
   Alembic (#8) and the PostgreSQL harness (#9) stay later.
 - Tests: no `.env`, `DATABASE_URL` unset, the CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 838 passed in 15.33s, no warnings summary, TOTAL 92% (exact
-  92.70%). On `6a7f533`, the two strict xfails were `2 xfailed`
+  92.70%) before the reviewer nits. After the isfinite, sign, and
+  overflow guards: 846 passed in 15.09s, exact 92.75%. On
+  `6a7f533`, the two strict xfails were `2 xfailed`
   (both `AssertionError` under `--runxfail`). On `a06ca28` the
   further behaviour tests were `8 failed` at assertion level. The
   404/400 pin already passed on that commit.

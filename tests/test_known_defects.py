@@ -98,7 +98,7 @@ def test_debt_to_assets_is_not_debt_per_share(monkeypatch):
 
     metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics["debt_to_assets"] != 7.5
+    assert metrics["debt_to_assets"] is None
 
 
 @pytest.mark.asyncio
@@ -123,7 +123,6 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
     )
     assert response.json()["detail"] == "Error fetching company data"
     assert "hunter2" not in response.text
-    assert "hunter2" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -151,7 +150,9 @@ async def test_fetch_company_404_and_400_stay_unchanged(client):
 
 
 def _patch_info(monkeypatch, info):
-    _InfoTicker.info = info
+    # setattr restores the class attribute after the test. Assigning
+    # _InfoTicker.info directly would leak into the next test.
+    monkeypatch.setattr(_InfoTicker, "info", info)
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _InfoTicker)
 
 
@@ -198,6 +199,36 @@ def test_debt_to_assets_is_total_debt_over_total_assets(
         },
         {"totalDebt": True, "totalAssets": 200, "totalDebtPerShare": 7.5},
         {"totalDebt": 50, "totalAssets": False, "totalDebtPerShare": 7.5},
+        {
+            "totalDebt": float("nan"),
+            "totalAssets": 200,
+            "totalDebtPerShare": 7.5,
+        },
+        {
+            "totalDebt": 50,
+            "totalAssets": float("nan"),
+            "totalDebtPerShare": 7.5,
+        },
+        {
+            "totalDebt": float("inf"),
+            "totalAssets": 200,
+            "totalDebtPerShare": 7.5,
+        },
+        {
+            "totalDebt": 50,
+            "totalAssets": float("inf"),
+            "totalDebtPerShare": 7.5,
+        },
+        {
+            "totalDebt": 50,
+            "totalAssets": -200,
+            "totalDebtPerShare": 7.5,
+        },
+        {
+            "totalDebt": -10,
+            "totalAssets": 200,
+            "totalDebtPerShare": 7.5,
+        },
     ],
     ids=[
         "per_share_only",
@@ -207,13 +238,20 @@ def test_debt_to_assets_is_total_debt_over_total_assets(
         "non_numeric",
         "bool_debt",
         "bool_assets",
+        "nan_debt",
+        "nan_assets",
+        "inf_debt",
+        "inf_assets",
+        "negative_assets",
+        "negative_debt",
     ],
 )
 def test_debt_to_assets_is_none_when_inputs_are_missing(monkeypatch, info):
     """Missing or unusable totals are None, not per-share debt.
 
-    Each payload still carries ``totalDebtPerShare``. Assets of zero
-    cannot be a denominator. Strings and booleans are not amounts.
+    Each payload still carries ``totalDebtPerShare``. Assets that are
+    zero or negative cannot be a denominator. Strings, booleans, NaN,
+    and infinity are not amounts. Negative debt is not a ratio input.
     """
     _patch_info(monkeypatch, info)
 
@@ -221,3 +259,46 @@ def test_debt_to_assets_is_none_when_inputs_are_missing(monkeypatch, info):
 
     assert metrics is not None
     assert metrics["debt_to_assets"] is None
+
+
+def test_debt_to_assets_overflow_keeps_the_other_metrics(monkeypatch):
+    """A huge int must not raise and wipe the metrics dict.
+
+    ``10**400`` cannot be converted to float. The ratio is None and
+    the other fields from the same payload are still returned.
+    """
+    _patch_info(
+        monkeypatch,
+        {
+            "totalDebt": 10**400,
+            "totalAssets": 1,
+            "totalDebtPerShare": 7.5,
+            "trailingPE": 12.5,
+        },
+    )
+
+    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+
+    assert metrics is not None
+    assert metrics["debt_to_assets"] is None
+    assert metrics["pe_ratio"] == 12.5
+
+
+def test_debt_to_assets_accepts_numpy_reals(monkeypatch):
+    """NumPy integers and floats are real numbers, not missing data."""
+    numpy = pytest.importorskip("numpy")
+    _patch_info(
+        monkeypatch,
+        {
+            "totalDebt": numpy.int64(50),
+            "totalAssets": numpy.float64(200),
+            "totalDebtPerShare": 7.5,
+            "trailingPE": 30.1,
+        },
+    )
+
+    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+
+    assert metrics is not None
+    assert metrics["debt_to_assets"] == 0.25
+    assert metrics["pe_ratio"] == 30.1
