@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.config import Settings
 from tests.integration.env_isolation import command_selects_integration
 
 pytestmark = pytest.mark.integration
@@ -19,7 +20,7 @@ pytestmark = pytest.mark.integration
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCARY_URL = "postgresql://real:secret@db.example.com:5432/investment_ai"
 SCARY_SECRET = "from-dotenv-should-be-ignored"
-DEFAULT_URL = "postgresql://przemkowy@localhost:5432/investment_ai"
+DEFAULT_URL = Settings.model_fields["DATABASE_URL"].default
 DEFAULT_SECRET = "your-secret-key-here"
 
 

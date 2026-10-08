@@ -23,9 +23,10 @@ from tests.integration.postgres_dsn import (
 
 pytestmark = pytest.mark.integration
 
-# The code default in app/core/config.py. Tests also read the live
-# Settings field so a future edit of that default stays covered.
-DEFAULT_DATABASE_URL = "postgresql://przemkowy@localhost:5432/investment_ai"
+# The declared default in app/core/config.py. Read from the field
+# so this file does not copy a role name. Tests that refuse this
+# URL keep working when that default changes.
+DEFAULT_DATABASE_URL = Settings.model_fields["DATABASE_URL"].default
 
 SEPARATE_DATABASE_URL = (
     "postgresql://postgres:postgres@127.0.0.1:5432/investment_test"
@@ -36,11 +37,12 @@ SEPARATE_DATABASE_URL = (
 CI_DATABASE_URL = SEPARATE_DATABASE_URL
 
 
-def test_code_default_matches_the_settings_field():
-    """The copied default string stays equal to the class default."""
-    assert Settings.model_fields["DATABASE_URL"].default == (
-        DEFAULT_DATABASE_URL
-    )
+def test_code_default_database_name_is_investment_ai():
+    """The application default is the database the harness must refuse."""
+    identity = database_identity(DEFAULT_DATABASE_URL)
+    assert identity.database == "investment_ai"
+    assert identity.driver == "postgresql"
+    assert identity.host == "loopback"
 
 
 @pytest.mark.parametrize("raw", [None, "", "   ", "\n"])
@@ -91,13 +93,13 @@ def test_database_name_without_test_as_its_own_word_is_refused(name):
     "url",
     [
         DEFAULT_DATABASE_URL,
-        "postgresql://przemkowy@localhost/investment_ai",
-        "postgresql+psycopg2://przemkowy:secret@127.0.0.1:5432/investment_ai",
+        "postgresql://user@localhost/investment_ai",
+        "postgresql+psycopg2://user:secret@127.0.0.1:5432/investment_ai",
         "postgresql://other:secret@localhost:5432/Investment_AI",
         "postgresql:///investment_ai",
-        "postgresql://przemkowy@[::1]:5432/investment_ai",
-        "postgresql://przemkowy@localhost:5433/investment_ai",
-        "postgresql://przemkowy@db.example.com:5432/investment_ai",
+        "postgresql://user@[::1]:5432/investment_ai",
+        "postgresql://user@localhost:5433/investment_ai",
+        "postgresql://user@db.example.com:5432/investment_ai",
     ],
 )
 def test_name_without_test_as_its_own_word_is_refused(url):
@@ -155,11 +157,11 @@ def test_ci_service_url_is_accepted():
     "url",
     [
         SEPARATE_DATABASE_URL,
-        "postgresql://przemkowy@localhost:5432/investment_ai_test",
-        "postgresql://przemkowy@localhost/test",
-        "postgresql://przemkowy@[::1]:5432/test_db",
+        "postgresql://user@localhost:5432/investment_ai_test",
+        "postgresql://user@localhost/test",
+        "postgresql://user@[::1]:5432/test_db",
         "postgresql:///investment_test",
-        "postgresql://przemkowy@localhost:5432/Foo_Test_Bar",
+        "postgresql://user@localhost:5432/Foo_Test_Bar",
     ],
 )
 def test_local_test_database_is_accepted(url):
@@ -171,8 +173,8 @@ def test_local_test_database_is_accepted(url):
 @pytest.mark.parametrize(
     "url",
     [
-        "postgresql://przemkowy@db.example.com:5432/investment_test",
-        "postgresql://przemkowy@10.0.0.5:5432/test",
+        "postgresql://user@db.example.com:5432/investment_test",
+        "postgresql://user@10.0.0.5:5432/test",
     ],
 )
 def test_remote_host_is_refused_unless_the_override_is_set(url):
@@ -189,7 +191,7 @@ def test_remote_host_is_refused_unless_the_override_is_set(url):
 
 
 def test_remote_override_does_not_bypass_the_name_rule():
-    url = "postgresql://przemkowy@db.example.com:5432/investment_ai"
+    url = "postgresql://user@db.example.com:5432/investment_ai"
     decision = decide_test_dsn(
         url, [DEFAULT_DATABASE_URL], require=False, allow_remote=True
     )
@@ -198,7 +200,7 @@ def test_remote_override_does_not_bypass_the_name_rule():
 
 
 def test_remote_override_does_not_bypass_the_application_database():
-    url = "postgresql://przemkowy@db.example.com:5432/investment_test"
+    url = "postgresql://user@db.example.com:5432/investment_test"
     decision = decide_test_dsn(
         url, [DEFAULT_DATABASE_URL, url], require=False, allow_remote=True
     )

@@ -41,6 +41,38 @@
   completed with conclusion success.
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37833690203
 
+## 2026-10-08 - Integration client host and neutral paths (#9)
+
+- Scope: follow-up on `cursor/postgres-integration-harness-fc54`
+  after
+  [Actions run 37836507848](https://github.com/Waber/Investment-AI-Companion/actions/runs/37836507848)
+  went green on `c9b7302`. Pull request #61 is still open, so
+  this branch is not rebased onto it.
+- Decision, client host: `postgres_client` uses
+  `base_url="http://127.0.0.1"`. #61 adds `TrustedHostMiddleware`
+  that allows `localhost` and `127.0.0.1`. The name `testserver`
+  would be HTTP 400 and would fail the PostgreSQL API tests
+  after that merge. `tests/conftest.py` is still untouched.
+- Decision, paths: text added by this pull request no longer
+  contains a personal account name or a machine-specific home or
+  temporary directory. DSN tests read the application default from
+  `Settings.model_fields` instead of copying a role name. Example
+  URLs use the role `user`. The README names the refused database
+  as `investment_ai` on localhost. Historical journal and
+  work-state paths that were already on master are left for #61,
+  which rewrites those same lines. Rewriting them here would
+  conflict with that edit.
+- Not in this commit: the work-state sentence "#9 stays later".
+  #61 adds that sentence in its new top section. This branch
+  updates it when it rebases onto #61.
+- Verification, same environment as the allowlist entry:
+  default suite 846 passed, 68 deselected, exact 92.58%.
+  `-m integration` with the local test DSN: 67 passed, 1
+  xfailed. `black`, `isort --check-only`, and `flake8` passed
+  on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
 ## 2026-10-08 - PostgreSQL harness review follow-up (#9)
 
 - Scope: QA and PM follow-up on the harness in
@@ -108,7 +140,11 @@
   setup, exit 1.
   `black --check`, `isort --check-only`, and `flake8` passed on
   `conftest.py` and `tests/integration`.
-  GitHub Actions for this follow-up is recorded after the push.
+  GitHub Actions
+  [run 37836507848](https://github.com/Waber/Investment-AI-Companion/actions/runs/37836507848)
+  on `c9b7302`: SQLite job 846 passed, 68 deselected in 17.49s,
+  TOTAL 93%. PostgreSQL job 67 passed, 1 xfailed, 846 deselected
+  in 2.68s on PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2).
 - Work-state next action: unchanged. #45 and #47 together, with
   #50 if that fix stays small. Then #24, #19, #25, and #26 (with
   #16 and #17). #8 and #16 stay open. #20 stays open until
@@ -138,7 +174,7 @@
   is unset.
 - Decision, refuse the application database: the harness compares
   the test URL with `settings.DATABASE_URL` and with the code
-  default `postgresql://przemkowy@localhost:5432/investment_ai`.
+  default (database name `investment_ai` on localhost).
   The same host (localhost, 127.0.0.1, ::1, or a Unix socket),
   port, and database name match even when the role or the driver
   suffix differs. A match fails the run before any connection.

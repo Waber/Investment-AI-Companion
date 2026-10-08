@@ -151,9 +151,12 @@ async def postgres_client(postgres_session_factory):
     app.state.testing_session_local = postgres_session_factory
     app.dependency_overrides[get_db] = override_get_db
 
+    # Host 127.0.0.1 is in ALLOWED_HOSTS. TrustedHostMiddleware
+    # rejects the name "testserver" with HTTP 400, which would fail
+    # every API-level PostgreSQL test once that middleware is on.
     async with AsyncClient(
         transport=ASGITransport(app=app),
-        base_url="http://testserver",
+        base_url="http://127.0.0.1",
     ) as test_client:
         test_client.app = app
         yield test_client
