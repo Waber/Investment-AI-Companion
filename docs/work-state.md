@@ -1,5 +1,45 @@
 # Current Work State
 
+## /ui instrument list and detail: 2026-10-08
+
+- Branch `cursor/ui-skeleton-htmx-aa8b`, rebased onto
+  `origin/master` `d7f6798` (PR #60).
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63).
+  Refs #29.
+- Completed: server-rendered `/ui` list and detail over the current
+  company rows. Polish by default, English by cookie. Search plus
+  exchange and currency filters. Synthetic-data badge, disclaimer in
+  both languages, missing values as "brak danych" / "no data".
+  Website strings become links only for http/https, in the
+  view-model. HTMX 2.0.10 and CSS are local. `jinja2` 3.1.6 is
+  pinned in the hashed locks. PR #60 did not change the requirement
+  files, so the locks were not regenerated. `python-multipart` is
+  not added. `--database-url` seeds a gitignored sqlite file for
+  the demo. `docs/demo-data.md` has the exact commands. The UI
+  tests are not `integration` tests, so the PostgreSQL job does
+  not run them and the zero-skip guard does not count them.
+- Incomplete: #26 (instrument model, type/country/ISIN filters,
+  ETF/ETC detail), #27 (demo-v2 prices), #28 (ETF/ETC attributes),
+  and #25 (one-command demo). PR #61 is still the secure-defaults
+  review and was not duplicated. After that PR merges, the demo
+  command also needs `SECRET_KEY` of at least 32 characters, not a
+  placeholder. Whichever of #61 and #63 lands second updates
+  `docs/demo-data.md`.
+- Tests: no `.env`, `DATABASE_URL` unset. The CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  after the rebase onto `d7f6798`: dependency commit 846 passed,
+  119 deselected, exact 92.58%; feature commit 892 passed,
+  119 deselected, exact 94.79%; docs commit repeats 892 passed,
+  119 deselected, exact 94.79%. `-m integration` with no
+  `TEST_POSTGRES_DSN`: 103 passed, 16 skipped, 892 deselected.
+  The 16 skips need PostgreSQL. The UI tests are deselected.
+- Active agents: none.
+- Blockers: none.
+- Next action: review pull request #63 (Refs #29). Do not start
+  #26, #27, #28, or #25 on this branch. After it merges, return to
+  PR #61 if it is still open (#45, #47, #50), then #24 and #19,
+  then #25 and #26 (with #16 and #17).
+
 ## Secure defaults, neutral paths, and provider hygiene: 2026-10-08
 
 - Branch `cursor/secure-config-provider-hygiene-c91c`, based on
@@ -86,7 +126,7 @@
   passed on the touched Python files.
 - Active agents: none.
 - Blockers: none.
-- Next action: #24, the collector interface by capability plus a
+- Next action when this section was written: #24, the collector interface by capability plus a
   deterministic offline fake collector selected by config
   (`DATA_COLLECTOR=fake|yahoo`). Include the QA follow-ups in the
   issue body: `debt_to_assets` from the balance sheet for equities
@@ -182,7 +222,8 @@
 - Next action when this section was written: #45 and #47 together
   (secure config defaults and neutral defaults, one pull request),
   with #50 if that fix stays small. Then #24, #19, #25, and #26
-  (with #16 and #17).
+  (with #16 and #17). The live next action is in the /ui section
+  above.
 
 ## Security dependencies and hashed lock: 2026-10-08
 

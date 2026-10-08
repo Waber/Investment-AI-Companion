@@ -8,7 +8,48 @@
 The versioned source is [demo-v1.json](../fixtures/demo-v1.json), not a download
 of real securities or financial statements. All names, tickers, exchanges, and
 amounts are invented. No data-provider keys or investment decisions are involved.
-This fixture is for API and future frontend testing; it is not a real portfolio.
+This fixture is for API and UI testing; it is not a real portfolio.
+
+## Local /ui demo
+
+The server-rendered pages are at `/ui`. They read a sqlite file. Seed that
+file first, then start uvicorn against the same URL. The seeder opens only
+the URL you pass. It does not read or change the personal `DATABASE_URL`.
+
+From the repository root:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --require-hashes -r requirements.lock
+python -m scripts.seed_demo --database-url "sqlite:///demo/investment_demo.db" --apply
+DATABASE_URL="sqlite:///demo/investment_demo.db" python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Open [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
+
+These commands were run from a clean virtualenv installed only from
+`requirements.lock` (jinja2 3.1.6). The seed created 6 companies and 20
+metric rows. `GET /ui`, `GET /ui/instruments/1`, the CSS, and the local
+HTMX file each returned 200. `demo/` is gitignored.
+
+- Bind `127.0.0.1` only. Do not start the demo with `python main.py`:
+  that entry point still binds `0.0.0.0`.
+- Polish is the default. The EN link stores `ui_lang` and comes back
+  to the same `/ui` path.
+- Rows from this fixture show the synthetic-data badge. The page
+  disclaimer stays visible. The output is research context, not a
+  recommendation.
+- A website is a link only when the view-model accepts `http` or
+  `https`. Anything else is plain text. An empty website is
+  "brak danych" / "no data".
+- After PR #61 merges, the demo command also needs `SECRET_KEY`
+  (at least 32 characters, not a placeholder). One way to make one:
+  `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+  That pull request also checks `Host`. `127.0.0.1` and `localhost`
+  are allowed by default, which matches `--host 127.0.0.1`.
+  Whichever of #61 and #63 lands second updates this file.
+  On current master the commands above are enough.
 
 ## Scenarios
 
@@ -87,8 +128,8 @@ curl -q --noproxy '*' -fsS \
 ```
 
 For create/update/delete request examples and the isolated runtime's lifecycle,
-see [the API demo guide](api-demo.md). The fixture can be used for scenario
-selection in a future frontend; no frontend or filtering UI is added here.
+see [the API demo guide](api-demo.md). The `/ui` list and detail pages are
+documented above. They filter the seeded companies in the browser.
 
 ## Old SQLite demo databases
 

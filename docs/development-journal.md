@@ -1,5 +1,68 @@
 # Development Journal
 
+## 2026-10-08 - /ui instrument list and detail (D4, #29)
+
+- Scope: the first runnable UI demo, rebased onto `origin/master`
+  `d7f6798` after PR #60 (the PostgreSQL harness, #9). Branch
+  `cursor/ui-skeleton-htmx-aa8b`. Refs #29. This does not close #29,
+  and it does not start #26, #27, #28, or #25.
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63).
+  PR #61 (secure defaults) is still open and was not copied.
+- Decision, read model: templates bind to instrument view-models.
+  `CompanyDB` stays behind `app/ui/queries.py`. Every current row is
+  type `stock` until #26. A description that starts with
+  `[IAC-DEMO-V1]` is synthetic and shows the badge. The list filters
+  in Python (`casefold`) because the demo file is small and SQLite
+  `LIKE` is not the same case-fold for every character.
+- Decision, website links: `website_view` is the only place that
+  decides whether a stored string becomes an `href`. After stripping
+  whitespace, only an `http` or `https` URL with a host is a link
+  (`javascript:` and `data:` stay plain text). The template checks
+  `instrument.website.href` and copies `rel` from the view-model
+  (`noopener noreferrer`). An empty value uses the catalog string
+  "brak danych" / "no data".
+- Decision, pages: Jinja2 3.1.6 is pinned and locked. Autoescape is
+  on. HTMX 2.0.10 (Zero-Clause BSD) and the CSS are files under
+  `static/`; the script URL is root-relative, not a CDN. Language is
+  a cookie (`ui_lang`), Polish by default, with the same catalog
+  keys in PL and EN. Numbers and dates are formatted in Python, not
+  with `locale.setlocale`. `python-multipart` is not added.
+- Decision, demo database: `scripts/seed_demo.py --database-url`
+  writes sqlite through the same create/skip rules as the HTTP
+  seeder. File sqlite engines set `check_same_thread=False` so a
+  sync route can use a pooled connection. The personal
+  `DATABASE_URL` default is unchanged. PR #60 did not change
+  `requirements.txt` or either lock, so this pin was not recompiled.
+- Decision, PostgreSQL job: the UI tests are not marked
+  `integration`. The default command still deselects that marker.
+  The PostgreSQL job runs only `-m integration` and does not execute
+  these pages. Deselected tests are not skips, so the zero-skip
+  guard does not see them.
+- Verification: no `.env`, `DATABASE_URL` unset during pytest.
+  Dev venv `/tmp/iac-venv` (Python 3.12.3) installed from
+  `requirements-dev.lock` with `--require-hashes`. Command:
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  After the rebase onto `d7f6798`: the dependency commit was
+  846 passed, 119 deselected, exact 92.58%. The feature commit
+  was 892 passed, 119 deselected, exact 94.79%. The docs commit
+  does not change Python and repeats that 892 / 119 / 94.79%.
+  `-m integration` with no `TEST_POSTGRES_DSN` was 103 passed,
+  16 skipped, 892 deselected. Those 16 skips are the harness
+  tests that open PostgreSQL. The UI tests are in the 892
+  deselected, not in the skips.
+  `black --check`, `isort --check-only`, and `flake8` passed on the
+  touched Python files before the rebase. A separate venv installed
+  from `requirements.lock` only, then the commands in
+  `docs/demo-data.md` (with that venv's Python): seed created 6
+  companies and 20 metric rows; uvicorn on `127.0.0.1:8000` returned
+  200 for `/ui`, `/ui/instruments/1`, `/static/ui.css`, and the HTMX
+  file. In the browser, the list filter swapped to `DEMO_US_GROWTH`
+  only, the English cookie rendered "It is not financial advice",
+  and `https://vistula.example.com/` was a link with
+  `rel="noopener noreferrer"`.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - Code Reviewer round 1 on ff300e6
 
 - Scope: requested changes from the review of `ff300e6`, added
