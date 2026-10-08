@@ -15,7 +15,7 @@ In **Settings > Project > Python Interpreter**, select an existing Python 3.12
 interpreter. On the original development machine it is:
 
 ```text
-~/projects/Investment-AI-Companion/.venv/bin/python
+~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 ```
 
 Reusing this interpreter does not select its source checkout. For another

@@ -404,6 +404,23 @@ def test_documented_commands_expand_tmpdir_and_home():
     assert frozen == []
 
 
+def test_operator_guides_name_the_shared_checkout():
+    """Guides name one checkout and tell the reader to use their own temp dir."""
+    checkout = "~/IdeaProjects/Investment-AI-Companion"
+    old_checkout = "~/projects/"
+    paths = (
+        ROOT / "docs" / "ide-startup.md",
+        ROOT / "docs" / "api-demo.md",
+        ROOT / "docs" / "demo-data.md",
+    )
+    for path in paths:
+        text = path.read_text()
+        assert checkout in text, path.name
+        assert old_checkout not in text, path.name
+    demo = (ROOT / "docs" / "api-demo.md").read_text()
+    assert "Substitute your own `$TMPDIR` path" in demo
+
+
 def test_ide_startup_mentions_secret_key_length():
     """A short SECRET_KEY is a settings error, not a database error."""
     guide = (ROOT / "docs" / "ide-startup.md").read_text().splitlines()
