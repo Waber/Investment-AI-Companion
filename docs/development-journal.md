@@ -1,5 +1,34 @@
 # Development Journal
 
+## 2026-10-08 - Module-level skips fail the PostgreSQL job (#9)
+
+- Scope: QA approved `5aa1ccf` and sent it to Code Reviewer.
+  One low follow-up: `pytest.skip(allow_module_level=True)` left
+  the PostgreSQL job green (`5 passed, 1 skipped`, exit 0). That
+  skip is a collection report. `pytest_runtest_logreport` never
+  sees it.
+- Decision: `pytest_collectreport` records the same skips as the
+  per-test hook. Expected failures (`wasxfail`) stay ignored.
+  The same node id is stored once. The failure banner names the
+  first three node ids and, when there are more, how many remain.
+  The default SQLite job still does not set `REQUIRE_POSTGRES`.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3: the CI pytest command
+  -> 846 passed, 119 deselected in 12.43s, exact 92.58%.
+  `REQUIRE_POSTGRES=1` and the local test DSN with
+  `-m integration` -> 117 passed, 2 xfailed, 846 deselected in
+  4.15s, exit 0. `test_skip_guard.py -m integration` -> 8 passed
+  in 1.07s, including a child process whose module-level skip
+  exits 1 and names `test_mod.py`. `black`, `isort --check-only`,
+  and `flake8` passed on the touched Python files. GitHub Actions
+  for this commit follows the push.
+- Work-state next action: unchanged. #45 and #47 together, with
+  #50 if that fix stays small. Then #24, #19, #25, and #26 (with
+  #16 and #17).
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Rebase onto #59 and three review nits (#9)
 
 - Scope: rebase `cursor/postgres-integration-harness-fc54` onto
