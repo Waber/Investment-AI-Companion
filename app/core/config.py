@@ -6,12 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Investment AI Companion"
-    
+
     # BACKEND_CORS_ORIGINS is a comma-separated list of origins
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+    def assemble_cors_origins(
+        cls, v: Union[str, List[str]]
+    ) -> Union[List[str], str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
         elif isinstance(v, (list, str)):
@@ -33,7 +35,9 @@ class Settings(BaseSettings):
 
     # Application
     DEBUG: bool = True  # Changed to True for development
-    SECRET_KEY: str = "your-secret-key-here"  # Required, but with default value
+    SECRET_KEY: str = (
+        "your-secret-key-here"  # Required, but with default value
+    )
     ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
 
     # Logging
@@ -41,10 +45,8 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     model_config = SettingsConfigDict(
-        case_sensitive=True,
-        env_file=".env",
-        env_file_encoding="utf-8"
+        case_sensitive=True, env_file=".env", env_file_encoding="utf-8"
     )
 
 
-settings = Settings() 
+settings = Settings()
