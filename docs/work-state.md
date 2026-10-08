@@ -14,25 +14,31 @@
   under `docs/research/`, which is the relative path the requirements
   file already uses.
 - Incomplete: Demo v1 issues #23–#40 are not started. QA bugs #16–#21
-  are still open. Coverage PR #22 is still open.
-- Tests: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
-  -> 758 passed in 6.48s, no warnings summary. GitHub Actions Tests on
-  `8ba25ee` succeeded:
-  https://github.com/Waber/Investment-AI-Companion/actions/runs/37756800118
+  are still open. PR #13 is merged as `a10e196`. PR #15 is merged as
+  `b2541d7`. PR #22 is merged as `778735e`. This branch is rebased onto
+  that master.
+- Tests: after the rebase, the 80% gate command passed: 813 passed in
+  11.50s, no warnings summary, TOTAL 92% (exact 91.77%). The earlier
+  docs-only run was 758 passed. GitHub Actions Tests on `8ba25ee`
+  (https://github.com/Waber/Investment-AI-Companion/actions/runs/37756800118)
+  is from before this rebase.
 - Active agents: none.
-- Blockers: none for starting Demo v1. This branch and PR #22
-  (`cursor/coverage-threshold-80-c3a6`) both edit this file and
-  `docs/development-journal.md`. Whichever merges second needs a rebase.
+- Blockers: none for starting Demo v1.
 - Next action: Demo v1 issue
   [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
   together with bug
   [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
-  first, then
+  first, then bugs
+  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
+  and
+  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21),
+  then
   [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
   then
   [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
   then
   [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
+  Issues #8, #9, and #10 come after the demo.
 
 ## Coverage Gate: 2026-10-08
 
@@ -41,7 +47,7 @@
   applied with `git am` and keep their author. No production `.py` edits.
   A later commit on this branch adjusts tests and the README only.
   QA's commits are not rewritten. The 80% gate is unchanged. Code
-  Reviewer approved `63822cd` and is waiting on Raul.
+  Reviewer approved `63822cd`. PR #22 is merged as `778735e`.
 - `--cov-fail-under=80` is enforced in `.github/workflows/tests.yml` and
   the README test command. The gate reads TOTAL for `app`, `main`, and
   `scripts`, statements plus branches. JUnit XML and the `MIN_TESTS` gate
@@ -58,28 +64,13 @@
   pull requests being opened are history; the sentences that called them
   open or awaiting review are corrected.
 - Reviewer nits from PRs #14 and #15 are a separate branch off master,
-  not this one. Whichever of the two pull requests merges second needs a
-  rebase of this file and the journal.
+  not this one. PR #22 is merged as `778735e`.
 - Review follow-up: missing test-config settings are isolated from the
   shell, statement keys are a subset, and company-shaped pins are marked
   `see #26`. `NEWS_API_KEY=x` no longer fails
   `test_test_config_marks_missing_settings`.
-- Next action: Demo v1 issue
-  [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
-  together with bug
-  [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
-  first, then bugs
-  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
-  and
-  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21)
-  just before
-  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
-  then
-  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
-  then
-  [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
-  Issues #8, #9, and #10 come after the demo. PR #41 records the same
-  order.
+- The live next action is the product-requirements section at the top
+  of this file.
 - Account usage was not available in this session. Stop reason: coverage
   gate delivered, not quota.
 
@@ -106,7 +97,7 @@
 - [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
   is merged as `b2541d7`. The next-action line that said to review it
   was the state when this snapshot was written. The current next action
-  is in the coverage-gate section at the top of this file.
+  is in the product-requirements section at the top of this file.
 - The Resume Instructions section immediately below is the merged
   minimal-CI note from PR #14, not the deprecation cleanup. The
   deprecation record follows that CI note.
@@ -156,8 +147,8 @@ the previous ChatGPT tooling was not available in that Cursor session.
   is merged as `a10e196`. The next-action line that said to re-review it
   was the state when this snapshot was written. Tooling config (issue #6,
   PR #15, `b2541d7`) and minimal CI (issue #5, PR #14, `db0cc12`) are
-  merged too. The current next action is in the coverage-gate section
-  at the top of this file. Editable profiles and source-aware AI stay
+  merged too. The current next action is in the product-requirements
+  section at the top of this file. Editable profiles and source-aware AI stay
   later.
 - Account usage was not available in this Cursor session. Stop reason:
   bounded cleanup completed, not quota.
@@ -189,7 +180,7 @@ review/merge next-action line below was the state when this snapshot was written
 - Published as [PR #2](https://github.com/Waber/Investment-AI-Companion/pull/2)
   against master; implementation commit `5bd286c`. No merge. Agents closed.
   Stop reason: approved bounded scope completed, not quota. Final usage 40%
-  five-hour / 6% weekly. Next action: review/merge PR before subsequent development.
+  five-hour / 6% weekly. Follow-up at that time: review the pull request before subsequent development.
 - Older entries below are historical, not active workers or current service state.
 
 ## Historical Delivery Checkpoint: 2026-10-04
@@ -319,10 +310,7 @@ review/merge next-action line below was the state when this snapshot was written
   [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
   (`a10e196`).
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
-- Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
+- Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is not in this branch.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- Current next action: Demo v1 issue #23 together with bug #20 first,
-  then bugs #18 and #21 just before #24, then #25, then #26. Issues
-  #8, #9, and #10 come after the demo. The coverage-gate section at the
-  top of this file is the live snapshot. Do not assume the old demo
-  runtime still exists.
+- The live next action is the product-requirements section at the top
+  of this file. The old demo runtime is not assumed to still exist.
