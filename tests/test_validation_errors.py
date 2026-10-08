@@ -108,7 +108,10 @@ async def test_ordinary_validation_unchanged(client, populated_metrics, value):
     assert response.status_code == 422
     with pytest.raises(ValidationError) as exc_info:
         FinancialMetricsUpdate(roe=value)
-    errors = exc_info.value.errors()
+    # FastAPI 0.143 builds the request error with include_url=False, so
+    # the 422 body has no Pydantic documentation link. errors() defaults
+    # to include_url=True, which would not match that body.
+    errors = exc_info.value.errors(include_url=False)
     for error in errors:
         error["loc"] = ("body", *error["loc"])
     expected = await request_validation_exception_handler(

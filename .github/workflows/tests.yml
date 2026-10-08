@@ -1,7 +1,8 @@
 # Minimal CI for the SQLite pytest suite.
 #
-# One job. It installs requirements.txt and runs pytest with a coverage
-# report for app, main, and scripts. It does not lint or start Postgres.
+# One job. It installs requirements-dev.lock with pip --require-hashes
+# and runs pytest with a coverage report for app, main, and scripts.
+# It does not lint or start Postgres.
 # Total coverage (statements plus branches) must stay at or above 80%.
 # JUnit XML and the MIN_TESTS gate are not enabled.
 name: Tests
@@ -54,13 +55,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements-dev.lock
 
-      - name: Install dependencies from requirements.txt
-        # Nothing else is installed. pytest, pytest-asyncio, and pytest-cov
-        # are already pinned in requirements.txt. An extra unpinned plugin
-        # can upgrade pytest and break pytest-asyncio 0.21.1.
-        run: python -m pip install -r requirements.txt
+      - name: Install dependencies from the hashed dev lock
+        # requirements-dev.lock is produced by pip-compile --generate-hashes.
+        # --require-hashes refuses any dependency that is not pinned and
+        # hashed, including transitive ones. The lock includes pytest,
+        # pytest-asyncio, and pytest-cov.
+        run: python -m pip install --require-hashes -r requirements-dev.lock
 
       - name: Check installed packages
         run: python -m pip check

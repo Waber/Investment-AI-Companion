@@ -1,0 +1,41 @@
+# Test, format, and lock-file tools. Includes the runtime set.
+#
+# Python 3.12. Regenerate the hashed lock from the repository root:
+#
+#   python -m piptools compile --allow-unsafe --generate-hashes --output-file=requirements-dev.lock --strip-extras requirements-dev.txt
+#
+# --allow-unsafe pins setuptools (and pip, when a package needs them).
+# pip-tools depends on setuptools. Without the pin, pip install
+# --require-hashes rejects the lock. --strip-extras writes
+# coverage==7.16.2 instead of coverage[toml]==7.16.2. The hashes
+# stay the same.
+#
+# CI and a clean local environment install the lock:
+#
+#   python -m pip install --require-hashes -r requirements-dev.lock
+
+-r requirements.txt
+
+# Tests. pytest-asyncio 0.21.1 does not run on pytest 8 or later.
+# tests/ still use pytest_asyncio fixtures and pytest.mark.asyncio,
+# so the plugin stays and moves up with pytest.
+pytest>=9.0.3
+pytest-asyncio>=1.0
+pytest-cov>=4.1.0
+# TestClient is not used. AsyncClient and ASGITransport are.
+httpx>=0.25.2
+
+# tests/test_yahoo_finance_collector.py imports pandas. yfinance
+# depends on pandas as well, so the runtime lock already contains it.
+# This line keeps the test import as a direct dev dependency.
+pandas>=1.3.0
+
+# Format and lint. Versions for isort, flake8, and mypy stay at the
+# previous pins. black moves to the security minimum.
+black>=26.3.1
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Regenerates requirements.lock and requirements-dev.lock.
+pip-tools>=7.0
