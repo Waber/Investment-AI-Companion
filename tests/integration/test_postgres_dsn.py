@@ -10,12 +10,16 @@ import pytest
 from app.core.config import Settings, settings
 from tests.integration.postgres_dsn import (
     DATABASE_MESSAGE,
+    ENV_HOST_MESSAGE,
     HOST_MESSAGE,
     NAME_MESSAGE,
+    QUERY_HOST_MESSAGE,
+    QUERY_MESSAGE,
     REFUSE_MESSAGE,
     REQUIRE_MESSAGE,
     SCHEME_MESSAGE,
     SKIP_MESSAGE,
+    allow_remote_requested,
     database_identity,
     database_name_is_allowed,
     decide_test_dsn,
@@ -249,3 +253,154 @@ def test_malformed_url_is_refused_without_echoing_it():
     assert decision.action == "fail"
     assert decision.message.endswith("(ValueError).")
     assert raw not in decision.message
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://user@/investment_test?host=/tmp/sock&dbname=postgres",
+        "postgresql://user@localhost/investment_test?dbname=investment_ai",
+        "postgresql://user@localhost/investment_test?database=investment_ai",
+        "postgresql://user@localhost/investment_test?hostaddr=10.0.0.5",
+        "postgresql://user@localhost/investment_test?service=prod",
+        "postgresql://user@localhost/investment_test?DBNAME=postgres",
+    ],
+)
+def test_query_parameter_cannot_override_the_database_or_server(url):
+    decision = decide_test_dsn(
+        url, [DEFAULT_DATABASE_URL], require=False, allow_remote=True
+    )
+    assert decision.action == "fail"
+    assert decision.message == QUERY_MESSAGE
+    assert decision.dsn == ""
+    assert url not in decision.message
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://user@localhost/investment_test?host=db.example.com",
+        "postgresql://user@/investment_test?host=10.0.0.5",
+        "postgresql:///investment_test?HOST=db.example.com",
+        "postgresql:///investment_test?host=localhost,db.example.com",
+        "postgresql:///investment_test?host=",
+        "postgresql:///investment_test?host=relative/sock",
+    ],
+)
+def test_query_host_must_be_loopback_or_an_absolute_socket(url):
+    decision = decide_test_dsn(
+        url, [DEFAULT_DATABASE_URL], require=False, allow_remote=True
+    )
+    assert decision.action == "fail"
+    assert decision.message == QUERY_HOST_MESSAGE
+    assert url not in decision.message
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql:///investment_test?host=/socket/dir",
+        "postgresql://user@/investment_test?host=/tmp/sock",
+        "postgresql://user@localhost/investment_test?host=localhost",
+        "postgresql://user@localhost/investment_test?host=127.0.0.1",
+        "postgresql:///investment_test?host=::1",
+        "postgresql:///investment_test?host=localhost,/tmp/sock",
+    ],
+)
+def test_local_query_host_is_accepted(url):
+    decision = decide_test_dsn(
+        url,
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        environ={},
+    )
+    assert decision.action == "use"
+    assert decision.dsn == url
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {"PGHOST": "db.example.com"},
+        {"PGHOST": "localhost,db.example.com"},
+        {"PGHOSTADDR": "10.0.0.5"},
+        {"PGSERVICE": "prod"},
+        {"PGHOST": "/tmp/sock", "PGSERVICE": "prod"},
+    ],
+)
+def test_unset_url_host_refuses_a_remote_libpq_environment(environ):
+    decision = decide_test_dsn(
+        "postgresql:///investment_test",
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        allow_remote=True,
+        environ=environ,
+    )
+    assert decision.action == "fail"
+    assert decision.message == ENV_HOST_MESSAGE
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {},
+        {"PGHOST": "localhost"},
+        {"PGHOST": "/var/run/postgresql"},
+        {"PGHOSTADDR": "127.0.0.1"},
+        {"PGHOST": "::1"},
+    ],
+)
+def test_unset_url_host_accepts_a_local_libpq_environment(environ):
+    decision = decide_test_dsn(
+        "postgresql:///investment_test",
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        environ=environ,
+    )
+    assert decision.action == "use"
+
+
+def test_explicit_url_host_ignores_a_remote_pghost():
+    decision = decide_test_dsn(
+        SEPARATE_DATABASE_URL,
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        environ={"PGHOST": "db.example.com", "PGSERVICE": "prod"},
+    )
+    assert decision.action == "use"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("1", True),
+        ("0", False),
+        ("true", False),
+        ("yes", False),
+        ("", False),
+    ],
+)
+def test_allow_remote_is_only_the_digit_one(value, expected):
+    assert allow_remote_requested({"TEST_POSTGRES_ALLOW_REMOTE": value}) is (
+        expected
+    )
+    assert allow_remote_requested({}) is False
+
+
+def test_dotenv_database_url_is_refused(tmp_path, monkeypatch):
+    """A .env DATABASE_URL is refused even when Settings did not load it."""
+    from tests.integration.conftest import _dsn_decision
+
+    url = "postgresql://postgres:postgres@127.0.0.1:5432/investment_test"
+    (tmp_path / ".env").write_text(
+        f"DATABASE_URL={url}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TEST_POSTGRES_DSN", url)
+    monkeypatch.delenv("REQUIRE_POSTGRES", raising=False)
+    monkeypatch.delenv("TEST_POSTGRES_ALLOW_REMOTE", raising=False)
+    decision = _dsn_decision()
+    assert decision.action == "fail"
+    assert decision.message == REFUSE_MESSAGE
+    assert url not in decision.message

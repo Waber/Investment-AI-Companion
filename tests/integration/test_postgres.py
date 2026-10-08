@@ -13,6 +13,7 @@ back as the UTC instant, and a second write of that instant is rejected.
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -356,22 +357,30 @@ def test_session_accepts_a_write_after_a_constraint_rollback(
         assert db.query(FinancialMetricsDB).count() == 0
 
 
+@pytest_asyncio.fixture()
+async def created_dup_company(postgres_client):
+    """One company with ticker ``DUP``, or an error if create fails.
+
+    The xfail tests below start from this row. Keeping the create
+    out of those tests means a broken client fails setup instead of
+    counting as the expected failure.
+    """
+    response = await postgres_client.post(
+        COMPANIES, json={"name": "A", "ticker": "DUP"}
+    )
+    assert response.status_code == 201, response.text
+    return response
+
+
 @pytest.mark.asyncio
-async def test_duplicate_ticker_is_500_and_lowercase_is_stored(
-    postgres_client, postgres_session_factory
-):
+async def test_duplicate_ticker_is_500(created_dup_company, postgres_client):
     """Current PostgreSQL behaviour for issue #16. This file does not fix it.
 
     The ticker unique index is not ``uq_company_name_ticker``, so the
     repository re-raises ``IntegrityError`` and the API returns 500
-    with a fixed detail. ``dup`` is a different ticker and is stored.
-    The write after the 500 also shows the request session recovered.
+    with a fixed detail. A different ticker after that 500 shows the
+    request session recovered. Case folding is not part of #16.
     """
-    first = await postgres_client.post(
-        COMPANIES, json={"name": "A", "ticker": "DUP"}
-    )
-    assert first.status_code == 201, first.text
-
     duplicate = await postgres_client.post(
         COMPANIES, json={"name": "B", "ticker": "DUP"}
     )
@@ -380,45 +389,52 @@ async def test_duplicate_ticker_is_500_and_lowercase_is_stored(
     assert "IntegrityError" not in duplicate.text
     assert "duplicate" not in duplicate.text.lower()
 
-    lower = await postgres_client.post(
-        COMPANIES, json={"name": "C", "ticker": "dup"}
+    other = await postgres_client.post(
+        COMPANIES, json={"name": "C", "ticker": "OTHER"}
     )
-    assert lower.status_code == 201, lower.text
-
-    with postgres_session_factory() as db:
-        tickers = {row.ticker for row in db.query(CompanyDB).all()}
-    assert tickers == {"DUP", "dup"}
+    assert other.status_code == 201, other.text
 
 
 @pytest.mark.asyncio
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Issue #16 is open. Duplicate ticker should be 400 or 409, "
-        "and dup should collide with DUP. Today the duplicate is 500 "
-        "and dup is stored. Remove this marker when that behaviour "
-        "lands."
+        "Issue #16 is open. An exact duplicate ticker should be "
+        "400 or 409 and leave one row. Today the duplicate is 500. "
+        "Remove this marker when that behaviour lands. Case folding "
+        "is a separate test."
     ),
 )
-async def test_duplicate_ticker_is_a_client_error_and_case_collides(
-    postgres_client, postgres_session_factory
+async def test_duplicate_ticker_is_a_client_error(
+    created_dup_company, postgres_client, postgres_session_factory
 ):
-    """Target behaviour for issue #16.
+    """Target behaviour for issue #16: the same ticker is a client error.
 
     ``strict=True`` fails the suite when this starts passing, so the
-    fix has to delete the marker in the same change. A fixture setup
-    error is not an expected failure: a broken harness still fails CI.
+    fix has to delete the marker in the same change.
     """
-    first = await postgres_client.post(
-        COMPANIES, json={"name": "A", "ticker": "DUP"}
-    )
-    assert first.status_code == 201, first.text
-
     duplicate = await postgres_client.post(
         COMPANIES, json={"name": "B", "ticker": "DUP"}
     )
     assert duplicate.status_code in (400, 409), duplicate.text
 
+    with postgres_session_factory() as db:
+        assert db.query(CompanyDB).count() == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Ticker normalization is not issue #16. dup should collide "
+        "with DUP and return 400 or 409, leaving one row. Remove "
+        "this marker when tickers are normalized to one case."
+    ),
+)
+async def test_lowercase_ticker_collides_with_uppercase(
+    created_dup_company, postgres_client, postgres_session_factory
+):
+    """Target behaviour for ticker case folding, separate from #16."""
     lower = await postgres_client.post(
         COMPANIES, json={"name": "C", "ticker": "dup"}
     )

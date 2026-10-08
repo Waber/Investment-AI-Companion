@@ -29,19 +29,26 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import Settings, settings
 from app.core.database import Base, create_db_engine, get_db
 from main import create_app
-from tests.integration.postgres_dsn import decide_test_dsn
+from tests.integration.postgres_dsn import (
+    allow_remote_requested,
+    decide_test_dsn,
+    dotenv_database_url,
+)
 
 
 def _dsn_decision():
-    """Read the environment at fixture time, not at import time."""
+    """Read the environment at fixture time, not at import time.
+
+    ``DATABASE_URL`` inside a ``.env`` file is part of the denylist
+    even though Settings was imported from an empty directory and
+    did not apply that file.
+    """
     require = os.environ.get("REQUIRE_POSTGRES") == "1"
-    # "1" is the only override. An empty value or any other string
-    # keeps the host allowlist, which is the safe default.
-    allow_remote = os.environ.get("TEST_POSTGRES_ALLOW_REMOTE") == "1"
+    allow_remote = allow_remote_requested(os.environ)
     default_url = Settings.model_fields["DATABASE_URL"].default
     return decide_test_dsn(
         os.environ.get("TEST_POSTGRES_DSN"),
-        (settings.DATABASE_URL, default_url),
+        (settings.DATABASE_URL, default_url, dotenv_database_url()),
         require,
         allow_remote=allow_remote,
     )

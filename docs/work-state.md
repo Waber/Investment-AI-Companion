@@ -4,9 +4,9 @@
 
 - Branch `cursor/postgres-integration-harness-fc54`, based on
   `origin/master` `d568663`. Implementation commit `e242341`.
-  Review follow-up `c9b7302` is green in GitHub Actions. The
-  integration client host and the path cleanup are the latest
-  commit on this branch.
+  Review follow-up `c9b7302` and the host commit `1fc4edb` are
+  green in GitHub Actions. The query-parameter guard and the
+  merge-safe secret are the latest commit on this branch.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
@@ -34,22 +34,24 @@
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3, the CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 846 passed, 68 deselected in 12.84s, no warnings summary,
+  -> 846 passed, 108 deselected in 13.83s, no warnings summary,
   TOTAL 92% (exact 92.58%).
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
-  and `-m integration` -> 67 passed, 1 xfailed, 846 deselected
-  in 2.00s on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1).
-  Without the variable, `-m integration` -> 53 passed, 15
-  skipped, exit 0. Of the 68 integration tests, 53 do not open
-  PostgreSQL (45 DSN checks, 8 `.env` checks) and 15 hit the
-  database. A node id without `-m integration` -> 1 deselected,
-  exit 5. GitHub Actions
+  and `-m integration` -> 106 passed, 2 xfailed, 846 deselected
+  in 3.65s on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1).
+  Of the 108 integration tests, 92 do not open PostgreSQL and 16
+  hit the database (14 passed, 2 xfailed). A node id without
+  `-m integration` -> 1 deselected, exit 5. GitHub Actions
   [run 37836507848](https://github.com/Waber/Investment-AI-Companion/actions/runs/37836507848)
-  on `c9b7302`: SQLite job 846 passed, 68 deselected in 17.49s,
-  TOTAL 93%. PostgreSQL job 67 passed, 1 xfailed, 846 deselected
-  in 2.68s on PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2).
-  `postgres_client` now uses `http://127.0.0.1` so a later
-  `TrustedHostMiddleware` does not reject the Host header.
+  on `c9b7302`: SQLite 846 passed, 68 deselected in 17.49s,
+  TOTAL 93%. PostgreSQL 67 passed, 1 xfailed in 2.68s.
+  [run 37837340255](https://github.com/Waber/Investment-AI-Companion/actions/runs/37837340255)
+  on `1fc4edb`: SQLite 846 passed, 68 deselected in 16.98s.
+  PostgreSQL 67 passed, 1 xfailed in 2.86s. The query-guard
+  commit's Actions run is recorded after that push.
+  `postgres_client` uses `http://127.0.0.1`. The integration
+  import sets a 34-character `SECRET_KEY` when the marker is
+  selected. Query parameters cannot redirect the connection.
   Pull request #61 is open and not merged. Its new work-state
   section still says the harness stays later. That sentence is
   updated when this branch rebases onto #61. Older sections
