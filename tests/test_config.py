@@ -11,12 +11,12 @@ def test_env_example_startup_preserves_cors_origins(monkeypatch, tmp_path):
     replaced = False
     for line in (project_root / ".env.example").read_text().splitlines():
         if line.startswith("SECRET_KEY="):
-            lines.append("SECRET_KEY=unit-test-secret-key")
+            lines.append("SECRET_KEY=unit-test-secret-key-0123456789abcd")
             replaced = True
         else:
             lines.append(line)
     if not replaced:
-        lines.append("SECRET_KEY=unit-test-secret-key")
+        lines.append("SECRET_KEY=unit-test-secret-key-0123456789abcd")
     (tmp_path / ".env").write_text("\n".join(lines) + "\n")
     monkeypatch.chdir(tmp_path)
     for name in list(os.environ):

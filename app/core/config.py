@@ -5,13 +5,16 @@ from pydantic import AnyHttpUrl, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # These strings used to be defaults. They are rejected so a copied
-# example cannot boot the app with a known key.
+# example cannot boot the app with a known key. Comparison is
+# case-insensitive: YOUR-SECRET-KEY-HERE is the same placeholder.
 _REJECTED_SECRET_KEYS = frozenset(
     {
         "your-secret-key-here",
         "replace-this-in-local-env",
     }
 )
+# token_urlsafe(32) is 43 characters. 32 is the shortest value we accept.
+_MIN_SECRET_KEY_LENGTH = 32
 
 
 def _cors_origin_parts(value: object) -> List[str]:
@@ -119,10 +122,14 @@ class Settings(BaseSettings):
     @classmethod
     def secret_key_must_be_real(cls, value: str) -> str:
         cleaned = value.strip()
-        if not cleaned or cleaned in _REJECTED_SECRET_KEYS:
+        if (
+            len(cleaned) < _MIN_SECRET_KEY_LENGTH
+            or cleaned.casefold() in _REJECTED_SECRET_KEYS
+        ):
             raise ValueError(
-                "SECRET_KEY is required. Set a long random value in the "
-                "environment. Known placeholders are rejected."
+                "SECRET_KEY is required. Set a random value of at least "
+                f"{_MIN_SECRET_KEY_LENGTH} characters. Known placeholders "
+                "are rejected in any case."
             )
         return cleaned
 
