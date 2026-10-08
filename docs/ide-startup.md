@@ -151,7 +151,7 @@ ingestion is still a placeholder.
 
 - Import errors: check interpreter, module target and explicit `PYTHONPATH`.
 - Database errors: check PostgreSQL status, database ownership and the URL.
-- Settings errors: ensure the working directory has no `.env` and CORS is `[]`.
+- Settings errors: ensure the working directory has no `.env` and CORS is `[]`. Check `SECRET_KEY` is at least 32 characters.
 - Blank Swagger: CDN assets require network access; use curl or OpenAPI JSON.
 - `/api/v1/test-config` returns 403: expected with `DEBUG=False`.
 - No breakpoint: check Debug mode, route, port and source checkout; omit reload.
