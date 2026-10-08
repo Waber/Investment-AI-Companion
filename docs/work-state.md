@@ -1,5 +1,37 @@
 # Current Work State
 
+## Reviewer Nits: 2026-10-08
+
+- Branch `cursor/reviewer-nits-checkout-isort-c3a6`, off `origin/master`
+  `b2541d7`. Checkout uses `persist-credentials: false`. isort
+  `known_first_party` is `app`, `main`, and `scripts`. README lint text
+  no longer names a file. No production `.py` edits. No files reformatted.
+- `python -m isort --check-only .` (isort 5.12.0) still fails the same
+  12 files:
+  `alembic/env.py`, `setup_database.py`, `app/api/companies.py`,
+  `app/api/data_collection.py`, `app/api/financial_metrics.py`,
+  `app/core/config.py`, `app/core/init_db.py`,
+  `app/data_collectors/yahoo_finance.py`, `app/models/database_models.py`,
+  `app/repositories/company_repository.py`,
+  `app/repositories/financial_metrics_repository.py`, and
+  `tests/test_company_update_conflicts.py`.
+  The suggested diff is the same with or without `known_first_party`
+  when isort runs from the repo root.
+- QA's subset check for `test_financial_statements_return_all_six_frames`
+  is skipped. `tests/test_yahoo_finance_collector.py` is not on this
+  branch. It arrives with PR #22. This branch stays off master, not off
+  PR #22.
+- [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22) and
+  [PR #41](https://github.com/Waber/Investment-AI-Companion/pull/41)
+  also edit this file and the journal. Whichever merges after another
+  needs a rebase of those two files.
+- The tooling section below still says to review PR #15. That pull
+  request is merged as `b2541d7`. PR #13 is merged as `a10e196`.
+- Next after this PR: guarded Alembic baseline and isolated PostgreSQL
+  tests (issues #8, #9, and #10).
+- Account usage was not available in this session. Stop reason: reviewer
+  nits delivered, not quota.
+
 ## Tooling Config Slice: 2026-10-07
 
 - Branch `cursor/tooling-config-black-isort-flake8-pytest-48d8`, rebased onto

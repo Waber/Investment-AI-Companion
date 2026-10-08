@@ -1,5 +1,47 @@
 # Development Journal
 
+## 2026-10-08 - Reviewer nits on checkout, isort, and the README
+
+- Scope: three notes from the review of PR #14 and PR #15. Branch
+  `cursor/reviewer-nits-checkout-isort-c3a6` off `origin/master`
+  `b2541d7`. No production `.py` edits and no reformatting of older files.
+- `actions/checkout` now sets `persist-credentials: false`. The default
+  is true, which writes the checkout token into `.git/config` so a later
+  step can push. This job only runs pytest, so it does not keep that
+  credential.
+- `[tool.isort]` now sets `known_first_party = ["app", "main", "scripts"]`.
+  That names this repository's own packages. isort's default, when the
+  config file is in the repo root, already sees `app/`, `scripts/`, and
+  `main.py` and treats them as first-party. The setting records that
+  choice so a move of the config file does not silently reclassify them.
+- `python -m isort --check-only .` (isort 5.12.0) still fails the same
+  12 files. None were reformatted. The suggested diff with the setting
+  matches the suggested diff without it. The list is
+  `alembic/env.py`, `setup_database.py`, `app/api/companies.py`,
+  `app/api/data_collection.py`, `app/api/financial_metrics.py`,
+  `app/core/config.py`, `app/core/init_db.py`,
+  `app/data_collectors/yahoo_finance.py`, `app/models/database_models.py`,
+  `app/repositories/company_repository.py`,
+  `app/repositories/financial_metrics_repository.py`, and
+  `tests/test_company_update_conflicts.py`.
+- README lint text no longer names `tests/test_company_update_conflicts.py`.
+  It says older files still have formatting debt. The file list stays in
+  this entry and in `docs/work-state.md`.
+- QA asked to change `test_financial_statements_return_all_six_frames`
+  from an exact statement-key set to a subset check (`expected <= actual`).
+  That test is added in PR #22 and is not on master. This branch does not
+  contain `tests/test_yahoo_finance_collector.py`, so the edit is skipped.
+  Do not base this branch on PR #22.
+- [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22) and
+  [PR #41](https://github.com/Waber/Investment-AI-Companion/pull/41)
+  (docs-only product requirements) also edit this journal and
+  `docs/work-state.md`. Whichever of these pull requests merges after
+  another needs a rebase of those two files.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+  Account usage was not available in this session; no percentage recorded.
+- Next after this PR: guarded Alembic baseline and isolated PostgreSQL
+  tests (issues #8, #9, and #10).
+
 ## 2026-10-07 - Tooling configuration
 
 - Scope: configuration and docs only. Black line length 79 with target
