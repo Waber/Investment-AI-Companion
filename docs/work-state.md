@@ -16,8 +16,12 @@
   `period_end` is normalized to aware UTC before the uniqueness
   pre-check on create and update. Naive `period_end` input is treated
   as UTC and stored as that instant. The API returns it with a `Z`
-  suffix. The app engine enables SQLite foreign keys, and the tests
-  reuse that hook.
+  suffix. On PostgreSQL, naive `period_end` input used to be
+  interpreted in the session time zone and is now UTC. Responses now
+  always use the `Z` suffix. The PUT OpenAPI schema shows `period_end`
+  as a non-nullable date-time. The app engine enables SQLite foreign
+  keys, and the tests reuse that hook. A PostgreSQL `create_db_engine`
+  call attaches no SQLite listener and opens no connection.
   `python scripts/seed_demo.py --apply` succeeds twice on a fresh
   SQLite file and does not insert duplicate rows. `PUT` can move
   `period_end`. An explicit null is a 422 from the update model.
@@ -27,16 +31,17 @@
   #20 on PostgreSQL 16 (Europe/Warsaw) at the application level: the
   same instant with `+02:00`, `Z`, or naive returns 400, and readback
   has no double shift. Alembic (#8), the instrument model (#26), and
-  bugs #18, #19, and #21 are not in this branch. Code Reviewer
-  approval is still open.
+  bugs #18, #19, and #21 are not in this branch.
 - Tests: no `.env`, the CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 823 passed in 15.55s, no warnings summary, TOTAL 92% (exact
-  92.41%). The earlier rebased head `c3c8911` was 822 passed, exact
-  92.36%. Before the fix, `tests/test_known_defects.py` was
-  `1 xfailed` and `tests/test_sqlite_utc_timestamps.py` was `8 failed`.
-  `PUT {"period_end": null}` failed that new test with 400
-  `constraint violation` before the model rejected null.
+  -> 825 passed in 15.31s, no warnings summary, TOTAL 92% (exact
+  92.35%). The head `dbcfaa5` was 823 passed, exact 92.41%. The
+  rebased head `c3c8911` was 822 passed, exact 92.36%. Before the fix,
+  `tests/test_known_defects.py` was `1 xfailed` and
+  `tests/test_sqlite_utc_timestamps.py` was `8 failed`. On master,
+  `PUT {"period_end": null}` returned 200 and the value was ignored.
+  At `c3c8911` that request was 400 `constraint violation`. It is now
+  422.
 - Active agents: none.
 - Blockers: none for bugs #18 and #21.
 - Next action: bugs

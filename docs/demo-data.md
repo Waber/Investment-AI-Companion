@@ -90,6 +90,12 @@ For create/update/delete request examples and the isolated runtime's lifecycle,
 see [the API demo guide](api-demo.md). The fixture can be used for scenario
 selection in a future frontend; no frontend or filtering UI is added here.
 
+## Old SQLite demo databases
+
+Recreate an old SQLite demo database. Do not keep using that file.
+Rows written with a non-UTC offset are read back 2h off, and nothing
+migrates them. Create a fresh file and run `--apply` again.
+
 ## Storage And Recovery
 
 The JSON fixture and scripts are committed in Git. The running PostgreSQL
