@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 # FX symbols (PKN.WA, BRK-B, ^GSPC, EURUSD=X). Control characters and
 # spaces are not in the class.
 TICKER_PATTERN = r"^[A-Z0-9._\-^=]{1,20}$"
+# Three letters, either case. GBp is London pence and must not become GBP.
+_CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
 # The description column is Text, so the database would store a
 # paste of any size. 5000 characters is about a page: enough for a
 # provider summary, and the cap lives on the write models only so a
@@ -94,9 +96,14 @@ class CompanyBase(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def _normalize_currency(cls, value: object) -> object:
-        # Before the length check, so " usd " is "USD" and then accepted.
-        if isinstance(value, str):
-            return value.strip().upper()
+        # Length and letters only. Case stays as the provider sent it:
+        # Yahoo's GBp is pence, and uppercasing it would mean pounds.
+        if value is None or not isinstance(value, str):
+            return value
+        if _CURRENCY_RE.fullmatch(value) is None:
+            raise ValueError(
+                "currency must be exactly three letters; case is unchanged"
+            )
         return value
 
 
