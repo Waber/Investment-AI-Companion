@@ -33,8 +33,8 @@ These commands were run from a clean virtualenv installed only from
 metric rows. `GET /ui`, `GET /ui/instruments/1`, the CSS, and the local
 HTMX file each returned 200. `demo/` is gitignored.
 
-- Bind `127.0.0.1` only. Do not start the demo with `python main.py`:
-  that entry point still binds `0.0.0.0`.
+- Bind the uvicorn command above to `127.0.0.1`. Do not start the
+  demo with `python main.py`: that entry point still binds `0.0.0.0`.
 - Polish is the default. The EN link stores `ui_lang` and comes back
   to the same `/ui` path.
 - Rows from this fixture show the synthetic-data badge. The page
@@ -43,13 +43,9 @@ HTMX file each returned 200. `demo/` is gitignored.
 - A website is a link only when the view-model accepts `http` or
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".
-- After PR #61 merges, the demo command also needs `SECRET_KEY`
-  (at least 32 characters, not a placeholder). One way to make one:
-  `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-  That pull request also checks `Host`. `127.0.0.1` and `localhost`
-  are allowed by default, which matches `--host 127.0.0.1`.
-  Whichever of #61 and #63 lands second updates this file.
-  On current master the commands above are enough.
+- `SECRET_KEY` is not required for the commands above.
+  After #61, the demo seed and uvicorn both need `SECRET_KEY`, and
+  the bind becomes `127.0.0.1`.
 
 ## Scenarios
 
@@ -129,7 +125,8 @@ curl -q --noproxy '*' -fsS \
 
 For create/update/delete request examples and the isolated runtime's lifecycle,
 see [the API demo guide](api-demo.md). The `/ui` list and detail pages are
-documented above. They filter the seeded companies in the browser.
+documented above. The server filters the seeded companies. The browser
+sends the form and swaps in the HTML fragment.
 
 ## Old SQLite demo databases
 

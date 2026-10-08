@@ -20,6 +20,16 @@ _CDN = (
 )
 
 
+def test_safe_next_rejects_a_parent_segment():
+    """``/ui/../api/...`` starts with /ui and still leaves /ui."""
+    from app.ui.router import safe_next
+
+    assert safe_next("/ui/../api/v1/companies/") == "/ui"
+    assert safe_next("/ui/%2e%2e/api/v1/companies/") == "/ui"
+    assert safe_next("/ui/%5cevil") == "/ui"
+    assert safe_next("/ui/instruments/1") == "/ui/instruments/1"
+
+
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
     """The scheme check stays even when the prefix check already passed."""
     from types import SimpleNamespace
@@ -152,6 +162,7 @@ async def test_language_switch_rejects_open_redirects(client):
         "/ui/\\evil",
         "/ui/%0d%0aSet-Cookie:x",
         "/ui\r\nX: 1",
+        "/ui/../api/v1/companies/",
     ]
     for target in targets:
         response = await client.get("/ui/language/en", params={"next": target})
@@ -167,6 +178,60 @@ async def test_language_switch_rejects_open_redirects(client):
     unknown = await client.get("/ui/instruments/999999")
     assert unknown.status_code == 404
     assert "Nie jest poradą inwestycyjną" in unknown.text
+
+
+def _assert_ui_headers(response):
+    policy = response.headers["content-security-policy"]
+    assert "default-src 'self'" in policy
+    assert "frame-ancestors 'none'" in policy
+    assert "http://" not in policy
+    assert "https://" not in policy
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["vary"] == "HX-Request"
+
+
+@pytest.mark.asyncio
+async def test_history_restore_returns_the_full_page(seeded):
+    restored = await seeded.get(
+        "/ui",
+        headers={
+            "HX-Request": "true",
+            "HX-History-Restore-Request": "true",
+        },
+    )
+    assert restored.status_code == 200
+    assert "<html" in restored.text.casefold()
+    assert "Nie jest poradą inwestycyjną" in restored.text
+    _assert_ui_headers(restored)
+
+    fragment = await seeded.get("/ui", headers={"HX-Request": "true"})
+    assert "<html" not in fragment.text.casefold()
+    assert "Nie jest poradą inwestycyjną" not in fragment.text
+    _assert_ui_headers(fragment)
+
+
+@pytest.mark.asyncio
+async def test_non_integer_instrument_id_is_html_not_json(client):
+    page = await client.get("/ui/instruments/abc")
+    assert page.status_code == 404
+    assert "text/html" in page.headers["content-type"]
+    assert "Nie znaleziono instrumentu" in page.text
+    assert "Nie jest poradą inwestycyjną" in page.text
+    assert not page.text.lstrip().startswith("{")
+    _assert_ui_headers(page)
+
+    api = await client.get("/api/v1/companies/abc")
+    assert api.status_code == 422
+    assert "application/json" in api.headers["content-type"]
+
+
+@pytest.mark.asyncio
+async def test_language_redirect_sends_the_ui_headers(client):
+    response = await client.get("/ui/language/pl", params={"next": "/ui"})
+    assert response.status_code == 303
+    _assert_ui_headers(response)
 
 
 @pytest.mark.asyncio

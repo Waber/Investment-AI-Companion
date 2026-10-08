@@ -1,5 +1,6 @@
 """Templates stay escaped, catalog-driven, and free of CDN URLs."""
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -31,6 +32,7 @@ def test_templates_have_no_safe_filter_or_hardcoded_text():
     for path in TEMPLATE_DIR.rglob("*.html"):
         text = path.read_text(encoding="utf-8")
         assert "|safe" not in text
+        assert re.search(r"\|\s+safe\b", text) is None
         assert "javascript:" not in text.casefold()
         leftover = _LETTERS.sub("", _TAG.sub(" ", _JINJA.sub(" ", text)))
         assert leftover == "", f"{path.name}: {leftover}"
@@ -44,11 +46,14 @@ def test_local_assets_are_not_a_cdn():
     license_text = (STATIC_DIR / "vendor" / "htmx-LICENSE.txt").read_text(
         encoding="utf-8"
     )
+    script_path = STATIC_DIR / "vendor" / "htmx-2.0.10.min.js"
     readme = (STATIC_DIR / "vendor" / "README.txt").read_text(encoding="utf-8")
+    digest = hashlib.sha256(script_path.read_bytes()).hexdigest()
     assert "htmx" in script
     assert "Zero-Clause BSD" in license_text
     assert "2.0.10" in readme
     assert "0BSD" in readme
+    assert f"sha256: {digest}" in readme
     for blob in (css, script):
         lowered = blob.casefold()
         for host in _CDN:

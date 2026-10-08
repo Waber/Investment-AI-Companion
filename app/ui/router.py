@@ -4,7 +4,7 @@ The JSON API stays under /api/v1. These routes are left out of the
 OpenAPI document so /docs remains the API reference.
 """
 
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse
@@ -19,11 +19,56 @@ from app.ui.view_models import METRIC_FIELDS, MONETARY_FIELDS
 router = APIRouter(prefix="/ui", tags=["ui"])
 
 _COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+# The pages load CSS and HTMX from this origin only. frame-ancestors
+# and X-Frame-Options both refuse to be embedded. Referrer-Policy
+# keeps the local address off links to a company website.
+_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
+def _with_ui_headers(response):
+    """Security headers shared by every /ui response, including 404."""
+    response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    # A fragment and a full page share the URL. Caches must not mix them.
+    response.headers["Vary"] = "HX-Request"
+    return response
 
 
 def is_htmx(request):
-    """True when HTMX asked for a fragment instead of the whole page."""
+    """True when HTMX asked for a fragment instead of the whole page.
+
+    A history restore sets ``HX-Request`` and
+    ``HX-History-Restore-Request``. HTMX then writes the response
+    into ``body``. The fragment has no header, language switch, or
+    disclaimer, so a restore must get the full page.
+    """
+    restore = request.headers.get("hx-history-restore-request", "")
+    if restore.casefold() == "true":
+        return False
     return request.headers.get("hx-request", "").casefold() == "true"
+
+
+def _path_escapes_ui(candidate):
+    """True when the path is not a page under /ui.
+
+    ``/ui/../api/v1/companies/`` starts with ``/ui/`` and is still
+    outside /ui once the ``..`` segment is applied. Same-origin is
+    not enough.
+    """
+    parts = urlsplit(candidate)
+    if parts.scheme or parts.netloc:
+        return True
+    path = unquote(parts.path)
+    if "\\" in path:
+        return True
+    return any(segment == ".." for segment in path.split("/"))
 
 
 def safe_next(value):
@@ -47,12 +92,21 @@ def safe_next(value):
         or candidate.startswith("/ui/")
         or candidate.startswith("/ui?")
     )
-    if not allowed:
-        return "/ui"
-    parts = urlsplit(candidate)
-    if parts.scheme or parts.netloc:
+    if not allowed or _path_escapes_ui(candidate):
         return "/ui"
     return candidate
+
+
+def _instrument_id(value):
+    """Return a decimal id, or None when the path is not one.
+
+    A non-integer path such as ``abc`` must be the HTML 404. Leaving
+    the parameter as ``int`` would make FastAPI return the API's 422
+    JSON instead.
+    """
+    if not value.isdigit():
+        return None
+    return int(value)
 
 
 @router.get("", include_in_schema=False)
@@ -84,33 +138,40 @@ def instrument_list(
         if is_htmx(request)
         else "instrument_list.html"
     )
-    return render(
-        request,
-        template_name,
-        instruments=instruments,
-        instrument_types=instrument_types,
-        exchanges=exchanges,
-        currencies=currencies,
-        filters=filters,
+    return _with_ui_headers(
+        render(
+            request,
+            template_name,
+            instruments=instruments,
+            instrument_types=instrument_types,
+            exchanges=exchanges,
+            currencies=currencies,
+            filters=filters,
+        )
     )
 
 
 @router.get("/instruments/{instrument_id}", include_in_schema=False)
 def instrument_detail(
     request: Request,
-    instrument_id: int,
+    instrument_id: str,
     db: Session = Depends(get_db),
 ):
-    """One instrument, or a translated 404."""
-    instrument = get_instrument(db, instrument_id)
+    """One instrument, or a translated HTML 404."""
+    parsed_id = _instrument_id(instrument_id)
+    instrument = None if parsed_id is None else get_instrument(db, parsed_id)
     if instrument is None:
-        return render(request, "not_found.html", status_code=404)
-    return render(
-        request,
-        "instrument_detail.html",
-        instrument=instrument,
-        metric_fields=METRIC_FIELDS,
-        monetary_fields=MONETARY_FIELDS,
+        return _with_ui_headers(
+            render(request, "not_found.html", status_code=404)
+        )
+    return _with_ui_headers(
+        render(
+            request,
+            "instrument_detail.html",
+            instrument=instrument,
+            metric_fields=METRIC_FIELDS,
+            monetary_fields=MONETARY_FIELDS,
+        )
     )
 
 
@@ -118,7 +179,9 @@ def instrument_detail(
 def switch_language(request: Request, language_code: str, next: str = ""):
     """Store the language in a cookie and redirect back to /ui."""
     if language_code not in SUPPORTED_LANGUAGES:
-        return render(request, "not_found.html", status_code=404)
+        return _with_ui_headers(
+            render(request, "not_found.html", status_code=404)
+        )
     response = RedirectResponse(safe_next(next), status_code=303)
     response.set_cookie(
         key=LANGUAGE_COOKIE,
@@ -128,4 +191,4 @@ def switch_language(request: Request, language_code: str, next: str = ""):
         samesite="lax",
         path="/",
     )
-    return response
+    return _with_ui_headers(response)
