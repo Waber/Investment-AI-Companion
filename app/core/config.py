@@ -2,7 +2,7 @@ import json
 from typing import List, Optional
 from urllib.parse import urlsplit
 
-from pydantic import AnyHttpUrl, ValidationError, field_validator
+from pydantic import AnyHttpUrl, Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # These strings used to be defaults. They are rejected so a copied
@@ -215,8 +215,10 @@ class Settings(BaseSettings):
 
     # Off unless a local .env turns it on. /test-config checks this flag.
     DEBUG: bool = False
-    # No default. A missing value or a known placeholder fails startup.
-    SECRET_KEY: str
+    # Empty default so a missing value reaches the validator. Without
+    # it, pydantic stops at "Field required" and never shows how to
+    # generate a key. validate_default runs that check on the "".
+    SECRET_KEY: str = Field(default="", validate_default=True)
     # Raw env text. allowed_hosts is the list TrustedHostMiddleware
     # reads. See _allowed_host_parts. The test client sends
     # Host: 127.0.0.1. Starlette strips the port before comparing,
@@ -246,7 +248,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SECRET_KEY is required. Set a random value of at least "
                 f"{_MIN_SECRET_KEY_LENGTH} characters. Known placeholders "
-                "are rejected in any case."
+                "are rejected in any case. Generate one with "
+                'python -c "import secrets; print(secrets.token_urlsafe(32))".'
             )
         return cleaned
 

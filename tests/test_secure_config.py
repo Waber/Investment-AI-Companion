@@ -43,6 +43,18 @@ def test_secret_key_is_required(monkeypatch):
         Settings(_env_file=None)
 
 
+def test_missing_secret_key_explains_how_to_generate_one(monkeypatch):
+    """A missing key must not stop at a bare 'Field required'."""
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+
+    with pytest.raises(ValidationError) as caught:
+        Settings(_env_file=None)
+
+    message = str(caught.value)
+    assert "token_urlsafe(32)" in message
+    assert "Field required" not in message
+
+
 def test_settings_errors_hide_other_secrets(monkeypatch):
     """A missing or rejected SECRET_KEY must not print the other settings.
 
@@ -424,7 +436,9 @@ def test_operator_guides_name_the_shared_checkout():
 def test_ide_startup_mentions_secret_key_length():
     """A short SECRET_KEY is a settings error, not a database error."""
     guide = (ROOT / "docs" / "ide-startup.md").read_text().splitlines()
-    settings = [line for line in guide if line.startswith("- Settings errors:")]
+    settings = [
+        line for line in guide if line.startswith("- Settings errors:")
+    ]
     assert len(settings) == 1
     assert "SECRET_KEY" in settings[0]
     assert "at least 32 characters" in settings[0]
