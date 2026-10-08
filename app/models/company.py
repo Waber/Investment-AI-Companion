@@ -47,13 +47,63 @@ def normalize_ticker(value: object) -> object:
     return normalized
 
 
-class CompanyBase(BaseModel):
-    """Base company model.
+class _CompanyWriteChecks(BaseModel):
+    """Ticker and currency checks for create and update only.
 
-    String limits match the companies table. SQLite does not enforce
-    ``String(n)``, so the check lives here and a too-long value is a
-    422 on the user routes instead of a 500 on PostgreSQL.
+    ``Company``, the model that serialises stored rows, does not
+    inherit this. One old blank ticker would otherwise make
+    ``GET /companies/`` return 500 for every caller.
+    ``check_fields=False`` is required because this mixin declares
+    no fields of its own; the subclasses do.
     """
+
+    @field_validator("ticker", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_ticker(cls, value: object) -> object:
+        return normalize_ticker(value)
+
+    @field_validator("currency", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_currency(cls, value: object) -> object:
+        # Length and letters only. Case stays as the provider sent it:
+        # Yahoo's GBp is pence, and uppercasing it would mean pounds.
+        if value is None or not isinstance(value, str):
+            return value
+        if _CURRENCY_RE.fullmatch(value) is None:
+            raise ValueError(
+                "currency must be exactly three letters; case is unchanged"
+            )
+        return value
+
+
+class CompanyBase(BaseModel):
+    """Fields of a stored company, without write-time limits.
+
+    SQLite does not enforce ``String(n)``. The limits live on
+    ``CompanyCreate`` and ``CompanyUpdate``, so a too-long value is a
+    422 on those routes instead of a 500 on PostgreSQL, and a legacy
+    row can still be read.
+    """
+
+    name: str = Field(..., description="Company name")
+    ticker: str = Field(..., description="Stock ticker symbol")
+    sector: Optional[str] = Field(None, description="Economic sector")
+    industry: Optional[str] = Field(None, description="Industry")
+    description: Optional[str] = Field(
+        None, description="Brief company description"
+    )
+    website: Optional[HttpUrl] = Field(None, description="Company website")
+    country: Optional[str] = Field(None, description="Country of origin")
+    exchange: Optional[str] = Field(
+        None, description="Stock exchange where the company is listed"
+    )
+    currency: Optional[str] = Field(
+        "USD", description="Currency for financial data"
+    )
+
+
+class CompanyCreate(_CompanyWriteChecks):
+    """Input for creating a company. Lengths match the table columns."""
 
     name: str = Field(..., max_length=255, description="Company name")
     ticker: str = Field(
@@ -68,7 +118,9 @@ class CompanyBase(BaseModel):
         None, max_length=100, description="Industry"
     )
     description: Optional[str] = Field(
-        None, description="Brief company description"
+        None,
+        max_length=DESCRIPTION_MAX_LENGTH,
+        description="Brief company description",
     )
     website: Optional[HttpUrl] = Field(
         None, max_length=500, description="Company website"
@@ -88,54 +140,23 @@ class CompanyBase(BaseModel):
         description="Currency for financial data",
     )
 
-    @field_validator("ticker", mode="before")
-    @classmethod
-    def _normalize_ticker(cls, value: object) -> object:
-        return normalize_ticker(value)
 
-    @field_validator("currency", mode="before")
-    @classmethod
-    def _normalize_currency(cls, value: object) -> object:
-        # Length and letters only. Case stays as the provider sent it:
-        # Yahoo's GBp is pence, and uppercasing it would mean pounds.
-        if value is None or not isinstance(value, str):
-            return value
-        if _CURRENCY_RE.fullmatch(value) is None:
-            raise ValueError(
-                "currency must be exactly three letters; case is unchanged"
-            )
-        return value
+class CompanyUpdate(_CompanyWriteChecks):
+    """Input for a partial update. Every field is optional.
 
-
-class CompanyCreate(CompanyBase):
-    """Model for creating a new company.
-
-    ``description`` is capped here and on update, not on the read
-    model. See ``DESCRIPTION_MAX_LENGTH``.
-    """
-
-    description: Optional[str] = Field(
-        None,
-        max_length=DESCRIPTION_MAX_LENGTH,
-        description="Brief company description",
-    )
-
-
-class CompanyUpdate(CompanyBase):
-    """Model for updating company data.
-
-    ``name`` and ``ticker`` are optional here. Repeating the limits
-    matters: overriding a field drops the parent's ``Field`` constraints.
-    The ticker validator on ``CompanyBase`` still runs.
+    Repeating the limits matters: this model does not inherit
+    ``CompanyCreate``, so the constraints have to be written again.
     """
 
     name: Optional[str] = Field(None, max_length=255)
     ticker: Optional[str] = Field(None, pattern=TICKER_PATTERN)
-    description: Optional[str] = Field(
-        None,
-        max_length=DESCRIPTION_MAX_LENGTH,
-        description="Brief company description",
-    )
+    sector: Optional[str] = Field(None, max_length=100)
+    industry: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=DESCRIPTION_MAX_LENGTH)
+    website: Optional[HttpUrl] = Field(None, max_length=500)
+    country: Optional[str] = Field(None, max_length=100)
+    exchange: Optional[str] = Field(None, max_length=50)
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
 
 class Company(CompanyBase):

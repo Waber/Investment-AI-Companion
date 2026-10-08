@@ -27,6 +27,20 @@ FETCH = "/api/v1/data-collection/fetch-company"
 FETCH_METRICS = "/api/v1/data-collection/fetch-financial-metrics"
 
 
+@pytest.mark.asyncio
+async def test_list_companies_returns_a_stored_blank_ticker(client):
+    """A legacy blank ticker must not make GET /companies/ fail for everyone."""
+    session = client.app.state.testing_session_local()
+    session.add(CompanyDB(name="Legacy", ticker="", currency="USD"))
+    session.commit()
+    session.close()
+
+    response = await client.get(COMPANIES)
+
+    assert response.status_code == 200
+    assert any(row["ticker"] == "" for row in response.json())
+
+
 def test_normalize_ticker_leaves_none_and_non_strings():
     assert normalize_ticker(None) is None
     assert normalize_ticker(12) == 12
