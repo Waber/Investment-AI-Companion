@@ -1,10 +1,18 @@
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+import os
 
-from app.core.database import Base, create_db_engine, get_db
-from main import create_app
+# The app requires SECRET_KEY and rejects the old placeholders. CI does
+# not set the variable. Set it before importing the app so collection
+# does not depend on a developer .env file. A test that checks the
+# missing-key failure deletes this name first.
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
+
+import pytest_asyncio  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from app.core.database import Base, create_db_engine, get_db  # noqa: E402
+from main import create_app  # noqa: E402
 
 
 @pytest_asyncio.fixture()
