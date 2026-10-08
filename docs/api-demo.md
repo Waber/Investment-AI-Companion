@@ -79,6 +79,11 @@ curl -q --noproxy '*' -fsS -X PUT "$BASE_URL/api/v1/financial-metrics/$METRICS_I
 curl -q --noproxy '*' -fsS "$BASE_URL/api/v1/financial-metrics/company/$COMPANY_ID"
 ```
 
+Metrics `PUT` accepts `period_end` and stores that instant as UTC.
+Omitting `period_end` leaves the stored value unchanged. An explicit
+`null` is rejected with 422. Company `website` is different: the
+example above sends `{"website": null}` and that clears the website.
+
 Invalid URL: expected 422, without changing the company. Deliberate error examples
 omit curl's `-f` so the response body and status remain visible.
 

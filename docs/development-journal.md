@@ -23,17 +23,21 @@
   accepts offset-less strings such as
   `2024-12-31T00:00:00` (see `tests/test_metric_creation_conflicts.py`).
   Rejecting them would break that contract. The same instant sent as
-  `Z` or as `+02:00` is a duplicate (400). Responses use Pydantic's
-  `Z` suffix, which is an explicit UTC offset.
+  `Z` or as `+02:00` is a duplicate (400). On PostgreSQL, naive
+  `period_end` input used to be interpreted in the session time zone
+  and is now UTC. Responses now always use the `Z` suffix.
 - The metrics repository calls `as_utc` before the uniqueness pre-check
   and before the insert or update. `FinancialMetricsUpdate` accepts an
   optional `period_end` so an update can move the period and still hit
   that check. A row is not a duplicate of itself (`exclude_id`).
-  An explicit JSON null is rejected by a field validator on that model,
-  so Pydantic returns 422. The validator does not run when the field is
-  omitted, and `model_dump(exclude_unset=True)` then leaves `period_end`
-  unchanged. `PUT` can move `period_end`; that field used to be ignored.
-  Moving onto an existing company, period, and type is 400.
+  An explicit JSON null is rejected because the update field is a
+  `datetime` with default `None` (HTTP 422). Omitting it leaves the
+  field unset, so the column stays unchanged. OpenAPI drops that null
+  default and shows `period_end` as a non-nullable date-time. On
+  master, `PUT` with null `period_end` returned 200 and the value was
+  ignored. At `c3c8911` null reached the database and came back as 400
+  `constraint violation`. `PUT` can move `period_end`. Moving onto an
+  existing company, period, and type is 400.
 - `create_db_engine` in `app/core/database.py` runs
   `PRAGMA foreign_keys=ON` on each SQLite connection. The test client
   uses that function, so the pragma is not copied into `tests/conftest.py`.
@@ -65,8 +69,11 @@
   92.36%) on the rebased head `c3c8911`. The 80% gate passed.
   After the null `period_end` follow-up, the same command is
   823 passed in 15.55s, no warnings summary, TOTAL 92% (exact 92.41%).
-- Work-state next action, after this PR: bugs #18 and #21, then #24.
-  Bug #19 can be slotted in.
+  Reviewer follow-up on this branch: 825 passed in 15.31s, no warnings
+  summary, TOTAL 92% (exact 92.35%). `database.py` is fully covered,
+  including the non-SQLite branch of `create_db_engine`.
+- Work-state next action: bugs #18 and #21, then #24. Bug #19 can be
+  slotted in.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
   measured. Account usage was not available in this session; no
   percentage recorded.
