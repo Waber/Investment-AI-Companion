@@ -31,6 +31,8 @@ def test_only_http_and_https_become_links():
         "http:example.com",
         "https://example.com/a b",
         "https://example.com/\nnext",
+        "javascript://example.com/%0Aalert(1)",
+        "data://x/y",
     ]
     for value in blocked:
         assert http_website_href(value) is None
@@ -59,6 +61,20 @@ def test_only_http_and_https_become_links():
     assert padded.text == "https://example.com/demo"
     assert padded.href == "https://example.com/demo"
     assert padded.rel == EXTERNAL_LINK_REL
+
+
+def test_website_rejects_format_characters_and_del():
+    blocked = (
+        "https://example.com/\u202ehidden",
+        "https://example.com/\u200bhidden",
+        "https://example.com/\x7fhidden",
+    )
+    for value in blocked:
+        assert http_website_href(value) is None
+        view = website_view(value)
+        assert view.href is None
+        assert view.rel is None
+        assert view.text == value
 
 
 def test_company_row_becomes_an_instrument_view():

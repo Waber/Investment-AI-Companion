@@ -41,6 +41,7 @@ def _with_ui_headers(response):
     response.headers["Referrer-Policy"] = "no-referrer"
     # A fragment and a full page share the URL. Caches must not mix them.
     response.headers["Vary"] = "HX-Request"
+    response.headers["Cache-Control"] = "no-store"
     return response
 
 
@@ -109,11 +110,18 @@ def _instrument_id(value):
 
     ``str.isdigit`` is also true for Unicode digits. Superscript
     ``²`` then makes ``int`` raise, and Arabic-Indic ``١`` becomes
-    ``1``. Only an ASCII digit string whose value fits a signed
-    64-bit integer is an id. Anything else is the HTML 404. The
-    JSON API is unchanged.
+    ``1``. ``int`` also raises ``ValueError`` once an ASCII digit
+    string is longer than about 4300 characters, which became a
+    plain-text 500. A signed 64-bit value has at most 19 digits,
+    so anything longer is rejected before ``int``.
+
+    ``01`` and ``007`` are the same rows as ``1`` and ``7``. A
+    leading zero is not a second URL for that row. The single
+    character ``0`` is a normal id. The JSON API is unchanged.
     """
-    if not value.isascii() or not value.isdigit():
+    if not value.isascii() or not value.isdigit() or len(value) > 19:
+        return None
+    if len(value) > 1 and value.startswith("0"):
         return None
     parsed = int(value)
     if parsed > _MAX_INSTRUMENT_ID:

@@ -108,6 +108,8 @@ async def test_pages_render_in_polish_by_default(seeded):
     assert script_at != -1
     assert config_at != -1
     assert "includeIndicatorStyles" in page.text
+    assert '"allowEval":false' in page.text
+    assert '"allowScriptTags":false' in page.text
     assert config_at < script_at
     assert 'href="/static/ui.css"' in page.text
     assert_no_dangerous_href(page.text)
@@ -195,6 +197,7 @@ def _assert_ui_headers(response):
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["vary"] == "HX-Request"
+    assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.asyncio
@@ -244,6 +247,7 @@ async def test_instrument_id_rejects_unicode_digits_and_overflow(seeded):
         "/ui/instruments/\u00b2",
         "/ui/instruments/\u0661",
         "/ui/instruments/" + ("1" * 23),
+        "/ui/instruments/" + ("1" * 5000),
         "/ui/instruments/" + str(2**63),
     )
     for path in rejected:
@@ -257,6 +261,30 @@ async def test_instrument_id_rejects_unicode_digits_and_overflow(seeded):
     at_limit = await seeded.get("/ui/instruments/" + str(2**63 - 1))
     assert at_limit.status_code == 404
     assert "Nie znaleziono instrumentu" in at_limit.text
+
+
+@pytest.mark.asyncio
+async def test_leading_zero_is_not_a_second_url(seeded):
+    listing = await seeded.get("/ui")
+    href = _href_for(listing.text, "DEMO_PL_TECH")
+    real = await seeded.get(href)
+    assert real.status_code == 200
+    assert "DEMO_PL_TECH" in real.text
+    padded = await seeded.get("/ui/instruments/0" + href.rsplit("/", 1)[-1])
+    assert padded.status_code == 404
+    assert "DEMO_PL_TECH" not in padded.text
+
+    created = _add_company(seeded, name="Padded Seven", ticker="PAD7")
+    assert created == 7
+    plain = await seeded.get("/ui/instruments/7")
+    assert plain.status_code == 200
+    assert "PAD7" in plain.text
+    zero = await seeded.get("/ui/instruments/007")
+    assert zero.status_code == 404
+    assert "PAD7" not in zero.text
+    lone = await seeded.get("/ui/instruments/0")
+    assert lone.status_code == 404
+    assert "Nie znaleziono instrumentu" in lone.text
 
 
 @pytest.mark.asyncio

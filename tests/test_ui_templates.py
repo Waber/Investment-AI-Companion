@@ -37,7 +37,8 @@ def test_htmx_config_disables_the_indicator_style():
     text = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
     marker = (
         '<meta name="htmx-config" content='
-        "'{\"includeIndicatorStyles\":false}'>"
+        '\'{"includeIndicatorStyles":false,'
+        '"allowEval":false,"allowScriptTags":false}\'>'
     )
     script = '<script src="/static/vendor/htmx-2.0.10.min.js">'
     assert marker in text

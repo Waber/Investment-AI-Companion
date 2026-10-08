@@ -8,6 +8,7 @@ a description that starts with the demo-v1 marker is synthetic.
 """
 
 import math
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -105,10 +106,13 @@ def http_website_href(value):
 
     1. ``None`` and whitespace-only values are not links.
     2. Surrounding whitespace is removed before the scheme is read.
-    3. A value that still contains whitespace or a control character
-       is not a link.
+    3. A value that still contains whitespace, a control character
+       (including DEL), or a Unicode format character (category
+       ``Cf``, such as U+202E or U+200B) is not a link.
     4. The scheme is compared case-insensitively. Only ``http`` and
        ``https`` pass, and only when a host is present.
+       ``javascript://example.com/...`` has a host and is still
+       rejected here.
 
     The returned string is the stripped URL. The template does not
     inspect the scheme.
@@ -118,7 +122,7 @@ def http_website_href(value):
     text = str(value).strip()
     if not text:
         return None
-    if any(character.isspace() or ord(character) < 32 for character in text):
+    if any(_blocks_website_link(character) for character in text):
         return None
     parts = urlsplit(text)
     if parts.scheme.casefold() not in _LINK_SCHEMES:
@@ -126,6 +130,19 @@ def http_website_href(value):
     if not parts.netloc:
         return None
     return text
+
+
+def _blocks_website_link(character):
+    """True when this character must not appear inside an href.
+
+    Format characters can reorder or hide the rest of the URL.
+    DEL is a control character whose code point is 127, so a
+    check for ``ord < 32`` does not see it.
+    """
+    code = ord(character)
+    if character.isspace() or code < 32 or code == 127:
+        return True
+    return unicodedata.category(character) == "Cf"
 
 
 def website_view(value):
