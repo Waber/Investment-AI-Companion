@@ -1,6 +1,6 @@
 # Investment AI Companion: Product Requirements (Draft)
 
-- Status: draft v0.2, 2026-10-08. Prepared from the repository state at master `b2541d7` and Raul's decisions of 2026-10-08 (two rounds). v0.2 adds: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo.
+- Status: draft v0.3, 2026-10-08. Prepared from the repository state at master `b2541d7` and Raul's decisions of 2026-10-08 (three rounds). v0.2 added: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo. **v0.3 adds the post-demo direction (section 12):** server deployment for the owner only, login, private portfolio holdings, and a scheduled market scanner with buy/sell/opportunity signals and notifications. "No authentication/hosting" and "the score is never a buy/sell signal" now apply to the **demo phase only**; the demo itself is unchanged (local, loopback, no auth, no signals).
 - Owner: Raul (product decisions). Prepared by the Project Manager agent for the Developer, QA Engineer and Code Reviewer.
 - Related docs: `AGENTS.md`, `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`, `docs/demo-data.md`, `docs/work-state.md`.
 - Research inputs (Researcher, 2026-10-08; land in the repo via PR under `docs/research/`): `docs/research/market-data-sources.md` (market-data sources) and `docs/research/llm-comparison.md` (LLM providers).
@@ -8,7 +8,7 @@
 
 ## 1. Purpose and vision
 
-Investment AI Companion is Raul's personal, local investment research tool. It helps him:
+Investment AI Companion is Raul's personal investment research tool. In the demo phase it runs locally; after the demo it is meant to run on a server for Raul alone (section 12). It helps him:
 - understand and compare listed stocks, ETFs and ETCs;
 - see a transparent, explainable score per instrument;
 - track a watchlist;
@@ -17,12 +17,12 @@ Investment AI Companion is Raul's personal, local investment research tool. It h
 
 It is also a project for learning Python, so code and docs must stay readable for a developer who is still learning (see `AGENTS.md`).
 
-The tool supports research and decision hygiene. It never gives financial advice or buy/sell instructions. Every analysis and every score shows its sources, how fresh the data is, its assumptions and its uncertainty.
+The tool supports research and decision hygiene. **In the demo phase** it never gives buy/sell instructions. After the demo, Raul wants personal buy/sell/"interesting company" signals (section 12); they are **personal decision support, not financial advice**. In both phases, **transparency is a principle**: every analysis, score and signal shows its sources, how fresh the data is, its assumptions, its risks and its uncertainty.
 
 ## 2. User and context
 
 - **Primary user:** Raul. The tool runs locally on his machine. Other people may look at the app on his machine (hence the English option), but there are no accounts, roles or remote users.
-- **No authentication, no hosting.** The HTTP server binds to `127.0.0.1` only. A public or tunnelled exposure is out of scope and must stay off.
+- **No authentication, no hosting (demo phase only).** In the demo phase the HTTP server binds to `127.0.0.1` only, and a public or tunnelled exposure must stay off. After the demo the app runs on a server for the owner only, behind login and HTTPS (section 12; #48, #56).
 - **Language [Decided]:** the UI has a **PL/EN language switch, Polish by default**. AI analyses are generated in Polish by default and follow the selected UI language when EN is chosen. Code, identifiers and technical documentation stay in English, as the repo convention requires.
 - **Technical context:** the existing FastAPI, SQLAlchemy and Pydantic backend; Python 3.12; the SQLite test suite with CI on GitHub Actions.
 - **Databases [Decided]:** **PostgreSQL is the personal database** (notes, theses, watchlist, real data). **SQLite is used for tests and the disposable demo only.**
@@ -36,16 +36,17 @@ The tool supports research and decision hygiene. It never gives financial advice
 4. Real market data via **yfinance** (primary) behind a collector interface, plus an offline fake for demo and tests.
 5. Personal notes and investment theses attached to instruments.
 6. A server-rendered web UI **[Decided]**: Jinja2 + HTMX inside FastAPI under `/ui`, pure Python, with a PL/EN switch.
-7. **A transparent, explainable score per instrument [Decided]** (US6): visible components, weights and data freshness; configurable weights; never a buy/sell signal.
+7. **A transparent, explainable score per instrument [Decided]** (US6): visible components, weights and data freshness; configurable weights; in the demo phase never labelled as a buy/sell signal (post-demo signals are a separate feature built on the score, section 12).
 8. An offline demo mode with synthetic data and mocked AI.
 
 **Out of scope**
 - Bonds, derivatives (futures, options, CFDs), crypto, mutual funds outside ETFs.
-- Trading, broker integration, holdings and allocations, portfolio performance tracking.
-- Buy/sell/hold signals, recommendations, target prices or "best pick" rankings.
-- Multiple users, authentication, hosting, mobile apps.
+- Trading, order execution and broker API integration.
+- Holdings and allocations, portfolio performance tracking: **demo phase only**; post-demo portfolio holdings are planned (section 12, #57).
+- Buy/sell/hold signals, recommendations, target prices or "best pick" rankings: **demo phase only**; post-demo scanner signals are planned (section 12, #58).
+- Multiple users and mobile apps. Authentication and hosting: **demo phase only** (section 12, #48, #56).
 - Paid AI calls in the demo or in automated tests.
-- Redis, Elasticsearch, news and social-media scraping, schedulers. These are listed as "planned" in `.env.example` and `CONVERSATION.md` but are not part of this product scope.
+- Redis, Elasticsearch, news and social-media scraping. These are listed as "planned" in `.env.example` and `CONVERSATION.md` but are not part of this product scope. Schedulers: demo phase only (the post-demo market scanner needs one, section 12).
 
 **Deferred or optional**
 - **Investor profiles** (issue #12, plan Task 4). Deferred: not a core use case. Bring them back only if they turn out to be needed to tailor AI analysis.
@@ -115,7 +116,7 @@ The tool supports research and decision hygiene. It never gives financial advice
   - [ ] Components use criteria that fit the instrument type (stock vs ETF/ETC); the default component set per type is **[Open]** (section 10, Q4).
   - [ ] Missing or stale inputs are visible: a missing component is shown as "brak danych" / "no data" and excluded, the remaining weights are renormalized **[Proposal]**, and the score shows a coverage indicator (e.g. "4 of 6 components") and the oldest input date.
   - [ ] Weights are configurable (a settings page or config file **[Proposal]**). Changing weights recomputes scores and the page shows which weight set and score version were used.
-  - [ ] The score is never labelled or styled as a buy/sell/hold signal or recommendation (no "kupuj"/"buy", no traffic-light advice), and the disclaimer is shown next to it in both languages.
+  - [ ] **Demo phase:** the score is never labelled or styled as a buy/sell/hold signal or recommendation (no "kupuj"/"buy", no traffic-light advice), and the disclaimer is shown next to it in both languages. Post-demo signals (section 12) are shown separately from the score, each with its own rationale; the score's transparency requirements above stay unchanged.
   - [ ] The score appears on the detail page and in the comparison view; scores of different instrument types are not presented as directly comparable.
   - [ ] Unit tests pin the formula for fixture inputs, including missing data and custom weights.
 
@@ -135,8 +136,11 @@ The model generalizes from `companies` to `instruments`. Today's `companies` and
 | `ScoreWeights` / `InstrumentScore` | Weight set per instrument type (version, weights per component); computed score with per-component breakdown, inputs' "as of" dates, weight-set version and computed time. Persisting computed scores vs computing on request is **[Proposal: compute on request in v1]**. |
 | `Analysis` | Instrument, language, input snapshot, report content, provider and model metadata, prompt version, created date. No profile link. |
 | UI language | Stored client-side (cookie) in v1; no user table. |
+| `Portfolio`, `Holding` (post-demo) | Owner, portfolio name, base currency; holding = instrument, quantity, cost and currency, dates (or derived from transactions). **Not built in the demo** (section 12, #57). |
+| `Signal` (post-demo) | Instrument, type (buy candidate / sell or review / interesting company), triggering rules, inputs with sources and as-of dates, score version, rationale, risks, status. **Not built in the demo** (section 12, #58). |
 
 Other model points:
+- **Design constraint for the demo phase [Decided 2026-10-08]:** models must allow a future `owner_id`/`user_id` and a portfolio table to be added **without a rewrite**. Instruments, prices and metrics stay global reference data; user-owned data (watchlist, notes, theses, analyses, score weights, later portfolios and signals) must be able to gain an `owner_id` column via a migration, so keys and unique constraints must not assume a single user forever (e.g. watchlist uniqueness can become `(owner_id, instrument_id)`). **No auth code, user table or owner column in the demo.**
 - **Fixture:** a new `demo-v2.json` adds synthetic ETFs and ETCs, price history, and enough data for every score component (including one deliberately incomplete instrument). The v1 companies are kept or migrated.
 - **Migrations [Decided]:** PostgreSQL is the personal database, so #8–#10 stay on the main path, right after the demo. The first Alembic migration (#8) captures the **new instrument schema** (instruments, prices, watchlist, notes/theses, analyses, score weights), so the schema isn't migrated twice. The existing local PostgreSQL demo databases are disposable.
 - **Timestamps** must come back timezone-aware (UTC) on both SQLite and PostgreSQL. Fixing this on SQLite is slice D1 (overlaps QA bug #20 for `period_end`).
@@ -157,8 +161,8 @@ Other model points:
 - **Output schema** (text in the requested language, English field names): summary, observations (each with evidence IDs), risks, scenarios `base`/`upside`/`downside`, assumptions, thesis-breakers, open questions, uncertainty, freshness warnings.
 - **Validation:** the schema must match, all citations must resolve to known evidence IDs, and malformed output fails visibly.
 - **Saving:** only validated reports are saved, together with the input snapshot, language, provider, model, prompt or contract version and creation time.
-- **Guardrails** (from `AGENTS.md`): not financial advice, scenarios instead of buy/sell, freshness shown, nothing inferred about holdings or risk profile, and evidence and notes treated as untrusted input that cannot override the rules.
-- **Cost control:** a configurable timeout and output limit. The request is made only on explicit user action, never in bulk or on a schedule.
+- **Guardrails** (from `AGENTS.md`): not financial advice, scenarios instead of buy/sell (demo phase; post-demo signal rationales follow section 12), freshness shown, nothing inferred about holdings or risk profile unless Raul explicitly includes them, and evidence and notes treated as untrusted input that cannot override the rules.
+- **Cost control:** a configurable timeout and output limit. In the demo phase the request is made only on explicit user action, never in bulk or on a schedule. Post-demo, scanner-triggered AI rationales are allowed within a configured cost cap (section 12).
 
 ## 7. Data source requirements
 
@@ -177,7 +181,7 @@ Decision based on `docs/research/market-data-sources.md` (tested on 2026-10-08).
 
 ## 8. Non-functional requirements
 
-- **Local and private:** loopback only; no telemetry; all data stays local. A third party receives data only when Raul explicitly triggers a real AI analysis or a data refresh.
+- **Local and private (demo phase):** loopback only; no telemetry; all data stays local. A third party receives data only when Raul explicitly triggers a real AI analysis or a data refresh. **Post-demo:** server deployment for the owner only, behind login and HTTPS; still no telemetry; scheduled scans and notifications send only what section 12 allows (section 12, #48, #56).
 - **Secrets:** API keys (e.g. `GEMINI_API_KEY`) live only in a git-ignored `.env`, never in the repo, fixtures, logs or tests. GitHub secret scanning and push protection are already on. The personal default `DATABASE_URL` in `app/core/config.py` should be replaced with a neutral placeholder.
 - **Data durability:** the personal PostgreSQL database (notes, theses, watchlist) is separate from the disposable SQLite demo database, schema changes go through Alembic migrations (#8–#10), and backup and export steps (`pg_dump`) are documented.
 - **Offline demo:** no network access at all. HTMX, CSS and chart assets are bundled locally, not loaded from a CDN, and AI and data are faked.
@@ -229,6 +233,14 @@ Still open:
 12. **`DEBUG` default:** currently `True`, which exposes `/test-config`; default to `False`? **[Proposal]** yes. (from QA)
 13. **Legacy `init_db` sample data:** repeats net income and appears to swap ROE/ROA; fix or drop it? **[Proposal]** drop in favour of the demo fixture. (from QA)
 
+Added in v0.3 (post-demo direction, section 12):
+
+14. **Hosting target and budget:** VPS, home server or cloud platform? Monthly budget? Public internet with login, or private network (VPN/Tailscale) plus login? (#56)
+15. **Notification channel:** email, Telegram or other (Signal, push)? (#58)
+16. **Signal frequency:** daily after market close, several times a day, or a weekly digest? (#58)
+17. **Holdings import:** which brokers, and how: manual entry, a generic CSV, or broker-specific CSV exports? (#57)
+18. **2FA:** required (TOTP with recovery codes), optional, or not needed? (#48)
+
 ## 11. Phased roadmap
 
 Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #15). In review: PR #22 coverage above 80% with a CI gate. Open QA bugs #16–#21 are fixed alongside the slices they touch (#20 with D1; #16/#17 before or with I1; #18/#21 before or with D3).
@@ -242,8 +254,9 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 | **P4 AI (mocked)** | **A1** provider interface, deterministic PL/EN mock, report schema, citation validation, saving (Dev). **A2** analysis UI and history, language follows the UI (Dev). | #12 deferred; no profile dependency |
 | **P5 Demo acceptance** | **D7** demo checklist plus CI demo job (QA). **D8** UI and security review, including disclaimer and score wording (Code Reviewer). **D9** README "Run the demo" and refreshed work-state (Dev). | PR #22 coverage gate |
 | **P6 Persistence and real data (after the demo)** | **#8** first Alembic migration capturing the instrument schema → **#9** opt-in PostgreSQL harness (QA) → **#10** switch to migrations. **R1** yfinance adapter with cache, throttling and the ISIN-keyed type mapping (Dev). The `yfinance>=1.7` pin itself moved with #11's security/deps part. **R2** Gemini adapter via `google-genai` plus the 20–30 analysis bake-off incl. Polish quality (Dev, QA). | `google-genai` still waits for R2. `jinja2` and `python-multipart` wait for D4/D5. #21 with R1 |
+| **P7 Server, login, portfolio, signals (after P6) [Decided direction 2026-10-08]** | **#56** server deployment: hosting, HTTPS, secrets, encrypted backups (Dev, Security Engineer). **#48** authentication: login, sessions, rate limiting, 2FA [Open] (Dev, Security Engineer). **#57** portfolio holdings: model, manual/CSV import, privacy (Dev). **#58** market scanner with buy/sell/opportunity signals and notifications (Dev, Code Reviewer). | #45, #52 security baseline |
 
-**Issue map (Demo v1, label `demo`):** D1 #23, D3 #24, D2 #25, I1 #26, I2 #27, I3 #28, D4 #29, D6 #30, C1 #31, W1 #32, N1 #33, D5 #34, S1 #35, A1 #36, A2 #37, D7 #38, D8 #39, D9 #40. R1 and R2 (post-demo) have no issues yet.
+**Issue map (Demo v1, label `demo`):** D1 #23, D3 #24, D2 #25, I1 #26, I2 #27, I3 #28, D4 #29, D6 #30, C1 #31, W1 #32, N1 #33, D5 #34, S1 #35, A1 #36, A2 #37, D7 #38, D8 #39, D9 #40. Post-demo: R1 #54, R2 #55; P7 (label `deferred`): #48 authentication, #56 server deployment, #57 portfolio holdings, #58 market scanner and signals.
 
 **Dependencies:**
 - #20 ↔ D1 (same root cause on SQLite); D1 and D3 → D2.
@@ -252,4 +265,43 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 - I1–I3, D4, D6, C1 → S1 → A1 → A2 (A1 hard-depends on I2; N1 is optional for A1, notes context is added once N1 is available).
 - All of P1–P4 → D7 and D8 → D9.
 - On 2026-10-08 the Project Manager moved #11's security/deps part ahead of the demo after the Security Engineer's review found CVEs. That part is the FastAPI and Starlette CVE upgrade, the `requests` and `python-dotenv` floors, removal of unused pins, the runtime/dev split, and the hashed lock. It is scheduled before the demo. After it: #45 and #47 together, with #50 if that fix stays small, then the remaining demo slices. Demo done → #8 → #9 → #10. `google-genai` stays with R2. `jinja2` and `python-multipart` stay with D4/D5.
+- P7: #45 → #48 → #56 (no internet exposure before auth); #48 and I1 → #57; R1 (#54), R2 (#55) and S1 (#35) → #58 (optional input from #57).
 - #12 stays deferred unless analysis tailoring needs it.
+
+## 12. Post-demo direction (2026-10-08)
+
+Raul, 2026-10-08 (translated from Polish): *"Maybe not in the demo, but later we should add some login option. By default the app should run on a server and analyze the current market situation, so it gives signals when it's worth buying or selling, or when a good company turns up. Login will be needed because I don't want anyone breaking into the app, and also because it will hold information about my current stock portfolios, which is fairly private data."*
+
+**The demo is unchanged:** local, bound to `127.0.0.1`, no auth, no holdings, no signals, offline. Everything below starts after Demo v1 (and after P6). Issues carry the `deferred` label until then.
+
+### 12.1 Server deployment [Decided direction; details Open] (#56)
+- The app runs on a server by default, **still single-user: the owner (Raul) only**. No public sign-up, no other accounts.
+- HTTPS only (reverse proxy or private network); the app stays behind the proxy; `DEBUG` off; trusted hosts set (#45).
+- Secrets (AI key, DB password, session secret, notification tokens) live outside the repo and images; never logged.
+- PostgreSQL on the server, not publicly reachable; scheduled **encrypted backups** with a tested restore.
+- **No internet exposure before authentication (#48) is in place.**
+
+### 12.2 Authentication [Decided direction; 2FA Open] (#48)
+- Login for the single owner account (password hashed with Argon2id or bcrypt; account created by a CLI command).
+- Secure sessions (`Secure`, `HttpOnly`, `SameSite` cookies, timeouts, logout), CSRF protection on forms.
+- Rate limiting and lockout on login; failed attempts logged without secrets.
+- **Ideally 2FA** (TOTP with recovery codes) [Open, Q18].
+- All pages and API routes require auth except a minimal health check.
+
+### 12.3 Portfolio holdings as private data [Decided direction; import Open] (#57)
+- Raul's current portfolios and holdings are stored in the app and treated as **private data**: owner-scoped, only visible when logged in, never in logs, error pages or AI prompts unless Raul explicitly includes them on a request.
+- Import by manual entry and/or CSV [Open, Q17]; no broker API integration or order execution.
+- **Encryption at rest** (volume and/or column level) and inclusion in encrypted backups are considered and decided in #56/#57.
+
+### 12.4 Market scanner and signals [Decided direction; rules Open] (#58)
+- A **scheduled market scanner** runs on the server [frequency Open, Q16] over the watchlist, holdings and a configurable universe, within data-provider limits (R1 cache and throttling).
+- It produces **buy candidate**, **sell / review** and **interesting company** signals.
+- Every signal is **explainable**: triggering rules, input values with sources and as-of dates, score breakdown and version, a rationale, **risks** and what would invalidate it, plus a coverage/confidence indicator. Signals are deterministic first; an optional AI rationale (R2) follows the section 6 validation and citation rules and is never the sole basis of a signal.
+- **Notifications** via a channel to be chosen [Open, Q15], with dedup/cooldown; no portfolio amounts in notifications unless Raul opts in.
+- **Signals are personal decision support for Raul, not investment advice.** Every signal view and notification says so (PL/EN). No automated trading.
+- The **score transparency principle (US6) stays**: the score remains a transparent, explainable, configurable score; signals are a separate layer built on it and on other rules.
+
+### 12.5 What this changes in earlier sections
+- Sections 1, 2, 3, 6 and 8: "no authentication/hosting", "no holdings", "no schedulers" and "never a buy/sell signal" now apply to the **demo phase only**.
+- Section 5: new post-demo entities (`Portfolio`, `Holding`, `Signal`) and the demo-phase design constraint (future `owner_id`, no auth code in the demo).
+- Section 10: new open questions 14–18. Section 11: new phase P7.

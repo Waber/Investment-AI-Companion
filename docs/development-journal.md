@@ -1,5 +1,30 @@
 # Development Journal
 
+## 2026-10-08 - Product requirements v0.3 and hosting research
+
+- Scope: documentation only, on a branch from `origin/master` `d568663`.
+  `docs/product-requirements.md` is the Project Manager's v0.3 source,
+  applied with the PM's v0.2-to-v0.3 diff on top of master.
+  `docs/research/hosting-options.md` is the Researcher's hosting note,
+  verbatim. No `.py` files, workflows, or config files were edited.
+  `docs/work-state.md` is unchanged. The live next action stays #45
+  and #47 together.
+- Decision: "No authentication, no hosting" and "the score is never a
+  buy/sell signal" apply to the demo phase only. Section 12 is the
+  PM's post-demo direction (server for the owner, login, private
+  holdings, scheduled scanner with signals and notifications).
+  Refs #48, #56, #57 and #58. This does not close them.
+- Merge with PR #51: two hunks did not apply on the #51 roadmap text.
+  The P6 row and the dependency bullet that starts "On 2026-10-08 the
+  Project Manager moved #11's security/deps part" stay exactly as on
+  master, including the note that the `yfinance>=1.7` pin moved with
+  that security/deps part. The P7 row, the issue map (#48, #54–#58),
+  the P7 dependency line, and section 12 are the PM's wording.
+- There is no `docs/research/README`. The hosting note has no relative
+  links to rewrite.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - Security dependencies, hashed locks, and Actions SHAs (#11, #46)
 
 - Scope: the security/deps part of #11, on a branch from
