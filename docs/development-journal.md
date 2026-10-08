@@ -68,8 +68,9 @@
   whitespace-only, CR/LF, and other control characters. Control
   characters are rejected before strip, so `"AAPL\n"` is not
   turned into `AAPL`. `None` still means "field omitted" on
-  update. Currency is stripped and uppercased before the
-  3-character check, so `usd` is stored as `USD`.
+  update. Currency keeps the letters it was sent with. Yahoo's
+  `GBp` means pence, and rewriting it to `GBP` would treat the
+  amount as pounds.
 - Decision, provider errors: in `fetch_company_data`, pydantic
   `ValidationError` is caught before `ValueError` (it is a
   subclass) and returned as HTTP 502 with the fixed detail
@@ -185,8 +186,9 @@ branch was not rebased.
   single-quoted `$TMPDIR` or `~/`. There were no others. 948
   passed, exact 92.46%.
 - QA, currency, `7bb9ee0`: `GBp` is stored and read back unchanged.
-  Currency is three letters, and the case is not rewritten. 949
-  passed, exact 92.49%.
+  Currency is three letters, and the case is not rewritten.
+  Yahoo's `GBp` means pence, and rewriting it to `GBP` would
+  treat the amount as pounds. 949 passed, exact 92.49%.
 - QA, read model, `88f3250`: ticker, length, and ASCII checks apply
   to create and update only. `GET /companies/` returns 200 when a
   row inserted past the model has a blank ticker. 950 passed,
