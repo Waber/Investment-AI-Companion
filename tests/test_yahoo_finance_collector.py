@@ -125,7 +125,7 @@ def test_company_info_returns_none_and_logs_on_provider_error(
     with caplog.at_level(logging.ERROR, logger=yahoo_finance.__name__):
         assert collector.fetch_company_info("FAIL") is None
 
-    assert "Error fetching company info for FAIL" in caplog.text
+    assert "Error fetching company info for 'FAIL'" in caplog.text
 
 
 def test_historical_data_passes_period_and_interval(install_ticker, collector):

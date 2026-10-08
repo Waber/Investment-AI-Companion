@@ -9,11 +9,18 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
+from app.models.company import TICKER_PATTERN, normalize_ticker
 from app.repositories.company_repository import CompanyRepository
 
 logger = logging.getLogger(__name__)
@@ -28,10 +35,36 @@ def get_yahoo_finance_collector() -> YahooFinanceCollector:
 class FetchCompanyRequest(BaseModel):
     """Request model for fetching company data."""
 
-    ticker: str
+    ticker: str = Field(..., pattern=TICKER_PATTERN)
 
     model_config = ConfigDict(
         json_schema_extra={"example": {"ticker": "AAPL"}}
+    )
+
+    @field_validator("ticker", mode="before")
+    @classmethod
+    def _normalize_ticker(cls, value: object) -> object:
+        return normalize_ticker(value)
+
+
+def _log_provider_validation(ticker: str, exc: ValidationError) -> None:
+    """Log which fields failed, not the provider's raw values.
+
+    ``ValidationError`` text includes the input. That text must stay
+    out of the HTTP body and out of this log line.
+    """
+    fields = []
+    kinds = []
+    for err in exc.errors():
+        location = err.get("loc") or ()
+        fields.append(".".join(str(part) for part in location))
+        kinds.append(str(err.get("type", "value_error")))
+    logger.error(
+        "Provider returned invalid company data for ticker %r "
+        "fields=%r types=%r",
+        ticker,
+        fields,
+        kinds,
     )
 
 
@@ -75,7 +108,7 @@ def fetch_company_data(
     # when the failure is the first line of the body.
     ticker = request.ticker.upper()
     try:
-        logger.info(f"Fetching company data for ticker: {ticker}")
+        logger.info("Fetching company data for ticker: %r", ticker)
 
         # Initialize repository
         company_repo = CompanyRepository(db)
@@ -97,7 +130,7 @@ def fetch_company_data(
 
         if existing_company:
             # Update existing company
-            logger.info(f"Updating existing company with ticker: {ticker}")
+            logger.info("Updating existing company with ticker: %r", ticker)
             from app.models.company import CompanyUpdate
 
             # Prepare update data using CompanyUpdate model
@@ -118,6 +151,7 @@ def fetch_company_data(
             )
 
             if not updated_company:
+                logger.error("Failed to update company for ticker %r", ticker)
                 raise HTTPException(
                     status_code=500, detail="Failed to update company"
                 )
@@ -133,7 +167,7 @@ def fetch_company_data(
 
         else:
             # Create new company
-            logger.info(f"Creating new company with ticker: {ticker}")
+            logger.info("Creating new company with ticker: %r", ticker)
             from app.models.company import CompanyCreate
 
             company_create = CompanyCreate(
@@ -160,6 +194,15 @@ def fetch_company_data(
 
     except HTTPException:
         raise
+    except ValidationError as exc:
+        # ValidationError subclasses ValueError. It has to be caught
+        # first, or a bad provider payload is returned as HTTP 400 with
+        # the provider's own text in the body.
+        _log_provider_validation(ticker, exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Provider returned invalid company data",
+        )
     except ValueError as e:
         # Handle uniqueness violations. The message is a fixed business
         # error, not a provider traceback, so it stays in the response.
@@ -167,7 +210,8 @@ def fetch_company_data(
     except Exception:
         # The client gets a fixed sentence. The traceback, including
         # anything the provider put in the exception, stays in the log.
-        logger.exception("Error fetching company data for ticker %s", ticker)
+        # %r keeps a newline in the ticker from starting a new log line.
+        logger.exception("Error fetching company data for ticker %r", ticker)
         raise HTTPException(
             status_code=500, detail="Error fetching company data"
         )

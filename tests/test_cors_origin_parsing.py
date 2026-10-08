@@ -12,7 +12,7 @@ def test_comma_separated_origins_are_split_and_trimmed():
         BACKEND_CORS_ORIGINS="http://localhost:3000, http://127.0.0.1:3000",
     )
 
-    assert [str(url) for url in settings.BACKEND_CORS_ORIGINS] == [
+    assert [str(url) for url in settings.cors_origins] == [
         "http://localhost:3000/",
         "http://127.0.0.1:3000/",
     ]
@@ -24,7 +24,7 @@ def test_list_origins_are_kept():
         BACKEND_CORS_ORIGINS=["http://localhost:3000"],
     )
 
-    assert [str(url) for url in settings.BACKEND_CORS_ORIGINS] == [
+    assert [str(url) for url in settings.cors_origins] == [
         "http://localhost:3000/"
     ]
 

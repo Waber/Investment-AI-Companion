@@ -66,7 +66,7 @@ async def test_raw_json_overflow_rejected_without_persistence(
     content = json.dumps(payload)[:-1] + ', "roe": ' + overflow + "}"
     async with AsyncClient(
         transport=ASGITransport(app=client.app, raise_app_exceptions=False),
-        base_url="http://testserver",
+        base_url="http://127.0.0.1",
     ) as request_client:
         response = await request_client.request(
             method,

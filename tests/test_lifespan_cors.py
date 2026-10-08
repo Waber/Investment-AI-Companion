@@ -17,7 +17,7 @@ async def lifespan_client(application):
     async with application.router.lifespan_context(application):
         async with AsyncClient(
             transport=ASGITransport(app=application),
-            base_url="http://testserver",
+            base_url="http://127.0.0.1",
         ) as client:
             yield client
 
@@ -96,7 +96,7 @@ async def test_cors_matches_only_configured_origins(
             "http://localhost:3000",
         ],
     )
-    assert [str(value) for value in configured.BACKEND_CORS_ORIGINS] == [
+    assert [str(value) for value in configured.cors_origins] == [
         "https://frontend.example/",
         "http://localhost:3000/",
     ]
@@ -133,7 +133,7 @@ async def test_cors_matches_only_configured_origins(
 async def test_empty_cors_list_grants_no_cross_origin_access(
     isolated_startup, method
 ):
-    assert main.settings.BACKEND_CORS_ORIGINS == []
+    assert main.settings.cors_origins == []
     headers = {
         "Origin": "https://frontend.example",
         "Access-Control-Request-Method": "GET",
