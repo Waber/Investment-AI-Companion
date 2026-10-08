@@ -272,6 +272,29 @@ async def test_huge_name_validation_body_stays_small(client):
 
 
 @pytest.mark.asyncio
+async def test_provider_description_over_the_cap_is_stored_truncated(client):
+    """Yahoo summaries can exceed the user cap. Fetch stores the first 5000."""
+    description = "d" * 6000
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: PayloadCollector(
+            {
+                "name": "Long Summary",
+                "currency": "USD",
+                "description": description,
+            }
+        )
+    )
+
+    response = await client.post(FETCH, json={"ticker": "LONG"})
+
+    assert response.status_code == 200
+    company_id = response.json()["company_id"]
+    stored = await client.get(f"/api/v1/companies/{company_id}")
+    assert stored.status_code == 200
+    assert stored.json()["description"] == "d" * 5000
+
+
+@pytest.mark.asyncio
 async def test_description_longer_than_5000_characters_is_422(client):
     response = await client.post(
         COMPANIES,

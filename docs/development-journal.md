@@ -191,8 +191,13 @@ branch was not rebased.
   to create and update only. `GET /companies/` returns 200 when a
   row inserted past the model has a blank ticker. 950 passed,
   exact 92.57%.
-- The pull request says `Refs #50` until Security signs off. It
-  still closes #45, #47, and #17. #60 is a separate PostgreSQL
+- Security and QA approved at `f1072cc`. The pull request now
+  says `Closes #50`. Follow-ups stay tracked separately. It still
+  closes #45, #47, and #17. fetch-company truncates a provider
+  description to the first 5000 characters, with no ellipsis, so
+  a long Yahoo summary is stored instead of returning HTTP 502.
+  User create and update still reject anything longer with HTTP
+  422. 951 passed, exact 92.63%. #60 is a separate PostgreSQL
   harness on the same base. Whichever lands second has to point
   its test client at `http://127.0.0.1`, stop hard-coding the old
   database URL default, clear the personal paths the git-grep
