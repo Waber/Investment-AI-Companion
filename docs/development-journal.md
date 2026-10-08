@@ -47,10 +47,16 @@
   -> 838 passed in 15.33s, no warnings summary, TOTAL 92% (exact
   92.70%). The 80% gate passed. `coverage report --precision=2`
   reports the same total. Black, isort, and flake8 (line length 79)
-  pass on the files this change touches. The pull request body cites
-  the GitHub Actions run for the head.
-- Work-state next action: #24 (collector interface + offline fake).
-  Bug #19 can be slotted in.
+  pass on the files this change touches. CI on `526990d`:
+  [run 37778103776](https://github.com/Waber/Investment-AI-Companion/actions/runs/37778103776),
+  838 passed in 23.14s, TOTAL 92% (exact 92.70%).
+- Work-state next action, after the security review: #11, the
+  security/deps part (FastAPI and Starlette CVE upgrade, `requests`,
+  `python-dotenv`, `black`, `pytest`, removing unused pins,
+  `yfinance>=1.7`, and a lock file with hashes). After it come #45
+  and #47 together (secure config defaults and neutral defaults, one
+  pull request), then #24, #19, #25 and #26 (with #16 and #17). #46
+  (pin Actions to SHAs) goes into any pull request that touches CI.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
   measured. Account usage was not available in this session; no
   percentage recorded.
