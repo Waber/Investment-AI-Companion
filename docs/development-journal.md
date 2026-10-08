@@ -9,12 +9,11 @@
   `docs/research/market-data-sources.md`, and
   `docs/research/llm-comparison.md`. No `.py` files, workflows, or config
   files were edited.
-- Decision: the attached text is copied as given. Nothing in those three
-  files was rewritten. There were no markdown links to repair, no
-  `/workspace` paths, and the cross-references
-  `research/market-data-sources.md` and `research/llm-comparison.md` are
-  already the relative paths from `docs/product-requirements.md` to
-  `docs/research/`.
+- Decision: the attached text is copied as given, except one line in
+  `docs/product-requirements.md`. That line is the only deviation from
+  the PM's copy. There were no `/workspace` paths. The research notes are
+  in the repo under `docs/research/`, with relative links from
+  `docs/product-requirements.md`.
 - Work-state next action is Demo v1 issue #23 together with bug #20
   first, then #24, then #25, then #26. That action does not wait on this
   docs change.
@@ -23,9 +22,10 @@
   -> 758 passed in 6.48s, no warnings summary. This machine provides
   `python3` (3.12.3); `python` on `PATH` was that interpreter. Dependencies
   came from `requirements.txt` and were not changed.
-- GitHub Actions Tests on `6c0112c` succeeded:
-  https://github.com/Waber/Investment-AI-Companion/actions/runs/37755950125
-  Job `pytest (Python 3.12, SQLite)` completed with conclusion success.
+- GitHub Actions Tests on `c9b5033` succeeded:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37756259080
+  That is an earlier run of this PR. Job `pytest (Python 3.12, SQLite)`
+  completed with conclusion success.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 - PR #22 (`cursor/coverage-threshold-80-c3a6`) is also open and edits this

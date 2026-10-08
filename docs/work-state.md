@@ -6,7 +6,9 @@
   `docs/product-requirements.md` (draft v0.2) plus
   `docs/research/market-data-sources.md` and
   `docs/research/llm-comparison.md`. No `.py`, workflow, or config edits.
-  The attached text was copied unchanged.
+  The attached text was copied as given, except one line in
+  `docs/product-requirements.md`. That line is the only deviation from
+  the PM's copy.
 - Completed: those three files are on this branch. Demo issue links to
   `docs/product-requirements.md` resolve here. The research notes are
   under `docs/research/`, which is the relative path the requirements
@@ -15,8 +17,9 @@
   are still open. Coverage PR #22 is still open.
 - Tests: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
   -> 758 passed in 6.48s, no warnings summary. GitHub Actions Tests on
-  `6c0112c` succeeded:
-  https://github.com/Waber/Investment-AI-Companion/actions/runs/37755950125
+  `c9b5033` succeeded:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37756259080
+  That is an earlier run of this PR.
 - Active agents: none.
 - Blockers: none for starting Demo v1. This branch and PR #22
   (`cursor/coverage-threshold-80-c3a6`) both edit this file and
