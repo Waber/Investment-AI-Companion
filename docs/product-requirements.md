@@ -21,7 +21,7 @@ The tool supports research and decision hygiene. **In the demo phase** it never 
 
 ## 2. User and context
 
-- **Primary user:** Raul. The tool runs locally on his machine. Other people may look at the app on his machine (hence the English option), but there are no accounts, roles or remote users.
+- **Primary user:** Raul. The tool runs locally on his machine. Other people may look at the app on his machine (hence the English option), but in the demo there are no accounts, roles or remote users.
 - **No authentication, no hosting (demo phase only).** In the demo phase the HTTP server binds to `127.0.0.1` only, and a public or tunnelled exposure must stay off. After the demo the app runs on a server for the owner only, behind login and HTTPS (section 12; #48, #56).
 - **Language [Decided]:** the UI has a **PL/EN language switch, Polish by default**. AI analyses are generated in Polish by default and follow the selected UI language when EN is chosen. Code, identifiers and technical documentation stay in English, as the repo convention requires.
 - **Technical context:** the existing FastAPI, SQLAlchemy and Pydantic backend; Python 3.12; the SQLite test suite with CI on GitHub Actions.
@@ -88,7 +88,7 @@ The tool supports research and decision hygiene. **In the demo phase** it never 
   - [ ] The analysis language equals the UI language at request time and is stored with the analysis.
   - [ ] Every factual observation cites at least one known evidence ID. An analysis with unknown citations is rejected and is not saved.
   - [ ] Freshness warnings appear for evidence older than 180 days (the existing spec) or dated in the future.
-  - [ ] There is no imperative buy/sell language, and the disclaimer is always visible.
+  - [ ] In the demo, there is no imperative buy/sell language, and the disclaimer is always visible.
 - **US3.2** As Raul, I want to see past analyses for an instrument, so that I can compare them over time.
   - [ ] Each saved analysis keeps an immutable snapshot of its inputs, plus the provider, model, prompt version, language and creation time.
 - **US3.3** In demo mode and in tests, the analysis comes from a deterministic mock (PL and EN). It is labelled clearly as a demo analysis and makes no network calls.
@@ -214,7 +214,7 @@ Decision based on `docs/research/market-data-sources.md` (tested on 2026-10-08).
 ## 10. Open questions
 
 Resolved in v0.2:
-- ~~4. Scoring in or out?~~ **Resolved: in scope** as a transparent, explainable, configurable score that is never a buy/sell signal (US6). Remaining detail moved to Q4 below.
+- ~~4. Scoring in or out?~~ **Resolved: in scope** as a transparent, explainable, configurable score that is never a buy/sell signal in the demo (US6). Remaining detail moved to Q4 below.
 - ~~7. UI technology?~~ **Resolved: Jinja2 + HTMX under `/ui`**, with a PL/EN switch (Polish default).
 - ~~8. Personal database?~~ **Resolved: PostgreSQL** for personal data; SQLite for tests and the demo. #8–#10 stay on the main path after the demo.
 
