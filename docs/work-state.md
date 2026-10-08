@@ -13,6 +13,9 @@
   `env_isolation`, and `PGPORT` in the denylist identity.
   [run 37840094330](https://github.com/Waber/Investment-AI-Companion/actions/runs/37840094330)
   was green on `4960a42` before this rebase.
+  [run 37841966780](https://github.com/Waber/Investment-AI-Companion/actions/runs/37841966780)
+  is green on `135bc59`. SQLite 846 passed, 116 deselected.
+  PostgreSQL 114 passed, 2 xfailed, 0 skipped.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
