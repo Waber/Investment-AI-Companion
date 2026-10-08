@@ -141,6 +141,18 @@ async def test_fetch_strips_and_uppercases_ticker(client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ticker", ["aapl\u2028", "\u00a0aapl", "ıbm"])
+async def test_non_ascii_ticker_is_rejected_on_create(client, ticker):
+    """strip/upper would turn these into AAPL or IBM. Reject them first."""
+    response = await client.post(
+        COMPANIES, json={"name": "Unicode", "ticker": ticker}
+    )
+
+    assert response.status_code == 422
+    assert _count(client) == 0
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", CONTROL_TICKERS)
 async def test_control_character_ticker_is_rejected_on_create(client, ticker):
     before = _count(client)

@@ -17,14 +17,19 @@ _TICKER_RE = re.compile(TICKER_PATTERN)
 def normalize_ticker(value: object) -> object:
     """Strip and uppercase a ticker. Reject blanks and control characters.
 
-    Control characters are rejected before ``strip`` so a trailing
-    newline is not removed and then stored as a normal symbol. ``None``
-    is left alone so an update can omit the field.
+    Non-ASCII and control characters are rejected before ``strip`` and
+    ``upper``. Those calls would hide a trailing newline, a line
+    separator, a no-break space, or a dotless i. ``None`` is left
+    alone so an update can omit the field.
     """
     if value is None:
         return None
     if not isinstance(value, str):
         return value
+    # Before strip/upper. Those calls turn a line separator, a
+    # no-break space, and a dotless i into a normal ASCII symbol.
+    if not value.isascii():
+        raise ValueError("ticker must be ASCII")
     if any(ord(char) < 32 or ord(char) == 127 for char in value):
         raise ValueError("ticker must not contain control characters")
     normalized = value.strip().upper()
