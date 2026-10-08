@@ -1,5 +1,33 @@
 # Development Journal
 
+## 2026-10-08 - Review notes on the coverage tests
+
+- Scope: one commit on `cursor/coverage-threshold-80-c3a6` on top of
+  `63822cd`. QA's two commits are unchanged. No production `.py` edits.
+  The 80% gate is unchanged. Code Reviewer approved the earlier head and
+  is waiting on Raul; this commit is not a merge.
+- `test_test_config_marks_missing_settings` only blanked four settings.
+  `Settings` fills any name it was not given from the process environment,
+  so `NEWS_API_KEY=x` made that optional mark present and the test failed.
+  The test now calls `monkeypatch.delenv` for every name the endpoint
+  reports and passes each of those fields (`None` or `""`). With
+  `NEWS_API_KEY=x` exported, the test passes.
+- `test_financial_statements_return_all_six_frames` now checks
+  `set(STATEMENT_ATTRIBUTES) <= set(statements)`. A new statement key
+  does not fail it. The entry below said an added key would fail; that
+  was true before this commit.
+- `debt_to_assets` is still not asserted. The comment now names GitHub
+  issue #21.
+- Each company-shaped pin listed in the entry below has the comment
+  `# company-shaped pin, see #26`. Issue #26 is the instrument model.
+- `datetime` imports in `tests/test_repository_edge_paths.py` are at the
+  top of the module. The stray parentheses around `200` are gone.
+- README: the copied command includes `--cov-fail-under=80`, so a subset
+  run with that flag fails the gate. The README shows the same command
+  without the flag.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+  Account usage was not available in this session; no percentage recorded.
+
 ## 2026-10-08 - Coverage gate at 80%
 
 - Scope: QA's two commits, applied with `git am` on

@@ -72,6 +72,7 @@ def collector():
     return YahooFinanceCollector()
 
 
+# company-shaped pin, see #26
 def test_company_info_maps_provider_fields(install_ticker, collector):
     created = install_ticker(
         info={
@@ -106,6 +107,7 @@ def test_company_info_maps_provider_fields(install_ticker, collector):
     assert info["logo_url"] is None
 
 
+# company-shaped pin, see #26
 def test_company_info_falls_back_to_short_name_and_usd(
     install_ticker, collector
 ):
@@ -160,6 +162,7 @@ def test_historical_data_returns_none_on_provider_error(
     assert collector.fetch_historical_data("FAIL") is None
 
 
+# company-shaped pin, see #26
 def test_financial_statements_return_all_six_frames(install_ticker, collector):
     frames = {
         attribute: pd.DataFrame({attribute: [1]})
@@ -169,7 +172,7 @@ def test_financial_statements_return_all_six_frames(install_ticker, collector):
 
     statements = collector.fetch_financial_statements("MSFT")
 
-    assert set(statements) == set(STATEMENT_ATTRIBUTES)
+    assert set(STATEMENT_ATTRIBUTES) <= set(statements)
     for key, attribute in STATEMENT_ATTRIBUTES.items():
         assert statements[key] is frames[attribute]
 
@@ -180,6 +183,7 @@ def test_financial_statements_return_none_on_provider_error(
     assert collector.fetch_financial_statements("FAIL") is None
 
 
+# company-shaped pin, see #26
 def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
     install_ticker(
         info={
@@ -214,7 +218,7 @@ def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
     metrics = collector.fetch_key_metrics("AAPL")
 
     # debt_to_assets is deliberately not asserted here: its mapping is a
-    # known defect handed to the Developer (see the bug list).
+    # known defect (GitHub issue #21).
     expected = {
         "pe_ratio": 30.1,
         "forward_pe": 27.5,

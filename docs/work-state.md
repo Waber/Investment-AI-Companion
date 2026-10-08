@@ -5,7 +5,9 @@
 - Branch `cursor/coverage-threshold-80-c3a6`, based on `origin/master`
   `b2541d7` (PR #15, tooling config, rebase-merged). QA's two commits are
   applied with `git am` and keep their author. No production `.py` edits.
-  No test was changed after review.
+  A later commit on this branch adjusts tests and the README only.
+  QA's commits are not rewritten. The 80% gate is unchanged. Code
+  Reviewer approved `63822cd` and is waiting on Raul.
 - `--cov-fail-under=80` is enforced in `.github/workflows/tests.yml` and
   the README test command. The gate reads TOTAL for `app`, `main`, and
   `scripts`, statements plus branches. JUnit XML and the `MIN_TESTS` gate
@@ -22,6 +24,10 @@
 - Reviewer nits from PRs #14 and #15 are a separate branch off master,
   not this one. Whichever of the two pull requests merges second needs a
   rebase of this file and the journal.
+- Review follow-up: missing test-config settings are isolated from the
+  shell, statement keys are a subset, and company-shaped pins are marked
+  `see #26`. `NEWS_API_KEY=x` no longer fails
+  `test_test_config_marks_missing_settings`.
 - Next after this PR: guarded Alembic baseline and isolated PostgreSQL
   tests (issues #8, #9, and #10).
 - Account usage was not available in this session. Stop reason: coverage

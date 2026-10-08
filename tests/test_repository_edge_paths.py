@@ -1,5 +1,7 @@
 """Repository paths the HTTP API cannot reach on its own."""
 
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
@@ -59,6 +61,7 @@ def company(session):
     return row
 
 
+# company-shaped pin, see #26
 def test_company_create_maps_named_constraint_to_value_error(
     monkeypatch, session
 ):
@@ -85,6 +88,7 @@ def test_company_create_reraises_other_integrity_errors(monkeypatch, session):
     assert rollbacks == [True]
 
 
+# company-shaped pin, see #26
 def test_company_is_unique_checks_name_or_ticker(session, company):
     repo = CompanyRepository(session)
 
@@ -107,8 +111,6 @@ def test_company_delete_missing_returns_false(session):
 def test_metrics_update_integrity_error_rolls_back(
     monkeypatch, session, company
 ):
-    from datetime import datetime, timezone
-
     row = FinancialMetricsDB(
         company_id=company.id,
         period_end=datetime(2024, 12, 31, tzinfo=timezone.utc),
@@ -128,8 +130,6 @@ def test_metrics_update_integrity_error_rolls_back(
 
 
 def test_metrics_is_unique_ignores_excluded_id(session, company):
-    from datetime import datetime, timezone
-
     period_end = datetime(2024, 12, 31, tzinfo=timezone.utc)
     row = FinancialMetricsDB(
         company_id=company.id, period_end=period_end, period_type="annual"

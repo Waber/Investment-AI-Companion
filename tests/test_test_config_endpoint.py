@@ -55,15 +55,38 @@ async def test_test_config_reports_presence_without_values(
         assert value not in response.text
 
 
+# Names the /api/v1/test-config payload reports. A name left unset on
+# Settings is filled from the process environment.
+REPORTED_SETTINGS = (
+    "OPENAI_API_KEY",
+    "SECRET_KEY",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "ELASTICSEARCH_URL",
+    "NEWS_API_KEY",
+    "TWITTER_API_KEY",
+    "DEBUG",
+    "LOG_LEVEL",
+    "ALLOWED_HOSTS",
+)
+
+
 @pytest.mark.asyncio
 async def test_test_config_marks_missing_settings(client, monkeypatch):
+    for name in REPORTED_SETTINGS:
+        monkeypatch.delenv(name, raising=False)
     configured = Settings(
         _env_file=None,
         DEBUG=True,
+        LOG_LEVEL="INFO",
+        ALLOWED_HOSTS=["localhost", "127.0.0.1"],
         OPENAI_API_KEY="",
         SECRET_KEY="",
         DATABASE_URL="",
         REDIS_URL="",
+        ELASTICSEARCH_URL=None,
+        NEWS_API_KEY=None,
+        TWITTER_API_KEY=None,
     )
     monkeypatch.setattr(main, "settings", configured)
 
