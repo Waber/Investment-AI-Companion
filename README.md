@@ -112,6 +112,7 @@ isort read line length 79 from `pyproject.toml`. flake8 does not read that
 file; `.flake8` records the same 79, which is also flake8's own default.
 These commands do not pass `--line-length`. Older files still have
 formatting debt. The commands report it and do not reformat those files.
+CI does not run these lint checks yet.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m black --check app main.py setup_database.py tests

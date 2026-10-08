@@ -63,8 +63,8 @@
   is merged as `b2541d7`. Lines below that still tell the story of those
   pull requests being opened are history; the sentences that called them
   open or awaiting review are corrected.
-- Reviewer nits from PRs #14 and #15 are this branch,
-  `cursor/reviewer-nits-minimal-c3a6`, rebased onto `778735e` after
+- Reviewer nits from PRs #14 and #15 are in PR #43
+  (`cursor/reviewer-nits-minimal-c3a6`), rebased onto `778735e` after
   PR #22 merged. PR #41 also edits this file and the journal.
   Whichever of those pull requests merges second needs a rebase.
 - Review follow-up: missing test-config settings are isolated from the
