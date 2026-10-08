@@ -37,7 +37,11 @@ jobs:
       - name: Check out the repository
         # v7 is the newest major tag for actions/checkout (v7.0.1) and runs
         # on Node 24. v5 would also, and v4 is the one that warns about Node 20.
+        # persist-credentials false: the default stores the checkout token in
+        # .git/config so later steps can push. This job never pushes.
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Refuse to run when .env is present
         # app/core/config.py loads .env when that file exists. CI must not.
