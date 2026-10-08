@@ -106,7 +106,9 @@ def fetch_company_data(
     """
     # Bound before the try so the error log can name the ticker even
     # when the failure is the first line of the body.
-    ticker = request.ticker.upper()
+    # FetchCompanyRequest already strips and uppercases. Doing it again
+    # would change a ticker that bypassed validation.
+    ticker = request.ticker
     try:
         logger.info("Fetching company data for ticker: %r", ticker)
 

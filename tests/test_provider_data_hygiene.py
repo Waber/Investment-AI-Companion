@@ -451,6 +451,32 @@ def test_yahoo_error_log_does_not_split_on_a_newline_ticker(
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 
 
+def test_fetch_does_not_uppercase_a_ticker_again(client):
+    """The request model already uppercases. The handler must not do it twice.
+
+    model_construct skips that validator, so a lowercase ticker stays
+    lowercase only when the handler's extra ``.upper()`` is gone.
+    """
+    seen = {}
+
+    class _Seen:
+        def fetch_company_info(self, ticker):
+            seen["ticker"] = ticker
+            return None
+
+    request = FetchCompanyRequest.model_construct(ticker="aapl")
+    session = client.app.state.testing_session_local()
+    try:
+        try:
+            fetch_company_data(request, db=session, collector=_Seen())
+        except Exception:
+            pass
+    finally:
+        session.close()
+
+    assert seen["ticker"] == "aapl"
+
+
 # These two call the route with model_construct so the log lines run
 # even after request validation starts rejecting control characters.
 def test_data_collection_logs_do_not_split_on_a_newline_ticker(client, caplog):
@@ -473,10 +499,9 @@ def test_data_collection_logs_do_not_split_on_a_newline_ticker(client, caplog):
     finally:
         session.close()
 
-    # fetch_company_data uppercases the ticker before it logs.
-    _assert_no_forged_log_line(caplog, "FORGED-ADMIN-LOGIN")
+    _assert_no_forged_log_line(caplog, "forged-admin-login")
     assert any(
-        "FORGED-ADMIN-LOGIN" in record.getMessage()
+        "forged-admin-login" in record.getMessage()
         for record in caplog.records
     )
 
@@ -511,5 +536,5 @@ def test_data_collection_update_and_error_logs_do_not_split(
         session.close()
 
     # The boom happens before the update log. This test pins the
-    # exception log. fetch_company_data uppercases the ticker first.
-    _assert_no_forged_log_line(caplog, "FORGED-ADMIN-LOGIN")
+    # exception log. The handler logs the ticker it was given.
+    _assert_no_forged_log_line(caplog, "forged-admin-login")
