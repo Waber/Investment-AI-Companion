@@ -42,6 +42,36 @@ def test_secret_key_is_required(monkeypatch):
         Settings(_env_file=None)
 
 
+def test_settings_errors_hide_other_secrets(monkeypatch):
+    """A missing or rejected SECRET_KEY must not print the other settings.
+
+    Pydantic's default error includes the whole input dict. That dict
+    holds DATABASE_URL and API keys.
+    """
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    marker = "S3cr3t-marker"
+    database_url = f"postgresql://a:{marker}@h/d"
+
+    with pytest.raises(ValidationError) as missing:
+        Settings(
+            _env_file=None,
+            DATABASE_URL=database_url,
+            OPENAI_API_KEY=marker,
+        )
+
+    assert marker not in str(missing.value)
+
+    with pytest.raises(ValidationError) as invalid:
+        Settings(
+            _env_file=None,
+            SECRET_KEY="your-secret-key-here",
+            DATABASE_URL=database_url,
+            OPENAI_API_KEY=marker,
+        )
+
+    assert marker not in str(invalid.value)
+
+
 @pytest.mark.parametrize(
     "value",
     ["your-secret-key-here", "replace-this-in-local-env", "", "   "],
