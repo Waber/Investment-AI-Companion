@@ -6,7 +6,8 @@
   `origin/master` `d568663`. Implementation commit `e242341`.
   Review follow-up `c9b7302` and the host commit `1fc4edb` are
   green in GitHub Actions. The query-parameter guard and the
-  merge-safe secret are the latest commit on this branch.
+  merge-safe secret are `64acc52`, green in
+  [run 37838815029](https://github.com/Waber/Investment-AI-Companion/actions/runs/37838815029).
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
@@ -47,8 +48,10 @@
   TOTAL 93%. PostgreSQL 67 passed, 1 xfailed in 2.68s.
   [run 37837340255](https://github.com/Waber/Investment-AI-Companion/actions/runs/37837340255)
   on `1fc4edb`: SQLite 846 passed, 68 deselected in 16.98s.
-  PostgreSQL 67 passed, 1 xfailed in 2.86s. The query-guard
-  commit's Actions run is recorded after that push.
+  PostgreSQL 67 passed, 1 xfailed in 2.86s.
+  [run 37838815029](https://github.com/Waber/Investment-AI-Companion/actions/runs/37838815029)
+  on `64acc52`: SQLite 846 passed, 108 deselected in 18.22s.
+  PostgreSQL 106 passed, 2 xfailed, 846 deselected in 2.96s.
   `postgres_client` uses `http://127.0.0.1`. The integration
   import sets a 34-character `SECRET_KEY` when the marker is
   selected. Query parameters cannot redirect the connection.
