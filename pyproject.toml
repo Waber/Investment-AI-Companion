@@ -11,6 +11,10 @@ target-version = ["py312"]
 [tool.isort]
 profile = "black"
 line_length = 79
+# app, main, and scripts are this repository's code. isort otherwise treats
+# a name it cannot find as an installed package as third-party, which moves
+# those imports into the wrong group.
+known_first_party = ["app", "main", "scripts"]
 
 [tool.pytest.ini_options]
 # Versions stay in requirements.txt. Do not pin pytest or pytest-asyncio
