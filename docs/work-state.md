@@ -32,6 +32,11 @@
   (Ubuntu 16.15-0ubuntu0.24.04.1). Without the variable,
   `-m integration` -> 23 passed, 14 skipped, exit 0. A node id
   without `-m integration` -> 1 deselected, exit 5.
+  GitHub Actions
+  [run 37834076658](https://github.com/Waber/Investment-AI-Companion/actions/runs/37834076658)
+  on `8bfd7ba`: SQLite job 846 passed, 37 deselected in 9.90s,
+  TOTAL 93%. PostgreSQL job 37 passed, 846 deselected in 1.20s
+  on PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2).
 - Active agents: none.
 - Blockers: none.
 - Next action: #45 and #47 together (secure config defaults and
