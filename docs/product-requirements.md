@@ -3,7 +3,7 @@
 - Status: draft v0.2, 2026-10-08. Prepared from the repository state at master `b2541d7` and Raul's decisions of 2026-10-08 (two rounds). v0.2 adds: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo.
 - Owner: Raul (product decisions). Prepared by the Project Manager agent for the Developer, QA Engineer and Code Reviewer.
 - Related docs: `AGENTS.md`, `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`, `docs/demo-data.md`, `docs/work-state.md`.
-- Research inputs (Researcher, 2026-10-08; currently on the PM box under `research/`, not yet in the repo): `research/market-data-sources.md` (market-data sources) and `research/llm-comparison.md` (LLM providers).
+- Research inputs (Researcher, 2026-10-08; in the repo under `docs/research/`): [market-data-sources.md](research/market-data-sources.md) (market-data sources) and [llm-comparison.md](research/llm-comparison.md) (LLM providers).
 - Items marked **[Decided]** were confirmed by Raul. Items marked **[Proposal]** still need his confirmation. Items marked **[Open]** are undecided.
 
 ## 1. Purpose and vision
