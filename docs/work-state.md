@@ -28,9 +28,14 @@
   responses send the local CSP, frame denial, nosniff, and
   referrer policy. Seed tests use the neutral postgres URL. The
   vendored htmx sha256 is in `static/vendor/README.txt`.
-  An instrument id is an ASCII digit string up to `2**63 - 1`;
-  Unicode digits and larger values are the HTML 404. The htmx
-  config meta tag turns off the injected indicator style.
+  An instrument id is an ASCII digit string of at most 19
+  characters, with no leading zero when longer than one
+  character, and at most `2**63 - 1`. Longer strings are rejected
+  before `int`. Unicode digits, `01`, and `007` are the HTML 404.
+  `/ui` sends `Cache-Control: no-store`. Website links reject
+  format characters and DEL. The htmx config meta tag turns off
+  the indicator style, `allowEval`, and `allowScriptTags`.
+  `docs/demo-data.md` was not rewritten for #61.
 - Incomplete: #26 (instrument model, type/country/ISIN filters,
   ETF/ETC detail), #27 (demo-v2 prices), #28 (ETF/ETC attributes),
   and #25 (one-command demo). PR #61 is still the secure-defaults
@@ -47,7 +52,8 @@
   892 passed, 119 deselected, exact 94.81%. The QA follow-up:
   896 passed, 119 deselected, exact 94.89%. The id and htmx
   config follow-up: 898 passed, 119 deselected, exact 94.91%.
-  `-m integration`
+  The review follow-up: 900 passed, 119 deselected, exact
+  94.95%. `-m integration`
   with no `TEST_POSTGRES_DSN`: 103 passed, 16 skipped, 892
   deselected. The 16 skips need PostgreSQL. The UI tests are
   deselected.

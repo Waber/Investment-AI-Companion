@@ -1,5 +1,39 @@
 # Development Journal
 
+## 2026-10-08 - Review fixes for /ui ids and website links (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. Code review of head
+  `d64cbbb`. Disclaimer wording, autoescape, the type filter, and
+  `/api/v1` id parsing stay. `docs/demo-data.md` was not rewritten
+  for `SECRET_KEY` or the bind host. PR #61 is not in this branch.
+- Decision, ids: `int` raises `ValueError` on an ASCII digit
+  string longer than about 4300 characters, and that was a
+  plain-text 500. The helper now returns `None` when the string
+  is not ASCII, is not all digits, or is longer than 19
+  characters, before calling `int`. A value that still exceeds
+  `2**63 - 1` is also `None`. `01` and `007` are not a second URL
+  for rows 1 and 7. The single character `0` is still a normal
+  id. All of these misses are the existing HTML 404.
+- Decision, responses: every `/ui` response also sends
+  `Cache-Control: no-store`, next to `Vary: HX-Request`.
+- Decision, websites: a `javascript:` or `data:` URL is still
+  not a link when it has a host. Unicode format characters
+  (category `Cf`, including U+202E and U+200B) and DEL (code
+  point 127) are rejected in the view-model. Approved links
+  stay `http` or `https` with `rel="noopener noreferrer"`.
+- Decision, htmx: the config meta also sets `allowEval` and
+  `allowScriptTags` to false, next to `includeIndicatorStyles`.
+  The script stays the local file. No CDN.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 900 passed, 119 deselected, exact 94.95%. The docs commit
+  does not change Python and repeats that result. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - ASCII instrument ids and htmx CSP config (#29)
 
 - Scope: follow-up on
