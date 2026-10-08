@@ -137,6 +137,36 @@ The command above includes `--cov-fail-under=80`, so running only part of the su
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning tests/test_yahoo_finance_collector.py
 ```
 
+### PostgreSQL integration tests
+
+The default command above stays on SQLite. It does not need PostgreSQL, and it deselects tests marked `integration`. A node id does not turn that marker off: this still deselects the test and exits 5 unless `-m integration` is passed too.
+
+```bash
+python -m pytest tests/integration/test_postgres.py::test_server_is_postgresql
+```
+
+To run the PostgreSQL tests, set `TEST_POSTGRES_DSN` to a separate database. The harness refuses the application's `DATABASE_URL` (the code default is `postgresql://przemkowy@localhost:5432/investment_ai`) because it drops and recreates its tables. If the variable is unset, `pytest -m integration` skips those tests with a message. `REQUIRE_POSTGRES=1` (set in CI) makes a missing variable fail the run.
+
+```bash
+createdb investment_test
+TEST_POSTGRES_DSN=postgresql://127.0.0.1:5432/investment_test \
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider \
+  -W error::DeprecationWarning -m integration
+```
+
+A Docker server on port 5432 is the same contract the GitHub Actions job uses (`postgres:16`, database `investment_test`):
+
+```bash
+docker run --rm -d --name iac-test-postgres \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=investment_test \
+  -p 5432:5432 postgres:16
+TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test \
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider \
+  -W error::DeprecationWarning -m integration
+```
+
+The CI workflow runs that marked subset as a second job. The SQLite job is unchanged, including the 80% coverage gate. Tables in the integration tests are created from the SQLAlchemy models. The Alembic baseline remains issue #8.
+
 Useful lint and formatting checks, run from the repository root. Black and
 isort read line length 79 from `pyproject.toml`. flake8 does not read that
 file; `.flake8` records the same 79, which is also flake8's own default.
