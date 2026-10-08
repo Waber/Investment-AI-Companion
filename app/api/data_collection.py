@@ -71,8 +71,10 @@ def fetch_company_data(
             "ticker": "AAPL"
         }
     """
+    # Bound before the try so the error log can name the ticker even
+    # when the failure is the first line of the body.
+    ticker = request.ticker.upper()
     try:
-        ticker = request.ticker.upper()
         logger.info(f"Fetching company data for ticker: {ticker}")
 
         # Initialize repository
@@ -159,12 +161,15 @@ def fetch_company_data(
     except HTTPException:
         raise
     except ValueError as e:
-        # Handle uniqueness violations
+        # Handle uniqueness violations. The message is a fixed business
+        # error, not a provider traceback, so it stays in the response.
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error in fetch_company_data: {str(e)}")
+    except Exception:
+        # The client gets a fixed sentence. The traceback, including
+        # anything the provider put in the exception, stays in the log.
+        logger.exception("Error fetching company data for ticker %s", ticker)
         raise HTTPException(
-            status_code=500, detail=f"Error fetching company data: {str(e)}"
+            status_code=500, detail="Error fetching company data"
         )
 
 

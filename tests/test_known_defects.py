@@ -1,14 +1,14 @@
-"""Known-defect pins.
+"""Pins for bugs that were open on master.
 
-The period_end case (#20) is fixed: the same instant with another UTC
-offset is a duplicate. PostgreSQL coverage of that case waits for
+The period_end case (#20) treats the same instant with another UTC
+offset as a duplicate. PostgreSQL coverage of that case waits for
 issue #9.
 
-``test_fetch_company_500_does_not_leak_exception_text`` (#18) and
-``test_debt_to_assets_is_not_debt_per_share`` (#21) are QA's strict
-xfails. ``strict=True`` turns an unexpected pass into a failure, so
-the fix commit deletes the markers. The tests below those two pins
-describe the behaviour the fix must add. Issue #19 is not covered here.
+The fetch-company 500 (#18) returns a fixed detail and logs the
+exception with the ticker. ``debt_to_assets`` (#21) is total debt
+divided by total assets when both numbers are already on the provider
+info, and None otherwise. It is never a per-share amount. Issue #19
+is not covered here.
 """
 
 import logging
@@ -58,11 +58,6 @@ async def test_same_instant_with_other_offset_is_a_duplicate(client):
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="fetch-company 500 echoes the exception text (issue #18)",
-)
 @pytest.mark.asyncio
 async def test_fetch_company_500_does_not_leak_exception_text(client):
     client.app.dependency_overrides[
@@ -98,11 +93,6 @@ class _InfoTicker:
         self.info = dict(self.info)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="debt_to_assets is read from totalDebtPerShare (issue #21)",
-)
 def test_debt_to_assets_is_not_debt_per_share(monkeypatch):
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Ticker)
 
@@ -113,10 +103,10 @@ def test_debt_to_assets_is_not_debt_per_share(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
-    """The 500 is still logged, and the log names the ticker.
+    """The 500 is logged with the ticker, and the body stays generic.
 
-    ``logger.exception`` attaches the traceback. ``logger.error`` of the
-    message alone does not, and the current message omits the ticker.
+    ``logger.exception`` attaches the traceback, so the secret stays in
+    the server log and is not copied into the HTTP detail.
     """
     client.app.dependency_overrides[
         get_yahoo_finance_collector
@@ -177,8 +167,8 @@ def test_debt_to_assets_is_total_debt_over_total_assets(
 ):
     """The ratio is total debt / total assets, never the per-share figure.
 
-    ``totalDebtPerShare`` is left in the payload as a decoy. On master
-    the mapping returns that decoy (7.5) instead of the ratio.
+    ``totalDebtPerShare`` is left in the payload as a decoy. The mapping
+    ignores it.
     """
     _patch_info(
         monkeypatch,
@@ -206,6 +196,8 @@ def test_debt_to_assets_is_total_debt_over_total_assets(
             "totalAssets": "200",
             "totalDebtPerShare": 7.5,
         },
+        {"totalDebt": True, "totalAssets": 200, "totalDebtPerShare": 7.5},
+        {"totalDebt": 50, "totalAssets": False, "totalDebtPerShare": 7.5},
     ],
     ids=[
         "per_share_only",
@@ -213,13 +205,15 @@ def test_debt_to_assets_is_total_debt_over_total_assets(
         "assets_only",
         "zero_assets",
         "non_numeric",
+        "bool_debt",
+        "bool_assets",
     ],
 )
 def test_debt_to_assets_is_none_when_inputs_are_missing(monkeypatch, info):
-    """Missing, zero, or non-numeric totals are None, not per-share debt.
+    """Missing or unusable totals are None, not per-share debt.
 
-    Each payload still carries ``totalDebtPerShare`` so the old mapping
-    returns 7.5. Assets of zero cannot be a denominator.
+    Each payload still carries ``totalDebtPerShare``. Assets of zero
+    cannot be a denominator. Strings and booleans are not amounts.
     """
     _patch_info(monkeypatch, info)
 
