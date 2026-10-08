@@ -13,8 +13,8 @@
   (2026-10-08), which fixes the research paths and makes N1 optional for
   A1. There were no `/workspace` paths.
 - Work-state next action is Demo v1 issue #23 together with bug #20
-  first, then #24, then #25, then #26. That action does not wait on this
-  docs change.
+  first, then bugs #18 and #21, then #24, then #25, then #26. Issues
+  #8, #9, and #10 come after the demo.
 - Verification: from the repository root, no `.env`,
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
   -> 758 passed in 6.48s, no warnings summary. This machine provides
@@ -23,18 +23,22 @@
 - GitHub Actions Tests on `8ba25ee` succeeded:
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37756800118
   Job `pytest (Python 3.12, SQLite)` completed with conclusion success.
+  That run is from before this rebase.
+- After the rebase onto `778735e`, from the repository root, no `.env`:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 813 passed in 11.50s, no warnings summary, TOTAL 92% (exact 91.77%).
+  The 80% gate passed.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
-- PR #22 (`cursor/coverage-threshold-80-c3a6`) is also open and edits this
-  journal and `docs/work-state.md`. Whichever of the two merges second
-  needs a rebase.
+- Rebased onto `origin/master` `778735e`. PR #13 is merged as `a10e196`.
+  PR #15 is merged as `b2541d7`. PR #22 is merged as `778735e`.
 
 ## 2026-10-08 - Review notes on the coverage tests
 
 - Scope: one commit on `cursor/coverage-threshold-80-c3a6` on top of
   `63822cd`. QA's two commits are unchanged. No production `.py` edits.
-  The 80% gate is unchanged. Code Reviewer approved the earlier head and
-  is waiting on Raul; this commit is not a merge.
+  The 80% gate is unchanged. Code Reviewer approved the earlier head.
+  PR #22 is merged as `778735e`.
 - `test_test_config_marks_missing_settings` only blanked four settings.
   `Settings` fills any name it was not given from the process environment,
   so `NEWS_API_KEY=x` made that optional mark present and the test failed.
@@ -59,22 +63,10 @@
   Project Manager relayed the decision. The gate stays
   `--cov-fail-under=80`. JUnit XML and the `MIN_TESTS` gate are still
   not enabled.
-- Next action: Demo v1 issue
-  [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
-  together with bug
-  [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
-  first, then bugs
-  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
-  and
-  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21)
-  just before
-  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
-  then
-  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
-  then
-  [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
-  Issues #8, #9, and #10 come after the demo. PR #41 records the same
-  order.
+- The live next action is the product-requirements entry at the top of
+  this journal: Demo v1 issue #23 together with bug #20 first, then bugs
+  #18 and #21, then #24, then #25, then #26. Issues #8, #9, and #10 come
+  after the demo.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 
@@ -144,14 +136,11 @@
     requires `uq_company_name_ticker` in the error text. Needed today.
   - `test_company_is_unique_checks_name_or_ticker` requires uniqueness on
     name or ticker. Needed today.
-- Older journal lines that say PR #13 or PR #15 is not merged describe
-  the day those entries were written. Both are merged: PR #13 as
-  `a10e196`, PR #15 as `b2541d7`. PR #14 is merged as `db0cc12`.
+- PR #13 is merged as `a10e196`. PR #15 is merged as `b2541d7`.
+  PR #14 is merged as `db0cc12`. PR #22 is merged as `778735e`.
 - Reviewer nits from PRs #14 and #15 (`persist-credentials: false`,
   isort `known_first_party`, README lint wording) are not in this
-  change. They are a separate branch off master. Whichever of the two
-  pull requests merges second needs a rebase: both edit this journal
-  and `docs/work-state.md`.
+  change. They are a separate branch off master.
 - Verification, from the repository root, no `.env` file, in a network
   namespace whose connect to `1.1.1.1:443` failed. Python 3.12.3,
   pytest 7.4.3, packages from `requirements.txt`. Command:
@@ -174,10 +163,10 @@
   Account usage was not available in this session; no percentage recorded.
 - The next-action line that named Alembic and PostgreSQL (#8, #9, #10)
   as the next work was the order when this entry was written. The live
-  order is in the review-notes entry above: Demo v1, then #8–#10 after
-  the demo.
-- Published as [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
-  against master.
+  next action is the product-requirements entry at the top of this
+  journal.
+- Published as [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22),
+  merged as `778735e`.
 
 ## 2026-10-07 - Tooling configuration
 
@@ -264,8 +253,8 @@
     `setup_database.py` still fail those checks because of older debt.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
-- Published as [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
-  against master. Not merged.
+- Published as [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15),
+  merged as `b2541d7`.
 
 ## 2026-10-07 - Minimal pytest CI
 
@@ -301,7 +290,7 @@
 
 - QA approved [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
   at `b05c79a` with three non-blocking notes. Fixed on
-  `cursor/deprecation-cleanup-7154`. Not merged.
+  `cursor/deprecation-cleanup-7154`. PR #13 is merged as `a10e196`.
 - `docs/work-state.md` now says issue #5 and issue #6. Those numbers are
   GitHub issues, not pull requests. The pull request body matches.
 - The suite command in the cleanup entry below is the portable form, run
@@ -318,7 +307,7 @@
 - Full suite on the current sources: `758 passed in 6.39s`, no warnings
   summary. The targeted warning check is included.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
-- Next: re-review PR #13. Do not merge unless the user authorizes it.
+- PR #13 is merged as `a10e196`.
 
 ## 2026-10-07 - Pydantic and SQLAlchemy deprecation cleanup
 
@@ -390,12 +379,12 @@
   19:49 UTC; elapsed time was not stopwatch-measured. Account usage was not
   available in this Cursor session; no percentage was recorded and no reset
   was redeemed.
-- Published as [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
-  against `master`. Not merged.
-- Next: review PR #13. Do not merge unless the user authorizes it.
-  After merge, guarded Alembic baseline and isolated PostgreSQL tests.
-  Issues #5 (minimal CI) and #6 (tooling config) are separate and do not
-  own this journal or `docs/work-state.md`.
+- Published as [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13),
+  merged as `a10e196`.
+- After that delivery: guarded Alembic baseline and isolated PostgreSQL
+  tests. Issues #5 (minimal CI) and #6 (tooling config) are separate and
+  do not own this journal or `docs/work-state.md`. PR #15 is merged as
+  `b2541d7`. PR #22 is merged as `778735e`.
 
 ## 2026-10-07 - Rebase workflow rule
 
