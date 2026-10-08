@@ -1,5 +1,35 @@
 # Development Journal
 
+## 2026-10-08 - Type filter and keyboard focus on /ui (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. Issue #29 asks the
+  list to filter by type, exchange, and currency. The list already
+  filtered by search, exchange, and currency. This adds type.
+  Disclaimer text, the bind host, and the website link rule are
+  unchanged.
+- Decision: the type dropdown is built from the distinct
+  `instrument_type` values the view-model returns. On this branch
+  that is `stock`. The option label is `type.stock` ("akcja" /
+  "stock"). The empty option is the existing "wszystkie" / "any"
+  string. An unknown `type` query matches no rows and returns 200.
+  A missing catalog key still renders, because `translate` returns
+  the key.
+- Decision, accessibility only: a skip link to `#main`, `scope="col"`
+  on the list table headers, and a `:focus-visible` outline. No
+  `outline: none`. No new external asset.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 892 passed, 119 deselected, exact 94.81%. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files. In the
+  browser, choosing Typ "akcja" requested `type=stock` and kept the
+  six demo rows. `type=etf` returned the Polish empty state and
+  still offered "akcja". English showed "Type", "any", and "stock",
+  plus "Skip to main content" and seven `scope="col"` headers.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - /ui instrument list and detail (D4, #29)
 
 - Scope: the first runnable UI demo, rebased onto `origin/master`

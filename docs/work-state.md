@@ -8,8 +8,12 @@
   Refs #29.
 - Completed: server-rendered `/ui` list and detail over the current
   company rows. Polish by default, English by cookie. Search plus
-  exchange and currency filters. Synthetic-data badge, disclaimer in
-  both languages, missing values as "brak danych" / "no data".
+  type, exchange, and currency filters. The type options are the
+  distinct view-model types (stock) with catalog labels, plus an
+  all-types option. An unknown type returns an empty list.
+  Skip link, list-header `scope="col"`, and a `:focus-visible`
+  outline. Synthetic-data badge, disclaimer in both languages,
+  missing values as "brak danych" / "no data".
   Website strings become links only for http/https, in the
   view-model. HTMX 2.0.10 and CSS are local. `jinja2` 3.1.6 is
   pinned in the hashed locks. PR #60 did not change the requirement
@@ -30,9 +34,11 @@
   after the rebase onto `d7f6798`: dependency commit 846 passed,
   119 deselected, exact 92.58%; feature commit 892 passed,
   119 deselected, exact 94.79%; docs commit repeats 892 passed,
-  119 deselected, exact 94.79%. `-m integration` with no
-  `TEST_POSTGRES_DSN`: 103 passed, 16 skipped, 892 deselected.
-  The 16 skips need PostgreSQL. The UI tests are deselected.
+  119 deselected, exact 94.79%. The type-filter follow-up:
+  892 passed, 119 deselected, exact 94.81%. `-m integration`
+  with no `TEST_POSTGRES_DSN`: 103 passed, 16 skipped, 892
+  deselected. The 16 skips need PostgreSQL. The UI tests are
+  deselected.
 - Active agents: none.
 - Blockers: none.
 - Next action: review pull request #63 (Refs #29). Do not start
