@@ -1,5 +1,6 @@
 import json
 from typing import List, Optional
+from urllib.parse import urlsplit
 
 from pydantic import AnyHttpUrl, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,17 +60,57 @@ def _cors_origin_parts(value: object) -> List[str]:
     for item in raw_items:
         if not isinstance(item, str):
             raise ValueError("BACKEND_CORS_ORIGINS entries must be strings")
-        try:
-            url = AnyHttpUrl(item.strip())
-        except ValidationError as exc:
-            raise ValueError(
-                "BACKEND_CORS_ORIGINS entry is not an http(s) URL: "
-                f"{item!r}"
-            ) from exc
-        # AnyHttpUrl's string form has a trailing slash. Store that so
-        # cors_origins can rebuild the same objects.
-        origins.append(str(url))
+        origins.append(_bare_http_origin(item))
     return origins
+
+
+def _bare_http_origin(item: str) -> str:
+    """Accept only ``scheme://host[:port]`` with an optional root path.
+
+    A path, userinfo, query, fragment, or wildcard is not an origin a
+    browser sends. ``http://localhost:3000/`` is the same origin as
+    ``http://localhost:3000`` and is stored without the slash.
+    """
+    text = item.strip()
+    if "*" in text:
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry must not contain '*': " f"{item!r}"
+        )
+    parts = urlsplit(text)
+    if parts.scheme not in {"http", "https"}:
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry is not an http(s) URL: " f"{item!r}"
+        )
+    if parts.username or parts.password:
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry must not include userinfo: "
+            f"{item!r}"
+        )
+    if parts.query or parts.fragment:
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry must not include a query "
+            f"or fragment: {item!r}"
+        )
+    if parts.path not in ("", "/"):
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry must not include a path: " f"{item!r}"
+        )
+    host = parts.hostname
+    if not host:
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry is not an http(s) URL: " f"{item!r}"
+        )
+    try:
+        # Reject a host AnyHttpUrl does not consider an HTTP URL.
+        AnyHttpUrl(f"{parts.scheme}://{host}")
+    except ValidationError as exc:
+        raise ValueError(
+            "BACKEND_CORS_ORIGINS entry is not an http(s) URL: " f"{item!r}"
+        ) from exc
+    port = f":{parts.port}" if parts.port else ""
+    if ":" in host:
+        return f"{parts.scheme}://[{host}]{port}"
+    return f"{parts.scheme}://{host}{port}"
 
 
 def _allowed_host_parts(value: object) -> List[str]:

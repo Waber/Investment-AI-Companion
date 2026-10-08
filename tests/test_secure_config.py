@@ -275,6 +275,39 @@ def test_json_list_cors_string_parses():
     ]
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://localhost:3000/api",
+        "http://user:secret@localhost:3000",
+        "http://localhost:3000?x=1",
+        "http://localhost:3000#frag",
+        "http://*.example.com",
+        "*",
+        "ftp://localhost",
+    ],
+)
+def test_cors_origin_must_be_a_bare_http_origin(origin):
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            SECRET_KEY=TEST_SECRET,
+            BACKEND_CORS_ORIGINS=origin,
+        )
+
+
+def test_cors_root_path_is_accepted_without_keeping_the_slash():
+    settings = Settings(
+        _env_file=None,
+        SECRET_KEY=TEST_SECRET,
+        BACKEND_CORS_ORIGINS="https://example.com/",
+    )
+
+    assert [str(origin).rstrip("/") for origin in settings.cors_origins] == [
+        "https://example.com"
+    ]
+
+
 def test_invalid_cors_origin_fails_clearly():
     with pytest.raises(ValidationError):
         Settings(
