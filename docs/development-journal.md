@@ -6,7 +6,9 @@
   personal-path guard), and #50 (provider-data hygiene and ticker
   validation) in one pull request. Branch
   `cursor/secure-config-provider-hygiene-c91c`, based on master
-  `d568663`. Blank tickers on company create and fetch-company are
+  `d568663`.
+  [PR #61](https://github.com/Waber/Investment-AI-Companion/pull/61).
+  Blank tickers on company create and fetch-company are
   rejected, which is the remaining #17 case, so this pull request
   also closes #17. Out of scope: auth (#48), the collector interface
   (#24), negative pagination (#19), duplicate ticker (#16),
@@ -96,12 +98,13 @@
   forge a second log line. Request validation blocks those
   tickers at the API. The log tests bypass that validation and
   call the collector and the handler directly.
-- History: three commits, and each one passes the CI pytest
+- History: four commits, and each one passes the CI pytest
   command. Tests are first and marked `xfail(strict=True)`, so
   the suite exits 0 while `--runxfail` shows assertion failures
   (not import errors). The fix commit removes those markers
   except the personal-path test, which still failed until the
-  docs commit. Docs are last, and that test is no longer xfail.
+  docs commit. That test is no longer xfail. The last commit
+  only adds the pull request link.
 - Client-visible behaviour: startup fails without a real
   `SECRET_KEY`. `DEBUG` defaults to false, so
   `/api/v1/test-config` is 403 until a local `.env` turns DEBUG
