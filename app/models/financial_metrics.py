@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class FinancialMetricsBase(BaseModel):
@@ -76,11 +76,23 @@ class FinancialMetricsUpdate(FinancialMetricsBase):
     """Partial update of financial metrics.
 
     ``period_end`` is optional. When a client sends it, the repository
-    converts it to aware UTC before the uniqueness check. Omitted fields
-    stay as they are.
+    converts it to aware UTC before the uniqueness check. Omitting the
+    field leaves the stored instant unchanged. An explicit null is
+    rejected here, so the API returns 422 instead of a database
+    NOT NULL error.
     """
 
     period_end: Optional[datetime] = None
+
+    @field_validator("period_end")
+    @classmethod
+    def reject_null_period_end(cls, value: Optional[datetime]):
+        # Pydantic skips this when the field is omitted, so the default
+        # None stays unset and model_dump(exclude_unset=True) leaves
+        # the column alone. A JSON null is an explicit value.
+        if value is None:
+            raise ValueError("period_end cannot be null")
+        return value
 
 
 class FinancialMetrics(FinancialMetricsBase):

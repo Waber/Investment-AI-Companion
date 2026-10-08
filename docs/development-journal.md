@@ -29,6 +29,11 @@
   and before the insert or update. `FinancialMetricsUpdate` accepts an
   optional `period_end` so an update can move the period and still hit
   that check. A row is not a duplicate of itself (`exclude_id`).
+  An explicit JSON null is rejected by a field validator on that model,
+  so Pydantic returns 422. The validator does not run when the field is
+  omitted, and `model_dump(exclude_unset=True)` then leaves `period_end`
+  unchanged. `PUT` can move `period_end`; that field used to be ignored.
+  Moving onto an existing company, period, and type is 400.
 - `create_db_engine` in `app/core/database.py` runs
   `PRAGMA foreign_keys=ON` on each SQLite connection. The test client
   uses that function, so the pragma is not copied into `tests/conftest.py`.
@@ -42,8 +47,10 @@
 - Test-first commits, then the fix: the strict xfail for #20
   (`1 xfailed` on the parent of the fix), then eight failing #23/#20
   tests (`8 failed`), then this change removes the xfail marker.
-  PostgreSQL verification of the duplicate instant is deferred to #9.
-  Out of scope: Alembic (#8), the PostgreSQL harness (#9), the
+  QA verified #20 on PostgreSQL 16 (session timezone Europe/Warsaw)
+  at the application level: the same instant with `+02:00`, `Z`, or
+  naive returns 400, and readback has no double shift. The formal
+  harness is still #9. Out of scope: Alembic (#8), that harness, the
   instrument model (#26), and bugs #18, #19, and #21.
 - `app/models/database_models.py`, `app/models/financial_metrics.py`,
   and `app/repositories/financial_metrics_repository.py` were
@@ -55,8 +62,9 @@
 - Verification, from the repository root, no `.env`:
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 822 passed in 14.80s, no warnings summary, TOTAL 92% (exact
-  92.36%). The 80% gate passed. That count is from the pre-rebase head;
-  the rebase did not change test or production code.
+  92.36%) on the rebased head `c3c8911`. The 80% gate passed.
+  After the null `period_end` follow-up, the same command is
+  823 passed in 15.55s, no warnings summary, TOTAL 92% (exact 92.41%).
 - Work-state next action, after this PR: bugs #18 and #21, then #24.
   Bug #19 can be slotted in.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
@@ -78,9 +86,8 @@
   says older files still have formatting debt.
 - Work-state no longer says Code Reviewer approved `63822cd` and is
   waiting on Raul. That line now says PR #22 is merged as `778735e`.
-  The live next action is the SQLite UTC section at the top of
-  `docs/work-state.md`: after this PR, bugs #18 and #21, then #24.
-  Bug #19 can be slotted in.
+  The live next action is the product-requirements section at the top
+  of `docs/work-state.md`.
 - Verification: no `.env`, Python 3.12.3, pytest 7.4.3. Command:
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   Result on this head: `813 passed in 11.32s`, TOTAL exact `91.77%`.
@@ -112,11 +119,9 @@
 - Decision: `docs/product-requirements.md` matches the PM's updated copy
   (2026-10-08), which fixes the research paths and makes N1 optional for
   A1. There were no `/workspace` paths.
-- The next action recorded in this entry was Demo v1 issue #23
-  together with bug #20, then bugs #18 and #21, then #24, then #25,
-  then #26. Issues #8, #9, and #10 come after the demo. The live next
-  action is the SQLite UTC section at the top of `docs/work-state.md`:
-  after this PR, bugs #18 and #21, then #24. Bug #19 can be slotted in.
+- Work-state next action is Demo v1 issue #23 together with bug #20
+  first, then bugs #18 and #21, then #24, then #25, then #26. Issues
+  #8, #9, and #10 come after the demo.
 - Verification: from the repository root, no `.env`,
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
   -> 758 passed in 6.48s, no warnings summary. This machine provides
@@ -170,9 +175,10 @@
   Project Manager relayed the decision. The gate stays
   `--cov-fail-under=80`. JUnit XML and the `MIN_TESTS` gate are still
   not enabled.
-- The live next action is the SQLite UTC section at the top of
-  `docs/work-state.md`: after this PR, bugs #18 and #21, then #24.
-  Bug #19 can be slotted in.
+- The live next action is the product-requirements entry at the top of
+  this journal: Demo v1 issue #23 together with bug #20 first, then bugs
+  #18 and #21, then #24, then #25, then #26. Issues #8, #9, and #10 come
+  after the demo.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 
@@ -269,9 +275,8 @@
   Account usage was not available in this session; no percentage recorded.
 - The next-action line that named Alembic and PostgreSQL (#8, #9, #10)
   as the next work was the order when this entry was written. The live
-  next action is the SQLite UTC section at the top of
-  `docs/work-state.md`: after this PR, bugs #18 and #21, then #24.
-  Bug #19 can be slotted in.
+  next action is the product-requirements entry at the top of this
+  journal.
 - Published as [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22),
   merged as `778735e`.
 

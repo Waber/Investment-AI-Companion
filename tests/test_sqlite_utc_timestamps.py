@@ -156,20 +156,76 @@ async def test_update_normalizes_period_end_before_uniqueness_check(client):
     )
     assert first.status_code == second.status_code == 201
 
+    # The same instant with another offset is the other row. PUT used to
+    # ignore period_end; it now moves the period, and a collision is 400.
     conflict = await client.put(
         f"{METRICS}{second.json()['id']}",
         json={"period_end": "2025-12-31T02:00:00+02:00"},
     )
     assert conflict.status_code == 400
+    unchanged = await client.get(f"{METRICS}{second.json()['id']}")
+    assert unchanged.status_code == 200
+    assert _explicit_utc(unchanged.json()["period_end"]) == datetime(
+        2024, 12, 31, tzinfo=timezone.utc
+    )
+
+    moved = await client.put(
+        f"{METRICS}{second.json()['id']}",
+        json={"period_end": "2023-06-30T00:00:00Z"},
+    )
+    assert moved.status_code == 200, moved.text
+    assert _explicit_utc(moved.json()["period_end"]) == datetime(
+        2023, 6, 30, tzinfo=timezone.utc
+    )
 
     shifted = await client.put(
         f"{METRICS}{second.json()['id']}",
-        json={"period_end": "2024-12-31T02:00:00+02:00"},
+        json={"period_end": "2023-06-30T02:00:00+02:00"},
     )
     assert shifted.status_code == 200, shifted.text
     assert _explicit_utc(shifted.json()["period_end"]) == datetime(
-        2024, 12, 31, tzinfo=timezone.utc
+        2023, 6, 30, tzinfo=timezone.utc
     )
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_null_period_end_and_keeps_omitted(client):
+    """Explicit null is 422. Leaving the field out does not clear it.
+
+    A JSON null used to pass this model and fail the database NOT NULL
+    check, which the API reports as 400 ``constraint violation``.
+    """
+    company = (
+        await client.post(COMPANIES, json={"name": "Null", "ticker": "NULLP"})
+    ).json()
+    created = await client.post(
+        METRICS,
+        json={
+            "company_id": company["id"],
+            "period_type": "annual",
+            "period_end": "2025-12-31T00:00:00Z",
+            "revenue": 1.0,
+        },
+    )
+    assert created.status_code == 201, created.text
+    metrics_id = created.json()["id"]
+    original = created.json()["period_end"]
+
+    rejected = await client.put(
+        f"{METRICS}{metrics_id}", json={"period_end": None}
+    )
+    assert rejected.status_code == 422, rejected.text
+    errors = rejected.json()["detail"]
+    assert any(error["loc"] == ["body", "period_end"] for error in errors)
+
+    still_there = await client.get(f"{METRICS}{metrics_id}")
+    assert still_there.status_code == 200
+    assert still_there.json()["period_end"] == original
+
+    omitted = await client.put(f"{METRICS}{metrics_id}", json={"revenue": 4.5})
+    assert omitted.status_code == 200, omitted.text
+    assert omitted.json()["period_end"] == original
+    assert omitted.json()["revenue"] == 4.5
 
 
 def test_app_engine_enforces_sqlite_foreign_keys(tmp_path):
