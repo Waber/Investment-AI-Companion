@@ -91,9 +91,17 @@ _skipped_nodeids: list[str] = []
 
 
 def pytest_runtest_logreport(report) -> None:
-    """Remember skips so the PostgreSQL job can refuse them."""
-    if getattr(report, "skipped", False):
-        _skipped_nodeids.append(getattr(report, "nodeid", "<unknown>"))
+    """Remember skips so the PostgreSQL job can refuse them.
+
+    An expected failure is also ``outcome == "skipped"``. ``wasxfail``
+    is the reason string on that report, so those two strict xfails
+    are not counted here.
+    """
+    if not getattr(report, "skipped", False):
+        return
+    if getattr(report, "wasxfail", False):
+        return
+    _skipped_nodeids.append(getattr(report, "nodeid", "<unknown>"))
 
 
 def refuse_skips_when_postgres_is_required(

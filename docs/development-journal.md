@@ -11,10 +11,12 @@
 - Decision, zero skips: `pytest_sessionfinish` in
   `tests/integration/conftest.py` fails the session when
   `REQUIRE_POSTGRES=1` and any test was skipped. Deselected tests
-  are not skips. An already failing session keeps its status.
-  The default SQLite job does not set `REQUIRE_POSTGRES`.
+  are not skips. An expected failure is not a skip either: pytest
+  reports it with ``outcome == "skipped"`` and sets ``wasxfail``.
+  An already failing session keeps its status. The default SQLite
+  job does not set `REQUIRE_POSTGRES`.
 - Decision, case collision: the expected failure cites PRD open
-  question 10 and I1 issue #26. It does not cite #17.
+  question 10 and I1 issue #26.
 - Decision, setup: the two expected-failure tests create `DUP`
   in the test body and add the strict xfail marker only after
   that create returns 201. Pytest reports a fixture failure

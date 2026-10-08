@@ -74,6 +74,11 @@ def test_runtest_logreport_records_only_skips():
         integration_conftest.pytest_runtest_logreport(
             SimpleNamespace(skipped=False, nodeid="recorded::pass")
         )
+        integration_conftest.pytest_runtest_logreport(
+            SimpleNamespace(
+                skipped=True, nodeid="recorded::xfail", wasxfail="known"
+            )
+        )
         added = integration_conftest._skipped_nodeids[before:]
         assert added == ["recorded::skip"]
     finally:
