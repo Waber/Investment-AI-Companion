@@ -25,6 +25,27 @@
 - README: the copied command includes `--cov-fail-under=80`, so a subset
   run with that flag fails the gate. The README shows the same command
   without the flag.
+- Raul explicitly chose the 80% coverage threshold on 2026-10-08 at
+  10:48 Warsaw time, overriding the earlier 70% recommendation. The
+  Project Manager relayed the decision. The gate stays
+  `--cov-fail-under=80`. JUnit XML and the `MIN_TESTS` gate are still
+  not enabled.
+- Next action: Demo v1 issue
+  [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
+  together with bug
+  [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
+  first, then bugs
+  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
+  and
+  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21)
+  just before
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
+  then
+  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
+  then
+  [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
+  Issues #8, #9, and #10 come after the demo. PR #41 records the same
+  order.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 
@@ -122,8 +143,10 @@
     while `PYTHONDONTWRITEBYTECODE=1`.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
-- Next after this PR: guarded Alembic baseline and isolated PostgreSQL
-  tests (issues #8, #9, and #10).
+- The next-action line that named Alembic and PostgreSQL (#8, #9, #10)
+  as the next work was the order when this entry was written. The live
+  order is in the review-notes entry above: Demo v1, then #8–#10 after
+  the demo.
 - Published as [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
   against master.
 
