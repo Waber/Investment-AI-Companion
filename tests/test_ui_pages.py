@@ -219,6 +219,38 @@ async def test_filters_limit_the_list_and_htmx_returns_a_fragment(seeded):
     assert "Brak instrumentów" not in english.text
 
     seeded.cookies.clear()
+    by_type = await seeded.get("/ui", params={"type": "stock"})
+    assert by_type.status_code == 200
+    assert 'name="type"' in by_type.text
+    assert '<option value="stock" selected>akcja</option>' in by_type.text
+    assert ">wszystkie</option>" in by_type.text
+    assert "DEMO_PL_TECH" in by_type.text
+    assert "DEMO_US_GROWTH" in by_type.text
+    assert by_type.text.count("<th ") == by_type.text.count('scope="col"')
+    assert 'href="#main"' in by_type.text
+    assert 'id="main"' in by_type.text
+    assert "Przejdź do treści" in by_type.text
+
+    unknown = await seeded.get(
+        "/ui",
+        params={"type": "etf"},
+        headers={"HX-Request": "true"},
+    )
+    assert unknown.status_code == 200
+    assert "<html" not in unknown.text.casefold()
+    assert "Brak instrumentów" in unknown.text
+    assert "DEMO_PL_TECH" not in unknown.text
+
+    seeded.cookies.set("ui_lang", "en")
+    english_type = await seeded.get("/ui", params={"type": "not-a-type"})
+    assert english_type.status_code == 200
+    assert '<option value="stock">stock</option>' in english_type.text
+    assert ">any</option>" in english_type.text
+    assert "No instruments" in english_type.text
+    assert "Skip to main content" in english_type.text
+    assert "DEMO_US_GROWTH" not in english_type.text
+
+    seeded.cookies.clear()
     mismatch = await seeded.get(
         "/ui",
         params={"exchange": "DEMO-WSE", "currency": "USD"},

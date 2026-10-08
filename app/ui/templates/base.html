@@ -8,6 +8,7 @@
   <script src="/static/vendor/htmx-2.0.10.min.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">{{ t['nav.skip'] }}</a>
   <header class="site-header">
     <a class="brand" href="/ui">{{ t['app_name'] }}</a>
     <nav>
@@ -20,7 +21,7 @@
     </nav>
   </header>
   <p class="disclaimer" role="note">{{ t['disclaimer'] }}</p>
-  <main>
+  <main id="main" tabindex="-1">
     {% block content %}{% endblock %}
   </main>
 </body>

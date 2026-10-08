@@ -20,6 +20,7 @@ class ListFilters:
     """The list form. Empty strings mean "do not filter"."""
 
     search: str
+    instrument_type: str
     exchange: str
     currency: str
 
@@ -40,10 +41,16 @@ def _load_companies(db):
 def list_instruments(db, filters):
     """Return the matching instruments and the dropdown values.
 
-    Dropdowns come from the full table, so a selected exchange does
-    not hide the other exchanges from the form.
+    Dropdowns come from the full table, so a selected type or
+    exchange does not hide the other options from the form.
     """
     instruments = [to_instrument(company) for company in _load_companies(db)]
+    # Options come from the rows, not a fixed list. Today that is
+    # "stock". A later model can add ETF and ETC without a template
+    # change. An empty type means "every type".
+    instrument_types = _ordered_text(
+        item.instrument_type for item in instruments
+    )
     exchanges = _ordered_text(item.exchange for item in instruments)
     currencies = _ordered_text(item.currency for item in instruments)
     needle = filters.search.casefold()
@@ -54,13 +61,18 @@ def list_instruments(db, filters):
             ticker = (item.ticker or "").casefold()
             if needle not in name and needle not in ticker:
                 continue
+        if (
+            filters.instrument_type
+            and (item.instrument_type or "") != filters.instrument_type
+        ):
+            continue
         if filters.exchange and (item.exchange or "") != filters.exchange:
             continue
         if filters.currency and (item.currency or "") != filters.currency:
             continue
         selected.append(item)
     selected.sort(key=lambda item: (item.ticker or "").casefold())
-    return selected, exchanges, currencies
+    return selected, instrument_types, exchanges, currencies
 
 
 def get_instrument(db, instrument_id):

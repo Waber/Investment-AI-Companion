@@ -55,3 +55,7 @@ def test_local_assets_are_not_a_cdn():
             assert host not in lowered
         assert "url(http" not in lowered
         assert "@import" not in lowered or "http" not in lowered
+    assert ":focus-visible" in css
+    compact = re.sub(r"\s+", "", css.casefold())
+    assert "outline:none" not in compact
+    assert "outline:0" not in compact

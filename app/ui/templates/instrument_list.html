@@ -15,6 +15,15 @@
     <input type="search" name="q" value="{{ filters.search }}">
   </label>
   <label>
+    {{ t['filter.type'] }}
+    <select name="type">
+      <option value="">{{ t['filter.any'] }}</option>
+      {% for instrument_type in instrument_types %}
+      <option value="{{ instrument_type }}"{% if instrument_type == filters.instrument_type %} selected{% endif %}>{{ t['type.' ~ instrument_type] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
     {{ t['filter.exchange'] }}
     <select name="exchange">
       <option value="">{{ t['filter.any'] }}</option>

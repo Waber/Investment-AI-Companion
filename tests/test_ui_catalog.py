@@ -19,6 +19,12 @@ def test_required_phrases_are_in_the_catalogs():
     assert CATALOGS["en"]["badge.synthetic"] == "synthetic data"
     assert "poradą inwestycyjną" in CATALOGS["pl"]["disclaimer"]
     assert "not financial advice" in CATALOGS["en"]["disclaimer"].casefold()
+    assert CATALOGS["pl"]["filter.type"] == "Typ"
+    assert CATALOGS["en"]["filter.type"] == "Type"
+    assert CATALOGS["pl"]["type.stock"] == "akcja"
+    assert CATALOGS["en"]["type.stock"] == "stock"
+    assert CATALOGS["pl"]["nav.skip"] == "Przejdź do treści"
+    assert CATALOGS["en"]["nav.skip"] == "Skip to main content"
 
 
 def test_missing_key_falls_back_to_polish_then_to_the_key():

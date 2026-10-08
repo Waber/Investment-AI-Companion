@@ -6,7 +6,7 @@ OpenAPI document so /docs remains the API reference.
 
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -60,17 +60,25 @@ def safe_next(value):
 def instrument_list(
     request: Request,
     q: str = "",
+    instrument_type: str = Query("", alias="type"),
     exchange: str = "",
     currency: str = "",
     db: Session = Depends(get_db),
 ):
-    """List instruments. HTMX swaps only the results region."""
+    """List instruments. HTMX swaps only the results region.
+
+    ``type`` is the query name. An unknown value matches no rows and
+    still returns the page. It does not raise.
+    """
     filters = ListFilters(
         search=q.strip(),
+        instrument_type=instrument_type.strip(),
         exchange=exchange.strip(),
         currency=currency.strip(),
     )
-    instruments, exchanges, currencies = list_instruments(db, filters)
+    instruments, instrument_types, exchanges, currencies = list_instruments(
+        db, filters
+    )
     template_name = (
         "partials/instrument_results.html"
         if is_htmx(request)
@@ -80,6 +88,7 @@ def instrument_list(
         request,
         template_name,
         instruments=instruments,
+        instrument_types=instrument_types,
         exchanges=exchanges,
         currencies=currencies,
         filters=filters,
