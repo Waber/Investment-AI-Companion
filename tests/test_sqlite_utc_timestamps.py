@@ -466,16 +466,14 @@ def test_seed_demo_apply_twice_on_fresh_sqlite(tmp_path):
         metrics = connection.execute(
             "select count(*) from financial_metrics"
         ).fetchone()
-        duplicates = connection.execute(
-            """
+        duplicates = connection.execute("""
             select count(*) from (
                 select company_id, period_end, period_type
                 from financial_metrics
                 group by company_id, period_end, period_type
                 having count(*) > 1
             )
-            """
-        ).fetchone()
+            """).fetchone()
     finally:
         connection.close()
     assert companies[0] == 6

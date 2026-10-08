@@ -60,9 +60,9 @@ async def test_same_instant_with_other_offset_is_a_duplicate(client):
 
 @pytest.mark.asyncio
 async def test_fetch_company_500_does_not_leak_exception_text(client):
-    client.app.dependency_overrides[
-        get_yahoo_finance_collector
-    ] = lambda: FakeCollector(RuntimeError("password=hunter2"))
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: FakeCollector(RuntimeError("password=hunter2"))
+    )
 
     response = await client.post(FETCH, json={"ticker": "FAIL"})
 
@@ -108,9 +108,9 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
     ``logger.exception`` attaches the traceback, so the secret stays in
     the server log and is not copied into the HTTP detail.
     """
-    client.app.dependency_overrides[
-        get_yahoo_finance_collector
-    ] = lambda: FakeCollector(RuntimeError("password=hunter2"))
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: FakeCollector(RuntimeError("password=hunter2"))
+    )
 
     with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
         response = await client.post(FETCH, json={"ticker": "fail"})
@@ -128,19 +128,19 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
 @pytest.mark.asyncio
 async def test_fetch_company_404_and_400_stay_unchanged(client):
     """No provider data stays 404. A ValueError stays 400 with its text."""
-    client.app.dependency_overrides[
-        get_yahoo_finance_collector
-    ] = lambda: NullCollector()
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: NullCollector()
+    )
     missing = await client.post(FETCH, json={"ticker": "miss"})
     assert missing.status_code == 404
     assert missing.json()["detail"] == (
         "Company with ticker MISS not found on Yahoo Finance"
     )
 
-    client.app.dependency_overrides[
-        get_yahoo_finance_collector
-    ] = lambda: FakeCollector(
-        ValueError("Company name or ticker already exists")
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: FakeCollector(
+            ValueError("Company name or ticker already exists")
+        )
     )
     conflict = await client.post(FETCH, json={"ticker": "dupe"})
     assert conflict.status_code == 400

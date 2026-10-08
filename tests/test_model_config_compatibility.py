@@ -290,8 +290,7 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
     that its working directory is not the project root. PYTHONPATH still
     points at this repository. This test does not write into the repo.
     """
-    script = textwrap.dedent(
-        r"""
+    script = textwrap.dedent(r"""
         import os
         import warnings
         from pathlib import Path
@@ -327,8 +326,7 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
         import app.models.company
         import app.models.financial_metrics
         import app.models.historical_data
-        """
-    )
+        """)
     completed = subprocess.run(
         [sys.executable, "-c", script],
         cwd=tmp_path,

@@ -70,19 +70,19 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
                 "SECRET_KEY": "✓" if settings.SECRET_KEY else "✗",
             },
             "optional_settings": {
-                "DATABASE_URL": "✓"
-                if settings.DATABASE_URL
-                else "✗ (optional)",
+                "DATABASE_URL": (
+                    "✓" if settings.DATABASE_URL else "✗ (optional)"
+                ),
                 "REDIS_URL": "✓" if settings.REDIS_URL else "✗ (optional)",
-                "ELASTICSEARCH_URL": "✓"
-                if settings.ELASTICSEARCH_URL
-                else "✗ (optional)",
-                "NEWS_API_KEY": "✓"
-                if settings.NEWS_API_KEY
-                else "✗ (optional)",
-                "TWITTER_API_KEY": "✓"
-                if settings.TWITTER_API_KEY
-                else "✗ (optional)",
+                "ELASTICSEARCH_URL": (
+                    "✓" if settings.ELASTICSEARCH_URL else "✗ (optional)"
+                ),
+                "NEWS_API_KEY": (
+                    "✓" if settings.NEWS_API_KEY else "✗ (optional)"
+                ),
+                "TWITTER_API_KEY": (
+                    "✓" if settings.TWITTER_API_KEY else "✗ (optional)"
+                ),
             },
             "environment": {
                 "DEBUG": settings.DEBUG,
