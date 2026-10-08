@@ -10,10 +10,14 @@ import pytest
 from app.core.config import Settings, settings
 from tests.integration.postgres_dsn import (
     DATABASE_MESSAGE,
+    HOST_MESSAGE,
+    NAME_MESSAGE,
     REFUSE_MESSAGE,
     REQUIRE_MESSAGE,
     SCHEME_MESSAGE,
     SKIP_MESSAGE,
+    database_identity,
+    database_name_is_allowed,
     decide_test_dsn,
 )
 
@@ -26,6 +30,10 @@ DEFAULT_DATABASE_URL = "postgresql://przemkowy@localhost:5432/investment_ai"
 SEPARATE_DATABASE_URL = (
     "postgresql://postgres:postgres@127.0.0.1:5432/investment_test"
 )
+
+# The CI service container. The database name is already allowed, so
+# the job does not set TEST_POSTGRES_ALLOW_REMOTE.
+CI_DATABASE_URL = SEPARATE_DATABASE_URL
 
 
 def test_code_default_matches_the_settings_field():
@@ -48,6 +56,38 @@ def test_missing_dsn_skips_unless_the_run_requires_postgres(raw):
 
 
 @pytest.mark.parametrize(
+    "name",
+    [
+        "test",
+        "investment_test",
+        "test_db",
+        "foo_test_bar",
+        "investment_ai_test",
+        "Test",
+    ],
+)
+def test_database_name_with_test_as_its_own_word_is_allowed(name):
+    assert database_name_is_allowed(name) is True
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "testing",
+        "testdb",
+        "contest",
+        "latest",
+        "mytest",
+        "investment_ai",
+        "testfoo",
+        "",
+    ],
+)
+def test_database_name_without_test_as_its_own_word_is_refused(name):
+    assert database_name_is_allowed(name) is False
+
+
+@pytest.mark.parametrize(
     "url",
     [
         DEFAULT_DATABASE_URL,
@@ -56,18 +96,27 @@ def test_missing_dsn_skips_unless_the_run_requires_postgres(raw):
         "postgresql://other:secret@localhost:5432/Investment_AI",
         "postgresql:///investment_ai",
         "postgresql://przemkowy@[::1]:5432/investment_ai",
+        "postgresql://przemkowy@localhost:5433/investment_ai",
+        "postgresql://przemkowy@db.example.com:5432/investment_ai",
     ],
 )
-def test_application_database_is_refused(url):
-    decision = decide_test_dsn(url, [DEFAULT_DATABASE_URL], require=False)
+def test_name_without_test_as_its_own_word_is_refused(url):
+    """The name check runs before the host check and before the app URL."""
+    decision = decide_test_dsn(
+        url,
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        allow_remote=True,
+    )
     assert decision.action == "fail"
-    assert decision.message == REFUSE_MESSAGE
+    assert decision.message == NAME_MESSAGE
     assert decision.dsn == ""
     assert "secret" not in decision.message
+    assert url not in decision.message
 
 
 def test_live_application_database_url_is_refused():
-    """Whatever this process loaded for the app is not a test database."""
+    """Whatever this process loaded for the app is not a test target."""
     application_urls = (
         Settings.model_fields["DATABASE_URL"].default,
         settings.DATABASE_URL,
@@ -75,15 +124,31 @@ def test_live_application_database_url_is_refused():
     for url in application_urls:
         decision = decide_test_dsn(url, application_urls, require=False)
         assert decision.action == "fail"
-        assert decision.message == REFUSE_MESSAGE
+        assert decision.dsn == ""
+        name = database_identity(url).database
+        if database_name_is_allowed(name):
+            assert decision.message == REFUSE_MESSAGE
+        else:
+            assert decision.message == NAME_MESSAGE
 
 
-def test_a_second_configured_url_is_refused_too():
-    custom = "postgresql://postgres@127.0.0.1:5432/custom_app"
+def test_application_database_is_refused_even_when_its_name_is_allowed():
+    """A test-looking name that is DATABASE_URL is still the app database."""
+    custom = "postgresql://postgres@127.0.0.1:5432/custom_app_test"
     decision = decide_test_dsn(
         custom, [DEFAULT_DATABASE_URL, custom], require=False
     )
     assert decision.action == "fail"
+    assert decision.message == REFUSE_MESSAGE
+    assert decision.dsn == ""
+
+
+def test_ci_service_url_is_accepted():
+    decision = decide_test_dsn(
+        CI_DATABASE_URL, [DEFAULT_DATABASE_URL], require=True
+    )
+    assert decision.action == "use"
+    assert decision.dsn == CI_DATABASE_URL
 
 
 @pytest.mark.parametrize(
@@ -91,16 +156,54 @@ def test_a_second_configured_url_is_refused_too():
     [
         SEPARATE_DATABASE_URL,
         "postgresql://przemkowy@localhost:5432/investment_ai_test",
-        "postgresql://przemkowy@localhost:5433/investment_ai",
-        "postgresql://przemkowy@db.example.com:5432/investment_ai",
+        "postgresql://przemkowy@localhost/test",
+        "postgresql://przemkowy@[::1]:5432/test_db",
         "postgresql:///investment_test",
+        "postgresql://przemkowy@localhost:5432/Foo_Test_Bar",
     ],
 )
-def test_separate_database_is_accepted(url):
+def test_local_test_database_is_accepted(url):
     decision = decide_test_dsn(url, [DEFAULT_DATABASE_URL], require=True)
     assert decision.action == "use"
     assert decision.dsn == url
-    assert decision.message
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://przemkowy@db.example.com:5432/investment_test",
+        "postgresql://przemkowy@10.0.0.5:5432/test",
+    ],
+)
+def test_remote_host_is_refused_unless_the_override_is_set(url):
+    refused = decide_test_dsn(url, [DEFAULT_DATABASE_URL], require=False)
+    assert refused.action == "fail"
+    assert refused.message == HOST_MESSAGE
+    assert url not in refused.message
+
+    allowed = decide_test_dsn(
+        url, [DEFAULT_DATABASE_URL], require=False, allow_remote=True
+    )
+    assert allowed.action == "use"
+    assert allowed.dsn == url
+
+
+def test_remote_override_does_not_bypass_the_name_rule():
+    url = "postgresql://przemkowy@db.example.com:5432/investment_ai"
+    decision = decide_test_dsn(
+        url, [DEFAULT_DATABASE_URL], require=False, allow_remote=True
+    )
+    assert decision.action == "fail"
+    assert decision.message == NAME_MESSAGE
+
+
+def test_remote_override_does_not_bypass_the_application_database():
+    url = "postgresql://przemkowy@db.example.com:5432/investment_test"
+    decision = decide_test_dsn(
+        url, [DEFAULT_DATABASE_URL, url], require=False, allow_remote=True
+    )
+    assert decision.action == "fail"
+    assert decision.message == REFUSE_MESSAGE
 
 
 def test_surrounding_space_is_stripped():
