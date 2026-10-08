@@ -190,8 +190,8 @@ TWITTER_API_SECRET=
 TWITTER_ACCESS_TOKEN=
 TWITTER_ACCESS_TOKEN_SECRET=
 
-DEBUG=True
-SECRET_KEY=replace-this-in-local-env
+DEBUG=False
+SECRET_KEY=
 LOG_LEVEL=INFO
 BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
@@ -202,7 +202,7 @@ Make it clear:
 - API prefix is `/api/v1`.
 - `tests/` exists after this iteration.
 - Redis, Elasticsearch, OpenAI, news, and social-media integrations are planned/configured unless code exists.
-- Run command is `python -m uvicorn main:app --reload`.
+- Run command is `python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload`.
 - Test command is `.venv/bin/python -m pytest -q`.
 
 - [ ] **Step 5: Commit docs**

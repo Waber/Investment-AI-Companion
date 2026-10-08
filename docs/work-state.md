@@ -1,5 +1,61 @@
 # Current Work State
 
+## Secure defaults, neutral paths, and provider hygiene: 2026-10-08
+
+- Branch `cursor/secure-config-provider-hygiene-c91c`, based on
+  master `d568663`.
+- Completed: #45, #47, and #50, plus the blank-ticker cases from
+  #17. `DEBUG` defaults to false. `SECRET_KEY` is required and
+  rejects the two known placeholders. `ALLOWED_HOSTS` is enforced
+  with `TrustedHostMiddleware` (default `localhost`, `127.0.0.1`).
+  `python main.py` binds `127.0.0.1`. `BACKEND_CORS_ORIGINS` is a
+  string plus a validator that accepts a comma-separated list and
+  a JSON list. pydantic-settings stays at 2.1.0 and both locks are
+  unchanged. `DATABASE_URL` defaults to
+  `postgresql://investment_ai@localhost:5432/investment_ai`.
+  Tracked docs use `~/projects/Investment-AI-Companion` and
+  `$TMPDIR`. A `git grep` test fails if a personal home-directory
+  prefix, the old temporary-directory prefix, or the previous
+  local account name comes back. Tickers match
+  `^[A-Z0-9._\-^=]{1,20}$` after control characters are rejected
+  and the value is stripped and uppercased. The pattern is wider
+  than the issue's 15-character example because the demo fixture
+  uses underscores and `DEMO_DE_INDUSTRY` is 16 characters, while
+  the column is `String(20)`. Provider `ValidationError` on
+  fetch-company is HTTP 502 with `Provider returned invalid company
+  data`, logged without the provider input. Uniqueness stays HTTP
+  400. A missing company on update stays HTTP 500 and is now
+  logged. Ticker logs use `%r`. `/api/v1/test-config` stays
+  registered and returns 403 when DEBUG is off.
+- Incomplete: the queue in the next-action line is still open.
+  Alembic (#8) and the PostgreSQL harness (#9) stay later.
+  `fetch-financial-metrics` is still a placeholder. It validates
+  the ticker and does not map provider `ValidationError` to 502.
+  isort and flake8 still report the previous unused-import and
+  E402 findings in `setup_database.py`. CI runs pytest only.
+- Tests: no `.env`, `DATABASE_URL` unset, fresh Python 3.12.3 venv,
+  `pip install --require-hashes -r requirements-dev.lock`. The CI
+  command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  on the test commit `e352413`: 865 passed, 51 xfailed, 14.91s,
+  exact 92.93%. On the fix commit `849b08a`: 918 passed, 1
+  xfailed, 14.44s, exact 93.41%. Docs tree: 919 passed in
+  14.56s, no xfailed, exact 93.41%. `black --check` passed on the
+  touched Python files.
+- Active agents: none.
+- Blockers: none.
+- Next action: #24, the collector interface by capability plus a
+  deterministic offline fake collector selected by config
+  (`DATA_COLLECTOR=fake|yahoo`). Include the QA follow-ups in the
+  issue body: `debt_to_assets` from the balance sheet for equities
+  and `None` for ETFs/ETCs (the full Yahoo adapter stays #54);
+  keep the NaN/infinity guard that is already on master; define
+  cache, rate-limit, and backoff hooks and test them with the fake
+  and a fake clock; separate "no data" (HTTP 404) from a provider
+  error (typed `ProviderError`, HTTP 502, fixed detail, logged).
+  yfinance is already >=1.7, so the "without upgrading yfinance"
+  line in #24 is outdated. Then #19, #25, and #26 (with #16).
+
 ## PostgreSQL integration harness: 2026-10-08
 
 - Branch `cursor/postgres-integration-harness-fc54`, rebased onto
@@ -77,15 +133,14 @@
   `postgres_client` uses `http://127.0.0.1`. The integration
   import sets a 34-character `SECRET_KEY` when the marker is
   selected. Query parameters cannot redirect the connection.
-  Pull request #61 is open and not merged. Its new work-state
-  section still says the harness stays later. That sentence is
-  updated when this branch rebases onto #61. Older sections
-  below are snapshots from before the harness.
+  The harness is merged. Older sections below are snapshots
+  from before it.
 - Active agents: none.
 - Blockers: none.
-- Next action: #45 and #47 together (secure config defaults and
-  neutral defaults, one pull request), with #50 if that fix stays
-  small. Then #24, #19, #25, and #26 (with #16 and #17).
+- Next action when this section was written: #45 and #47 together
+  (secure config defaults and neutral defaults, one pull request),
+  with #50 if that fix stays small. Then #24, #19, #25, and #26
+  (with #16 and #17).
 
 ## Security dependencies and hashed lock: 2026-10-08
 
@@ -135,10 +190,10 @@
   on every run. CI does not run black, isort, or flake8.
 - Active agents: none.
 - Blockers: none.
-- Next action when this section was written: #45 and #47
-  together, with #50 if that fix stays small. The live next action
-  is the section at the top of this file. The PostgreSQL harness
-  (#9) is that section.
+- Next action when this section was written: #45 and #47 together
+  (secure config defaults and neutral defaults, one pull request),
+  with #50 if that fix stays small. Then #24, #19, #25, and #26
+  (with #16 and #17).
 
 ## Fetch-company 500 detail and debt_to_assets: 2026-10-08
 
@@ -410,7 +465,7 @@ work-state; both entries are kept.
 Historical delivery, now on `origin/master` as merge commit `b10d06e`. The
 review/merge next-action line below was the state when this snapshot was written.
 
-- Branch `fix/startup-lifespan-cors`, worktree `/private/tmp/investment-metric-updates`.
+- Branch `fix/startup-lifespan-cors`, worktree `$TMPDIR/investment-metric-updates`.
 - Scope and delivery gates: [lifespan/CORS plan](superpowers/plans/2026-10-07-lifespan-cors.md).
 - User authorized implementation, push and PR, not merge. Five previous local
   commits from `569a89e` through `cc54057` are included in this branch.
@@ -429,7 +484,7 @@ review/merge next-action line below was the state when this snapshot was written
 ## Historical Delivery Checkpoint: 2026-10-04
 
 - All work below is complete through the JSON overflow slice on
-  `fix/json-overflow-validation` in `/private/tmp/investment-metric-updates`.
+  `fix/json-overflow-validation` in `$TMPDIR/investment-metric-updates`.
 - This session: `d9e56ce` metric creation conflicts (6 cases), `2374acf` collector
   refresh (6 cases), plus JSON-safe validation fix (9 cases). Earlier ancestors
   `569a89e` and `0008b0c` remain included. Local commits only, no push/merge.
@@ -479,7 +534,7 @@ review/merge next-action line below was the state when this snapshot was written
 ## Active Slice: Company Update Conflicts
 
 - Branch `test/company-update-conflicts`, based on completed `569a89e`, same
-  `/private/tmp/investment-metric-updates` worktree. Start usage60% five-hour.
+  `$TMPDIR/investment-metric-updates` worktree. Start usage60% five-hour.
 - Kant implements narrow duplicate-name/ticker and same-session rollback tests.
   Completed3 cases; full696 tests passed with six existing warnings. Raman approved
   specification and quality. No production changes. Developer scoped format/lint
@@ -492,7 +547,7 @@ review/merge next-action line below was the state when this snapshot was written
 ## Active Slice: 2026-10-04 Metric Updates
 
 - PR1 merged as `1e05ab1`; older sections below describe historical states.
-- Branch `test/financial-metric-updates`, `/private/tmp/investment-metric-updates`.
+- Branch `test/financial-metric-updates`, `$TMPDIR/investment-metric-updates`.
 - Scope: partial metric updates, explicit null, zero, omission and invalid payloads.
   [Slice plan](superpowers/plans/2026-10-04-metric-updates.md). Hubble owns tests;
   coordinator handles docs/full tests. Completed:82 new cases, full693 passed
@@ -510,7 +565,7 @@ review/merge next-action line below was the state when this snapshot was written
 ## 2026-10-04 Recovery And Publication
 
 - Current branch: `docs/demo-and-ide-delivery`; recovered committed base `69258b9`
-  into `/private/tmp/investment-pr-delivery` for the user-requested commit/push/PR.
+  into `$TMPDIR/investment-pr-delivery` for the user-requested commit/push/PR.
 - The former temporary worktree was emptied; uncommitted IDE documentation was
   lost after both agents hit the usage limit. The guide is reconstructed with
   explicit database prerequisites and without assuming the old runtime survives.
@@ -526,11 +581,11 @@ review/merge next-action line below was the state when this snapshot was written
 ## Historical September Snapshot
 
 - Date: 2026-09-26. User requested continuation and reusable test data for API/future frontend testing.
-- Current branch: `feature/reusable-demo-fixtures`, based on demo documentation commit `83940ea`. Tooling worktree: `/private/tmp/investment-demo-fixtures`. Running application remains in `/private/tmp/investment-api-demo`; no restart needed for HTTP-based seeding.
-- Primary repo remains `/Users/przemkowy/IdeaProjects/Investment-AI-Companion`; its `master` and untracked `.python-version` are untouched.
+- Current branch: `feature/reusable-demo-fixtures`, based on demo documentation commit `83940ea`. Tooling worktree: `$TMPDIR/investment-demo-fixtures`. Running application remains in `$TMPDIR/investment-api-demo`; no restart needed for HTTP-based seeding.
+- Primary repo remains `~/projects/Investment-AI-Companion`; its `master` and untracked `.python-version` are untouched.
 - Demo: `http://127.0.0.1:8081/docs`, API on port8081 loopback only, no authentication. Never expose publicly.
-- PostgreSQL14.19: fresh cluster `/private/tmp/iac-demo.h7TbGw/data`, private socket directory `/private/tmp/iac-demo.h7TbGw`, port15432, no TCP listener, role `demo`, database `investment_demo`.
-- API runs detached with PID in `/private/tmp/iac-demo.h7TbGw/api.pid`, log `api.log`; database log `postgres.log` in the same directory. These are intentional demo services, not unfinished test processes. Stop/restart commands are in [the demo guide](api-demo.md).
+- PostgreSQL14.19: fresh cluster `$TMPDIR/iac-demo.h7TbGw/data`, private socket directory `$TMPDIR/iac-demo.h7TbGw`, port15432, no TCP listener, role `demo`, database `investment_demo`.
+- API runs detached with PID in `$TMPDIR/iac-demo.h7TbGw/api.pid`, log `api.log`; database log `postgres.log` in the same directory. These are intentional demo services, not unfinished test processes. Stop/restart commands are in [the demo guide](api-demo.md).
 - Environment is isolated, DEBUG=False, no private `.env` or API keys. Existing installed interpreter used; no dependency upgrade or user DB migration.
 - Synthetic sample company `DEMO` and metrics were created successfully (initial IDs both1). No real market/provider calls or AI analysis.
 - Fresh regression run: 549 passed, six existing warnings. Live PostgreSQL startup, company insert, and metrics insert succeeded. Final smoke and review are recorded in the journal.

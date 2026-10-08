@@ -27,4 +27,4 @@
 
 ## Verification
 
-From `/private/tmp`, run the primary `.venv/bin/python -m pytest -q -p no:cacheprovider` with clean environment, `PYTHONDONTWRITEBYTECODE=1`, and this worktree on `PYTHONPATH`. Use deterministic fake clients for seed unit tests and existing isolated SQLite fixtures for schema tests. Live verification is separate against `http://127.0.0.1:8081`; do not use providers or private `.env`.
+From `$TMPDIR`, run the primary `.venv/bin/python -m pytest -q -p no:cacheprovider` with clean environment, `PYTHONDONTWRITEBYTECODE=1`, and this worktree on `PYTHONPATH`. Use deterministic fake clients for seed unit tests and existing isolated SQLite fixtures for schema tests. Live verification is separate against `http://127.0.0.1:8081`; do not use providers or private `.env`.

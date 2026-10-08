@@ -1,6 +1,6 @@
 # Local API Demo
 
-> Historical runtime: the absolute `/private/tmp` paths below describe the
+> Historical runtime: the absolute `$TMPDIR` paths below describe the
 > September 26 session and may no longer exist. They are not a current health
 > check or a fresh-install procedure. For a new local run, start with the
 > [IDE startup guide](ide-startup.md).
@@ -10,7 +10,7 @@ profiles are not implemented. All company names, tickers, and financial values
 below are synthetic, not market data or investment advice. Example website URLs
 are stored as strings; CRUD requests do not visit them.
 
-Runtime data is under `/private/tmp` and may disappear after system cleanup or
+Runtime data is under `$TMPDIR` and may disappear after system cleanup or
 reboot. Do not store valuable data here. The seeded `DEMO` company and its
 metrics are synthetic. Swagger loads UI assets from a CDN; curl does not need
 those assets. Commands below disable curl configuration and proxy inheritance.
@@ -29,9 +29,9 @@ After the coordinator confirms the demo is ready:
 
 ```bash
 export BASE_URL=http://127.0.0.1:8081
-export PYTHON=/Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python
+export PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
 curl -q --noproxy '*' -fsS "$BASE_URL/"
-"$PYTHON" /private/tmp/investment-api-demo/scripts/smoke_demo.py --base-url "$BASE_URL"
+"$PYTHON" $TMPDIR/investment-api-demo/scripts/smoke_demo.py --base-url "$BASE_URL"
 ```
 
 - [Swagger UI](http://127.0.0.1:8081/docs)
@@ -129,11 +129,11 @@ does not add or run migrations. These commands reuse the existing cluster only.
 Do not run `initdb`, drop databases, or delete the runtime directory.
 
 ```bash
-export DEMO_DIR=/private/tmp/iac-demo.h7TbGw
+export DEMO_DIR=$TMPDIR/iac-demo.h7TbGw
 export PG_BIN=/opt/homebrew/opt/postgresql@14/bin
-export REPO=/private/tmp/investment-api-demo
-export PYTHON=/Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python
-export DATABASE_URL='postgresql://demo@/investment_demo?host=/private/tmp/iac-demo.h7TbGw&port=15432'
+export REPO=$TMPDIR/investment-api-demo
+export PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
+export DATABASE_URL='postgresql://demo@/investment_demo?host=$TMPDIR/iac-demo.h7TbGw&port=15432'
 ```
 
 Stop the foreground API with Ctrl-C. For the coordinator-started API, inspect the

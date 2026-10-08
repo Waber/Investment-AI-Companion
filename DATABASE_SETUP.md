@@ -29,7 +29,7 @@ python setup_database.py
 createdb investment_ai
 
 # 2. Run the application (tables will be created automatically)
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ## Database Configuration
@@ -42,9 +42,13 @@ Create a `.env` file in your project root:
 # Database connection
 DATABASE_URL=postgresql://username:password@localhost:5432/investment_ai
 
-# Other settings...
-DEBUG=True
-SECRET_KEY=your-secret-key-here
+# DEBUG defaults to false. Set it true only for /api/v1/test-config.
+DEBUG=False
+# Required. Generate with:
+# python -c "import secrets; print(secrets.token_urlsafe(32))"
+SECRET_KEY=
+# Comma-separated origins, or a JSON list.
+BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
 ### Connection String Format

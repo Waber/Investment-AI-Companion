@@ -1,6 +1,6 @@
 # Reusable Synthetic Demo Data
 
-> Commands using `/private/tmp/investment-demo-fixtures` refer to the original
+> Commands using `$TMPDIR/investment-demo-fixtures` refer to the original
 > temporary checkout. Substitute your current checkout containing this file.
 > Provision a local API with the [IDE startup guide](ide-startup.md) first;
 > the old demo runtime is not guaranteed to survive cleanup.
@@ -32,12 +32,12 @@ models companies, not separate bond/ETF/ETC instrument types.
 ## Preview And Apply
 
 The existing demo API is at `http://127.0.0.1:8081`. Its running application stays
-in `/private/tmp/investment-api-demo`; the newer fixture tooling is in a separate
+in `$TMPDIR/investment-api-demo`; the newer fixture tooling is in a separate
 worktree so no application restart or production-code change is required.
 
 ```bash
-cd /private/tmp/investment-demo-fixtures
-PYTHON=/Users/przemkowy/IdeaProjects/Investment-AI-Companion/.venv/bin/python
+cd $TMPDIR/investment-demo-fixtures
+PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
 
 # Read-only preview; no POST, PUT, or DELETE.
 "$PYTHON" -m scripts.seed_demo --base-url http://127.0.0.1:8081
@@ -99,7 +99,7 @@ migrates them. Create a fresh file and run `--apply` again.
 ## Storage And Recovery
 
 The JSON fixture and scripts are committed in Git. The running PostgreSQL
-database remains under `/private/tmp/iac-demo.h7TbGw/data`, which can be removed
+database remains under `$TMPDIR/iac-demo.h7TbGw/data`, which can be removed
 by system cleanup. This is deliberately disposable storage, not a backup.
 After provisioning a fresh isolated demo with empty tables, apply the committed
 fixture again. User edits are not in the fixture and must be backed up separately

@@ -1,8 +1,8 @@
 """Secure defaults (#45) and the neutral database URL (#47).
 
 DEBUG is off, SECRET_KEY is required, the process binds to loopback,
-and a comma-separated CORS value parses. The personal-path grep stays
-expected-fail until the docs no longer contain those paths.
+and a comma-separated CORS value parses. Tracked files do not contain
+a local username or an absolute home or temporary path.
 """
 
 import runpy
@@ -230,10 +230,6 @@ def _personal_path_pattern() -> str:
     return f"{username}|{home}|{temporary}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="tracked files still contain a local username or machine path",
-)
 def test_tracked_files_have_no_personal_machine_paths():
     result = subprocess.run(
         ["git", "grep", "-n", "-E", _personal_path_pattern(), "--", "."],
