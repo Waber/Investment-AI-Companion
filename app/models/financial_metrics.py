@@ -103,9 +103,12 @@ class FinancialMetrics(FinancialMetricsBase):
     period_end: datetime = Field(
         ..., description="End of reporting period date"
     )
+    # No max_length here. SQLite stores a longer value, and a limit
+    # on this read model turns the company list into HTTP 500.
+    # FinancialMetricsCreate still rejects anything over 20 characters.
+    # FinancialMetricsUpdate does not set period_type.
     period_type: str = Field(
         ...,
-        max_length=20,
         description="Period type (quarterly/annual)",
     )
     created_at: datetime = Field(

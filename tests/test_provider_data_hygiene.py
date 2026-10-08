@@ -6,8 +6,10 @@ ticker cannot start a second log line.
 """
 
 import logging
+from datetime import datetime, timezone
 
 import pytest
+from annotated_types import MaxLen
 from pydantic import ValidationError
 
 from app.api.data_collection import (
@@ -17,8 +19,10 @@ from app.api.data_collection import (
 )
 from app.data_collectors import yahoo_finance
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
-from app.models.company import CompanyCreate, normalize_ticker
-from app.models.database_models import CompanyDB
+from app.models.company import Company, CompanyCreate, normalize_ticker
+from app.models.database_models import CompanyDB, FinancialMetricsDB
+from app.models.financial_metrics import FinancialMetrics
+from app.models.historical_data import HistoricalData
 from app.repositories.company_repository import CompanyRepository
 
 COMPANIES = "/api/v1/companies/"
@@ -387,6 +391,54 @@ async def test_period_type_longer_than_the_column_is_422(client):
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_stored_long_period_type_reads_back(client):
+    """A legacy period_type longer than the column must not 500 the list.
+
+    SQLite stores the value. The write model still rejects it. The
+    read model must not, or one old row fails
+    GET /financial-metrics/company/{id} for every caller.
+    """
+    company = (
+        await client.post(COMPANIES, json={"name": "Legacy", "ticker": "LPRD"})
+    ).json()
+    session = client.app.state.testing_session_local()
+    session.add(
+        FinancialMetricsDB(
+            company_id=company["id"],
+            period_end=datetime(2024, 12, 31, tzinfo=timezone.utc),
+            period_type="Q" * 25,
+        )
+    )
+    session.commit()
+    session.close()
+
+    response = await client.get(
+        f"/api/v1/financial-metrics/company/{company['id']}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["period_type"] == "Q" * 25
+
+
+def test_read_models_do_not_carry_write_length_limits():
+    """Create and update keep max_length. The models that read rows do not.
+
+    Company, FinancialMetrics, and HistoricalData are the response
+    shapes. One stored value past a write-time limit must still
+    serialise. This pull request added those limits on company
+    fields and on period_type.
+    """
+    for model in (Company, FinancialMetrics, HistoricalData):
+        for name, field in model.model_fields.items():
+            limited = [
+                item for item in field.metadata if isinstance(item, MaxLen)
+            ]
+            assert (
+                limited == []
+            ), f"{model.__name__}.{name} repeats a write limit"
 
 
 @pytest.mark.asyncio
