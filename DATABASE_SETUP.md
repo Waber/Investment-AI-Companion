@@ -6,7 +6,9 @@ This guide explains how to set up the PostgreSQL database for the Investment AI 
 
 1. **PostgreSQL** installed and running
 2. **Python** with virtual environment activated
-3. **Dependencies** installed (`pip install -r requirements.txt`)
+3. **Dependencies** installed from the hashed lock
+   (`pip install --require-hashes -r requirements-dev.lock` for tests,
+   or `requirements.lock` for the application only)
 
 ## Quick Setup
 

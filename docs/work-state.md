@@ -1,5 +1,57 @@
 # Current Work State
 
+## Security dependencies and hashed lock: 2026-10-08
+
+- Branch `cursor/security-deps-hashed-lock-79f1`, based on
+  `origin/master` `7120577`.
+  [PR #51](https://github.com/Waber/Investment-AI-Companion/pull/51).
+- Completed: the security/deps part of #11, plus #46 because the
+  workflow changed. FastAPI 0.143.0 and Starlette 1.7.0 replace
+  FastAPI 0.104.1 and Starlette 0.27.0. Pydantic stays on v2
+  (2.13.5). `requests` 2.34.2, `python-dotenv` 1.2.4, `black` 26.10.0,
+  `pytest` 9.1.1, and `pytest-asyncio` 1.4.0 are the locked installs.
+  `yfinance` is 1.7.0. Unused direct pins are removed. Runtime and
+  dev requirements are split. `requirements.lock` and
+  `requirements-dev.lock` are hashed. CI installs the dev lock with
+  `--require-hashes`. `actions/checkout` and `actions/setup-python`
+  are pinned to commit SHAs. `google-genai`, `jinja2`, and
+  `python-multipart` are not pinned.
+- One pull request. The FastAPI jump did not need a Pydantic major
+  bump or a broad code rewrite. The test that compares ordinary 422
+  bodies calls `errors(include_url=False)`, which is how FastAPI
+  0.143 builds those errors. Black 26 reformats are a separate
+  commit.
+- Incomplete: the queue in the next-action line is still open.
+  Alembic (#8) and the PostgreSQL harness (#9) stay later.
+  `google-genai` waits for the Gemini adapter. A dry-run of
+  `google-genai` 2.29.0 against this set installs, and it would
+  downgrade `websockets` from 17.2 to 16.1.1 because that release
+  requires `websockets<17`. `jinja2` and `python-multipart` wait for
+  the UI. isort and flake8 still report the previous import and
+  line-length findings. CI runs pytest only.
+- Tests: no `.env`, `DATABASE_URL` unset, fresh Python 3.12.3 venv,
+  `pip install --require-hashes -r requirements-dev.lock` (started
+  from pip 24.0). The CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 846 passed in 12.42s, no warnings summary, TOTAL 92% (exact
+  92.58%). `black --check` on `app`, `main.py`, `setup_database.py`,
+  and `tests` passed. `pip-audit -r requirements.lock` and
+  `pip-audit -r requirements-dev.lock` both reported no known
+  vulnerabilities. The runtime lock installs the same way.
+  `--strip-extras` does not change the runtime lock's pins or
+  hashes. It changes the dev lock from `coverage[toml]==7.16.2`
+  to `coverage==7.16.2` with the same hashes. Each commit passes
+  the CI pytest command in a venv installed from that commit's
+  lock (same lock blob `9b70931`): `a585a01` 846 passed in 12.75s,
+  `912c12b` 846 passed in 12.57s, `3bbea71` 846 passed in 12.79s,
+  and this docs tree 846 passed in 12.92s. Exact coverage 92.58%
+  on every run. CI does not run black, isort, or flake8.
+- Active agents: none.
+- Blockers: none.
+- Next action: #45 and #47 together (secure config defaults and
+  neutral defaults, one pull request), with #50 if that fix stays
+  small. Then #24, #19, #25, and #26 (with #16 and #17).
+
 ## Fetch-company 500 detail and debt_to_assets: 2026-10-08
 
 - Branch `cursor/fetch-company-500-debt-to-assets-9f95`, based on
@@ -32,16 +84,20 @@
   404/400 pin already passed on that commit.
 - Active agents: none.
 - Blockers: none.
-- Next action: #11, the security/deps part. That is the FastAPI and
-  Starlette CVE upgrade, `requests`, `python-dotenv`, `black`,
-  `pytest`, removing unused pins, `yfinance>=1.7`, and a lock file
-  with hashes. On 2026-10-08 the Project Manager moved this
+- Next action when this section was written: #11, the security/deps
+  part. That work is the section at the top of this file. The
+  detail below is the priority as it stood before that work: the
+  FastAPI and Starlette CVE upgrade, `requests`, `python-dotenv`,
+  `black`, `pytest`, removing unused pins, `yfinance>=1.7`, and a
+  lock file with hashes. On 2026-10-08 the Project Manager moved this
   security/deps part ahead of the demo after the Security Engineer's
   review found CVEs: `fastapi==0.104.1` forces `starlette==0.27.0`
   (CVE-2024-24762, CVE-2024-47874, CVE-2025-54121), and
   `requests==2.31.0` is also affected. This overrides
-  `docs/product-requirements.md` around line 254, which still lists
-  #11 after the demo. That requirements file is unchanged. After #11
+  `docs/product-requirements.md` around line 254, which at that
+  moment still listed #11 after the demo. That requirements file
+  was unchanged when this section was written. The section at the
+  top records the update. After #11
   come #45 and #47 together (secure config defaults and neutral
   defaults, one pull request), then #24, #19, #25 and #26 (with #16
   and #17). #46 (pin Actions to SHAs) goes into any pull request

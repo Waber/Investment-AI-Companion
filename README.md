@@ -14,7 +14,7 @@ The application must not present generated output as financial advice. Analysis 
 
 ## Planned Or Configured Integrations
 
-The environment template includes configuration keys for Redis, Elasticsearch, OpenAI, news, and social-media providers. Treat these as planned or configured integrations unless the corresponding application code exists and is covered by tests.
+The environment template includes configuration keys for Redis, Elasticsearch, OpenAI, news, and social-media providers. Treat these as planned or configured integrations unless the corresponding application code exists and is covered by tests. The Redis, Elasticsearch, and OpenAI client libraries are not installed. The settings keys remain. The planned AI provider is Gemini through `google-genai`, and that package is not pinned yet.
 
 ## Project Structure
 
@@ -29,13 +29,17 @@ investment_ai_companion/
 ├── docs/                    # Project documentation and delivery journal
 ├── tests/                   # Automated tests for API and behavior coverage
 ├── main.py                  # FastAPI application entrypoint
-├── requirements.txt         # Python dependencies
+├── requirements.txt         # Direct runtime dependencies
+├── requirements-dev.txt     # Runtime set plus test and lint tools
+├── requirements.lock        # Hashed runtime lock
+├── requirements-dev.lock    # Hashed dev lock; CI installs this
 └── setup_database.py        # Local database setup helper
 ```
 
 ## Requirements
 
-- Python 3.12 for local development.
+- Python 3.12 is the minimum. The locked numpy 2.5.3 requires
+  Python >=3.12.
 - PostgreSQL for the default application database.
 - A local virtual environment at `.venv`.
 - Redis, Elasticsearch, OpenAI, news, and social-media credentials only when working on features that use them.
@@ -52,11 +56,34 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-2. Install dependencies:
+2. Install dependencies from the hashed lock. Use the dev lock for
+   tests and lint. Use the runtime lock when you only need the API.
 
 ```bash
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
 ```
+
+```bash
+.venv/bin/python -m pip install --require-hashes -r requirements.lock
+```
+
+`requirements.txt` and `requirements-dev.txt` are the direct pins.
+The lock files are the exact set, with hashes. Regenerate them on
+Python 3.12 after you change a pin. Pass `--strip-extras` so the
+lock does not keep extras markers such as `coverage[toml]`. The
+dev command also passes `--allow-unsafe` because pip-tools depends
+on setuptools, and `--require-hashes` rejects an unpinned setuptools.
+
+```bash
+python -m piptools compile --generate-hashes --strip-extras --output-file=requirements.lock requirements.txt
+python -m piptools compile --allow-unsafe --generate-hashes --output-file=requirements-dev.lock --strip-extras requirements-dev.txt
+```
+
+These locks were generated for Python 3.12 on Linux and macOS, and
+they have no environment markers. A hashed install fails on Windows
+(tzdata, colorama) and on Python older than 3.11. Use Python 3.12
+on macOS or Linux. Universal locks are follow-up
+[#53](https://github.com/Waber/Investment-AI-Companion/issues/53).
 
 3. Create local environment configuration:
 
@@ -93,9 +120,12 @@ read-only preview, and explicit, non-overwriting seed command.
 From the repository root, after the virtual environment in Setup exists, run
 the test suite. No `.env` file is required. Tests use the in-memory SQLite
 database in `tests/conftest.py` and do not call market-data or AI providers.
-GitHub Actions on Python 3.12 runs pytest, prints a coverage report
+GitHub Actions on Python 3.12 installs `requirements-dev.lock` with
+`pip install --require-hashes`, runs pytest, prints a coverage report
 for `app`, `main`, and `scripts`, and treats `DeprecationWarning` as an
-error. The job fails if total coverage drops below 80%.
+error. The job fails if total coverage drops below 80%. Every `uses:`
+action is a full commit SHA with a trailing `# vX.Y.Z` comment. A new
+workflow uses that same form.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80
@@ -110,9 +140,10 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W e
 Useful lint and formatting checks, run from the repository root. Black and
 isort read line length 79 from `pyproject.toml`. flake8 does not read that
 file; `.flake8` records the same 79, which is also flake8's own default.
-These commands do not pass `--line-length`. Older files still have
-formatting debt. The commands report it and do not reformat those files.
-CI does not run these lint checks yet.
+These commands do not pass `--line-length`. `black --check` passes on
+these paths. isort and flake8 still report the previous import-order,
+unused-import, and long-line findings. Black does not rewrite those
+docstrings and comments. CI runs pytest and does not run these checks.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m black --check app main.py setup_database.py tests
