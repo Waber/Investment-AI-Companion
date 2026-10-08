@@ -13,8 +13,9 @@
   file already uses.
 - Incomplete: Demo v1 issues #23–#40 are not started. QA bugs #16–#21
   are still open. Coverage PR #22 is still open.
-- Tests: local pytest result is recorded in the journal after the run.
-  Unrun: GitHub Actions Tests on this branch, until that run finishes.
+- Tests: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
+  -> 758 passed in 6.48s, no warnings summary. GitHub Actions Tests on
+  this branch is the remaining check.
 - Active agents: none.
 - Blockers: none for starting Demo v1. This branch and PR #22
   (`cursor/coverage-threshold-80-c3a6`) both edit this file and
