@@ -98,6 +98,8 @@ refuses to start when it is missing, shorter than that, or still a known
 placeholder in any letter case. Generate one with
 `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 (that prints 43 characters).
+`ALLOWED_HOSTS` is enforced, so a request with any other Host gets
+400 Invalid host header.
 `DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need
 `/api/v1/test-config`. `BACKEND_CORS_ORIGINS` is a comma-separated list
 of http(s) origins. A JSON list works too. The code default for

@@ -404,6 +404,15 @@ def test_documented_commands_expand_tmpdir_and_home():
     assert frozen == []
 
 
+def test_docs_say_an_unknown_host_is_rejected():
+    """Operators need to see that ALLOWED_HOSTS is actually enforced."""
+    needle = "Invalid host header"
+    readme = (ROOT / "README.md").read_text()
+    example = (ROOT / ".env.example").read_text()
+    assert "ALLOWED_HOSTS" in readme and needle in readme
+    assert "ALLOWED_HOSTS" in example and needle in example
+
+
 def test_tracked_files_have_no_personal_machine_paths():
     result = subprocess.run(
         ["git", "grep", "-n", "-E", _personal_path_pattern(), "--", "."],
