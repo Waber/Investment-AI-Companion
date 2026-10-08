@@ -28,6 +28,16 @@
   400. A missing company on update stays HTTP 500 and is now
   logged. Ticker logs use `%r`. `/api/v1/test-config` stays
   registered and returns 403 when DEBUG is off.
+- Review follow-up, still on this branch, on top of `b36f7da`:
+  settings errors hide other secrets, `SECRET_KEY` is at least 32
+  characters, `ALLOWED_HOSTS` parses like CORS, name and provider
+  error logs use `%r`, non-ASCII tickers are rejected, 422 bodies
+  truncate long `input` values, descriptions are capped at 5000
+  characters on write, CORS origins are bare http(s) URLs, the
+  handler does not uppercase a ticker twice, the demo `DATABASE_URL`
+  expands `$TMPDIR`, `GBp` is stored unchanged, and the read model
+  does not apply write-time ticker rules. The next action below
+  is unchanged.
 - Incomplete: the queue in the next-action line is still open.
   Alembic (#8) and the PostgreSQL harness (#9) stay later.
   `fetch-financial-metrics` is still a placeholder. It validates

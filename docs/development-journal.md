@@ -140,6 +140,65 @@
   measured. Account usage was not available, so no percentage is
   recorded. No subagents.
 
+### Security and QA review on `b36f7da`
+
+Follow-up commits on the same branch. Each one started with a
+failing assertion, then the fix, and the commit itself passes the
+same CI pytest command. No force-push. #60 was still open, so this
+branch was not rebased.
+
+- B1, `cef67b6`: `hide_input_in_errors=True`. A missing or rejected
+  `SECRET_KEY` no longer prints `DATABASE_URL` or `OPENAI_API_KEY`
+  in the `ValidationError` text. 920 passed, exact coverage 93.41%.
+- N1, `f94088e`: placeholders are compared with `casefold()`, and
+  `SECRET_KEY` must be at least 32 characters. `token_urlsafe(32)`
+  is 43 characters, which is what `.env.example` and the README
+  tell you to generate. Test keys were lengthened in the same
+  commit so collection still works. 924 passed, exact 93.41%.
+- N2, `7a923f4`: `ALLOWED_HOSTS` is a string plus a validator, like
+  CORS. A comma list and a JSON list both work. `*`, an empty
+  entry, and a host that includes a port are rejected. The default
+  is still `localhost,127.0.0.1`. 931 passed, exact 92.53%.
+- N3, `2c94486`: company-name success logs and the collector's
+  `str(e)` logs use `%r`. A newline in the name or the exception
+  text cannot start a second log line. 933 passed, exact 92.53%.
+- N4, `9cc3e0e`: `isascii()` runs before `strip` and `upper`, so
+  `aapl` plus a line separator, a no-break space plus `aapl`, and
+  `ıbm` are HTTP 422. 936 passed, exact 92.56%.
+- N5, `d5c5570`: 422 errors still include `input`, because
+  `tests/test_validation_errors.py` checks short values such as
+  `inf` and a nested structure. Strings longer than 100 characters
+  are cut, so a 200k-character name does not come back in the
+  body. `description` is capped at 5000 characters on create and
+  update only. The column is `Text`. 5000 is about a page, enough
+  for a provider summary, and a longer row already stored can
+  still be read. 938 passed, exact 92.71%.
+- N6, `531fb00`: a CORS origin must be `http` or `https` with a
+  host and an optional port. A path other than `/`, userinfo, a
+  query, a fragment, or `*` is rejected at startup. 946 passed,
+  exact 92.46%.
+- N7, `7c4f7c9`: `fetch_company_data` no longer calls `.upper()`
+  again. The request model already did. 947 passed, exact 92.46%.
+- QA, documented commands, `8afeafb`: the demo `DATABASE_URL`
+  export used single quotes, so `$TMPDIR` never expanded. It is
+  double-quoted. A test scans the guides for any other
+  single-quoted `$TMPDIR` or `~/`. There were no others. 948
+  passed, exact 92.46%.
+- QA, currency, `7bb9ee0`: `GBp` is stored and read back unchanged.
+  Currency is three letters, and the case is not rewritten. 949
+  passed, exact 92.49%.
+- QA, read model, `88f3250`: ticker, length, and ASCII checks apply
+  to create and update only. `GET /companies/` returns 200 when a
+  row inserted past the model has a blank ticker. 950 passed,
+  exact 92.57%.
+- The pull request says `Refs #50` until Security signs off. It
+  still closes #45, #47, and #17. #60 is a separate PostgreSQL
+  harness on the same base. Whichever lands second has to point
+  its test client at `http://127.0.0.1`, stop hard-coding the old
+  database URL default, clear the personal paths the git-grep
+  guard flags, and refresh the work-state line that says `#9 stays
+  later`.
+
 ## 2026-10-08 - Module-level skips fail the PostgreSQL job (#9)
 
 - Scope: QA approved `5aa1ccf` and sent it to Code Reviewer.
