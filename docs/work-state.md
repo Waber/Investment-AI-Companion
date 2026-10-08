@@ -15,7 +15,10 @@
   was green on `4960a42` before this rebase.
   [run 37841966780](https://github.com/Waber/Investment-AI-Companion/actions/runs/37841966780)
   is green on `135bc59`. SQLite 846 passed, 116 deselected.
-  PostgreSQL 114 passed, 2 xfailed, 0 skipped.
+  PostgreSQL 114 passed, 2 xfailed, 0 skipped. QA approved
+  docs head `5aa1ccf`. A follow-up records module-level
+  `pytest.skip` collection reports in the zero-skip guard and
+  names the first skipped node ids in the banner.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
@@ -50,13 +53,14 @@
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3, the CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 846 passed, 116 deselected in 8.14s, no warnings summary,
+  -> 846 passed, 119 deselected in 12.43s, no warnings summary,
   TOTAL 92% (exact 92.58%).
+  `REQUIRE_POSTGRES=1` and
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
-  and `-m integration` -> 114 passed, 2 xfailed, 846 deselected,
-  0 skipped in 3.06s on local PostgreSQL 16.15. Of the 116
-  integration tests, 100 do not open PostgreSQL and 16 hit the
-  database (14 passed, 2 xfailed). The two expected failures
+  with `-m integration` -> 117 passed, 2 xfailed, 846 deselected
+  in 4.15s, exit 0. Of the 119 integration tests, 103 do not
+  open PostgreSQL and 16 hit the database (14 passed, 2 xfailed).
+  The two expected failures
   create `DUP` first; without the DSN they skip (2 skipped),
   and with `REQUIRE_POSTGRES=1` and no DSN they error (exit 1).
   A node id without

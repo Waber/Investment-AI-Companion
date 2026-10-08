@@ -86,22 +86,57 @@ def _prepare_schema(engine):
 
 
 # Node ids of tests that skipped in this process. A skip is not a
-# deselected test. pytest_sessionfinish reads this list.
+# deselected test. pytest_sessionfinish reads this list. A
+# module-level pytest.skip only produces a collection report, so
+# both hooks below append to this list.
 _skipped_nodeids: list[str] = []
 
 
-def pytest_runtest_logreport(report) -> None:
-    """Remember skips so the PostgreSQL job can refuse them.
+def _record_skip(report) -> None:
+    """Remember one skipped report, ignoring expected failures.
 
     An expected failure is also ``outcome == "skipped"``. ``wasxfail``
     is the reason string on that report, so those two strict xfails
-    are not counted here.
+    are not counted. The same node id is stored once.
     """
     if not getattr(report, "skipped", False):
         return
     if getattr(report, "wasxfail", False):
         return
-    _skipped_nodeids.append(getattr(report, "nodeid", "<unknown>"))
+    nodeid = getattr(report, "nodeid", "<unknown>")
+    if nodeid in _skipped_nodeids:
+        return
+    _skipped_nodeids.append(nodeid)
+
+
+def pytest_runtest_logreport(report) -> None:
+    """Remember a skip that happened while a test was running."""
+    _record_skip(report)
+
+
+def pytest_collectreport(report) -> None:
+    """Remember a skip that happened during collection.
+
+    ``pytest.skip(allow_module_level=True)`` never runs the tests in
+    that module, so ``pytest_runtest_logreport`` does not see them.
+    The collection report for the module is the skip.
+    """
+    _record_skip(report)
+
+
+def _skip_banner(skipped: list[str]) -> str:
+    """Name the first few skips so the CI log shows what was skipped."""
+    shown = skipped[:3]
+    names = ", ".join(shown)
+    extra = len(skipped) - len(shown)
+    if extra:
+        names = f"{names}, and {extra} more"
+    return (
+        "REQUIRE_POSTGRES=1 forbids skipped tests "
+        f"({len(skipped)} skipped: {names}). "
+        "The PostgreSQL job must run those tests or fail, "
+        "not skip them."
+    )
 
 
 def refuse_skips_when_postgres_is_required(
@@ -121,12 +156,7 @@ def refuse_skips_when_postgres_is_required(
         return
     reporter = session.config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:
-        reporter.write_sep(
-            "!",
-            "REQUIRE_POSTGRES=1 forbids skipped tests "
-            f"({len(skipped)} skipped). The PostgreSQL job must "
-            "run those tests or fail, not skip them.",
-        )
+        reporter.write_sep("!", _skip_banner(skipped))
     if int(session.exitstatus) == 0:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
