@@ -4,6 +4,7 @@
 
 - Branch `cursor/secure-config-provider-hygiene-c91c`, based on
   master `d568663`.
+  [PR #61](https://github.com/Waber/Investment-AI-Companion/pull/61).
 - Completed: #45, #47, and #50, plus the blank-ticker cases from
   #17. `DEBUG` defaults to false. `SECRET_KEY` is required and
   rejects the two known placeholders. `ALLOWED_HOSTS` is enforced
