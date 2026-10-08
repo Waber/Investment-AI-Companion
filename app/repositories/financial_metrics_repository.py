@@ -162,31 +162,19 @@ class FinancialMetricsRepository:
         if not db_metrics:
             return None
 
-        # Update only the fields that were provided
+        # Update only the fields that were provided. period_end is the
+        # only key this model can change. company_id and period_type
+        # stay on the row.
         update_data = metrics_update.model_dump(exclude_unset=True)
-        if (
-            "period_end" in update_data
-            and update_data["period_end"] is not None
-        ):
+        if "period_end" in update_data:
             update_data["period_end"] = as_utc(update_data["period_end"])
-        period_end = update_data.get("period_end", db_metrics.period_end)
-        if period_end is not None:
-            period_end = as_utc(period_end)
-        key_changed = any(
-            field in update_data
-            for field in ("period_end", "period_type", "company_id")
-        )
-        if (
-            key_changed
-            and period_end is not None
-            and not self.is_unique(
-                update_data.get("company_id", db_metrics.company_id),
-                period_end,
-                update_data.get("period_type", db_metrics.period_type),
+            if not self.is_unique(
+                db_metrics.company_id,
+                update_data["period_end"],
+                db_metrics.period_type,
                 exclude_id=metrics_id,
-            )
-        ):
-            raise ValueError(_UNIQUE_PERIOD)
+            ):
+                raise ValueError(_UNIQUE_PERIOD)
 
         # Update fields
         for field, value in update_data.items():

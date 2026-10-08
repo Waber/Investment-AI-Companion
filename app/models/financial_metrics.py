@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FinancialMetricsBase(BaseModel):
@@ -75,24 +75,18 @@ class FinancialMetricsCreate(FinancialMetricsBase):
 class FinancialMetricsUpdate(FinancialMetricsBase):
     """Partial update of financial metrics.
 
-    ``period_end`` is optional. When a client sends it, the repository
-    converts it to aware UTC before the uniqueness check. Omitting the
-    field leaves the stored instant unchanged. An explicit null is
-    rejected here, so the API returns 422 instead of a database
-    NOT NULL error.
+    ``period_end`` may be omitted. The repository then leaves the stored
+    instant unchanged. The annotation is ``datetime``, so a JSON null is
+    a validation error (HTTP 422) and does not clear the column.
     """
 
-    period_end: Optional[datetime] = None
-
-    @field_validator("period_end")
-    @classmethod
-    def reject_null_period_end(cls, value: Optional[datetime]):
-        # Pydantic skips this when the field is omitted, so the default
-        # None stays unset and model_dump(exclude_unset=True) leaves
-        # the column alone. A JSON null is an explicit value.
-        if value is None:
-            raise ValueError("period_end cannot be null")
-        return value
+    # Field(None) is only the "client left this out" default. It is not
+    # a stored value. json_schema_extra drops "default": null so the
+    # OpenAPI document shows a date-time, not a nullable field.
+    period_end: datetime = Field(
+        None,
+        json_schema_extra=lambda schema: schema.pop("default", None),
+    )
 
 
 class FinancialMetrics(FinancialMetricsBase):
