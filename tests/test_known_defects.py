@@ -1,8 +1,9 @@
-"""Strict xfail for the period_end offset duplicate (GitHub issue #20).
+"""Same period_end instant with another UTC offset is a duplicate (#20).
 
-QA pinned this case in an unpushed known-defects file. ``strict=True``
-turns an unexpected pass into a failure, so the fix commit deletes the
-marker. The other known-defect cases stay with issues #18, #19, and #21.
+QA pinned this case as a strict xfail. The marker is removed in the fix:
+the repository normalizes the instant to aware UTC before the uniqueness
+check. PostgreSQL coverage of this case waits for issue #9. The other
+known-defect cases stay with issues #18, #19, and #21.
 """
 
 import pytest
@@ -11,12 +12,6 @@ COMPANIES = "/api/v1/companies/"
 METRICS = "/api/v1/financial-metrics/"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="same instant with a different UTC offset is stored twice on "
-    "SQLite; verify PostgreSQL in the #9 harness (issue #20)",
-)
 @pytest.mark.asyncio
 async def test_same_instant_with_other_offset_is_a_duplicate(client):
     company = (

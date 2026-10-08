@@ -1,29 +1,21 @@
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import Base, get_db
+from app.core.database import Base, create_db_engine, get_db
 from main import create_app
 
 
 @pytest_asyncio.fixture()
 async def client():
-    engine = create_engine(
+    # The same SQLite foreign-key hook as the application engine.
+    # StaticPool keeps one connection for the in-memory database.
+    engine = create_db_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-
-    @event.listens_for(engine, "connect")
-    def enable_foreign_keys(dbapi_connection, connection_record):
-        # SQLite requires foreign key enforcement on each physical connection.
-        cursor = dbapi_connection.cursor()
-        try:
-            cursor.execute("PRAGMA foreign_keys=ON")
-        finally:
-            cursor.close()
 
     testing_session_local = sessionmaker(
         autocommit=False,

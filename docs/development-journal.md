@@ -1,5 +1,68 @@
 # Development Journal
 
+## 2026-10-08 - SQLite UTC timestamps and foreign keys (D1, #23 and #20)
+
+- Scope: demo slice D1 from `docs/product-requirements.md` section 5
+  ("Other model points") and section 11 phase P1, together with bug #20.
+  Rebased onto `origin/master` `f8266ea`.
+  [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
+  is merged as `778735e`.
+  [PR #41](https://github.com/Waber/Investment-AI-Companion/pull/41)
+  is merged as `07c30f6`.
+  [PR #43](https://github.com/Waber/Investment-AI-Companion/pull/43)
+  is merged as `f8266ea`. Branch
+  `cursor/sqlite-utc-timestamps-foreign-keys-feb1`.
+- `app/core/utc_datetime.py` adds `UTCDateTime`. On write it converts
+  the value to UTC. On SQLite it then drops `tzinfo` and stores that
+  UTC wall clock, because SQLite keeps the clock and throws away the
+  offset. On read it attaches UTC. On PostgreSQL the bound value stays
+  timezone-aware, so `timestamptz` is unchanged. `as_utc` is the shared
+  helper: a naive datetime is treated as UTC, an aware one is converted
+  with `astimezone` so the instant stays the same.
+- Decision for naive `period_end`: treat it as UTC. The API already
+  accepts offset-less strings such as
+  `2024-12-31T00:00:00` (see `tests/test_metric_creation_conflicts.py`).
+  Rejecting them would break that contract. The same instant sent as
+  `Z` or as `+02:00` is a duplicate (400). Responses use Pydantic's
+  `Z` suffix, which is an explicit UTC offset.
+- The metrics repository calls `as_utc` before the uniqueness pre-check
+  and before the insert or update. `FinancialMetricsUpdate` accepts an
+  optional `period_end` so an update can move the period and still hit
+  that check. A row is not a duplicate of itself (`exclude_id`).
+- `create_db_engine` in `app/core/database.py` runs
+  `PRAGMA foreign_keys=ON` on each SQLite connection. The test client
+  uses that function, so the pragma is not copied into `tests/conftest.py`.
+  The foreign-key test builds its own engine and does not use the
+  `client` fixture.
+- `scripts/seed_demo.py` still requires an offset on fixture rows.
+  Rows read back from the API may be naive; those are matched as UTC,
+  so `python scripts/seed_demo.py --apply` (with the required
+  `--base-url` and the repo on `PYTHONPATH`) can run twice against a
+  fresh SQLite file. The second run creates nothing.
+- Test-first commits, then the fix: the strict xfail for #20
+  (`1 xfailed` on the parent of the fix), then eight failing #23/#20
+  tests (`8 failed`), then this change removes the xfail marker.
+  PostgreSQL verification of the duplicate instant is deferred to #9.
+  Out of scope: Alembic (#8), the PostgreSQL harness (#9), the
+  instrument model (#26), and bugs #18, #19, and #21.
+- `app/models/database_models.py`, `app/models/financial_metrics.py`,
+  and `app/repositories/financial_metrics_repository.py` were
+  reformatted because Black, isort, and flake8 have to pass on every
+  file this change touches, and those three already failed that check.
+  Untouched files with the same old debt were left alone.
+- QA's carried-over nit: #43 added the README sentence "CI does not
+  run these lint checks yet".
+- Verification, from the repository root, no `.env`:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 822 passed in 14.80s, no warnings summary, TOTAL 92% (exact
+  92.36%). The 80% gate passed. That count is from the pre-rebase head;
+  the rebase did not change test or production code.
+- Work-state next action, after this PR: bugs #18 and #21, then #24.
+  Bug #19 can be slotted in.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Reviewer nits on the merged coverage gate
 
 - Scope: [PR #43](https://github.com/Waber/Investment-AI-Companion/pull/43)
@@ -15,8 +78,9 @@
   says older files still have formatting debt.
 - Work-state no longer says Code Reviewer approved `63822cd` and is
   waiting on Raul. That line now says PR #22 is merged as `778735e`.
-  The live next action is the product-requirements section at the top
-  of `docs/work-state.md`.
+  The live next action is the SQLite UTC section at the top of
+  `docs/work-state.md`: after this PR, bugs #18 and #21, then #24.
+  Bug #19 can be slotted in.
 - Verification: no `.env`, Python 3.12.3, pytest 7.4.3. Command:
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   Result on this head: `813 passed in 11.32s`, TOTAL exact `91.77%`.
@@ -48,9 +112,11 @@
 - Decision: `docs/product-requirements.md` matches the PM's updated copy
   (2026-10-08), which fixes the research paths and makes N1 optional for
   A1. There were no `/workspace` paths.
-- Work-state next action is Demo v1 issue #23 together with bug #20
-  first, then bugs #18 and #21, then #24, then #25, then #26. Issues
-  #8, #9, and #10 come after the demo.
+- The next action recorded in this entry was Demo v1 issue #23
+  together with bug #20, then bugs #18 and #21, then #24, then #25,
+  then #26. Issues #8, #9, and #10 come after the demo. The live next
+  action is the SQLite UTC section at the top of `docs/work-state.md`:
+  after this PR, bugs #18 and #21, then #24. Bug #19 can be slotted in.
 - Verification: from the repository root, no `.env`,
   `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
   -> 758 passed in 6.48s, no warnings summary. This machine provides
@@ -104,10 +170,9 @@
   Project Manager relayed the decision. The gate stays
   `--cov-fail-under=80`. JUnit XML and the `MIN_TESTS` gate are still
   not enabled.
-- The live next action is the product-requirements entry at the top of
-  this journal: Demo v1 issue #23 together with bug #20 first, then bugs
-  #18 and #21, then #24, then #25, then #26. Issues #8, #9, and #10 come
-  after the demo.
+- The live next action is the SQLite UTC section at the top of
+  `docs/work-state.md`: after this PR, bugs #18 and #21, then #24.
+  Bug #19 can be slotted in.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 
@@ -204,8 +269,9 @@
   Account usage was not available in this session; no percentage recorded.
 - The next-action line that named Alembic and PostgreSQL (#8, #9, #10)
   as the next work was the order when this entry was written. The live
-  next action is the product-requirements entry at the top of this
-  journal.
+  next action is the SQLite UTC section at the top of
+  `docs/work-state.md`: after this PR, bugs #18 and #21, then #24.
+  Bug #19 can be slotted in.
 - Published as [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22),
   merged as `778735e`.
 

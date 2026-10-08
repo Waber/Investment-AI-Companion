@@ -113,7 +113,14 @@ def _require(condition, message):
         raise ValueError(message)
 
 
-def _period_key(row):
+def _period_key(row, *, naive_is_utc=False):
+    """Return ``(period_type, utc_isoformat)`` for one metrics row.
+
+    Fixture rows must include an offset. Rows read from the API may be
+    naive when SQLite dropped the offset; those callers pass
+    ``naive_is_utc=True`` so the naive clock is treated as UTC and a
+    second ``--apply`` skips the row instead of inserting a duplicate.
+    """
     period_type, period_end = row["period_type"], row["period_end"]
     _require(
         isinstance(period_type, str) and bool(period_type.strip()),
@@ -121,10 +128,9 @@ def _period_key(row):
     )
     _require(isinstance(period_end, str), "period_end must be an ISO string")
     instant = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
-    _require(
-        instant.utcoffset() is not None,
-        "period_end must be timezone aware",
-    )
+    if instant.utcoffset() is None:
+        _require(naive_is_utc, "period_end must be timezone aware")
+        instant = instant.replace(tzinfo=timezone.utc)
     return period_type, instant.astimezone(timezone.utc).isoformat()
 
 
@@ -312,7 +318,7 @@ def seed_demo(fixture, client, *, apply=False):
                     row["company_id"] == company_id,
                     "Metrics company mismatch",
                 )
-                key = _period_key(row)
+                key = _period_key(row, naive_is_utc=True)
                 _require(
                     key not in existing_metrics,
                     f"Conflict: ambiguous metric for "

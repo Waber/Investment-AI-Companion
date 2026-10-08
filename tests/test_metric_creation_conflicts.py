@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -57,6 +57,9 @@ def assert_created_only(client, before, created_id, payload):
     for field, value in payload.items():
         if field == "period_end":
             value = datetime.fromisoformat(value)
+            # Naive API input is stored as UTC. See issue #20.
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
         assert stored[field] == value
 
 
