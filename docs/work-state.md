@@ -63,8 +63,10 @@
   is merged as `b2541d7`. Lines below that still tell the story of those
   pull requests being opened are history; the sentences that called them
   open or awaiting review are corrected.
-- Reviewer nits from PRs #14 and #15 are a separate branch off master,
-  not this one. PR #22 is merged as `778735e`.
+- Reviewer nits from PRs #14 and #15 are this branch,
+  `cursor/reviewer-nits-minimal-c3a6`, rebased onto `778735e` after
+  PR #22 merged. PR #41 also edits this file and the journal.
+  Whichever of those pull requests merges second needs a rebase.
 - Review follow-up: missing test-config settings are isolated from the
   shell, statement keys are a subset, and company-shaped pins are marked
   `see #26`. `NEWS_API_KEY=x` no longer fails
