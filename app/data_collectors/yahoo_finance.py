@@ -13,6 +13,34 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 
+def _is_real_number(value: Any) -> bool:
+    """True for int and float, and false for bool.
+
+    ``bool`` is a subclass of ``int``. ``True / 200`` would look like a
+    ratio and would not be one, so booleans are rejected here.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _debt_to_assets(info: Dict[str, Any]) -> Optional[float]:
+    """Return total debt divided by total assets from ``info`` alone.
+
+    Yahoo's ``totalDebtPerShare`` is a currency amount per share, not
+    this ratio, so this function never reads that field.
+    ``fetch_key_metrics`` has already loaded ``info``. This does not
+    call the provider again. If either total is missing, is not a real
+    number, or total assets is zero, the ratio is unknown and the
+    result is None.
+    """
+    total_debt = info.get("totalDebt")
+    total_assets = info.get("totalAssets")
+    if not _is_real_number(total_debt) or not _is_real_number(total_assets):
+        return None
+    if total_assets == 0:
+        return None
+    return total_debt / total_assets
+
+
 class YahooFinanceCollector:
     """
     Collector for fetching stock market data from Yahoo Finance.
@@ -199,9 +227,10 @@ class YahooFinanceCollector:
                 # Liquidity metrics
                 "current_ratio": info.get("currentRatio"),
                 "quick_ratio": info.get("quickRatio"),
-                # Debt metrics
+                # Debt metrics. debt_to_assets is a ratio from totals
+                # already on info, never totalDebtPerShare.
                 "debt_to_equity": info.get("debtToEquity"),
-                "debt_to_assets": info.get("totalDebtPerShare"),
+                "debt_to_assets": _debt_to_assets(info),
                 # Dividend metrics
                 "dividend_yield": info.get("dividendYield"),
                 "payout_ratio": info.get("payoutRatio"),

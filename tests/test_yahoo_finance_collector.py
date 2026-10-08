@@ -217,8 +217,9 @@ def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
 
     metrics = collector.fetch_key_metrics("AAPL")
 
-    # debt_to_assets is deliberately not asserted here: its mapping is a
-    # known defect (GitHub issue #21).
+    # This fixture has no totalDebt or totalAssets, so the ratio is
+    # None (issue #21). It must not fall back to a per-share field.
+    assert metrics["debt_to_assets"] is None
     expected = {
         "pe_ratio": 30.1,
         "forward_pe": 27.5,
