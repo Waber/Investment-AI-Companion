@@ -18,8 +18,11 @@
 - Work-state next action is Demo v1 issue #23 together with bug #20
   first, then #24, then #25, then #26. That action does not wait on this
   docs change.
-- Verification: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
-  from the repository root. Result recorded after the run.
+- Verification: from the repository root, no `.env`,
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
+  -> 758 passed in 6.48s, no warnings summary. This machine provides
+  `python3` (3.12.3); `python` on `PATH` was that interpreter. Dependencies
+  came from `requirements.txt` and were not changed.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
   Account usage was not available in this session; no percentage recorded.
 - PR #22 (`cursor/coverage-threshold-80-c3a6`) is also open and edits this
