@@ -6,8 +6,10 @@
   master `d568663`.
   [PR #61](https://github.com/Waber/Investment-AI-Companion/pull/61).
 - Completed: #45, #47, and #50, plus the blank-ticker cases from
-  #17. `DEBUG` defaults to false. `SECRET_KEY` is required and
-  rejects the two known placeholders. `ALLOWED_HOSTS` is enforced
+  #17. Security signed off, so the pull request closes #50.
+  `DEBUG` defaults to false. `SECRET_KEY` is required, rejects
+  the two known placeholders in any letter case, and must be at
+  least 32 characters. `ALLOWED_HOSTS` is enforced
   with `TrustedHostMiddleware` (default `localhost`, `127.0.0.1`).
   `python main.py` binds `127.0.0.1`. `BACKEND_CORS_ORIGINS` is a
   string plus a validator that accepts a comma-separated list and
@@ -57,7 +59,10 @@
   xfailed, 14.44s, exact 93.41%. Docs tree: 919 passed in
   14.56s, no xfailed, exact 93.41%. The provider-description
   truncation commit: 951 passed in 15.42s, exact 92.63% (1143
-  statements, 78 missed, 254 branches, 15 partial). `black --check`
+  statements, 78 missed, 254 branches, 15 partial). After the
+  website, CORS, and currency follow-ups: 954 passed, exact
+  92.77% (1143 statements, 77 missed, 254 branches, 14 partial).
+  `black --check`
   passed on the touched Python files.
 - Active agents: none.
 - Blockers: none.
