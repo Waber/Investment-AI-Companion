@@ -282,14 +282,35 @@ async def test_overlong_name_is_422_on_update(client):
 
 
 @pytest.mark.asyncio
-async def test_currency_is_normalized_to_three_uppercase_letters(client):
-    response = await client.post(
+async def test_pence_currency_round_trips_unchanged(client):
+    """Yahoo sends GBp for London pence. Uppercasing it would be GBP, 100x off."""
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: PayloadCollector({"name": "Vodafone", "currency": "GBp"})
+    )
+
+    created = await client.post(FETCH, json={"ticker": "VOD"})
+
+    assert created.status_code == 200
+    company_id = created.json()["company_id"]
+    stored = await client.get(f"/api/v1/companies/{company_id}")
+    assert stored.status_code == 200
+    assert stored.json()["currency"] == "GBp"
+
+
+@pytest.mark.asyncio
+async def test_currency_keeps_case_and_rejects_a_non_letter_code(client):
+    kept = await client.post(
         COMPANIES,
         json={"name": "Dollar", "ticker": "USDX", "currency": "usd"},
     )
+    rejected = await client.post(
+        COMPANIES,
+        json={"name": "Bad", "ticker": "BADC", "currency": "US1"},
+    )
 
-    assert response.status_code == 201
-    assert response.json()["currency"] == "USD"
+    assert kept.status_code == 201
+    assert kept.json()["currency"] == "usd"
+    assert rejected.status_code == 422
 
 
 @pytest.mark.asyncio
