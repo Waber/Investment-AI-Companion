@@ -4,7 +4,9 @@
 
 - Branch `cursor/postgres-integration-harness-fc54`, based on
   `origin/master` `d568663`. Implementation commit `e242341`.
-  Review follow-up is the latest commit on this branch.
+  Review follow-up `c9b7302` is green in GitHub Actions. The
+  integration client host and the path cleanup are the latest
+  commit on this branch.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
@@ -12,7 +14,7 @@
   own word, and a host that is not loopback or a Unix socket,
   unless `TEST_POSTGRES_ALLOW_REMOTE=1`. The application database
   is still refused after those checks, including the code default
-  `postgresql://przemkowy@localhost:5432/investment_ai`. CI pins
+  (database name `investment_ai` on localhost). CI pins
   `postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d`
   and database `investment_test`. The SQLite job is unchanged,
   including `--cov-fail-under=80`, `persist-credentials: false`,
@@ -41,10 +43,17 @@
   skipped, exit 0. Of the 68 integration tests, 53 do not open
   PostgreSQL (45 DSN checks, 8 `.env` checks) and 15 hit the
   database. A node id without `-m integration` -> 1 deselected,
-  exit 5. GitHub Actions for this follow-up is not recorded yet.
-  The earlier green run
-  [37834076658](https://github.com/Waber/Investment-AI-Companion/actions/runs/37834076658)
-  is on `8bfd7ba`, before the allowlist and the image pin.
+  exit 5. GitHub Actions
+  [run 37836507848](https://github.com/Waber/Investment-AI-Companion/actions/runs/37836507848)
+  on `c9b7302`: SQLite job 846 passed, 68 deselected in 17.49s,
+  TOTAL 93%. PostgreSQL job 67 passed, 1 xfailed, 846 deselected
+  in 2.68s on PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2).
+  `postgres_client` now uses `http://127.0.0.1` so a later
+  `TrustedHostMiddleware` does not reject the Host header.
+  Pull request #61 is open and not merged. Its new work-state
+  section still says the harness stays later. That sentence is
+  updated when this branch rebases onto #61. Older sections
+  below are snapshots from before the harness.
 - Active agents: none.
 - Blockers: none.
 - Next action: #45 and #47 together (secure config defaults and
