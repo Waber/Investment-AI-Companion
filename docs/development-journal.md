@@ -209,6 +209,11 @@ branch was not rebased.
   passed, exact 92.63%.
 - A CORS origin that includes userinfo fails startup without
   repeating the username or password. 953 passed, exact 92.63%.
+- IPv6 CORS origins are not supported for now.
+  ``http://[::1]:3000`` is rejected with that reason. The old
+  branch that tried to put the brackets back never ran, because
+  ``AnyHttpUrl`` receives the host without them. 954 passed,
+  exact 92.77%.
 
 ## 2026-10-08 - Module-level skips fail the PostgreSQL job (#9)
 

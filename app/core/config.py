@@ -70,6 +70,10 @@ def _bare_http_origin(item: str) -> str:
     A path, userinfo, query, fragment, or wildcard is not an origin a
     browser sends. ``http://localhost:3000/`` is the same origin as
     ``http://localhost:3000`` and is stored without the slash.
+
+    IPv6 origins are not supported for now. ``urlsplit`` returns the
+    host without brackets, and ``AnyHttpUrl`` cannot accept that
+    form, so ``http://[::1]:3000`` is rejected instead of rebuilt.
     """
     text = item.strip()
     if "*" in text:
@@ -100,6 +104,13 @@ def _bare_http_origin(item: str) -> str:
         raise ValueError(
             "BACKEND_CORS_ORIGINS entry is not an http(s) URL: " f"{item!r}"
         )
+    # An IPv6 hostname contains ":". Re-bracketing it never ran:
+    # AnyHttpUrl below is built without brackets and rejects "::1".
+    if ":" in host:
+        raise ValueError(
+            "IPv6 origins are not supported in BACKEND_CORS_ORIGINS "
+            f"yet: {item!r}"
+        )
     try:
         # Reject a host AnyHttpUrl does not consider an HTTP URL.
         AnyHttpUrl(f"{parts.scheme}://{host}")
@@ -108,8 +119,6 @@ def _bare_http_origin(item: str) -> str:
             "BACKEND_CORS_ORIGINS entry is not an http(s) URL: " f"{item!r}"
         ) from exc
     port = f":{parts.port}" if parts.port else ""
-    if ":" in host:
-        return f"{parts.scheme}://[{host}]{port}"
     return f"{parts.scheme}://{host}{port}"
 
 
