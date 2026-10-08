@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="/ui">{{ t['nav.instruments'] }}</a></p>
+<h1>{{ t['page.detail_title'] }}</h1>
+<p class="instrument-name">
+  {{ instrument.name if instrument.name else t['missing'] }}
+  {% if instrument.is_synthetic %}
+  <span class="badge">{{ t['badge.synthetic'] }}</span>
+  {% endif %}
+</p>
+<dl>
+  {% macro text_field(code, value) %}
+  <dt>{{ t['field.' ~ code] }}</dt>
+  <dd data-field="{{ code }}">
+    {% if value %}
+    {{ value }}
+    {% else %}
+    <span class="missing">{{ t['missing'] }}</span>
+    {% endif %}
+  </dd>
+  {% endmacro %}
+  {{ text_field('ticker', instrument.ticker) }}
+  <dt>{{ t['field.type'] }}</dt>
+  <dd data-field="type">{{ t['type.' ~ instrument.instrument_type] }}</dd>
+  {{ text_field('exchange', instrument.exchange) }}
+  {{ text_field('currency', instrument.currency) }}
+  {{ text_field('country', instrument.country) }}
+  {{ text_field('sector', instrument.sector) }}
+  {{ text_field('industry', instrument.industry) }}
+  {# href and rel come from the view-model. This template does not read the scheme. #}
+  <dt>{{ t['field.website'] }}</dt>
+  <dd data-field="website">
+    {% if instrument.website.href %}
+    <a href="{{ instrument.website.href }}" rel="{{ instrument.website.rel }}">{{ instrument.website.text }}</a>
+    {% elif instrument.website.text %}
+    {{ instrument.website.text }}
+    {% else %}
+    <span class="missing">{{ t['missing'] }}</span>
+    {% endif %}
+  </dd>
+  {{ text_field('source', instrument.source) }}
+  <dt>{{ t['field.as_of'] }}</dt>
+  <dd data-field="as_of">
+    {% if instrument.as_of %}
+    {{ format_date(instrument.as_of, language) }}
+    {% else %}
+    <span class="missing">{{ t['missing'] }}</span>
+    {% endif %}
+  </dd>
+  {{ text_field('description', instrument.description) }}
+</dl>
+<h2>{{ t['metrics.annual'] }}</h2>
+{% with periods=instrument.annual, period_type='annual' %}
+{% include "partials/metric_table.html" %}
+{% endwith %}
+<h2>{{ t['metrics.quarterly'] }}</h2>
+{% with periods=instrument.quarterly, period_type='quarterly' %}
+{% include "partials/metric_table.html" %}
+{% endwith %}
+{% if instrument.other %}
+<h2>{{ t['metrics.other'] }}</h2>
+{% with periods=instrument.other, period_type='other' %}
+{% include "partials/metric_table.html" %}
+{% endwith %}
+{% endif %}
+{% endblock %}

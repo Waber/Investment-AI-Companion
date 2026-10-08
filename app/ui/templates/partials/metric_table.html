@@ -1,0 +1,33 @@
+{% if periods %}
+<table data-period-type="{{ period_type }}">
+  <thead>
+    <tr>
+      <th>{{ t['column.metric'] }}</th>
+      {% for period in periods %}
+      <th>{{ format_date(period.period_end, language) }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for field in metric_fields %}
+    <tr>
+      <th scope="row">{{ t['metric.' ~ field] }}</th>
+      {% for period in periods %}
+      {% set value = period.values[field] %}
+      <td data-field="{{ field }}" data-period="{{ period.period_key }}">
+        {% if value is none %}
+        <span class="missing">{{ t['missing'] }}</span>
+        {% elif field in monetary_fields %}
+        {{ format_number(value, language) }} {{ instrument.currency if instrument.currency else t['missing'] }}
+        {% else %}
+        {{ format_number(value, language) }}
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>{{ t['metrics.none'] }}</p>
+{% endif %}

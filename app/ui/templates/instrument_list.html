@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t['page.list_title'] }}</h1>
+<form
+  method="get"
+  action="/ui"
+  hx-get="/ui"
+  hx-target="#instrument-results"
+  hx-swap="outerHTML"
+  hx-push-url="true"
+  hx-trigger="submit, change, keyup changed delay:300ms from:input[name=q]"
+>
+  <label>
+    {{ t['filter.search'] }}
+    <input type="search" name="q" value="{{ filters.search }}">
+  </label>
+  <label>
+    {{ t['filter.exchange'] }}
+    <select name="exchange">
+      <option value="">{{ t['filter.any'] }}</option>
+      {% for exchange in exchanges %}
+      <option value="{{ exchange }}"{% if exchange == filters.exchange %} selected{% endif %}>{{ exchange }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    {{ t['filter.currency'] }}
+    <select name="currency">
+      <option value="">{{ t['filter.any'] }}</option>
+      {% for currency in currencies %}
+      <option value="{{ currency }}"{% if currency == filters.currency %} selected{% endif %}>{{ currency }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">{{ t['filter.apply'] }}</button>
+</form>
+{% include "partials/instrument_results.html" %}
+{% endblock %}

@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Dict
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.companies import router as companies_router
@@ -13,6 +15,11 @@ from app.api.financial_metrics import router as financial_metrics_router
 from app.core.config import settings
 from app.core.init_db import init_db
 from app.core.validation import request_validation_exception_handler
+from app.ui.router import router as ui_router
+
+# HTMX and CSS live in the repository. The pages link to this directory
+# with root-relative paths, so the browser does not fetch a CDN.
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def create_app(init_database_on_startup: bool = True) -> FastAPI:
@@ -107,6 +114,12 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     )
     application.include_router(
         data_collection_router, prefix=settings.API_V1_STR
+    )
+    application.include_router(ui_router)
+    application.mount(
+        "/static",
+        StaticFiles(directory=str(STATIC_DIR)),
+        name="static",
     )
 
     return application
