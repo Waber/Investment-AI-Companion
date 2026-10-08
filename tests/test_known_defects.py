@@ -1,8 +1,8 @@
 """Pins for bugs that were open on master.
 
 The period_end case (#20) treats the same instant with another UTC
-offset as a duplicate. PostgreSQL coverage of that case waits for
-issue #9.
+offset as a duplicate. The PostgreSQL run of that case is
+``tests/integration/test_postgres.py`` (issue #9).
 
 The fetch-company 500 (#18) returns a fixed detail and logs the
 exception with the ticker. ``debt_to_assets`` (#21) is total debt
