@@ -2,7 +2,8 @@
 #
 # One job. It installs requirements.txt and runs pytest with a coverage
 # report for app, main, and scripts. It does not lint or start Postgres.
-# The coverage threshold, JUnit XML, and MIN_TESTS gate are not enabled yet.
+# Total coverage (statements plus branches) must stay at or above 80%.
+# JUnit XML and the MIN_TESTS gate are not enabled.
 name: Tests
 
 on:
@@ -65,12 +66,13 @@ jobs:
 
       - name: Run pytest
         # -q prints the pass/fail summary. -p no:cacheprovider skips
-        # .pytest_cache. Coverage is a report, not a failing threshold.
-        # JUnit XML, the coverage threshold, and the test-count gate stay
-        # out until that decision is made. DeprecationWarning is an error
-        # now that the deprecation cleanup is on master.
+        # .pytest_cache. --cov-fail-under=80 fails the job when the TOTAL
+        # (app, main, scripts; statements plus branches) drops below 80%.
+        # JUnit XML and the test-count gate stay out. DeprecationWarning is
+        # an error now that the deprecation cleanup is on master.
         run: >
           python -m pytest -q -p no:cacheprovider
           -W error::DeprecationWarning
           --cov=app --cov=main --cov=scripts
           --cov-branch --cov-report=term-missing
+          --cov-fail-under=80
