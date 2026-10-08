@@ -1,5 +1,43 @@
 # Current Work State
 
+## PostgreSQL integration harness: 2026-10-08
+
+- Branch `cursor/postgres-integration-harness-fc54`, based on
+  `origin/master` `d568663`. Implementation commit `e242341`.
+- Completed: issue #9. SQLite stays the default. `python -m pytest`
+  deselects the `integration` marker and still reports 846 passed.
+  `TEST_POSTGRES_DSN` opts in. An unset variable skips. The URL is
+  refused when it names the application database, including the
+  code default `postgresql://przemkowy@localhost:5432/investment_ai`.
+  CI job `pytest (Python 3.12, PostgreSQL)` runs `-m integration`
+  against `postgres:16`. The SQLite job is unchanged, including
+  `--cov-fail-under=80`, `persist-credentials: false`, and the
+  hashed `requirements-dev.lock` install. Tables come from
+  `Base.metadata.create_all`. The duplicate-instant check from #20
+  runs on PostgreSQL (five offsets return 400, one row, and a
+  direct insert hits `uq_metrics_company_period`). #16 is recorded
+  only: duplicate ticker `DUP` is 500, and `dup` is stored.
+  `tests/conftest.py` was not modified.
+- Incomplete: Alembic baseline #8. The local disposable-cluster
+  runner was not added. #16 is not fixed. #20 stays open until
+  review accepts the PostgreSQL run. The queue in the next-action
+  line is still open.
+- Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3, the CI
+  command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 846 passed, 37 deselected in 13.55s, no warnings summary,
+  TOTAL 92% (exact 92.58%).
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  and `-m integration` -> 37 passed in 1.06s on PostgreSQL 16.15
+  (Ubuntu 16.15-0ubuntu0.24.04.1). Without the variable,
+  `-m integration` -> 23 passed, 14 skipped, exit 0. A node id
+  without `-m integration` -> 1 deselected, exit 5.
+- Active agents: none.
+- Blockers: none.
+- Next action: #45 and #47 together (secure config defaults and
+  neutral defaults, one pull request), with #50 if that fix stays
+  small. Then #24, #19, #25, and #26 (with #16 and #17).
+
 ## Security dependencies and hashed lock: 2026-10-08
 
 - Branch `cursor/security-deps-hashed-lock-79f1`, based on
@@ -48,9 +86,10 @@
   on every run. CI does not run black, isort, or flake8.
 - Active agents: none.
 - Blockers: none.
-- Next action: #45 and #47 together (secure config defaults and
-  neutral defaults, one pull request), with #50 if that fix stays
-  small. Then #24, #19, #25, and #26 (with #16 and #17).
+- Next action when this section was written: #45 and #47
+  together, with #50 if that fix stays small. The live next action
+  is the section at the top of this file. The PostgreSQL harness
+  (#9) is that section.
 
 ## Fetch-company 500 detail and debt_to_assets: 2026-10-08
 

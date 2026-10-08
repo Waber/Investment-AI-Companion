@@ -41,6 +41,116 @@
   completed with conclusion success.
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37833690203
 
+## 2026-10-08 - PostgreSQL integration test harness (#9)
+
+- Scope: issue #9, on a branch from `origin/master` `d568663`.
+  Branch `cursor/postgres-integration-harness-fc54`.
+  Implementation commit `e242341`. SQLite stays the default
+  database. No new package. Alembic is unchanged.
+- Decision, opt-in: tests under `tests/integration/` carry the
+  existing `integration` marker. `addopts` still passes
+  `-m "not integration"`. `python -m pytest` deselects them.
+  `pytest -m integration` replaces that expression and runs them.
+  A node id without `-m integration` stays deselected and exits 5.
+- Decision, configuration: the database URL is
+  `TEST_POSTGRES_DSN`. When it is unset, database fixtures skip
+  with a message that names the variable and an example URL.
+  `REQUIRE_POSTGRES=1` (the CI job) fails that case instead of
+  skipping, so a missing CI variable cannot go green on skips.
+  DSN comparison tests in `tests/integration/test_postgres_dsn.py`
+  do not open a connection, so they still run when the variable
+  is unset.
+- Decision, refuse the application database: the harness compares
+  the test URL with `settings.DATABASE_URL` and with the code
+  default `postgresql://przemkowy@localhost:5432/investment_ai`.
+  The same host (localhost, 127.0.0.1, ::1, or a Unix socket),
+  port, and database name match even when the role or the driver
+  suffix differs. A match fails the run before any connection.
+  The tests then drop and recreate only their own tables.
+- Decision, schema: `Base.metadata.create_all` on the test
+  engine. Issue #8 is still open. `alembic.ini` has
+  `version_num_format = %04d`, which crashes Alembic commands
+  (the value needs `%%04d`). There is no baseline revision. The
+  integration test asserts `alembic_version` is absent and that
+  `period_end` is `timestamp with time zone`.
+- Decision, CI: a second job, `pytest (Python 3.12, PostgreSQL)`,
+  uses a `postgres:16` service container and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`.
+  The SQLite job is unchanged: same checkout SHA,
+  `persist-credentials: false`, hashed install from
+  `requirements-dev.lock`, and the same pytest flags including
+  `--cov-fail-under=80`. The PostgreSQL job does not pass
+  coverage flags. No `pytest-postgresql` dependency.
+- Decision, session zone: each transaction runs
+  `SET TIME ZONE 'Europe/Warsaw'`. December is UTC+1 there, so a
+  value shifted into the session zone does not read back as the
+  UTC instant. The server default can stay UTC.
+- Behaviour pinned on PostgreSQL: `+02:00`, `Z`, and naive
+  `period_end` read back as the UTC instant through the API and
+  the ORM, and as the UTC wall clock from
+  `period_end AT TIME ZONE 'UTC'`. Five other spellings of
+  `2025-12-31T00:00:00Z` return 400 with the uniqueness detail,
+  and one row remains (issue #20). A direct ORM insert of that
+  same instant raises `IntegrityError` on
+  `uq_metrics_company_period`. A missing company is 400 from the
+  API and `IntegrityError` from a direct insert. `DELETE FROM
+  companies` is rejected by `financial_metrics_company_id_fkey`
+  while metrics exist. Deleting the company through the ORM
+  removes the metrics. After that constraint error, the same
+  session can commit a new row.
+- Issue #16 is recorded, not fixed. A second company with ticker
+  `DUP` returns 500 and `{"detail":"Internal server error"}`.
+  Ticker `dup` is stored as a second row.
+- `tests/conftest.py` was not modified. The SQLite `client`
+  fixture is untouched. PostgreSQL fixtures live in
+  `tests/integration/conftest.py`: `postgres_engine` (session),
+  `postgres_session_factory` (truncates `companies` and
+  `financial_metrics` around each test), and `postgres_client`
+  (async HTTP client, `init_database_on_startup=False`). The
+  only edit under the existing tests tree is the docstring in
+  `tests/test_known_defects.py`, which now points at the
+  PostgreSQL duplicate-instant test.
+- Out of this pull request: the disposable local cluster runner
+  (`scripts/test_postgres.py`) and Alembic upgrade/downgrade.
+  The runner would be a new script under `scripts/`, which is
+  inside the coverage gate, and the task asked for the GitHub
+  Actions service container instead of a Python-managed server.
+  Migrations wait for #8.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3, packages from
+  `requirements-dev.lock`:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 846 passed, 37 deselected in 13.55s, no warnings summary,
+  TOTAL 92% (exact 92.58%). Same passed count as master
+  `d568663`.
+  Node id without the marker:
+  `python -m pytest -q -p no:cacheprovider tests/integration/test_postgres.py::test_server_is_postgresql`
+  -> 1 deselected, exit 5.
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  with `TEST_POSTGRES_DSN` unset -> 23 passed, 14 skipped,
+  exit 0. The skip text is: PostgreSQL integration tests need
+  `TEST_POSTGRES_DSN` set to a database that is not the
+  application's `DATABASE_URL`.
+  The same `-m integration` command with
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  -> 37 passed, 846 deselected in 1.06s.
+  Server version from that run: `PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit`.
+  Pointing `TEST_POSTGRES_DSN` at the code default, and setting
+  `REQUIRE_POSTGRES=1` with the variable unset, each failed in
+  fixture setup before a connection, exit 1.
+  `black`, `isort --check-only`, and `flake8` passed on
+  `tests/integration` and `tests/test_known_defects.py`.
+  The docs tree, measured before this commit: 846 passed,
+  37 deselected in 13.00s, exact 92.58%.
+- Work-state next action: unchanged. #45 and #47 together, with
+  #50 if that fix stays small. Then #24, #19, #25, and #26 (with
+  #16 and #17). This harness is done. #8 and #16 stay open.
+  #20's PostgreSQL check now has a test; the issue stays open
+  until review accepts that run.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Security dependencies, hashed locks, and Actions SHAs (#11, #46)
 
 - Scope: the security/deps part of #11, on a branch from

@@ -35,7 +35,7 @@ Owner: second backend developer. Files: `app/api/companies.py`, `app/api/financi
 Owner: database/QA developer. Files: `scripts/test_postgres.py` (new), `tests/integration/conftest.py`, `tests/integration/test_postgres.py`, runner/init tests, `alembic/versions/0001_baseline.py`, `alembic/env.py`, `app/core/init_db.py`, `setup_database.py`, and dedicated pytest marker/config if necessary. Avoid changing shared SQLite fixtures or main.py.
 
 - [ ] Add baseline migration matching existing companies/financial_metrics tables and constraints.
-- [ ] Add opt-in integration fixtures that reject accidental use of the application's default DSN.
+- [x] Add opt-in integration fixtures that reject accidental use of the application's default DSN. (2026-10-08, issue #9: `tests/integration/`. CI uses a `postgres:16` service. Tables come from `metadata.create_all`. The local cluster runner, Alembic upgrade/downgrade, and the migration boxes below are still open with #8.)
 - [ ] Pass an explicit checked connection to Alembic; no fallback to settings when that connection is supplied.
 - [ ] Make init_db/setup use migrations only; require explicit validated adoption for old unversioned tables and test that legacy data survives.
 - [ ] Add a disposable local cluster runner with guaranteed shutdown and no TCP listener.
