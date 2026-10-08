@@ -365,9 +365,39 @@ def test_explicit_url_host_ignores_a_remote_pghost():
         SEPARATE_DATABASE_URL,
         [DEFAULT_DATABASE_URL],
         require=False,
-        environ={"PGHOST": "db.example.com", "PGSERVICE": "prod"},
+        environ={"PGHOST": "db.example.com"},
     )
     assert decision.action == "use"
+
+
+def test_explicit_url_host_accepts_a_loopback_pghostaddr():
+    decision = decide_test_dsn(
+        SEPARATE_DATABASE_URL,
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        environ={"PGHOSTADDR": "127.0.0.1", "PGHOST": "db.example.com"},
+    )
+    assert decision.action == "use"
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {"PGHOSTADDR": "10.0.0.5"},
+        {"PGSERVICE": "prod"},
+    ],
+)
+def test_explicit_url_host_refuses_pghostaddr_and_pgservice(environ):
+    """libpq still applies these when the URL already names a host."""
+    decision = decide_test_dsn(
+        SEPARATE_DATABASE_URL,
+        [DEFAULT_DATABASE_URL],
+        require=False,
+        allow_remote=True,
+        environ=environ,
+    )
+    assert decision.action == "fail"
+    assert decision.message == ENV_HOST_MESSAGE
 
 
 @pytest.mark.parametrize(
