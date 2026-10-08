@@ -352,6 +352,39 @@ async def test_failed_update_returns_fixed_500(client, monkeypatch, caplog):
     assert "EXST" in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_company_name_with_newline_does_not_forge_a_log_line(
+    client, caplog
+):
+    """A newline in the provider name must stay inside one log record."""
+    name = "Acme\nINFO forged-admin-login"
+    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+        lambda: PayloadCollector({"name": name, "currency": "USD"})
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.api.data_collection"):
+        created = await client.post(FETCH, json={"ticker": "ACME"})
+        updated = await client.post(FETCH, json={"ticker": "ACME"})
+
+    assert created.status_code == 200
+    assert updated.status_code == 200
+    _assert_no_forged_log_line(caplog, "forged-admin-login")
+
+
+def test_yahoo_error_text_with_newline_does_not_forge_a_log_line(
+    monkeypatch, caplog
+):
+    class _Boom:
+        def __init__(self, symbol):
+            raise RuntimeError("provider down\nINFO forged-admin-login")
+
+    monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Boom)
+    with caplog.at_level(logging.ERROR, logger=yahoo_finance.__name__):
+        assert YahooFinanceCollector().fetch_company_info("FAIL") is None
+
+    _assert_no_forged_log_line(caplog, "forged-admin-login")
+
+
 def test_yahoo_logs_do_not_split_on_a_newline_ticker(monkeypatch, caplog):
     class _Info:
         def __init__(self, symbol):

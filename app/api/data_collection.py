@@ -157,7 +157,7 @@ def fetch_company_data(
                 )
 
             logger.info(
-                f"Successfully updated company: {updated_company.name}"
+                "Successfully updated company: %r", updated_company.name
             )
             return FetchCompanyResponse(
                 success=True,
@@ -185,7 +185,7 @@ def fetch_company_data(
             # Create company
             new_company = company_repo.create(company_create)
 
-            logger.info(f"Successfully created company: {new_company.name}")
+            logger.info("Successfully created company: %r", new_company.name)
             return FetchCompanyResponse(
                 success=True,
                 message=f"Company {new_company.name} created successfully",
