@@ -297,6 +297,19 @@ def test_cors_origin_must_be_a_bare_http_origin(origin):
         )
 
 
+def test_cors_userinfo_error_does_not_echo_the_password():
+    """The startup error must not repeat user:password from the origin."""
+    marker = "cors-password-marker"
+    with pytest.raises(ValidationError) as caught:
+        Settings(
+            _env_file=None,
+            SECRET_KEY=TEST_SECRET,
+            BACKEND_CORS_ORIGINS=f"http://alice:{marker}@localhost:3000",
+        )
+
+    assert marker not in str(caught.value)
+
+
 def test_cors_root_path_is_accepted_without_keeping_the_slash():
     settings = Settings(
         _env_file=None,

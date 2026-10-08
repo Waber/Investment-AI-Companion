@@ -207,6 +207,8 @@ branch was not rebased.
   value that is not a URL still returns HTTP 200 from
   `GET /companies/`. Create and update still require a URL. 952
   passed, exact 92.63%.
+- A CORS origin that includes userinfo fails startup without
+  repeating the username or password. 953 passed, exact 92.63%.
 
 ## 2026-10-08 - Module-level skips fail the PostgreSQL job (#9)
 
