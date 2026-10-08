@@ -1,5 +1,60 @@
 # Development Journal
 
+## 2026-10-08 - Fetch-company 500 detail and debt_to_assets (#18, #21)
+
+- Scope: bugs #18 and #21, on a branch from `origin/master` `a03ca24`.
+  Branch `cursor/fetch-company-500-debt-to-assets-9f95`.
+  [PR #49](https://github.com/Waber/Investment-AI-Companion/pull/49).
+  No global exception middleware. No Yahoo change besides the
+  `debt_to_assets` mapping. `fetch-financial-metrics` stays a
+  placeholder.
+- Decision for #18: the 500 detail is the fixed string
+  `Error fetching company data`. The handler uses `logger.exception`,
+  so the traceback stays in the server log, and the log message
+  includes the ticker. The ticker is read before the `try`, so the
+  log can name it. 404 (empty provider payload) and 400 (`ValueError`,
+  including "Company name or ticker already exists") are the same
+  handlers as before.
+- Decision for #21: `debt_to_assets` is `totalDebt / totalAssets` when
+  both values are already on the `info` dict that `fetch_key_metrics`
+  just loaded. `totalDebtPerShare` is a currency amount per share, so
+  the mapping never reads it. There is no second provider call. If
+  either total is missing, is not an int or float (booleans count as
+  not numbers, because `bool` is a subclass of `int`), or total assets
+  is zero, the ratio is `None`. Yahoo's `info` modules in yfinance
+  0.2.33 do not include a balance sheet, so a live payload often has
+  `totalDebt` and not `totalAssets`. `None` is the result then. That
+  matches the issue: `None` is acceptable when the ratio needs data
+  this method did not already fetch.
+- Test-first commits, then the fix. On `6a7f533`, QA's two strict
+  xfails were `2 xfailed`. With `--runxfail` both failed as
+  `AssertionError`: the 500 body contained `hunter2`, and
+  `debt_to_assets` was `7.5`. On `a06ca28` the further tests were
+  `8 failed`, `2 passed`, `2 xfailed`. The failures were assertion
+  failures: the error log did not contain the ticker `FAIL`, and
+  `debt_to_assets` was still `7.5` instead of `0.25`, `0.0`, or
+  `None`. `test_fetch_company_404_and_400_stay_unchanged` already
+  passed. The fix commit removes both xfail markers.
+- `app/api/data_collection.py` and
+  `app/data_collectors/yahoo_finance.py` were reformatted in their own
+  commit (`4bb8f1f`) because Black, isort, and flake8 have to pass on
+  every file the fix touches, and both files already failed that
+  check. Unused imports were removed in that same commit. The 500
+  detail and the per-share mapping were still the old code there.
+- Verification, from the repository root, no `.env`, `DATABASE_URL`
+  unset:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 838 passed in 15.33s, no warnings summary, TOTAL 92% (exact
+  92.70%). The 80% gate passed. `coverage report --precision=2`
+  reports the same total. Black, isort, and flake8 (line length 79)
+  pass on the files this change touches. The pull request body cites
+  the GitHub Actions run for the head.
+- Work-state next action: #24 (collector interface + offline fake).
+  Bug #19 can be slotted in.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - SQLite UTC timestamps and foreign keys (D1, #23 and #20)
 
 - Scope: demo slice D1 from `docs/product-requirements.md` section 5

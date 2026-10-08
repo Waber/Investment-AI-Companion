@@ -1,5 +1,36 @@
 # Current Work State
 
+## Fetch-company 500 detail and debt_to_assets: 2026-10-08
+
+- Branch `cursor/fetch-company-500-debt-to-assets-9f95`, based on
+  `origin/master` `a03ca24`.
+  [PR #49](https://github.com/Waber/Investment-AI-Companion/pull/49).
+- Completed: bug #18 and bug #21.
+  `POST /api/v1/data-collection/fetch-company` returns HTTP 500 with
+  the fixed detail `Error fetching company data`. The exception is
+  logged with the ticker through `logger.exception`. 404 (no provider
+  data) and 400 (`ValueError`) are unchanged. There is no global
+  exception middleware.
+  `debt_to_assets` is `totalDebt / totalAssets` when both values are
+  real numbers already on the Yahoo `info` dict. Otherwise it is
+  `None`. Booleans are not treated as numbers, and total assets of
+  zero is `None`. The mapping never reads `totalDebtPerShare` and
+  makes no extra provider call. No other Yahoo field changed.
+- Incomplete: the collector interface and an offline fake (#24), bug
+  #19, and the rest of Demo v1. Alembic (#8), the PostgreSQL harness
+  (#9), and the instrument model (#26) stay later.
+- Tests: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 838 passed in 15.33s, no warnings summary, TOTAL 92% (exact
+  92.70%). On `6a7f533`, the two strict xfails were `2 xfailed`
+  (both `AssertionError` under `--runxfail`). On `a06ca28` the
+  further behaviour tests were `8 failed` at assertion level. The
+  404/400 pin already passed on that commit.
+- Active agents: none.
+- Blockers: none.
+- Next action: #24 (collector interface + offline fake). Bug #19 can
+  be slotted in.
+
 ## SQLite UTC timestamps and foreign keys: 2026-10-08
 
 - Branch `cursor/sqlite-utc-timestamps-foreign-keys-feb1`, rebased
@@ -44,15 +75,9 @@
   422.
 - Active agents: none.
 - Blockers: none for bugs #18 and #21.
-- Next action: bugs
-  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
-  and
-  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21),
-  then
-  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24).
-  Bug
-  [#19](https://github.com/Waber/Investment-AI-Companion/issues/19)
-  can be slotted in.
+- Next action when this section was written: bugs #18 and #21, then
+  #24. Bug #19 could be slotted in. Bugs #18 and #21 are done in the
+  section above. This list is history.
 
 ## Product requirements and research: 2026-10-08
 
@@ -96,7 +121,8 @@
   then
   [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
   Issues #8, #9, and #10 come after the demo. Issue #23 and bug #20
-  are done in the SQLite UTC section above. This list is history.
+  are done in the SQLite UTC section above. Bugs #18 and #21 are done
+  in the section at the top of this file. This list is history.
 
 ## Coverage Gate: 2026-10-08
 
@@ -128,8 +154,7 @@
   shell, statement keys are a subset, and company-shaped pins are marked
   `see #26`. `NEWS_API_KEY=x` no longer fails
   `test_test_config_marks_missing_settings`.
-- The live next action is the SQLite UTC section at the top of this
-  file: bugs #18 and #21, then #24. Bug #19 can be slotted in.
+- The live next action is the section at the top of this file.
 - Account usage was not available in this session. Stop reason: coverage
   gate delivered, not quota.
 
@@ -156,8 +181,7 @@
 - [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
   is merged as `b2541d7`. The next-action line that said to review it
   was the state when this snapshot was written. The live next action
-  is the SQLite UTC section at the top of this file: bugs #18 and #21,
-  then #24. Bug #19 can be slotted in.
+  is the section at the top of this file.
 - The Resume Instructions section immediately below is the merged
   minimal-CI note from PR #14, not the deprecation cleanup. The
   deprecation record follows that CI note.
@@ -207,10 +231,8 @@ the previous ChatGPT tooling was not available in that Cursor session.
   is merged as `a10e196`. The next-action line that said to re-review it
   was the state when this snapshot was written. Tooling config (issue #6,
   PR #15, `b2541d7`) and minimal CI (issue #5, PR #14, `db0cc12`) are
-  merged too. The live next action is the SQLite UTC section at the
-  top of this file: bugs #18 and #21, then #24. Bug #19 can be
-  slotted in. Editable profiles and source-aware AI stay
-  later.
+  merged too. The live next action is the section at the top of this
+  file. Editable profiles and source-aware AI stay later.
 - Account usage was not available in this Cursor session. Stop reason:
   bounded cleanup completed, not quota.
 
@@ -373,6 +395,5 @@ review/merge next-action line below was the state when this snapshot was written
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is not in this branch.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- The live next action is the SQLite UTC section at the top of this
-  file: bugs #18 and #21, then #24. Bug #19 can be slotted in. The
+- The live next action is the section at the top of this file. The
   old demo runtime is not assumed to still exist.
