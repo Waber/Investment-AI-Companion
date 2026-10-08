@@ -33,6 +33,7 @@ async def create_metrics(client, company_id, period_end, revenue=100.0):
     return response.json()
 
 
+# company-shaped pin, see #26
 @pytest.mark.asyncio
 async def test_get_missing_company_returns_404(client):
     response = await client.get(f"{COMPANIES}999")
@@ -57,6 +58,7 @@ async def test_delete_company_returns_204_and_removes_its_metrics(client):
     assert (await client.get(METRICS)).json() == []
 
 
+# company-shaped pin, see #26
 @pytest.mark.asyncio
 async def test_delete_company_keeps_other_companies(client):
     keep = await create_company(client, ticker="KEEP", name="Keep Co")
@@ -72,9 +74,10 @@ async def test_delete_company_keeps_other_companies(client):
     ]
     assert (
         await client.get(f"{METRICS}{kept_metrics['id']}")
-    ).status_code == (200)
+    ).status_code == 200
 
 
+# company-shaped pin, see #26
 @pytest.mark.asyncio
 async def test_delete_missing_company_returns_404(client):
     response = await client.delete(f"{COMPANIES}999")
@@ -101,6 +104,7 @@ async def test_create_company_unexpected_error_returns_generic_500(
     assert "hunter2" not in response.text
 
 
+# company-shaped pin, see #26
 @pytest.mark.asyncio
 async def test_create_company_business_error_returns_400(client, monkeypatch):
     def reject(self, company):

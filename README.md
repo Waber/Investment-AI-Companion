@@ -101,6 +101,12 @@ error. The job fails if total coverage drops below 80%.
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80
 ```
 
+The command above includes `--cov-fail-under=80`, so running only part of the suite with that command fails the coverage gate. Drop `--cov-fail-under=80` to check a subset:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning tests/test_yahoo_finance_collector.py
+```
+
 Useful lint and formatting checks, run from the repository root. Black and
 isort read line length 79 from `pyproject.toml`. flake8 does not read that
 file; `.flake8` records the same 79, which is also flake8's own default.

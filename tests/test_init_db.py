@@ -29,6 +29,7 @@ def session(memory_engine):
     db.close()
 
 
+# company-shaped pin, see #26
 def test_init_db_creates_tables_on_configured_engine(
     monkeypatch, memory_engine, capsys
 ):
@@ -50,6 +51,7 @@ def test_init_db_is_safe_to_repeat(monkeypatch, memory_engine):
     assert "companies" in inspect(memory_engine).get_table_names()
 
 
+# company-shaped pin, see #26
 def test_seed_sample_data_inserts_companies_and_apple_metrics(session, capsys):
     database_initializer.seed_sample_data(session)
 
@@ -75,6 +77,7 @@ def test_seed_sample_data_skips_when_data_exists(session, capsys):
     assert "already contains data" in capsys.readouterr().out
 
 
+# company-shaped pin, see #26
 def test_seed_sample_data_runs_once(session):
     database_initializer.seed_sample_data(session)
     database_initializer.seed_sample_data(session)
