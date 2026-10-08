@@ -1,9 +1,9 @@
 """SQLite timestamps, foreign keys, and demo-seed reruns (issues #23 and #20).
 
-These tests describe the behavior before the fix. They do not use a live
-market-data provider. The foreign-key test builds its own engine through
-``app.core.database`` and does not use the ``client`` fixture, so a passing
-result is not the ``PRAGMA`` hook in ``tests/conftest.py``.
+These tests check aware UTC timestamps, the app engine's SQLite foreign
+keys, and a second demo-seed run. They do not use a live market-data
+provider. The foreign-key test builds its own engine through
+``app.core.database`` and does not use the ``client`` fixture.
 """
 
 import json
@@ -192,8 +192,9 @@ async def test_update_normalizes_period_end_before_uniqueness_check(client):
 async def test_update_rejects_null_period_end_and_keeps_omitted(client):
     """Explicit null is 422. Leaving the field out does not clear it.
 
-    A JSON null used to pass this model and fail the database NOT NULL
-    check, which the API reports as 400 ``constraint violation``.
+    On master, ``PUT`` with ``period_end: null`` returned 200 and the
+    value was ignored. At ``c3c8911`` the model accepted null, and the
+    database NOT NULL check came back as 400 ``constraint violation``.
     """
     company = (
         await client.post(COMPANIES, json={"name": "Null", "ticker": "NULLP"})
@@ -228,6 +229,25 @@ async def test_update_rejects_null_period_end_and_keeps_omitted(client):
     assert omitted.json()["revenue"] == 4.5
 
 
+def test_put_period_end_schema_is_not_nullable():
+    """PUT documents period_end as a date-time, not as null."""
+    from main import create_app
+
+    spec = create_app(init_database_on_startup=False).openapi()
+    operation = spec["paths"]["/api/v1/financial-metrics/{metrics_id}"]["put"]
+    body = operation["requestBody"]["content"]["application/json"]["schema"]
+    name = body["$ref"].rsplit("/", 1)[-1]
+    schema = spec["components"]["schemas"][name]
+    period_end = schema["properties"]["period_end"]
+
+    assert period_end["type"] == "string"
+    assert period_end["format"] == "date-time"
+    assert "anyOf" not in period_end
+    assert period_end.get("nullable") is not True
+    assert "default" not in period_end
+    assert "period_end" not in schema.get("required", [])
+
+
 def test_app_engine_enforces_sqlite_foreign_keys(tmp_path):
     """Orphan metrics fail on the app engine, not the test hook."""
     from sqlalchemy.exc import IntegrityError
@@ -260,6 +280,29 @@ def test_app_engine_enforces_sqlite_foreign_keys(tmp_path):
         with pytest.raises(IntegrityError):
             db.commit()
     engine.dispose()
+
+
+def test_postgres_engine_does_not_attach_sqlite_foreign_key_hook(monkeypatch):
+    """A PostgreSQL URL gets no SQLite listener and opens no connection."""
+    import psycopg2
+    from sqlalchemy import event
+
+    from app.core import database
+
+    def refuse_connect(*args, **kwargs):
+        raise AssertionError("create_db_engine opened a connection")
+
+    monkeypatch.setattr(psycopg2, "connect", refuse_connect)
+    engine = database.create_db_engine("postgresql://u@localhost/x")
+    try:
+        assert engine.dialect.name == "postgresql"
+        assert not event.contains(
+            engine, "connect", database.enable_sqlite_foreign_keys
+        )
+        assert engine.pool.checkedout() == 0
+        assert engine.pool.checkedin() == 0
+    finally:
+        engine.dispose()
 
 
 def test_utc_datetime_type_normalizes_sqlite_without_changing_postgres():

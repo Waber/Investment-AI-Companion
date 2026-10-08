@@ -51,10 +51,7 @@ class UTCDateTime(TypeDecorator):
         return utc_value
 
     def process_result_value(self, value, dialect):
-        if value is None:
-            return None
-        # SQLite returns a naive clock. We stored UTC, so the zone is UTC.
-        # An aware value (PostgreSQL) is converted without moving the instant.
-        if value.tzinfo is None or value.utcoffset() is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+        # dialect is unused. as_utc covers both drivers: a naive SQLite
+        # clock was stored as UTC, and an aware PostgreSQL value keeps
+        # the same instant.
+        return None if value is None else as_utc(value)
