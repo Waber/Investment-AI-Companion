@@ -19,9 +19,17 @@ interpreter. On the original development machine it is:
 ```
 
 Reusing this interpreter does not select its source checkout. For another
-machine, create a Python 3.12 virtual environment and install `requirements.txt`.
-Fresh installation has not been verified in this documentation task; do not
-upgrade the existing environment merely to follow this guide.
+machine, create a Python 3.12 virtual environment and install the hashed
+dev lock:
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+```
+
+That command was checked on Python 3.12.3 with the lock in this branch.
+Use `requirements.lock` instead when the environment only runs the API.
+Do not upgrade an existing environment merely to follow this guide.
 
 ## 2. Prepare A Dedicated Local Database
 

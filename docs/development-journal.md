@@ -1,5 +1,141 @@
 # Development Journal
 
+## 2026-10-08 - Security dependencies, hashed locks, and Actions SHAs (#11, #46)
+
+- Scope: the security/deps part of #11, on a branch from
+  `origin/master` `7120577`. Branch
+  `cursor/security-deps-hashed-lock-79f1`.
+  [PR #51](https://github.com/Waber/Investment-AI-Companion/pull/51).
+  #46 is included because the workflow file changed. No Gemini
+  adapter, no UI, and no yfinance cache or throttle adapter.
+- Decision, one pull request: FastAPI 0.104.1 to 0.143.0 still uses
+  Pydantic v2 (locked 2.13.5, floor `>=2.9.0,<3`). Starlette is
+  locked at 1.7.0. The suite needed one test change. That is not a
+  Pydantic major bump and not a broad behaviour rewrite, so black,
+  pytest, yfinance, the removals, the split, and the lock stay in
+  this pull request. A follow-up pull request was not opened.
+- Decision, Starlette floor: the three named CVEs are fixed in
+  0.36.2, 0.40.0, and 0.47.2. The direct pin is `starlette>=1.3.1`
+  so resolution also clears the later Starlette advisories that
+  pip-audit reports for the 0.x line, through CVE-2026-54283.
+  FastAPI 0.135.2 is the first line whose own floors are
+  `starlette>=0.46.0` and `pydantic>=2.9.0`. The lock selects
+  FastAPI 0.143.0, which allows Starlette 1.7.0.
+- Decision, pytest-asyncio: async tests and `tests/conftest.py`
+  use `pytest_asyncio` fixtures, so the plugin stays. 0.21.1 does
+  not run on pytest 8 or later. The dev file requires
+  `pytest-asyncio>=1.0`. The lock installs 1.4.0, which accepts
+  pytest 9. scikit-learn is removed. Nothing imports `sklearn`.
+- Decision, jinja2 and python-multipart: not pinned. No module
+  imports them, and there is no `/ui` template tree yet. D4 and D5
+  add the pins when the UI needs them.
+- Decision, google-genai: not pinned. It waits for the Gemini
+  adapter. `pip install --dry-run google-genai` against the dev
+  lock's environment would install `google-genai` 2.29.0. Installed
+  FastAPI, Pydantic 2.13.5, httpx 0.28.1, and requests 2.34.2
+  already satisfy it. The dry-run would downgrade `websockets`
+  from 17.2 (pulled by yfinance 1.7) to 16.1.1, because
+  google-genai 2.29.0 requires `websockets<17`. yfinance accepts
+  `websockets>=13`, so 16.1.1 still fits. The adapter work should
+  regenerate the lock with that constraint included.
+- Decision, pandas and numpy: tests import pandas, so
+  `requirements-dev.txt` pins `pandas>=1.3.0` (locked 3.0.6).
+  numpy is only an `importorskip` in one test. The direct numpy
+  pin is removed. yfinance pulls numpy 2.5.3, so that test runs.
+  beautifulsoup4 is the same kind of transitive pin: removed as a
+  direct requirement, present as 4.15.0 because yfinance needs it.
+- Removed direct pins, after grep showed no import under `app/`,
+  `main.py`, `scripts/`, or `tests/`: aiohttp, nltk, python-jose,
+  passlib, bcrypt, openai, selenium, pandas-datareader, spacy,
+  elasticsearch, redis, sphinx, sphinx-rtd-theme, scikit-learn.
+  `REDIS_URL`, `ELASTICSEARCH_URL`, and `OPENAI_API_KEY` remain
+  settings fields. They are strings, not client libraries.
+- httpx stays, in the dev file. Tests use `httpx.AsyncClient` and
+  `ASGITransport`. The application does not import httpx.
+- Code change: `tests/test_validation_errors.py` calls
+  `ValidationError.errors(include_url=False)`. FastAPI 0.143
+  builds the request error that way, so the 422 body has no
+  Pydantic documentation link. The custom handler still encodes
+  the errors FastAPI passes in.
+- Client-visible behaviour from FastAPI 0.143 and Starlette 1.7,
+  checked against the installed app: when `BACKEND_CORS_ORIGINS`
+  is set, every response includes `Vary: Origin`, including a
+  request that sends no `Origin` header. An empty CORS list does
+  not add that header. A CORS preflight's
+  `Access-Control-Allow-Methods` includes `QUERY` (with DELETE,
+  GET, HEAD, OPTIONS, PATCH, POST, and PUT). The OpenAPI
+  `ValidationError` schema includes `input` and `ctx`. The
+  `/api/v1/test-config` 200 schema sets `additionalProperties` to
+  true. A 422 detail object has `type`, `loc`, `msg`, and `input`.
+  It no longer includes `url`.
+- Python 3.12 is the minimum. The locked numpy 2.5.3 declares
+  `Requires-Python >=3.12`.
+- `--strip-extras` on the runtime compile does not change pins or
+  hashes, so `requirements.lock` was left as compiled without that
+  flag. The same flag on the dev compile changes one line,
+  `coverage[toml]==7.16.2` to `coverage==7.16.2`, and the hashes
+  stay the same. `requirements-dev.lock` was regenerated with the
+  flag. The documented commands pass `--strip-extras`.
+- History: four commits, and each one passes the CI pytest
+  command. The dependency commit carries the requirements split,
+  both hashed locks, the workflow change to
+  `pip install --require-hashes -r requirements-dev.lock`, and the
+  `include_url=False` test fix. Action tags stay on that commit.
+  The CI commit pins `actions/checkout` and `actions/setup-python`
+  to commit SHAs. The style commit is the Black 26 reformat only.
+  Docs are last. Per-commit results are in the verification
+  section below.
+- Black 26.10.0 reformatted 14 legacy files in its own commit.
+  `black --check` then passes on `app`, `main.py`,
+  `setup_database.py`, and `tests`. isort and flake8 still report
+  the previous import-order, unused-import, and long-line findings
+  on those paths. CI runs pytest and does not run the linters.
+- Gaps between the floor in the text files and the locked install:
+  FastAPI 0.143.0 (floor 0.135.2), Starlette 1.7.0 (floor 1.3.1),
+  Pydantic 2.13.5 (was 2.6.1, floor `>=2.9.0,<3`), python-dotenv
+  1.2.4 (floor 1.2.2), requests 2.34.2 (floor 2.33.0), pytest
+  9.1.1 (floor 9.0.3), pytest-asyncio 1.4.0 (floor 1.0), pytest-cov
+  7.1.0 (floor 4.1.0), black 26.10.0 (floor 26.3.1), httpx 0.28.1
+  (floor 0.25.2), pandas 3.0.6 (floor 1.3.0), yfinance 1.7.0
+  (floor 1.7), pip-tools 7.6.2 (floor 7.0). Exact pins that match
+  the lock: uvicorn 0.24.0, pydantic-settings 2.1.0, SQLAlchemy
+  2.0.23, psycopg2-binary 2.9.9, alembic 1.12.1, isort 5.12.0,
+  flake8 6.1.0, mypy 1.7.1.
+- The previous flat `requirements.txt` installs on Python 3.12.
+  GitHub Actions run
+  [37780801408](https://github.com/Waber/Investment-AI-Companion/actions/runs/37780801408)
+  on master `7120577` installed that file on Python 3.12 and the
+  Tests job succeeded. The new dev lock also installs on Python
+  3.12. A clean venv whose pip was 24.0 accepted
+  `pip install --require-hashes -r requirements-dev.lock` and the
+  same command for `requirements.lock`.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3, packages from the dev lock:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 846 passed in 12.42s, no warnings summary, TOTAL 92% (exact
+  92.58%). The 80% gate passed. `coverage report --precision=2`
+  reports the same total. Collector tests are in that run and stay
+  offline. `pip-audit -r requirements.lock` and
+  `pip-audit -r requirements-dev.lock` both reported no known
+  vulnerabilities. CI runs pytest only, so these checkouts were
+  not asked to pass black, isort, or flake8. Each commit was
+  checked out and the command above was run in a Python 3.12.3
+  virtualenv installed with
+  `pip install --require-hashes -r requirements-dev.lock` from
+  that commit. The lock blob is the same on every commit
+  (`9b70931`). No warnings summary on any run. Exact coverage
+  is 92.58% on every run (`coverage report --precision=2`).
+  `a585a01` (deps): 846 passed in 12.75s.
+  `912c12b` (Actions SHAs): 846 passed in 12.57s.
+  `3bbea71` (Black): 846 passed in 12.79s.
+  The docs tree, measured before this commit: 846 passed in
+  12.92s.
+- Work-state next action: #45 and #47 together, with #50 if that
+  fix stays small. Then #24, #19, #25, and #26 (with #16 and #17).
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Fetch-company 500 detail and debt_to_assets (#18, #21)
 
 - Scope: bugs #18 and #21, on a branch from `origin/master` `a03ca24`.

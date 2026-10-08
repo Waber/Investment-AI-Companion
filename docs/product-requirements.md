@@ -241,7 +241,7 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 | **P3b Scoring** | **S1** transparent instrument score: components, weights, freshness, configurable weights, disclaimer (Dev; Code Reviewer checks no-signal wording). After I1–I3, D4, D6, C1; before A1. | — |
 | **P4 AI (mocked)** | **A1** provider interface, deterministic PL/EN mock, report schema, citation validation, saving (Dev). **A2** analysis UI and history, language follows the UI (Dev). | #12 deferred; no profile dependency |
 | **P5 Demo acceptance** | **D7** demo checklist plus CI demo job (QA). **D8** UI and security review, including disclaimer and score wording (Code Reviewer). **D9** README "Run the demo" and refreshed work-state (Dev). | PR #22 coverage gate |
-| **P6 Persistence and real data (after the demo)** | **#8** first Alembic migration capturing the instrument schema → **#9** opt-in PostgreSQL harness (QA) → **#10** switch to migrations. **R1** yfinance `>=1.7` adapter with cache, throttling and the ISIN-keyed type mapping (Dev). **R2** Gemini adapter via `google-genai` plus the 20–30 analysis bake-off incl. Polish quality (Dev, QA). | #11 dependency audit (`google-genai`, `yfinance>=1.7`, `jinja2`, `python-multipart`; drop `pandas-datareader`); #21 with R1 |
+| **P6 Persistence and real data (after the demo)** | **#8** first Alembic migration capturing the instrument schema → **#9** opt-in PostgreSQL harness (QA) → **#10** switch to migrations. **R1** yfinance adapter with cache, throttling and the ISIN-keyed type mapping (Dev). The `yfinance>=1.7` pin itself moved with #11's security/deps part. **R2** Gemini adapter via `google-genai` plus the 20–30 analysis bake-off incl. Polish quality (Dev, QA). | `google-genai` still waits for R2. `jinja2` and `python-multipart` wait for D4/D5. #21 with R1 |
 
 **Issue map (Demo v1, label `demo`):** D1 #23, D3 #24, D2 #25, I1 #26, I2 #27, I3 #28, D4 #29, D6 #30, C1 #31, W1 #32, N1 #33, D5 #34, S1 #35, A1 #36, A2 #37, D7 #38, D8 #39, D9 #40. R1 and R2 (post-demo) have no issues yet.
 
@@ -251,5 +251,5 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 - I1 and D2 → D4 → D5, D6, C1, W1, N1; I2 → D6, C1.
 - I1–I3, D4, D6, C1 → S1 → A1 → A2 (A1 hard-depends on I2; N1 is optional for A1, notes context is added once N1 is available).
 - All of P1–P4 → D7 and D8 → D9.
-- Demo done → #8 → #9 → #10; #11 → R1 and R2.
+- On 2026-10-08 the Project Manager moved #11's security/deps part ahead of the demo after the Security Engineer's review found CVEs. That part is the FastAPI and Starlette CVE upgrade, the `requests` and `python-dotenv` floors, removal of unused pins, the runtime/dev split, and the hashed lock. It is scheduled before the demo. After it: #45 and #47 together, with #50 if that fix stays small, then the remaining demo slices. Demo done → #8 → #9 → #10. `google-genai` stays with R2. `jinja2` and `python-multipart` stay with D4/D5.
 - #12 stays deferred unless analysis tailoring needs it.
