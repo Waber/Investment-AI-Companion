@@ -36,7 +36,10 @@
   characters on write, CORS origins are bare http(s) URLs, the
   handler does not uppercase a ticker twice, the demo `DATABASE_URL`
   expands `$TMPDIR`, `GBp` is stored unchanged, and the read model
-  does not apply write-time ticker rules. The next action below
+  does not apply write-time ticker rules. A provider description
+  longer than 5000 characters is cut to the first 5000 in
+  fetch-company, with no ellipsis; user create and update still
+  return 422. Security approved `f1072cc`. The next action below
   is unchanged.
 - Incomplete: the queue in the next-action line is still open.
   Alembic (#8) and the PostgreSQL harness (#9) stay later.
@@ -51,8 +54,10 @@
   on the test commit `e352413`: 865 passed, 51 xfailed, 14.91s,
   exact 92.93%. On the fix commit `849b08a`: 918 passed, 1
   xfailed, 14.44s, exact 93.41%. Docs tree: 919 passed in
-  14.56s, no xfailed, exact 93.41%. `black --check` passed on the
-  touched Python files.
+  14.56s, no xfailed, exact 93.41%. The provider-description
+  truncation commit: 951 passed in 15.42s, exact 92.63% (1143
+  statements, 78 missed, 254 branches, 15 partial). `black --check`
+  passed on the touched Python files.
 - Active agents: none.
 - Blockers: none.
 - Next action: #24, the collector interface by capability plus a

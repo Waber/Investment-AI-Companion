@@ -20,7 +20,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
-from app.models.company import TICKER_PATTERN, normalize_ticker
+from app.models.company import (
+    DESCRIPTION_MAX_LENGTH,
+    TICKER_PATTERN,
+    normalize_ticker,
+)
 from app.repositories.company_repository import CompanyRepository
 
 logger = logging.getLogger(__name__)
@@ -66,6 +70,24 @@ def _log_provider_validation(ticker: str, exc: ValidationError) -> None:
         fields,
         kinds,
     )
+
+
+def _provider_description(company_info: dict) -> object:
+    """Keep the first 5000 characters of a provider summary.
+
+    The 5000-character cap is for user create and update, which still
+    return HTTP 422. Yahoo's ``longBusinessSummary`` can be longer.
+    Passing it through ``CompanyCreate`` would be a validation error
+    and fetch-company would return HTTP 502. There is no ellipsis:
+    the stored text is exactly the first ``DESCRIPTION_MAX_LENGTH``
+    characters.
+    """
+    description = company_info.get("description")
+    if not isinstance(description, str):
+        return description
+    if len(description) <= DESCRIPTION_MAX_LENGTH:
+        return description
+    return description[:DESCRIPTION_MAX_LENGTH]
 
 
 class FetchCompanyResponse(BaseModel):
@@ -140,7 +162,7 @@ def fetch_company_data(
                 name=company_info.get("name"),
                 sector=company_info.get("sector"),
                 industry=company_info.get("industry"),
-                description=company_info.get("description"),
+                description=_provider_description(company_info),
                 website=company_info.get("website"),
                 country=company_info.get("country"),
                 exchange=company_info.get("exchange"),
@@ -177,7 +199,7 @@ def fetch_company_data(
                 ticker=ticker,
                 sector=company_info.get("sector"),
                 industry=company_info.get("industry"),
-                description=company_info.get("description"),
+                description=_provider_description(company_info),
                 website=company_info.get("website"),
                 country=company_info.get("country"),
                 exchange=company_info.get("exchange"),
