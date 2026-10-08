@@ -33,8 +33,18 @@
   xfailed, 0 skipped in 3.06s. The two target tests with no DSN
   -> 2 skipped. The same tests with `REQUIRE_POSTGRES=1` and no
   DSN -> 1 error, exit 1. `black`, `isort --check-only`, and
-  `flake8` passed on the touched Python files. GitHub Actions
-  for this commit is recorded after the push.
+  `flake8` passed on the touched Python files.
+  GitHub Actions
+  [run 37841595814](https://github.com/Waber/Investment-AI-Companion/actions/runs/37841595814)
+  on `3ebd6b0` failed the PostgreSQL job: the guard counted the
+  two expected failures as skips. The follow-up ignores
+  ``wasxfail``.
+  [run 37841966780](https://github.com/Waber/Investment-AI-Companion/actions/runs/37841966780)
+  on `135bc59bcb851626683902c44121e6e29eb24ec0` is green. SQLite
+  job 846 passed, 116 deselected in 16.90s. PostgreSQL job 114
+  passed, 2 xfailed, 846 deselected in 4.88s. The summary has
+  no skipped tests, and the job stayed green with
+  `REQUIRE_POSTGRES=1`.
 - AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
   measured. Account usage was not available in this session; no
   percentage recorded.
