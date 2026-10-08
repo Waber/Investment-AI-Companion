@@ -1,5 +1,27 @@
 # Development Journal
 
+## 2026-10-08 - Rebase onto the merged PostgreSQL harness (#60, #9)
+
+- Scope: `cursor/secure-config-provider-hygiene-c91c` rebased onto
+  `origin/master` `d7f6798` after pull request #60 merged.
+- Decision, journal: newest first. The secure-defaults entry stays
+  above #60's entries, and those entries are kept. This branch
+  keeps its own personal-path cleanup. Master's older journal
+  text still names a home-directory prefix and a
+  temporary-directory prefix; using that text fails
+  `test_tracked_files_have_no_personal_machine_paths`.
+- Decision, work-state: one next action, #24. The branch line names
+  `d7f6798`. Incomplete work no longer says the PostgreSQL harness
+  stays later. Alembic (#8) still does. #60's harness facts that
+  are still true stay in that section, including the integration
+  client on `http://127.0.0.1` and the 34-character test secret.
+- #60 already reads the database URL default from `Settings` and
+  does not add personal paths. No application code changed in this
+  rebase for `SECRET_KEY`, `ALLOWED_HOSTS`, or CORS.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Secure defaults, neutral paths, and provider hygiene (#45, #47, #50)
 
 - Scope: #45 (secure config defaults), #47 (neutral defaults and a

@@ -3,7 +3,7 @@
 ## Secure defaults, neutral paths, and provider hygiene: 2026-10-08
 
 - Branch `cursor/secure-config-provider-hygiene-c91c`, based on
-  master `d568663`.
+  master `d7f6798`.
   [PR #61](https://github.com/Waber/Investment-AI-Companion/pull/61).
 - Completed: #45, #47, and #50, plus the blank-ticker cases from
   #17. Security signed off, so the pull request closes #50.
@@ -45,11 +45,13 @@
   stored non-URL still lists. Security and QA approved
   `f1072cc`. The next action below is unchanged.
 - Incomplete: the queue in the next-action line is still open.
-  Alembic (#8) and the PostgreSQL harness (#9) stay later.
+  Alembic (#8) stays later.
   `fetch-financial-metrics` is still a placeholder. It validates
   the ticker and does not map provider `ValidationError` to 502.
   isort and flake8 still report the previous unused-import and
-  E402 findings in `setup_database.py`. CI runs pytest only.
+  E402 findings in `setup_database.py`. CI runs the SQLite suite
+  and the PostgreSQL integration job. It does not run black,
+  isort, or flake8.
 - Tests: no `.env`, `DATABASE_URL` unset, fresh Python 3.12.3 venv,
   `pip install --require-hashes -r requirements-dev.lock`. The CI
   command
@@ -186,7 +188,7 @@
   0.143 builds those errors. Black 26 reformats are a separate
   commit.
 - Incomplete: the queue in the next-action line is still open.
-  Alembic (#8) and the PostgreSQL harness (#9) stay later.
+  Alembic (#8) stays later.
   `google-genai` waits for the Gemini adapter. A dry-run of
   `google-genai` 2.29.0 against this set installs, and it would
   downgrade `websockets` from 17.2 to 16.1.1 because that release
@@ -237,7 +239,7 @@
   reads `totalDebtPerShare` and makes no extra provider call. No
   other Yahoo field changed.
 - Incomplete: the queue in the next-action line is still open.
-  Alembic (#8) and the PostgreSQL harness (#9) stay later.
+  Alembic (#8) stays later.
 - Tests: no `.env`, `DATABASE_URL` unset, the CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 838 passed in 15.33s, no warnings summary, TOTAL 92% (exact
