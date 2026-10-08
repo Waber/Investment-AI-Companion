@@ -93,9 +93,11 @@ cp .env.example .env
 
 Edit `.env` for local credentials and service URLs. Do not commit real secrets.
 
-`SECRET_KEY` is required. The process refuses to start when it is missing
-or still a known placeholder. Generate one with
-`python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+`SECRET_KEY` is required and must be at least 32 characters. The process
+refuses to start when it is missing, shorter than that, or still a known
+placeholder in any letter case. Generate one with
+`python -c "import secrets; print(secrets.token_urlsafe(32))"`
+(that prints 43 characters).
 `DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need
 `/api/v1/test-config`. `BACKEND_CORS_ORIGINS` is a comma-separated list
 of http(s) origins. A JSON list works too. The code default for

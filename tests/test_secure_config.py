@@ -17,7 +17,7 @@ import main
 from app.core.config import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_SECRET = "unit-test-secret-key"
+TEST_SECRET = "unit-test-secret-key-0123456789abcd"
 
 
 def _parsed_origins(settings):
@@ -79,6 +79,26 @@ def test_settings_errors_hide_other_secrets(monkeypatch):
 def test_placeholder_secret_key_is_rejected(value):
     with pytest.raises(ValidationError):
         Settings(_env_file=None, SECRET_KEY=value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "YOUR-SECRET-KEY-HERE",
+        "Replace-This-In-Local-Env",
+        "a" * 31,
+    ],
+)
+def test_secret_key_case_and_short_values_are_rejected(value):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, SECRET_KEY=value)
+
+
+def test_secret_key_of_32_characters_is_accepted():
+    value = "b" * 32
+    settings = Settings(_env_file=None, SECRET_KEY=value)
+
+    assert settings.SECRET_KEY == value
 
 
 def test_real_secret_key_is_accepted():

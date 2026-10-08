@@ -4,7 +4,7 @@ import os
 # not set the variable. Set it before importing the app so collection
 # does not depend on a developer .env file. A test that checks the
 # missing-key failure deletes this name first.
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-0123456789")
 
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402

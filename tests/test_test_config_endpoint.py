@@ -7,7 +7,7 @@ from app.core.config import Settings
 
 SECRET_VALUES = {
     "OPENAI_API_KEY": "sk-test-openai-value",
-    "SECRET_KEY": "test-secret-key-value",
+    "SECRET_KEY": "test-secret-key-value-0123456789abcd",
     "NEWS_API_KEY": "test-news-value",
     "TWITTER_API_KEY": "test-twitter-value",
 }
@@ -81,7 +81,7 @@ async def test_test_config_marks_missing_settings(client, monkeypatch):
         LOG_LEVEL="INFO",
         ALLOWED_HOSTS=["localhost", "127.0.0.1"],
         OPENAI_API_KEY="",
-        SECRET_KEY="unit-test-secret-key",
+        SECRET_KEY="unit-test-secret-key-0123456789abcd",
         DATABASE_URL="",
         REDIS_URL="",
         ELASTICSEARCH_URL=None,
@@ -109,7 +109,7 @@ async def test_test_config_does_not_echo_the_database_url(client, monkeypatch):
     configured = Settings(
         _env_file=None,
         DEBUG=True,
-        SECRET_KEY="test-secret-key-value",
+        SECRET_KEY="test-secret-key-value-0123456789abcd",
         DATABASE_URL=database_url,
         OPENAI_API_KEY="sk-test-openai-value",
     )

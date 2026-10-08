@@ -44,7 +44,7 @@ DATABASE_URL=postgresql://username:password@localhost:5432/investment_ai
 
 # DEBUG defaults to false. Set it true only for /api/v1/test-config.
 DEBUG=False
-# Required. Generate with:
+# Required. At least 32 characters. Generate with:
 # python -c "import secrets; print(secrets.token_urlsafe(32))"
 SECRET_KEY=
 # Comma-separated origins, or a JSON list.
