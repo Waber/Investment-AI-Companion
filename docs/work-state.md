@@ -4,39 +4,47 @@
 
 - Branch `cursor/postgres-integration-harness-fc54`, based on
   `origin/master` `d568663`. Implementation commit `e242341`.
+  Review follow-up is the latest commit on this branch.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
-  `TEST_POSTGRES_DSN` opts in. An unset variable skips. The URL is
-  refused when it names the application database, including the
-  code default `postgresql://przemkowy@localhost:5432/investment_ai`.
-  CI job `pytest (Python 3.12, PostgreSQL)` runs `-m integration`
-  against `postgres:16`. The SQLite job is unchanged, including
-  `--cov-fail-under=80`, `persist-credentials: false`, and the
-  hashed `requirements-dev.lock` install. Tables come from
-  `Base.metadata.create_all`. The duplicate-instant check from #20
-  runs on PostgreSQL (five offsets return 400, one row, and a
-  direct insert hits `uq_metrics_company_period`). #16 is recorded
-  only: duplicate ticker `DUP` is 500, and `dup` is stored.
-  `tests/conftest.py` was not modified.
-- Incomplete: Alembic baseline #8. The local disposable-cluster
-  runner was not added. #16 is not fixed. #20 stays open until
-  review accepts the PostgreSQL run. The queue in the next-action
-  line is still open.
+  `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
+  allowlist refuses a name that does not contain `test` as its
+  own word, and a host that is not loopback or a Unix socket,
+  unless `TEST_POSTGRES_ALLOW_REMOTE=1`. The application database
+  is still refused after those checks, including the code default
+  `postgresql://przemkowy@localhost:5432/investment_ai`. CI pins
+  `postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d`
+  and database `investment_test`. The SQLite job is unchanged,
+  including `--cov-fail-under=80`, `persist-credentials: false`,
+  and the hashed `requirements-dev.lock` install. Tables come
+  from `Base.metadata.create_all`. Selecting the integration
+  marker imports the application from an empty directory, so a
+  stray `.env` is not applied. The duplicate-instant check from
+  #20 runs on PostgreSQL. #16 is recorded (duplicate `DUP` is
+  500, `dup` is stored) and a strict xfail records the target
+  (400 or 409, one row). `tests/conftest.py` was not modified.
+  The PM dropped the disposable cluster runner. The README
+  documents the pinned image.
+- Incomplete: Alembic baseline #8, including upgrade/downgrade on
+  PostgreSQL. #16 is not fixed. #20 stays open until review
+  accepts the PostgreSQL run. The queue in the next-action line
+  is still open. The disposable runner is not remaining work.
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3, the CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 846 passed, 37 deselected in 13.55s, no warnings summary,
+  -> 846 passed, 68 deselected in 12.84s, no warnings summary,
   TOTAL 92% (exact 92.58%).
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
-  and `-m integration` -> 37 passed in 1.06s on PostgreSQL 16.15
-  (Ubuntu 16.15-0ubuntu0.24.04.1). Without the variable,
-  `-m integration` -> 23 passed, 14 skipped, exit 0. A node id
-  without `-m integration` -> 1 deselected, exit 5.
-  GitHub Actions
-  [run 37834076658](https://github.com/Waber/Investment-AI-Companion/actions/runs/37834076658)
-  on `8bfd7ba`: SQLite job 846 passed, 37 deselected in 9.90s,
-  TOTAL 93%. PostgreSQL job 37 passed, 846 deselected in 1.20s
-  on PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2).
+  and `-m integration` -> 67 passed, 1 xfailed, 846 deselected
+  in 2.00s on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1).
+  Without the variable, `-m integration` -> 53 passed, 15
+  skipped, exit 0. Of the 68 integration tests, 53 do not open
+  PostgreSQL (45 DSN checks, 8 `.env` checks) and 15 hit the
+  database. A node id without `-m integration` -> 1 deselected,
+  exit 5. GitHub Actions for this follow-up is not recorded yet.
+  The earlier green run
+  [37834076658](https://github.com/Waber/Investment-AI-Companion/actions/runs/37834076658)
+  is on `8bfd7ba`, before the allowlist and the image pin.
 - Active agents: none.
 - Blockers: none.
 - Next action: #45 and #47 together (secure config defaults and

@@ -41,6 +41,82 @@
   completed with conclusion success.
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37833690203
 
+## 2026-10-08 - PostgreSQL harness review follow-up (#9)
+
+- Scope: QA and PM follow-up on the harness in
+  `cursor/postgres-integration-harness-fc54`, still based on
+  `origin/master` `d568663`. The PM accepted the GitHub Actions
+  service container and is editing issue #9. Alembic
+  upgrade/downgrade on PostgreSQL moves to #8 and is not in this
+  change. The disposable `scripts/test_postgres.py` runner and its
+  cleanup tests are dropped. `.env` isolation before the
+  application import stays in #9 and is in this change.
+- Decision, allowlist: refusing only the application URL was not
+  enough. The harness drops and truncates tables, so any other
+  name would have been destroyed. `decide_test_dsn` now refuses a
+  database name unless it contains `test` as its own word
+  (`investment_test` passes; `testing`, `testdb`, and
+  `investment_ai` do not). The host must be localhost,
+  `127.0.0.1`, `::1`, or a Unix socket, unless
+  `TEST_POSTGRES_ALLOW_REMOTE=1`. That override does not relax
+  the name rule or the application-database check. The CI URL
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  already passes, so the database was not renamed and the job
+  does not set the override.
+- Decision, image pin: the PostgreSQL job uses
+  `postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d`.
+  That digest is the `postgres:16` image the earlier CI run
+  pulled. The README tells a local Docker run to use the same
+  image and `TEST_POSTGRES_DSN`.
+- Decision, `.env` isolation: `Settings` reads `env_file=".env"`
+  from the process working directory. pytest loads the repository
+  root `conftest.py` before `tests/conftest.py`, and
+  `tests/conftest.py` imports the application at module level.
+  When the command selects the `integration` marker (pytest's own
+  `-m` grammar; the last `-m` wins over `PYTEST_ADDOPTS`; no `-m`
+  means this repo's addopts, which deselects the marker), the
+  root conftest imports `app.core.config`, `app.core.database`,
+  and `main` from an empty temporary directory. The later import
+  reuses that module, so a `.env` in the original directory is
+  not applied. A `DATABASE_URL` exported in the shell is still
+  read. The default SQLite command does not select the marker, so
+  it does not take this path. `tests/conftest.py` was not
+  modified.
+- Decision, issue #16: the current-behaviour test stays (duplicate
+  `DUP` is 500, and `dup` is stored). A second test expects 400
+  or 409 and one row, with `strict` xfail. When the fix lands,
+  that marker has to be removed or the suite fails. A fixture
+  setup error is not an expected failure.
+- Docstring only: `SET TIME ZONE` stays after COMMIT. Only
+  ROLLBACK reverts it. The `begin` listener still sets
+  `Europe/Warsaw` on every transaction. Behaviour is unchanged.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3, packages from
+  `requirements-dev.lock`:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 846 passed, 68 deselected in 12.84s, no warnings summary,
+  TOTAL 92% (exact 92.58%).
+  Node id without the marker -> 1 deselected, exit 5.
+  `-m integration` with `TEST_POSTGRES_DSN` unset -> 53 passed,
+  15 skipped, exit 0. The 53 do not open PostgreSQL (45 DSN
+  checks and 8 `.env` checks). The 15 database tests skip.
+  The same command with
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  -> 67 passed, 1 xfailed, 846 deselected in 2.00s on the local
+  PostgreSQL 16.15. The xfail is the #16 target test.
+  `REQUIRE_POSTGRES=1` with the variable unset failed in fixture
+  setup, exit 1.
+  `black --check`, `isort --check-only`, and `flake8` passed on
+  `conftest.py` and `tests/integration`.
+  GitHub Actions for this follow-up is recorded after the push.
+- Work-state next action: unchanged. #45 and #47 together, with
+  #50 if that fix stays small. Then #24, #19, #25, and #26 (with
+  #16 and #17). #8 and #16 stay open. #20 stays open until
+  review accepts the PostgreSQL run.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - PostgreSQL integration test harness (#9)
 
 - Scope: issue #9, on a branch from `origin/master` `d568663`.

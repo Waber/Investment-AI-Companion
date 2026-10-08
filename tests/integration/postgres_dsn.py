@@ -1,15 +1,22 @@
 """Decide whether a PostgreSQL integration run may open a database.
 
-The application default is ``settings.DATABASE_URL``. That value comes
-from the environment, a ``.env`` file, or the code default in
-``app/core/config.py``. The harness must not open that database.
+The harness drops tables and truncates them. A denylist of the
+application URL is not enough: any other name would be destroyed.
+The database name must contain ``test`` as its own word, and the
+host must be this machine, unless ``TEST_POSTGRES_ALLOW_REMOTE=1``.
+
 Importing this module does not connect to anything.
 """
 
+import re
 from collections.abc import Iterable
 
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
+
+# ``investment_test`` matches. ``testing``, ``testdb``, and ``contest``
+# do not: ``test`` has to be a whole word between underscores.
+_TEST_DATABASE_NAME = re.compile(r"(^|_)test($|_)")
 
 # Hosts that mean "this machine". A Unix-socket URL has no host, and
 # that socket is the local server, same as localhost.
@@ -18,7 +25,10 @@ _LOCAL_HOSTS = frozenset({"loopback", "local-socket"})
 
 SKIP_MESSAGE = (
     "PostgreSQL integration tests need TEST_POSTGRES_DSN set to a "
-    "database that is not the application's DATABASE_URL. "
+    "local database whose name contains test as its own word, "
+    "for example investment_test. The host must be localhost, "
+    "127.0.0.1, ::1, or a Unix socket "
+    "(TEST_POSTGRES_ALLOW_REMOTE=1 allows another host). "
     "Example: postgresql://postgres:postgres@127.0.0.1:5432/"
     "investment_test. "
     "python -m pytest leaves these tests deselected and does not "
@@ -45,6 +55,21 @@ SCHEME_MESSAGE = (
 DATABASE_MESSAGE = (
     "TEST_POSTGRES_DSN must include a database name. "
     "An omitted name would use the server's default database."
+)
+
+NAME_MESSAGE = (
+    "Refusing to run integration tests: the database name must "
+    'contain "test" as its own word, separated by underscores '
+    "(for example investment_test). Names such as investment_ai, "
+    "testing, and testdb are refused. The harness drops and "
+    "recreates tables in that database."
+)
+
+HOST_MESSAGE = (
+    "Refusing to run integration tests: TEST_POSTGRES_DSN must "
+    "use localhost, 127.0.0.1, ::1, or a Unix socket. Set "
+    "TEST_POSTGRES_ALLOW_REMOTE=1 to allow another host. The "
+    "harness drops and recreates tables in that database."
 )
 
 
@@ -122,6 +147,17 @@ def same_database(left: str, right: str) -> bool:
     return database_identity(left) == database_identity(right)
 
 
+def database_name_is_allowed(name: str) -> bool:
+    """Return whether ``name`` contains ``test`` as its own word.
+
+    The check is case-insensitive. ``investment_test``, ``test``,
+    and ``test_db`` pass. ``testing`` and ``testdb`` do not, because
+    the letters after ``test`` are not an underscore or the end of
+    the name.
+    """
+    return _TEST_DATABASE_NAME.search(name.lower()) is not None
+
+
 def _matches_application_database(
     test_url: str, application_urls: Iterable[str | None]
 ) -> bool:
@@ -147,12 +183,20 @@ def decide_test_dsn(
     test_dsn: str | None,
     application_urls: Iterable[str | None],
     require: bool,
+    *,
+    allow_remote: bool = False,
 ) -> DsnDecision:
     """Choose skip, fail, or use for one integration run.
 
     Missing configuration skips, unless ``require`` is true (the CI
-    job). A URL that names the application's database fails closed:
-    the tests drop and recreate their tables.
+    job). A present URL is allowed only when all of these hold:
+
+    - the database name contains ``test`` as its own word
+    - the host is loopback or a Unix socket, unless ``allow_remote``
+    - the URL is not the application's own database
+
+    The tests drop and recreate their tables, so a URL that fails
+    any of those checks fails closed and does not connect.
     """
     raw = "" if test_dsn is None else test_dsn.strip()
     if not raw:
@@ -175,6 +219,14 @@ def decide_test_dsn(
         )
     if identity.database == "":
         return DsnDecision("fail", DATABASE_MESSAGE)
+    if not database_name_is_allowed(identity.database):
+        return DsnDecision("fail", NAME_MESSAGE)
+    if identity.host not in _LOCAL_HOSTS and not allow_remote:
+        return DsnDecision("fail", HOST_MESSAGE)
     if _matches_application_database(raw, application_urls):
         return DsnDecision("fail", REFUSE_MESSAGE)
-    return DsnDecision("use", "TEST_POSTGRES_DSN is a separate database.", raw)
+    return DsnDecision(
+        "use",
+        "TEST_POSTGRES_DSN is an allowed test database.",
+        raw,
+    )

@@ -145,7 +145,9 @@ The default command above stays on SQLite. It does not need PostgreSQL, and it d
 python -m pytest tests/integration/test_postgres.py::test_server_is_postgresql
 ```
 
-To run the PostgreSQL tests, set `TEST_POSTGRES_DSN` to a separate database. The harness refuses the application's `DATABASE_URL` (the code default is `postgresql://przemkowy@localhost:5432/investment_ai`) because it drops and recreates its tables. If the variable is unset, `pytest -m integration` skips those tests with a message. `REQUIRE_POSTGRES=1` (set in CI) makes a missing variable fail the run.
+To run the PostgreSQL tests, set `TEST_POSTGRES_DSN` to a separate local database. The database name must contain `test` as its own word, separated by underscores (`investment_test`, `test_db`). Names such as `investment_ai`, `testing`, and `testdb` are refused. The host must be `localhost`, `127.0.0.1`, `::1`, or a Unix socket. `TEST_POSTGRES_ALLOW_REMOTE=1` allows another host and does not relax the name rule. The harness also refuses the application's `DATABASE_URL` (the code default is `postgresql://przemkowy@localhost:5432/investment_ai`) because it drops and recreates its tables. If the variable is unset, `pytest -m integration` skips the database tests with a message. `REQUIRE_POSTGRES=1` (set in CI) makes a missing variable fail the run.
+
+`pytest -m integration` imports the application from an empty directory before any test module imports it, so a `.env` file in the repository or the current directory is not applied to `Settings`. A `DATABASE_URL` exported in the shell is still read. The default SQLite command does not take that path.
 
 ```bash
 createdb investment_test
@@ -154,18 +156,19 @@ TEST_POSTGRES_DSN=postgresql://127.0.0.1:5432/investment_test \
   -W error::DeprecationWarning -m integration
 ```
 
-A Docker server on port 5432 is the same contract the GitHub Actions job uses (`postgres:16`, database `investment_test`):
+GitHub Actions uses this pinned image, the same digest as the `postgres:16.15` image that job pulled, and database `investment_test`. A local Docker server is the same image and the same `TEST_POSTGRES_DSN` contract:
 
 ```bash
 docker run --rm -d --name iac-test-postgres \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=investment_test \
-  -p 5432:5432 postgres:16
+  -p 5432:5432 \
+  postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
 TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test \
   PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider \
   -W error::DeprecationWarning -m integration
 ```
 
-The CI workflow runs that marked subset as a second job. The SQLite job is unchanged, including the 80% coverage gate. Tables in the integration tests are created from the SQLAlchemy models. The Alembic baseline remains issue #8.
+The CI workflow runs that marked subset as a second job. The SQLite job is unchanged, including the 80% coverage gate. Tables in the integration tests are created from the SQLAlchemy models. Alembic upgrade and downgrade on PostgreSQL remains issue #8.
 
 Useful lint and formatting checks, run from the repository root. Black and
 isort read line length 79 from `pyproject.toml`. flake8 does not read that

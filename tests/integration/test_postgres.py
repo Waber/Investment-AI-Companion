@@ -388,3 +388,41 @@ async def test_duplicate_ticker_is_500_and_lowercase_is_stored(
     with postgres_session_factory() as db:
         tickers = {row.ticker for row in db.query(CompanyDB).all()}
     assert tickers == {"DUP", "dup"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Issue #16 is open. Duplicate ticker should be 400 or 409, "
+        "and dup should collide with DUP. Today the duplicate is 500 "
+        "and dup is stored. Remove this marker when that behaviour "
+        "lands."
+    ),
+)
+async def test_duplicate_ticker_is_a_client_error_and_case_collides(
+    postgres_client, postgres_session_factory
+):
+    """Target behaviour for issue #16.
+
+    ``strict=True`` fails the suite when this starts passing, so the
+    fix has to delete the marker in the same change. A fixture setup
+    error is not an expected failure: a broken harness still fails CI.
+    """
+    first = await postgres_client.post(
+        COMPANIES, json={"name": "A", "ticker": "DUP"}
+    )
+    assert first.status_code == 201, first.text
+
+    duplicate = await postgres_client.post(
+        COMPANIES, json={"name": "B", "ticker": "DUP"}
+    )
+    assert duplicate.status_code in (400, 409), duplicate.text
+
+    lower = await postgres_client.post(
+        COMPANIES, json={"name": "C", "ticker": "dup"}
+    )
+    assert lower.status_code in (400, 409), lower.text
+
+    with postgres_session_factory() as db:
+        assert db.query(CompanyDB).count() == 1

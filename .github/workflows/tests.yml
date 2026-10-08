@@ -5,10 +5,12 @@
 # tests, and this job does not start Postgres. Its total coverage
 # (statements plus branches) for app, main, and scripts must stay at or
 # above 80%.
-# The PostgreSQL job runs only `-m integration` against a postgres:16
-# service container. It has no coverage gate: the gate measures the
+# The PostgreSQL job runs only `-m integration` against the pinned
+# postgres:16.15 image. It has no coverage gate: the gate measures the
 # SQLite suite. It does not set DATABASE_URL, so the application default
-# stays distinct from TEST_POSTGRES_DSN.
+# stays distinct from TEST_POSTGRES_DSN. The database name
+# investment_test satisfies the DSN allowlist, so the job does not set
+# TEST_POSTGRES_ALLOW_REMOTE.
 # Neither job lints. Every uses: action is pinned to a full commit SHA
 # with a trailing version comment.
 # JUnit XML and the MIN_TESTS gate are not enabled.
@@ -96,11 +98,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
-      # postgres:16 matches the manual Europe/Warsaw check. The job
-      # reaches the container at 127.0.0.1:5432. The database name is
-      # investment_test, not the application default investment_ai.
+      # postgres:16.15 matches the manual Europe/Warsaw check. The
+      # digest is the image a previous CI run pulled for the floating
+      # postgres:16 tag. The job reaches the container at
+      # 127.0.0.1:5432. investment_test contains "test" as its own
+      # word, which the DSN allowlist requires.
       postgres:
-        image: postgres:16
+        image: postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

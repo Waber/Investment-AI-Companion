@@ -35,11 +35,11 @@ Owner: second backend developer. Files: `app/api/companies.py`, `app/api/financi
 Owner: database/QA developer. Files: `scripts/test_postgres.py` (new), `tests/integration/conftest.py`, `tests/integration/test_postgres.py`, runner/init tests, `alembic/versions/0001_baseline.py`, `alembic/env.py`, `app/core/init_db.py`, `setup_database.py`, and dedicated pytest marker/config if necessary. Avoid changing shared SQLite fixtures or main.py.
 
 - [ ] Add baseline migration matching existing companies/financial_metrics tables and constraints.
-- [x] Add opt-in integration fixtures that reject accidental use of the application's default DSN. (2026-10-08, issue #9: `tests/integration/`. CI uses a `postgres:16` service. Tables come from `metadata.create_all`. The local cluster runner, Alembic upgrade/downgrade, and the migration boxes below are still open with #8.)
+- [x] Add opt-in integration fixtures that reject accidental use of the application's default DSN. (2026-10-08, issue #9: `tests/integration/`. CI uses pinned `postgres:16.15`. The DSN allowlist requires a database name that contains `test` as its own word and a local host. `.env` is not read when the integration marker is selected. Tables come from `metadata.create_all`. The disposable cluster runner was dropped from #9. Alembic upgrade/downgrade on PostgreSQL moved to #8.)
 - [ ] Pass an explicit checked connection to Alembic; no fallback to settings when that connection is supplied.
 - [ ] Make init_db/setup use migrations only; require explicit validated adoption for old unversioned tables and test that legacy data survives.
-- [ ] Add a disposable local cluster runner with guaranteed shutdown and no TCP listener.
-- [ ] Test cleanup after migration/pytest failure and interruption, with isolated environment/CWD before app imports.
+- [ ] Add a disposable local cluster runner with guaranteed shutdown and no TCP listener. (Dropped from #9 on 2026-10-08. Run the pinned `postgres:16.15` image locally; see the README. This is not remaining harness work.)
+- [ ] Test cleanup after migration/pytest failure and interruption, with isolated environment/CWD before app imports. (Runner cleanup tests were dropped with the runner. Environment and CWD isolation before app imports landed with #9 on 2026-10-08. Migration failure cleanup stays with #8.)
 - [ ] Exercise constraints, timezone timestamps, cascade deletion, rollback recovery, upgrade/downgrade on the disposable database, and later new table revisions.
 - [ ] Actually run PostgreSQL tests locally and report the server version; independently review before integration.
 
