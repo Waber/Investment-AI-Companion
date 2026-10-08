@@ -1,5 +1,31 @@
 # Development Journal
 
+## 2026-10-08 - ASCII instrument ids and htmx CSP config (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. Disclaimer wording,
+  autoescape, the http/https website check, and the type filter
+  stay. The JSON API is unchanged.
+- Decision, ids: `str.isdigit` is true for Unicode digits.
+  Superscript `²` made `int` raise (HTTP 500). Arabic-Indic `١`
+  became `1` and opened that company. A 23-digit value overflowed
+  SQLite's signed 64-bit integer. `/ui` now accepts an id only
+  when the string is ASCII, every character is a digit, and the
+  integer is `<= 2**63 - 1`. Anything else is the existing HTML
+  404.
+- Decision, htmx: `base.html` sets
+  `<meta name="htmx-config" content='{"includeIndicatorStyles":false}'>`
+  before the vendored script. HTMX otherwise injects an inline
+  style, which the page CSP does not allow.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 898 passed, 119 deselected, exact 94.91%. The docs commit
+  does not change Python and repeats that result. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - QA fixes on /ui (#29)
 
 - Scope: follow-up on
