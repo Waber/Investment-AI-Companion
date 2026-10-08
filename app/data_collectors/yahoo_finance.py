@@ -114,9 +114,7 @@ class YahooFinanceCollector:
             return company_info
 
         except Exception as e:
-            logger.error(
-                "Error fetching company info for %r: %s", ticker, str(e)
-            )
+            logger.error("Error fetching company info for %r: %r", ticker, e)
             return None
 
     def fetch_historical_data(
@@ -160,7 +158,7 @@ class YahooFinanceCollector:
 
         except Exception as e:
             logger.error(
-                "Error fetching historical data for %r: %s", ticker, str(e)
+                "Error fetching historical data for %r: %r", ticker, e
             )
             return None
 
@@ -202,9 +200,9 @@ class YahooFinanceCollector:
 
         except Exception as e:
             logger.error(
-                "Error fetching financial statements for %r: %s",
+                "Error fetching financial statements for %r: %r",
                 ticker,
-                str(e),
+                e,
             )
             return None
 
@@ -272,9 +270,7 @@ class YahooFinanceCollector:
             return metrics
 
         except Exception as e:
-            logger.error(
-                "Error fetching key metrics for %r: %s", ticker, str(e)
-            )
+            logger.error("Error fetching key metrics for %r: %r", ticker, e)
             return None
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:
@@ -304,7 +300,7 @@ class YahooFinanceCollector:
             return limited_news
 
         except Exception as e:
-            logger.error("Error fetching news for %r: %s", ticker, str(e))
+            logger.error("Error fetching news for %r: %r", ticker, e)
             return None
 
     def fetch_recommendations(self, ticker: str) -> Optional[Any]:
@@ -333,6 +329,6 @@ class YahooFinanceCollector:
 
         except Exception as e:
             logger.error(
-                "Error fetching recommendations for %r: %s", ticker, str(e)
+                "Error fetching recommendations for %r: %r", ticker, e
             )
             return None
