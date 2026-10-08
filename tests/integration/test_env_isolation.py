@@ -173,7 +173,10 @@ def test_stray_dotenv_database_url_is_ignored(tmp_path):
     assert SCARY_SECRET not in output
     assert DEFAULT_URL in output
     assert PYTEST_SECRET_KEY in output
-    if isinstance(DEFAULT_SECRET, str):
+    # An empty code default is a substring of every string, so it
+    # cannot prove which secret was loaded. The harness key above
+    # is that proof. A non-empty default must still be absent.
+    if isinstance(DEFAULT_SECRET, str) and DEFAULT_SECRET:
         assert DEFAULT_SECRET not in output
 
 
