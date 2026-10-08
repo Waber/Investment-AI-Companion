@@ -1,10 +1,12 @@
 # Hosting options for Investment-AI-Companion (post-demo)
 
+*Research input, not a decision. Hosting will be decided after the demo in #56.*
+
 *Researcher, 2026-10-08 (Europe/Warsaw). For issues #56 (deployment), #48 (auth) and #58 (scanner); requirements in `docs/product-requirements.md` v0.3, §12 and §8. Read-only research. The repo was not modified.*
 
 ## TL;DR
 
-- **Primary: a small EU VPS running Docker Compose** (Caddy or Tailscale for HTTPS → FastAPI → PostgreSQL, plus a scanner container or systemd timer). The pick is **Hetzner Cloud CX23** (2 vCPU / 4 GB / 40 GB, Germany or Finland) with Hetzner daily backups and nightly **encrypted `pg_dump` to a Hetzner Storage Box in a different location**. That's about **€10.29 net, €12.65 / ~55 PLN gross a month**, or ~38 PLN gross without the Storage Box.
+- **Recommended (pending Raul's decision in #56/Q14): a small EU VPS running Docker Compose** (Caddy or Tailscale for HTTPS → FastAPI → PostgreSQL, plus a scanner container or systemd timer). **Recommended (pending Raul's decision in #56/Q14): Hetzner Cloud CX23** (2 vCPU / 4 GB / 40 GB, Germany or Finland) with Hetzner daily backups and nightly **encrypted `pg_dump` to a Hetzner Storage Box in a different location**. That's about **€10.29 net, €12.65 / ~55 PLN gross a month**, or ~38 PLN gross without the Storage Box.
   - **Cheaper equivalent: OVH VPS-1 in Warsaw**, 20.07 PLN gross a month with a daily backup included. Add an off-site backup target on top.
 - **Fallback (if Raul doesn't want to run Linux): Render in Frankfurt.** Starter web service ($7) + Postgres basic-256mb ($6, 3-day PITR) + one cron job (min $1) is about **$14 net, ~€15.4 / ~67 PLN gross**. TLS, backups and encryption at rest are managed.
 - **Avoid free tiers for the real (private) data.** Render Free sleeps after 15 min and its Postgres expires after 30 days. Supabase Free pauses after a week and has no backups. The Koyeb free plan is closed to new users. Oracle's Always Free tier can reclaim idle VMs. Neon Free is the only free DB that fits technically, with limits.
@@ -173,9 +175,9 @@ My suggestion is (b) + (c), and to decide in #56/#57.
   - Raul maintains the hardware.
 - **Plus:** a residential IP may be treated more kindly by Yahoo's rate limiting than datacenter IPs (*plausible, unverified; worth testing from any cloud VM before committing*).
 
-## Recommended setup
+## Recommended (pending Raul's decision in #56/Q14)
 
-### Primary: Hetzner Cloud CX23 (or OVH VPS-1 Warsaw for the cheapest equivalent)
+### Recommended (pending Raul's decision in #56/Q14): Hetzner Cloud CX23 (or OVH VPS-1 Warsaw for the cheapest equivalent)
 
 | Item | Net €/mo | Gross (23%) |
 |---|---|---|

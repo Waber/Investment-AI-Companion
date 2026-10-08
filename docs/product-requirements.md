@@ -1,9 +1,9 @@
 # Investment AI Companion: Product Requirements (Draft)
 
-- Status: draft v0.3, 2026-10-08. Prepared from the repository state at master `b2541d7` and Raul's decisions of 2026-10-08 (three rounds). v0.2 added: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo. **v0.3 adds the post-demo direction (section 12):** server deployment for the owner only, login, private portfolio holdings, and a scheduled market scanner with buy/sell/opportunity signals and notifications. "No authentication/hosting" and "the score is never a buy/sell signal" now apply to the **demo phase only**; the demo itself is unchanged (local, loopback, no auth, no signals).
+- Status: draft v0.3, 2026-10-08. Prepared from the repository state at master `d568663` and Raul's decisions of 2026-10-08 (three rounds). v0.2 added: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo. **v0.3 adds the post-demo direction (section 12):** server deployment for the owner only, login, private portfolio holdings, and a scheduled market scanner with buy/sell/opportunity signals and notifications. "No authentication/hosting" and "the score is never a buy/sell signal" now apply to the **demo phase only**; the demo itself is unchanged (local, loopback, no auth, no signals). Section 4 criteria US3.1 and US6 keep the disclaimer in both phases.
 - Owner: Raul (product decisions). Prepared by the Project Manager agent for the Developer, QA Engineer and Code Reviewer.
 - Related docs: `AGENTS.md`, `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`, `docs/demo-data.md`, `docs/work-state.md`.
-- Research inputs (Researcher, 2026-10-08; land in the repo via PR under `docs/research/`): `docs/research/market-data-sources.md` (market-data sources) and `docs/research/llm-comparison.md` (LLM providers).
+- Research inputs (Researcher, 2026-10-08; land in the repo via PR under `docs/research/`): `docs/research/market-data-sources.md` (market-data sources), `docs/research/llm-comparison.md` (LLM providers), and `docs/research/hosting-options.md` (hosting options; research input, not a decision).
 - Items marked **[Decided]** were confirmed by Raul. Items marked **[Proposal]** still need his confirmation. Items marked **[Open]** are undecided.
 
 ## 1. Purpose and vision
@@ -17,7 +17,7 @@ Investment AI Companion is Raul's personal investment research tool. In the demo
 
 It is also a project for learning Python, so code and docs must stay readable for a developer who is still learning (see `AGENTS.md`).
 
-The tool supports research and decision hygiene. **In the demo phase** it never gives buy/sell instructions. After the demo, Raul wants personal buy/sell/"interesting company" signals (section 12); they are **personal decision support, not financial advice**. In both phases, **transparency is a principle**: every analysis, score and signal shows its sources, how fresh the data is, its assumptions, its risks and its uncertainty.
+The tool supports research and decision hygiene. In both phases it never gives financial advice. **In the demo phase** it never gives buy/sell instructions. After the demo, Raul wants personal buy/sell/"interesting company" signals (section 12); they are **personal decision support, not financial advice**. In both phases, **transparency is a principle**: every analysis, score and signal shows its sources, how fresh the data is, its assumptions, its risks and its uncertainty.
 
 ## 2. User and context
 
@@ -88,7 +88,7 @@ The tool supports research and decision hygiene. **In the demo phase** it never 
   - [ ] The analysis language equals the UI language at request time and is stored with the analysis.
   - [ ] Every factual observation cites at least one known evidence ID. An analysis with unknown citations is rejected and is not saved.
   - [ ] Freshness warnings appear for evidence older than 180 days (the existing spec) or dated in the future.
-  - [ ] In the demo, there is no imperative buy/sell language, and the disclaimer is always visible.
+  - [ ] The disclaimer is always visible (both phases). In the demo there is no imperative buy/sell language.
 - **US3.2** As Raul, I want to see past analyses for an instrument, so that I can compare them over time.
   - [ ] Each saved analysis keeps an immutable snapshot of its inputs, plus the provider, model, prompt version, language and creation time.
 - **US3.3** In demo mode and in tests, the analysis comes from a deterministic mock (PL and EN). It is labelled clearly as a demo analysis and makes no network calls.
@@ -116,7 +116,7 @@ The tool supports research and decision hygiene. **In the demo phase** it never 
   - [ ] Components use criteria that fit the instrument type (stock vs ETF/ETC); the default component set per type is **[Open]** (section 10, Q4).
   - [ ] Missing or stale inputs are visible: a missing component is shown as "brak danych" / "no data" and excluded, the remaining weights are renormalized **[Proposal]**, and the score shows a coverage indicator (e.g. "4 of 6 components") and the oldest input date.
   - [ ] Weights are configurable (a settings page or config file **[Proposal]**). Changing weights recomputes scores and the page shows which weight set and score version were used.
-  - [ ] **Demo phase:** the score is never labelled or styled as a buy/sell/hold signal or recommendation (no "kupuj"/"buy", no traffic-light advice), and the disclaimer is shown next to it in both languages. Post-demo signals (section 12) are shown separately from the score, each with its own rationale; the score's transparency requirements above stay unchanged.
+  - [ ] **Demo phase:** the score is never labelled or styled as a buy/sell/hold signal or recommendation (no "kupuj"/"buy", no traffic-light advice). **Both phases:** the disclaimer is shown next to the score in both languages. Post-demo signals (section 12) stay a separate view and do not change the demo rule.
   - [ ] The score appears on the detail page and in the comparison view; scores of different instrument types are not presented as directly comparable.
   - [ ] Unit tests pin the formula for fixture inputs, including missing data and custom weights.
 
@@ -140,7 +140,7 @@ The model generalizes from `companies` to `instruments`. Today's `companies` and
 | `Signal` (post-demo) | Instrument, type (buy candidate / sell or review / interesting company), triggering rules, inputs with sources and as-of dates, score version, rationale, risks, status. **Not built in the demo** (section 12, #58). |
 
 Other model points:
-- **Design constraint for the demo phase [Decided 2026-10-08]:** models must allow a future `owner_id`/`user_id` and a portfolio table to be added **without a rewrite**. Instruments, prices and metrics stay global reference data; user-owned data (watchlist, notes, theses, analyses, score weights, later portfolios and signals) must be able to gain an `owner_id` column via a migration, so keys and unique constraints must not assume a single user forever (e.g. watchlist uniqueness can become `(owner_id, instrument_id)`). **No auth code, user table or owner column in the demo.**
+- **Design constraint for the demo phase [Proposal]:** models must allow a future `owner_id`/`user_id` and a portfolio table to be added **without a rewrite**. Instruments, prices and metrics stay global reference data; user-owned data (watchlist, notes, theses, analyses, score weights, later portfolios and signals) must be able to gain an `owner_id` column via a migration, so keys and unique constraints must not assume a single user forever (e.g. watchlist uniqueness can become `(owner_id, instrument_id)`). **No auth code, user table or owner column in the demo.**
 - **Fixture:** a new `demo-v2.json` adds synthetic ETFs and ETCs, price history, and enough data for every score component (including one deliberately incomplete instrument). The v1 companies are kept or migrated.
 - **Migrations [Decided]:** PostgreSQL is the personal database, so #8–#10 stay on the main path, right after the demo. The first Alembic migration (#8) captures the **new instrument schema** (instruments, prices, watchlist, notes/theses, analyses, score weights), so the schema isn't migrated twice. The existing local PostgreSQL demo databases are disposable.
 - **Timestamps** must come back timezone-aware (UTC) on both SQLite and PostgreSQL. Fixing this on SQLite is slice D1 (overlaps QA bug #20 for `period_end`).
@@ -298,10 +298,12 @@ Raul, 2026-10-08 (translated from Polish): *"Maybe not in the demo, but later we
 - It produces **buy candidate**, **sell / review** and **interesting company** signals.
 - Every signal is **explainable**: triggering rules, input values with sources and as-of dates, score breakdown and version, a rationale, **risks** and what would invalidate it, plus a coverage/confidence indicator. Signals are deterministic first; an optional AI rationale (R2) follows the section 6 validation and citation rules and is never the sole basis of a signal.
 - **Notifications** via a channel to be chosen [Open, Q15], with dedup/cooldown; no portfolio amounts in notifications unless Raul opts in.
-- **Signals are personal decision support for Raul, not investment advice.** Every signal view and notification says so (PL/EN). No automated trading.
+- **Signals are personal decision support for Raul, not investment advice.** Every signal view and notification says so (PL/EN). Every signal shows the disclaimer in both languages. Only the "no buy/sell signal" rule is demo-only. No automated trading.
+- Scanner AI rationales run within a configured monthly budget limit. The limit's value is **[Open]** for Raul.
+- Holdings and portfolio data (quantity, cost, amounts) are never sent in AI prompts by default. That covers scanner rationales and any other AI prompt. A user-requested analysis may include them only when Raul explicitly includes them on that request, which is the exception already stated for holdings.
 - The **score transparency principle (US6) stays**: the score remains a transparent, explainable, configurable score; signals are a separate layer built on it and on other rules.
 
 ### 12.5 What this changes in earlier sections
-- Sections 1, 2, 3, 6 and 8: "no authentication/hosting", "no holdings", "no schedulers" and "never a buy/sell signal" now apply to the **demo phase only**.
+- Sections 1, 2, 3, 6 and 8: "no authentication/hosting", "no holdings", "no schedulers" and "never a buy/sell signal" now apply to the **demo phase only**. Section 4 (US3.1, US6): the no-buy/sell wording is demo-only; the disclaimer stays in both phases, including on post-demo signals.
 - Section 5: new post-demo entities (`Portfolio`, `Holding`, `Signal`) and the demo-phase design constraint (future `owner_id`, no auth code in the demo).
 - Section 10: new open questions 14–18. Section 11: new phase P7.

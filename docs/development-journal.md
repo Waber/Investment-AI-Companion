@@ -1,5 +1,17 @@
 # Development Journal
 
+## 2026-10-08 - Review follow-up on requirements v0.3
+
+- Scope: documentation only, one commit on top of `55cc070`. The
+  disclaimer stays in both phases, including on post-demo signals.
+  Only the no-buy/sell rule is demo-only. The hosting note is research
+  input, not a decision. `docs/work-state.md` is unchanged.
+- OVH: the heading "OVH VPS 2027 range" was left as written. OVHcloud's
+  VPS page and the 2026 blog post "VPS 2027: OVHcloud's new server
+  range" use that name. VPS-1 is the entry model in that range.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - Product requirements v0.3 and hosting research
 
 - Scope: documentation only, on a branch from `origin/master` `d568663`.
