@@ -30,10 +30,17 @@
 - Next action: #11, the security/deps part. That is the FastAPI and
   Starlette CVE upgrade, `requests`, `python-dotenv`, `black`,
   `pytest`, removing unused pins, `yfinance>=1.7`, and a lock file
-  with hashes. After it come #45 and #47 together (secure config
-  defaults and neutral defaults, one pull request), then #24, #19,
-  #25 and #26 (with #16 and #17). #46 (pin Actions to SHAs) goes
-  into any pull request that touches CI.
+  with hashes. On 2026-10-08 the Project Manager moved this
+  security/deps part ahead of the demo after the Security Engineer's
+  review found CVEs: `fastapi==0.104.1` forces `starlette==0.27.0`
+  (CVE-2024-24762, CVE-2024-47874, CVE-2025-54121), and
+  `requests==2.31.0` is also affected. This overrides
+  `docs/product-requirements.md` around line 254, which still lists
+  #11 after the demo. That requirements file is unchanged. After #11
+  come #45 and #47 together (secure config defaults and neutral
+  defaults, one pull request), then #24, #19, #25 and #26 (with #16
+  and #17). #46 (pin Actions to SHAs) goes into any pull request
+  that touches CI.
 
 ## SQLite UTC timestamps and foreign keys: 2026-10-08
 

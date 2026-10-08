@@ -21,11 +21,12 @@
   the mapping never reads it. There is no second provider call. If
   either total is missing, is not an int or float (booleans count as
   not numbers, because `bool` is a subclass of `int`), or total assets
-  is zero, the ratio is `None`. Yahoo's `info` modules in yfinance
-  0.2.33 do not include a balance sheet, so a live payload often has
-  `totalDebt` and not `totalAssets`. `None` is the result then. That
-  matches the issue: `None` is acceptable when the ratio needs data
-  this method did not already fetch.
+  is zero, the ratio is `None`. With yfinance 1.7, `info` has no
+  `totalAssets` for equities. QA checked AAPL and PKN.WA, so
+  `debt_to_assets` will be `None` for equities. For ETFs such as SPY,
+  `totalAssets` is assets under management, not a balance-sheet
+  figure. A real ratio needs `balance_sheet` ('Total Debt' /
+  'Total Assets'), which is planned for #24.
 - Test-first commits, then the fix. On `6a7f533`, QA's two strict
   xfails were `2 xfailed`. With `--runxfail` both failed as
   `AssertionError`: the 500 body contained `hunter2`, and
