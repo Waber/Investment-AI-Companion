@@ -27,6 +27,11 @@
   `totalAssets` is assets under management, not a balance-sheet
   figure. A real ratio needs `balance_sheet` ('Total Debt' /
   'Total Assets'), which is planned for #24.
+- Reviewer nits on the ratio: NaN and infinity are None, and so are
+  negative debt and a non-positive asset total. `OverflowError` from
+  a huge int is caught, so the other metrics stay. `numbers.Real`
+  accepts NumPy numbers and still rejects bool. Local suite after
+  that: 846 passed in 15.09s, TOTAL 92% (exact 92.75%).
 - Test-first commits, then the fix. On `6a7f533`, QA's two strict
   xfails were `2 xfailed`. With `--runxfail` both failed as
   `AssertionError`: the 500 body contained `hunter2`, and
