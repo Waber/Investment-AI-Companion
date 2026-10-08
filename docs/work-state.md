@@ -8,12 +8,18 @@
   green in GitHub Actions. The query-parameter guard and the
   merge-safe secret are `64acc52`, green in
   [run 37838815029](https://github.com/Waber/Investment-AI-Companion/actions/runs/37838815029).
+  Docs-only `3f9de18` records that run. The latest code change
+  refuses `PGHOSTADDR` and `PGSERVICE` even when the URL names a
+  host. `PGHOST` is still checked only for a host-less URL.
 - Completed: issue #9. SQLite stays the default. `python -m pytest`
   deselects the `integration` marker and still reports 846 passed.
   `TEST_POSTGRES_DSN` opts in. An unset variable skips. The DSN
   allowlist refuses a name that does not contain `test` as its
   own word, and a host that is not loopback or a Unix socket,
-  unless `TEST_POSTGRES_ALLOW_REMOTE=1`. The application database
+  unless `TEST_POSTGRES_ALLOW_REMOTE=1`. `PGHOSTADDR` must be
+  loopback and `PGSERVICE` is refused even when the URL names a
+  host, because libpq still applies them. `PGHOST` is checked
+  only when the URL has no host. The application database
   is still refused after those checks, including the code default
   (database name `investment_ai` on localhost). CI pins
   `postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d`
@@ -23,9 +29,11 @@
   from `Base.metadata.create_all`. Selecting the integration
   marker imports the application from an empty directory, so a
   stray `.env` is not applied. The duplicate-instant check from
-  #20 runs on PostgreSQL. #16 is recorded (duplicate `DUP` is
-  500, `dup` is stored) and a strict xfail records the target
-  (400 or 409, one row). `tests/conftest.py` was not modified.
+  #20 runs on PostgreSQL. #16 is recorded (exact duplicate
+  `DUP` is 500, then `OTHER` shows the session recovered). A
+  strict xfail records the #16 target (400 or 409, one row). A
+  second strict xfail records case collision as ticker
+  normalization, not #16. `tests/conftest.py` was not modified.
   The PM dropped the disposable cluster runner. The README
   documents the pinned image.
 - Incomplete: Alembic baseline #8, including upgrade/downgrade on
@@ -35,13 +43,16 @@
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3, the CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 846 passed, 108 deselected in 13.83s, no warnings summary,
+  -> 846 passed, 111 deselected in 13.37s, no warnings summary,
   TOTAL 92% (exact 92.58%).
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
   and `-m integration` -> 106 passed, 2 xfailed, 846 deselected
-  in 3.65s on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1).
-  Of the 108 integration tests, 92 do not open PostgreSQL and 16
-  hit the database (14 passed, 2 xfailed). A node id without
+  in 3.65s on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1),
+  before the three new environment checks. Those three do not
+  open PostgreSQL: `test_postgres_dsn.py -m integration` is 83
+  passed in 0.11s. Of the 111 integration tests, 95 do not open
+  PostgreSQL and 16 hit the database (14 passed, 2 xfailed).
+  A node id without
   `-m integration` -> 1 deselected, exit 5. GitHub Actions
   [run 37836507848](https://github.com/Waber/Investment-AI-Companion/actions/runs/37836507848)
   on `c9b7302`: SQLite 846 passed, 68 deselected in 17.49s,

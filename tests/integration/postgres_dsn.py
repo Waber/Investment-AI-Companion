@@ -96,12 +96,13 @@ QUERY_HOST_MESSAGE = (
 )
 
 ENV_HOST_MESSAGE = (
-    "Refusing to run integration tests: TEST_POSTGRES_DSN has no "
-    "host, so libpq would use PGHOST, PGHOSTADDR, or PGSERVICE. "
-    "PGHOST must be localhost, 127.0.0.1, ::1, or an absolute "
-    "socket path. PGHOSTADDR must be a loopback address. "
+    "Refusing to run integration tests: libpq applies PGHOSTADDR "
+    "and PGSERVICE even when the URL names a host, and PGHOST "
+    "when it does not. PGHOSTADDR must be a loopback address. "
     "PGSERVICE is refused because a service file can name "
-    "another server. The harness drops and recreates tables."
+    "another server. When the URL has no host, PGHOST must be "
+    "localhost, 127.0.0.1, ::1, or an absolute socket path. "
+    "The harness drops and recreates tables."
 )
 
 
@@ -283,7 +284,17 @@ def _url_specifies_host(
     return any(key.lower() == "host" for key, _value in pairs)
 
 
-def _env_host_problem(environ: Mapping[str, str]) -> str | None:
+def _env_host_problem(
+    environ: Mapping[str, str], *, check_pghost: bool
+) -> str | None:
+    """Return a refusal when libpq environment variables redirect.
+
+    ``PGHOSTADDR`` is the TCP address libpq dials, including when
+    the URL already names a host. ``PGSERVICE`` loads a service
+    file that can name another server. ``PGHOST`` fills in only
+    when the URL has no host, so ``check_pghost`` is false once
+    the URL or a ``host`` query value names one.
+    """
     service = (environ.get("PGSERVICE") or "").strip()
     if service:
         return ENV_HOST_MESSAGE
@@ -292,6 +303,8 @@ def _env_host_problem(environ: Mapping[str, str]) -> str | None:
         for token in hostaddr.split(","):
             if not _host_token_is_local(token, allow_socket=False):
                 return ENV_HOST_MESSAGE
+    if not check_pghost:
+        return None
     host = environ.get("PGHOST")
     if host is not None and host.strip():
         for token in host.split(","):
@@ -316,8 +329,9 @@ def decide_test_dsn(
     - the database name contains ``test`` as its own word
     - the host is loopback or a Unix socket, unless ``allow_remote``
     - query parameters do not override that database or server
-    - a URL with no host does not inherit a remote ``PGHOST``,
-      ``PGHOSTADDR``, or ``PGSERVICE``
+    - ``PGHOSTADDR`` is a loopback address and ``PGSERVICE`` is
+      unset, including when the URL already names a host
+    - a URL with no host does not inherit a remote ``PGHOST``
     - the URL is not the application's own database
 
     ``environ`` defaults to the process environment. Tests pass a
@@ -356,10 +370,13 @@ def decide_test_dsn(
         return DsnDecision("fail", DATABASE_MESSAGE)
     if not database_name_is_allowed(identity.database):
         return DsnDecision("fail", NAME_MESSAGE)
-    if not _url_specifies_host(identity, pairs):
-        env_problem = _env_host_problem(env)
-        if env_problem is not None:
-            return DsnDecision("fail", env_problem)
+    # libpq dials PGHOSTADDR even when the URL names a host, and
+    # PGSERVICE can replace other parameters from a service file.
+    # PGHOST is consulted only when the URL has no host.
+    specifies_host = _url_specifies_host(identity, pairs)
+    env_problem = _env_host_problem(env, check_pghost=not specifies_host)
+    if env_problem is not None:
+        return DsnDecision("fail", env_problem)
     if identity.host not in _LOCAL_HOSTS and not allow_remote:
         return DsnDecision("fail", HOST_MESSAGE)
     if _matches_application_database(raw, application_urls):

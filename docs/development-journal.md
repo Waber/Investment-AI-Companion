@@ -41,6 +41,43 @@
   completed with conclusion success.
   https://github.com/Waber/Investment-AI-Companion/actions/runs/37833690203
 
+## 2026-10-08 - PGHOSTADDR applies even when the URL names a host (#9)
+
+- Scope: QA re-check of `3f9de18` approved the four earlier
+  findings. One remaining bypass: libpq dials `PGHOSTADDR` even
+  when the URL already names a host. A localhost URL with
+  `PGHOSTADDR=127.0.0.99` connected to `127.0.0.99`. `PGSERVICE`
+  can load a service file that names another server. `PGHOST`
+  does not override an explicit host.
+- Decision: `decide_test_dsn` now checks `PGHOSTADDR` and
+  `PGSERVICE` on every URL. `PGHOSTADDR` must be loopback
+  (`localhost`, `127.0.0.1`, or `::1`). Any `PGSERVICE` value is
+  refused. `PGHOST` is still checked only when the URL has no
+  host. `TEST_POSTGRES_ALLOW_REMOTE=1` does not relax these
+  checks. A remote `PGHOST` next to a localhost URL is still
+  accepted, and a loopback `PGHOSTADDR` is still accepted.
+- Verification, from the repository root, no `.env`,
+  `DATABASE_URL` unset, Python 3.12.3, packages from
+  `requirements-dev.lock`:
+  the CI pytest command -> 846 passed, 111 deselected in 13.37s,
+  exact 92.58%. `tests/integration/test_postgres_dsn.py -m integration`
+  -> 83 passed in 0.11s. Collection of `-m integration` is 111
+  tests (95 do not open PostgreSQL; 16 hit the database: 14
+  pass and 2 xfail when a server is configured). `black
+  --check`, `isort --check-only`, and `flake8` passed on
+  `tests/integration/postgres_dsn.py` and
+  `tests/integration/test_postgres_dsn.py`. The database tests
+  were not re-run; this change does not open a connection.
+  GitHub Actions for this commit follows the push. The previous
+  code head `64acc52` is green in
+  [run 37838815029](https://github.com/Waber/Investment-AI-Companion/actions/runs/37838815029):
+  SQLite 846 passed, 108 deselected in 18.22s. PostgreSQL 106
+  passed, 2 xfailed, 846 deselected in 2.96s.
+- Work-state next action: unchanged. #45 and #47 together, with
+  #50 if that fix stays small, until #61 lands.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
 ## 2026-10-08 - DSN query guard and merge-safe integration import (#9)
 
 - Scope: QA follow-up on `c9b7302`, applied on top of `1fc4edb`.
