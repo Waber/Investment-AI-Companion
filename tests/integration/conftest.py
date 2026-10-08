@@ -85,6 +85,50 @@ def _prepare_schema(engine):
     Base.metadata.create_all(bind=engine)
 
 
+# Node ids of tests that skipped in this process. A skip is not a
+# deselected test. pytest_sessionfinish reads this list.
+_skipped_nodeids: list[str] = []
+
+
+def pytest_runtest_logreport(report) -> None:
+    """Remember skips so the PostgreSQL job can refuse them."""
+    if getattr(report, "skipped", False):
+        _skipped_nodeids.append(getattr(report, "nodeid", "<unknown>"))
+
+
+def refuse_skips_when_postgres_is_required(
+    session, skipped: list[str]
+) -> None:
+    """Fail the session when CI required PostgreSQL and a test skipped.
+
+    ``REQUIRE_POSTGRES=1`` is set only on the PostgreSQL job. A skip
+    used to leave that job green when other tests passed. Deselected
+    tests are not in ``skipped``. Pytest returns ``session.exitstatus``
+    after this hook, so setting it here changes the process exit code.
+    An already failing session keeps its status.
+    """
+    if os.environ.get("REQUIRE_POSTGRES") != "1":
+        return
+    if not skipped:
+        return
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep(
+            "!",
+            "REQUIRE_POSTGRES=1 forbids skipped tests "
+            f"({len(skipped)} skipped). The PostgreSQL job must "
+            "run those tests or fail, not skip them.",
+        )
+    if int(session.exitstatus) == 0:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Apply the zero-skip guard after the terminal summary."""
+    refuse_skips_when_postgres_is_required(session, _skipped_nodeids)
+
+
 def empty_application_tables(engine):
     """Delete rows from the application tables and restart ids."""
     with engine.begin() as connection:
