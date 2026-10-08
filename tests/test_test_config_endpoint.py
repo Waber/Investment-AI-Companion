@@ -81,7 +81,7 @@ async def test_test_config_marks_missing_settings(client, monkeypatch):
         LOG_LEVEL="INFO",
         ALLOWED_HOSTS=["localhost", "127.0.0.1"],
         OPENAI_API_KEY="",
-        SECRET_KEY="",
+        SECRET_KEY="unit-test-secret-key",
         DATABASE_URL="",
         REDIS_URL="",
         ELASTICSEARCH_URL=None,
@@ -94,7 +94,7 @@ async def test_test_config_marks_missing_settings(client, monkeypatch):
 
     assert body["required_settings"] == {
         "OPENAI_API_KEY": "✗",
-        "SECRET_KEY": "✗",
+        "SECRET_KEY": "✓",
     }
     assert set(body["optional_settings"].values()) == {"✗ (optional)"}
 

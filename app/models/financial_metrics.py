@@ -69,7 +69,13 @@ class FinancialMetricsCreate(FinancialMetricsBase):
     period_end: datetime = Field(
         ..., description="End of reporting period date"
     )
-    period_type: str = Field(..., description="Period type (quarterly/annual)")
+    # financial_metrics.period_type is String(20). SQLite would store a
+    # longer value and PostgreSQL would return 500.
+    period_type: str = Field(
+        ...,
+        max_length=20,
+        description="Period type (quarterly/annual)",
+    )
 
 
 class FinancialMetricsUpdate(FinancialMetricsBase):
@@ -97,7 +103,11 @@ class FinancialMetrics(FinancialMetricsBase):
     period_end: datetime = Field(
         ..., description="End of reporting period date"
     )
-    period_type: str = Field(..., description="Period type (quarterly/annual)")
+    period_type: str = Field(
+        ...,
+        max_length=20,
+        description="Period type (quarterly/annual)",
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

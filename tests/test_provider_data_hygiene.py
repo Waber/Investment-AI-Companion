@@ -1,15 +1,14 @@
-"""Pins for provider-data hygiene (#50) and ticker rules (#17, #50).
+"""Provider-data hygiene (#50) and ticker rules (#17, #50).
 
-ValidationError from provider data is still caught as ValueError and
-returned as HTTP 400 with the provider text. Tickers are not checked.
-Log lines interpolate the ticker with an f-string, so a newline in the
-ticker can forge a second log line. Strict xfails mark those gaps.
-Valid symbols already pass and must keep passing.
+A provider ValidationError is HTTP 502 with a fixed detail. Tickers
+match a short symbol pattern. Log lines use ``%r`` so a newline in a
+ticker cannot start a second log line.
 """
 
 import logging
 
 import pytest
+from pydantic import ValidationError
 
 from app.api.data_collection import (
     FetchCompanyRequest,
@@ -18,6 +17,7 @@ from app.api.data_collection import (
 )
 from app.data_collectors import yahoo_finance
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
+from app.models.company import CompanyCreate, normalize_ticker
 from app.models.database_models import CompanyDB
 from app.repositories.company_repository import CompanyRepository
 
@@ -25,6 +25,17 @@ COMPANIES = "/api/v1/companies/"
 METRICS = "/api/v1/financial-metrics/"
 FETCH = "/api/v1/data-collection/fetch-company"
 FETCH_METRICS = "/api/v1/data-collection/fetch-financial-metrics"
+
+
+def test_normalize_ticker_leaves_none_and_non_strings():
+    assert normalize_ticker(None) is None
+    assert normalize_ticker(12) == 12
+
+
+def test_non_string_currency_is_rejected():
+    with pytest.raises(ValidationError):
+        CompanyCreate(name="C", ticker="CURR", currency=1)
+
 
 VALID_TICKERS = (
     "PKN.WA",
@@ -105,10 +116,6 @@ async def test_valid_tickers_are_accepted_by_fetch_company(client, ticker):
     assert response.json()["success"] is True
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="tickers are stored without strip or uppercase",
-)
 @pytest.mark.asyncio
 async def test_create_strips_and_uppercases_ticker(client):
     response = await client.post(
@@ -119,10 +126,6 @@ async def test_create_strips_and_uppercases_ticker(client):
     assert response.json()["ticker"] == "PKN.WA"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="fetch-company uppercases but does not strip",
-)
 @pytest.mark.asyncio
 async def test_fetch_strips_and_uppercases_ticker(client):
     client.app.dependency_overrides[get_yahoo_finance_collector] = (
@@ -137,10 +140,6 @@ async def test_fetch_strips_and_uppercases_ticker(client):
     assert tickers == ["PKN.WA"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="control characters in a ticker are stored",
-)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", CONTROL_TICKERS)
 async def test_control_character_ticker_is_rejected_on_create(client, ticker):
@@ -154,10 +153,6 @@ async def test_control_character_ticker_is_rejected_on_create(client, ticker):
     assert _count(client) == before
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="control characters in a ticker reach fetch-company",
-)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", CONTROL_TICKERS)
 async def test_control_character_ticker_is_rejected_by_fetch_company(
@@ -174,10 +169,6 @@ async def test_control_character_ticker_is_rejected_by_fetch_company(
     assert _count(client) == before
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="fetch-financial-metrics does not validate the ticker",
-)
 @pytest.mark.asyncio
 async def test_fetch_financial_metrics_rejects_control_character_ticker(
     client,
@@ -189,10 +180,6 @@ async def test_fetch_financial_metrics_rejects_control_character_ticker(
     assert response.status_code == 422
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a whitespace ticker is accepted on update",
-)
 @pytest.mark.asyncio
 async def test_blank_ticker_is_rejected_on_update(client):
     created = (
@@ -206,27 +193,19 @@ async def test_blank_ticker_is_rejected_on_update(client):
     assert (await client.get(url)).json()["ticker"] == "KEEP"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ticker length is not limited to 15 characters",
-)
 @pytest.mark.asyncio
-async def test_ticker_longer_than_15_characters_is_rejected(client):
+async def test_ticker_longer_than_the_column_is_rejected(client):
     accepted = await client.post(
-        COMPANIES, json={"name": "Fifteen", "ticker": "A" * 15}
+        COMPANIES, json={"name": "Twenty", "ticker": "A" * 20}
     )
     rejected = await client.post(
-        COMPANIES, json={"name": "Sixteen", "ticker": "B" * 16}
+        COMPANIES, json={"name": "Twenty One", "ticker": "B" * 21}
     )
 
     assert accepted.status_code == 201
     assert rejected.status_code == 422
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="company string lengths are not validated",
-)
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "field, value",
@@ -252,10 +231,6 @@ async def test_overlong_company_fields_are_422_on_create(client, field, value):
     assert _count(client) == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="company update does not enforce string lengths",
-)
 @pytest.mark.asyncio
 async def test_overlong_name_is_422_on_update(client):
     created = (
@@ -269,10 +244,6 @@ async def test_overlong_name_is_422_on_update(client):
     assert (await client.get(url)).json()["name"] == "Short"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="currency is stored without an uppercase normalization",
-)
 @pytest.mark.asyncio
 async def test_currency_is_normalized_to_three_uppercase_letters(client):
     response = await client.post(
@@ -284,10 +255,6 @@ async def test_currency_is_normalized_to_three_uppercase_letters(client):
     assert response.json()["currency"] == "USD"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="period_type is not limited to 20 characters",
-)
 @pytest.mark.asyncio
 async def test_period_type_longer_than_the_column_is_422(client):
     company = (
@@ -306,10 +273,6 @@ async def test_period_type_longer_than_the_column_is_422(client):
     assert response.status_code == 422
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="provider ValidationError is returned as HTTP 400 with the input",
-)
 @pytest.mark.asyncio
 async def test_provider_validation_error_is_502_without_input(client, caplog):
     """QA repro: a bad provider website must not be echoed to the client."""
@@ -335,10 +298,6 @@ async def test_provider_validation_error_is_502_without_input(client, caplog):
     assert _count(client) == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="an over-long provider name is stored instead of rejected",
-)
 @pytest.mark.asyncio
 async def test_provider_overlong_name_is_502(client):
     long_name = "N" * 300
@@ -356,10 +315,6 @@ async def test_provider_overlong_name_is_502(client):
     assert _count(client) == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a 4-character provider currency is stored",
-)
 @pytest.mark.asyncio
 async def test_provider_bad_currency_is_502(client):
     client.app.dependency_overrides[get_yahoo_finance_collector] = (
@@ -375,10 +330,6 @@ async def test_provider_bad_currency_is_502(client):
     assert "USDD" not in response.text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="failed company update is not logged",
-)
 @pytest.mark.asyncio
 async def test_failed_update_returns_fixed_500(client, monkeypatch, caplog):
     """Repository update returning None is a fixed 500, with a server log."""
@@ -401,10 +352,6 @@ async def test_failed_update_returns_fixed_500(client, monkeypatch, caplog):
     assert "EXST" in caplog.text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="yahoo logs interpolate the ticker",
-)
 def test_yahoo_logs_do_not_split_on_a_newline_ticker(monkeypatch, caplog):
     class _Info:
         def __init__(self, symbol):
@@ -419,10 +366,6 @@ def test_yahoo_logs_do_not_split_on_a_newline_ticker(monkeypatch, caplog):
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="yahoo error logs interpolate the ticker",
-)
 def test_yahoo_error_log_does_not_split_on_a_newline_ticker(
     monkeypatch, caplog
 ):
@@ -440,10 +383,6 @@ def test_yahoo_error_log_does_not_split_on_a_newline_ticker(
 
 # These two call the route with model_construct so the log lines run
 # even after request validation starts rejecting control characters.
-@pytest.mark.xfail(
-    strict=True,
-    reason="data-collection logs interpolate the ticker",
-)
 def test_data_collection_logs_do_not_split_on_a_newline_ticker(client, caplog):
     request = FetchCompanyRequest.model_construct(
         ticker="ACME\nINFO forged-admin-login"
@@ -472,10 +411,6 @@ def test_data_collection_logs_do_not_split_on_a_newline_ticker(client, caplog):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the fetch-company exception log interpolates the ticker",
-)
 def test_data_collection_update_and_error_logs_do_not_split(
     client, caplog, monkeypatch
 ):

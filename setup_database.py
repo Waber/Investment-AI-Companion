@@ -10,12 +10,13 @@ Usage:
 
 import argparse
 import sys
+
 from sqlalchemy.orm import Session
 
 # Add the project root to Python path
 sys.path.append(".")
 
-from app.core.database import engine, SessionLocal
+from app.core.database import SessionLocal, engine
 from app.core.init_db import init_db, seed_sample_data
 
 
@@ -50,7 +51,8 @@ def main():
 
         print("\n🎉 Database setup complete!")
         print(
-            "You can now run the application with: python -m uvicorn main:app --reload"
+            "You can now run the application with: "
+            "python -m uvicorn main:app --host 127.0.0.1 --reload"
         )
 
     except Exception as e:

@@ -5,6 +5,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.companies import router as companies_router
 from app.api.data_collection import router as data_collection_router
@@ -31,18 +32,25 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     )
 
     # Set up CORS middleware
-    if settings.BACKEND_CORS_ORIGINS:
+    if settings.cors_origins:
         application.add_middleware(
             CORSMiddleware,
             # AnyHttpUrl adds a root slash that HTTP Origin does not contain.
             allow_origins=[
                 str(origin).removesuffix("/")
-                for origin in settings.BACKEND_CORS_ORIGINS
+                for origin in settings.cors_origins
             ],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # Outermost middleware. A Host header outside ALLOWED_HOSTS is
+    # rejected before the route runs. Added last so it wraps CORS.
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.ALLOWED_HOSTS,
+    )
 
     @application.get("/")
     async def root():
@@ -107,4 +115,5 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
 app = create_app()
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=settings.DEBUG)
+    # Loopback only. Do not bind every interface.
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=settings.DEBUG)

@@ -89,7 +89,7 @@ class YahooFinanceCollector:
             Apple Inc.
         """
         try:
-            logger.info(f"Fetching company info for ticker: {ticker}")
+            logger.info("Fetching company info for ticker: %r", ticker)
             stock = yf.Ticker(ticker)
             info = stock.info
 
@@ -110,11 +110,13 @@ class YahooFinanceCollector:
                 "logo_url": info.get("logo_url"),
             }
 
-            logger.info(f"Successfully fetched company info for {ticker}")
+            logger.info("Successfully fetched company info for %r", ticker)
             return company_info
 
         except Exception as e:
-            logger.error(f"Error fetching company info for {ticker}: {str(e)}")
+            logger.error(
+                "Error fetching company info for %r: %s", ticker, str(e)
+            )
             return None
 
     def fetch_historical_data(
@@ -139,24 +141,26 @@ class YahooFinanceCollector:
         """
         try:
             logger.info(
-                f"Fetching historical data for {ticker}, "
-                f"period={period}, interval={interval}"
+                "Fetching historical data for %r, period=%r, interval=%r",
+                ticker,
+                period,
+                interval,
             )
             stock = yf.Ticker(ticker)
             hist = stock.history(period=period, interval=interval)
 
             if hist.empty:
-                logger.warning(f"No historical data found for {ticker}")
+                logger.warning("No historical data found for %r", ticker)
                 return None
 
             logger.info(
-                f"Successfully fetched {len(hist)} records for {ticker}"
+                "Successfully fetched %s records for %r", len(hist), ticker
             )
             return hist
 
         except Exception as e:
             logger.error(
-                f"Error fetching historical data for {ticker}: {str(e)}"
+                "Error fetching historical data for %r: %s", ticker, str(e)
             )
             return None
 
@@ -178,7 +182,7 @@ class YahooFinanceCollector:
             >>> income_stmt = statements['income_statement']
         """
         try:
-            logger.info(f"Fetching financial statements for {ticker}")
+            logger.info("Fetching financial statements for %r", ticker)
             stock = yf.Ticker(ticker)
 
             # Fetch different financial statements
@@ -192,13 +196,15 @@ class YahooFinanceCollector:
             }
 
             logger.info(
-                f"Successfully fetched financial statements for {ticker}"
+                "Successfully fetched financial statements for %r", ticker
             )
             return financials
 
         except Exception as e:
             logger.error(
-                f"Error fetching financial statements for {ticker}: {str(e)}"
+                "Error fetching financial statements for %r: %s",
+                ticker,
+                str(e),
             )
             return None
 
@@ -218,7 +224,7 @@ class YahooFinanceCollector:
             >>> print(metrics['pe_ratio'])
         """
         try:
-            logger.info(f"Fetching key metrics for {ticker}")
+            logger.info("Fetching key metrics for %r", ticker)
             stock = yf.Ticker(ticker)
             info = stock.info
 
@@ -262,11 +268,13 @@ class YahooFinanceCollector:
                 "market_cap": info.get("marketCap"),
             }
 
-            logger.info(f"Successfully fetched key metrics for {ticker}")
+            logger.info("Successfully fetched key metrics for %r", ticker)
             return metrics
 
         except Exception as e:
-            logger.error(f"Error fetching key metrics for {ticker}: {str(e)}")
+            logger.error(
+                "Error fetching key metrics for %r: %s", ticker, str(e)
+            )
             return None
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:
@@ -281,7 +289,7 @@ class YahooFinanceCollector:
             List of news articles or None if error
         """
         try:
-            logger.info(f"Fetching news for {ticker}")
+            logger.info("Fetching news for %r", ticker)
             stock = yf.Ticker(ticker)
             news_list = stock.news
 
@@ -289,13 +297,14 @@ class YahooFinanceCollector:
             limited_news = news_list[:limit] if news_list else []
 
             logger.info(
-                f"Successfully fetched {len(limited_news)} "
-                f"news articles for {ticker}"
+                "Successfully fetched %s news articles for %r",
+                len(limited_news),
+                ticker,
             )
             return limited_news
 
         except Exception as e:
-            logger.error(f"Error fetching news for {ticker}: {str(e)}")
+            logger.error("Error fetching news for %r: %s", ticker, str(e))
             return None
 
     def fetch_recommendations(self, ticker: str) -> Optional[Any]:
@@ -309,21 +318,21 @@ class YahooFinanceCollector:
             DataFrame with recommendations or None if error
         """
         try:
-            logger.info(f"Fetching recommendations for {ticker}")
+            logger.info("Fetching recommendations for %r", ticker)
             stock = yf.Ticker(ticker)
             recommendations = stock.recommendations
 
             if recommendations is not None and not recommendations.empty:
                 logger.info(
-                    f"Successfully fetched recommendations for {ticker}"
+                    "Successfully fetched recommendations for %r", ticker
                 )
                 return recommendations
             else:
-                logger.warning(f"No recommendations found for {ticker}")
+                logger.warning("No recommendations found for %r", ticker)
                 return None
 
         except Exception as e:
             logger.error(
-                f"Error fetching recommendations for {ticker}: {str(e)}"
+                "Error fetching recommendations for %r: %s", ticker, str(e)
             )
             return None

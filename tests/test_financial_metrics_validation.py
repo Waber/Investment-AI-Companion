@@ -144,7 +144,7 @@ async def test_api_rejects_non_finite_before_persistence(
     # Observe regressions as HTTP 500 responses instead of server exceptions.
     async with AsyncClient(
         transport=ASGITransport(app=client.app, raise_app_exceptions=False),
-        base_url="http://testserver",
+        base_url="http://127.0.0.1",
     ) as request_client:
         response = await request_client.request(method, url, json=payload)
 

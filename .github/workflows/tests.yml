@@ -40,8 +40,9 @@ jobs:
     timeout-minutes: 15
     env:
       # Stops Python from writing .pyc files next to the source. No database
-      # URL or provider keys are set. Settings in app/core/config.py already
-      # have defaults, and tests use in-memory SQLite.
+      # URL or provider keys are set. SECRET_KEY has no default; tests set
+      # it in tests/conftest.py before the app is imported. Tests use
+      # in-memory SQLite.
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Check out the repository

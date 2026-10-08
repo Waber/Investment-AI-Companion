@@ -10,9 +10,8 @@ divided by total assets when both numbers are already on the provider
 info, and None otherwise. It is never a per-share amount. Issue #19
 is not covered here.
 
-Blank tickers (#17) are pinned below. ``""`` and whitespace are still
-accepted on create and on fetch-company. The markers come off when
-those requests return 422 and write nothing.
+Blank tickers (#17) are rejected with 422 on create and on
+fetch-company, and no company row is written.
 """
 
 import logging
@@ -318,10 +317,6 @@ def _company_count(client) -> int:
         session.close()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="blank tickers are stored (#17)",
-)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", ["", "   "])
 async def test_blank_ticker_is_rejected_on_create(client, ticker):
@@ -336,10 +331,6 @@ async def test_blank_ticker_is_rejected_on_create(client, ticker):
     assert _company_count(client) == before
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="blank tickers reach fetch-company (#17)",
-)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", ["", "   "])
 async def test_blank_ticker_is_rejected_by_fetch_company(client, ticker):

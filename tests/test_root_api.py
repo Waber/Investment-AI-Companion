@@ -10,7 +10,7 @@ async def test_root_returns_project_metadata():
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
-        base_url="http://testserver",
+        base_url="http://127.0.0.1",
     ) as client:
         response = await client.get("/")
 

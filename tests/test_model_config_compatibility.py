@@ -334,6 +334,8 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
             "PATH": "/usr/bin:/bin",
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONPATH": str(PROJECT_ROOT),
+            # The child imports Settings(), which requires this key.
+            "SECRET_KEY": "unit-test-secret-key",
         },
         capture_output=True,
         text=True,

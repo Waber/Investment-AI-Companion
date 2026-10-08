@@ -1,8 +1,8 @@
-"""Pins for secure defaults (#45) and the neutral database URL (#47).
+"""Secure defaults (#45) and the neutral database URL (#47).
 
-Strict xfails fail as assertions on this commit. They describe the
-behavior the next commit turns on: DEBUG off, a required SECRET_KEY,
-a loopback bind, host-header checks, and comma-separated CORS.
+DEBUG is off, SECRET_KEY is required, the process binds to loopback,
+and a comma-separated CORS value parses. The personal-path grep stays
+expected-fail until the docs no longer contain those paths.
 """
 
 import runpy
@@ -28,7 +28,6 @@ def _parsed_origins(settings):
     return settings.BACKEND_CORS_ORIGINS
 
 
-@pytest.mark.xfail(strict=True, reason="DEBUG still defaults to True")
 def test_debug_defaults_to_false(monkeypatch):
     monkeypatch.delenv("DEBUG", raising=False)
     settings = Settings(_env_file=None, SECRET_KEY=TEST_SECRET)
@@ -36,10 +35,6 @@ def test_debug_defaults_to_false(monkeypatch):
     assert settings.DEBUG is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="SECRET_KEY still has a placeholder default",
-)
 def test_secret_key_is_required(monkeypatch):
     monkeypatch.delenv("SECRET_KEY", raising=False)
 
@@ -47,10 +42,6 @@ def test_secret_key_is_required(monkeypatch):
         Settings(_env_file=None)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="placeholder and empty SECRET_KEY values are still accepted",
-)
 @pytest.mark.parametrize(
     "value",
     ["your-secret-key-here", "replace-this-in-local-env", "", "   "],
@@ -73,10 +64,6 @@ def test_allowed_hosts_default_is_loopback(monkeypatch):
     assert settings.ALLOWED_HOSTS == ["localhost", "127.0.0.1"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ALLOWED_HOSTS is not enforced",
-)
 @pytest.mark.asyncio
 async def test_untrusted_host_header_is_rejected(client):
     response = await client.get("/", headers={"Host": "evil.example"})
@@ -93,10 +80,6 @@ async def test_loopback_host_with_port_is_accepted(client):
     assert response.status_code == 200
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="/test-config is exposed because DEBUG defaults to True",
-)
 @pytest.mark.asyncio
 async def test_test_config_is_hidden_when_debug_is_left_unset(
     client, monkeypatch
@@ -113,10 +96,6 @@ async def test_test_config_is_hidden_when_debug_is_left_unset(
     assert response.status_code in (403, 404)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="python main.py still binds every interface",
-)
 def test_main_binds_loopback(monkeypatch):
     import uvicorn
 
@@ -136,10 +115,6 @@ def test_main_binds_loopback(monkeypatch):
     assert captured.get("kwargs", {}).get("host") == "127.0.0.1"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="comma-separated BACKEND_CORS_ORIGINS raises SettingsError",
-)
 def test_comma_separated_cors_env_parses(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", TEST_SECRET)
     monkeypatch.setenv(
@@ -179,10 +154,6 @@ def test_json_list_cors_env_parses(monkeypatch):
     ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a JSON list string passed to Settings is not parsed",
-)
 def test_json_list_cors_string_parses():
     try:
         settings = Settings(
@@ -215,6 +186,24 @@ def test_invalid_cors_origin_fails_clearly():
         )
 
 
+def test_cors_none_and_non_list_json_and_non_string_entries_fail():
+    assert (
+        Settings(
+            _env_file=None,
+            SECRET_KEY=TEST_SECRET,
+            BACKEND_CORS_ORIGINS=None,
+        ).cors_origins
+        == []
+    )
+    for value in ('{"origin": "http://localhost:3000"}', "[1]"):
+        with pytest.raises(ValidationError):
+            Settings(
+                _env_file=None,
+                SECRET_KEY=TEST_SECRET,
+                BACKEND_CORS_ORIGINS=value,
+            )
+
+
 def test_broken_cors_json_fails_clearly():
     with pytest.raises(ValidationError):
         Settings(
@@ -224,10 +213,6 @@ def test_broken_cors_json_fails_clearly():
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="DATABASE_URL still defaults to a personal login",
-)
 def test_database_url_default_is_neutral(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     settings = Settings(_env_file=None, SECRET_KEY=TEST_SECRET)
