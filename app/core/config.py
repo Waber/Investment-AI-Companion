@@ -130,8 +130,13 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    # hide_input_in_errors stops a missing SECRET_KEY from printing the
+    # whole settings dict (database URL, API keys) in the traceback.
     model_config = SettingsConfigDict(
-        case_sensitive=True, env_file=".env", env_file_encoding="utf-8"
+        case_sensitive=True,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        hide_input_in_errors=True,
     )
 
 
