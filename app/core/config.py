@@ -82,9 +82,9 @@ def _bare_http_origin(item: str) -> str:
             "BACKEND_CORS_ORIGINS entry is not an http(s) URL: " f"{item!r}"
         )
     if parts.username or parts.password:
+        # Do not include the origin. It contains the username and password.
         raise ValueError(
-            "BACKEND_CORS_ORIGINS entry must not include userinfo: "
-            f"{item!r}"
+            "BACKEND_CORS_ORIGINS entry must not include userinfo"
         )
     if parts.query or parts.fragment:
         raise ValueError(
