@@ -203,6 +203,10 @@ branch was not rebased.
   database URL default, clear the personal paths the git-grep
   guard flags, and refresh the work-state line that says `#9 stays
   later`.
+- The company read model keeps `website` as plain text. A stored
+  value that is not a URL still returns HTTP 200 from
+  `GET /companies/`. Create and update still require a URL. 952
+  passed, exact 92.63%.
 
 ## 2026-10-08 - Module-level skips fail the PostgreSQL job (#9)
 

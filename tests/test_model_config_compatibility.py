@@ -51,8 +51,8 @@ COMPANY_JSON = {
     "sector": "Technology",
     "industry": "Software",
     "description": "Widget maker",
-    # HttpUrl adds the trailing slash while serializing the response.
-    "website": "https://example.com/",
+    # The read model returns the stored string. It does not add a slash.
+    "website": "https://example.com",
     "country": "USA",
     "exchange": "NASDAQ",
     "currency": "USD",

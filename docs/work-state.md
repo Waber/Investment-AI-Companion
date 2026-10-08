@@ -39,8 +39,9 @@
   does not apply write-time ticker rules. A provider description
   longer than 5000 characters is cut to the first 5000 in
   fetch-company, with no ellipsis; user create and update still
-  return 422. Security approved `f1072cc`. The next action below
-  is unchanged.
+  return 422. The read model keeps `website` as plain text so a
+  stored non-URL still lists. Security and QA approved
+  `f1072cc`. The next action below is unchanged.
 - Incomplete: the queue in the next-action line is still open.
   Alembic (#8) and the PostgreSQL harness (#9) stay later.
   `fetch-financial-metrics` is still a placeholder. It validates
