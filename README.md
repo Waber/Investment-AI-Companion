@@ -95,10 +95,10 @@ the test suite. No `.env` file is required. Tests use the in-memory SQLite
 database in `tests/conftest.py` and do not call market-data or AI providers.
 GitHub Actions on Python 3.12 runs pytest, prints a coverage report
 for `app`, `main`, and `scripts`, and treats `DeprecationWarning` as an
-error. The coverage report does not fail the job.
+error. The job fails if total coverage drops below 80%.
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80
 ```
 
 Useful lint and formatting checks, run from the repository root. Black and
