@@ -87,8 +87,12 @@
   2 xfailed, 846 deselected in 3.65s. Of those 108 integration
   tests, 92 do not open PostgreSQL and 16 hit the database (14
   passed, 2 xfailed). `black`, `isort --check-only`, and
-  `flake8` passed on the touched Python files. GitHub Actions
-  for this commit is recorded after the push.
+  `flake8` passed on the touched Python files.
+  GitHub Actions
+  [run 37838815029](https://github.com/Waber/Investment-AI-Companion/actions/runs/37838815029)
+  on `64acc52326c638f9ae8c6d645345fde8e751e509`: SQLite job
+  846 passed, 108 deselected in 18.22s. PostgreSQL job
+  106 passed, 2 xfailed, 846 deselected in 2.96s.
   The previous head `1fc4edb` is green in
   [run 37837340255](https://github.com/Waber/Investment-AI-Companion/actions/runs/37837340255):
   SQLite 846 passed, 68 deselected in 16.98s. PostgreSQL 67
