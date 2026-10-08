@@ -103,7 +103,12 @@ async def test_pages_render_in_polish_by_default(seeded):
     assert "not financial advice" not in page.text.casefold()
     assert "DEMO_PL_TECH" in page.text
     assert "demo-v1" in page.text
-    assert 'src="/static/vendor/htmx-2.0.10.min.js"' in page.text
+    script_at = page.text.find('src="/static/vendor/htmx-2.0.10.min.js"')
+    config_at = page.text.find('name="htmx-config"')
+    assert script_at != -1
+    assert config_at != -1
+    assert "includeIndicatorStyles" in page.text
+    assert config_at < script_at
     assert 'href="/static/ui.css"' in page.text
     assert_no_dangerous_href(page.text)
     lowered = page.text.casefold()
@@ -225,6 +230,33 @@ async def test_non_integer_instrument_id_is_html_not_json(client):
     api = await client.get("/api/v1/companies/abc")
     assert api.status_code == 422
     assert "application/json" in api.headers["content-type"]
+
+
+@pytest.mark.asyncio
+async def test_instrument_id_rejects_unicode_digits_and_overflow(seeded):
+    listing = await seeded.get("/ui")
+    detail = await seeded.get(_href_for(listing.text, "DEMO_PL_TECH"))
+    assert detail.status_code == 200
+    assert "DEMO_PL_TECH" in detail.text
+    assert "Nie jest poradą inwestycyjną" in detail.text
+
+    rejected = (
+        "/ui/instruments/\u00b2",
+        "/ui/instruments/\u0661",
+        "/ui/instruments/" + ("1" * 23),
+        "/ui/instruments/" + str(2**63),
+    )
+    for path in rejected:
+        page = await seeded.get(path)
+        assert page.status_code == 404, path
+        assert "text/html" in page.headers["content-type"]
+        assert "Nie znaleziono instrumentu" in page.text
+        assert "DEMO_PL_TECH" not in page.text
+        assert not page.text.lstrip().startswith("{")
+
+    at_limit = await seeded.get("/ui/instruments/" + str(2**63 - 1))
+    assert at_limit.status_code == 404
+    assert "Nie znaleziono instrumentu" in at_limit.text
 
 
 @pytest.mark.asyncio

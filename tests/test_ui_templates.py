@@ -28,6 +28,22 @@ def test_html_templates_autoescape():
         assert templates.env.autoescape(name) is True
 
 
+def test_htmx_config_disables_the_indicator_style():
+    """The config tag must sit before the script so htmx reads it.
+
+    Without this, htmx injects an inline style. That style is not
+    allowed by the page CSP.
+    """
+    text = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
+    marker = (
+        '<meta name="htmx-config" content='
+        "'{\"includeIndicatorStyles\":false}'>"
+    )
+    script = '<script src="/static/vendor/htmx-2.0.10.min.js">'
+    assert marker in text
+    assert text.find(marker) < text.find(script)
+
+
 def test_templates_have_no_safe_filter_or_hardcoded_text():
     for path in TEMPLATE_DIR.rglob("*.html"):
         text = path.read_text(encoding="utf-8")

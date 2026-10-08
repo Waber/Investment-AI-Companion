@@ -19,6 +19,9 @@ from app.ui.view_models import METRIC_FIELDS, MONETARY_FIELDS
 router = APIRouter(prefix="/ui", tags=["ui"])
 
 _COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+# SQLite stores an INTEGER in a signed 64-bit value. A larger Python
+# int reaches the driver and the query fails with 500.
+_MAX_INSTRUMENT_ID = 2**63 - 1
 # The pages load CSS and HTMX from this origin only. frame-ancestors
 # and X-Frame-Options both refuse to be embedded. Referrer-Policy
 # keeps the local address off links to a company website.
@@ -103,10 +106,19 @@ def _instrument_id(value):
     A non-integer path such as ``abc`` must be the HTML 404. Leaving
     the parameter as ``int`` would make FastAPI return the API's 422
     JSON instead.
+
+    ``str.isdigit`` is also true for Unicode digits. Superscript
+    ``²`` then makes ``int`` raise, and Arabic-Indic ``١`` becomes
+    ``1``. Only an ASCII digit string whose value fits a signed
+    64-bit integer is an id. Anything else is the HTML 404. The
+    JSON API is unchanged.
     """
-    if not value.isdigit():
+    if not value.isascii() or not value.isdigit():
         return None
-    return int(value)
+    parsed = int(value)
+    if parsed > _MAX_INSTRUMENT_ID:
+        return None
+    return parsed
 
 
 @router.get("", include_in_schema=False)
