@@ -17,8 +17,9 @@ line_length = 79
 known_first_party = ["app", "main", "scripts"]
 
 [tool.pytest.ini_options]
-# Versions stay in requirements.txt. Do not pin pytest or pytest-asyncio
-# here: pytest-asyncio 0.21.1 does not run on pytest 8 or later.
+# Versions stay in requirements-dev.txt. pytest-asyncio 0.21.1 does not
+# run on pytest 8 or later, so the dev file pins pytest>=9.0.3 and
+# pytest-asyncio>=1.0. Do not pin those packages here.
 # Do not set filterwarnings. Turning warnings into errors is a separate
 # decision; CI can pass -W on the command line until that is settled.
 testpaths = ["tests"]
