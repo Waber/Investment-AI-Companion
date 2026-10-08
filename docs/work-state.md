@@ -1,5 +1,32 @@
 # Current Work State
 
+## Coverage Gate: 2026-10-08
+
+- Branch `cursor/coverage-threshold-80-c3a6`, based on `origin/master`
+  `b2541d7` (PR #15, tooling config, rebase-merged). QA's two commits are
+  applied with `git am` and keep their author. No production `.py` edits.
+  No test was changed after review.
+- `--cov-fail-under=80` is enforced in `.github/workflows/tests.yml` and
+  the README test command. The gate reads TOTAL for `app`, `main`, and
+  `scripts`, statements plus branches. JUnit XML and the `MIN_TESTS` gate
+  are still not enabled.
+- Local Python 3.12.3, pytest 7.4.3, no `.env`, no network route:
+  `813 passed in 11.89s`, no warnings summary, TOTAL `92%` (exact
+  `91.77%`). Random-order seeds 7, 21, and 42 passed the same way. The
+  same command on master `b2541d7` is `758 passed`, exact total `76.08%`,
+  and the gate fails.
+- PR #13 is merged as `a10e196`. PR #14 is merged as `db0cc12`. PR #15
+  is merged as `b2541d7`. Lines below that still tell the story of those
+  pull requests being opened are history; the sentences that called them
+  open or awaiting review are corrected.
+- Reviewer nits from PRs #14 and #15 are a separate branch off master,
+  not this one. Whichever of the two pull requests merges second needs a
+  rebase of this file and the journal.
+- Next after this PR: guarded Alembic baseline and isolated PostgreSQL
+  tests (issues #8, #9, and #10).
+- Account usage was not available in this session. Stop reason: coverage
+  gate delivered, not quota.
+
 ## Tooling Config Slice: 2026-10-07
 
 - Branch `cursor/tooling-config-black-isort-flake8-pytest-48d8`, rebased onto
@@ -20,9 +47,10 @@
   production files from the cleanup still have the same pre-existing
   Black/flake8 debt; isort still fails only `app/api/data_collection.py`
   among them. None were reformatted.
-- Next action for this slice: review
-  [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15).
-  Do not merge.
+- [PR #15](https://github.com/Waber/Investment-AI-Companion/pull/15)
+  is merged as `b2541d7`. The next-action line that said to review it
+  was the state when this snapshot was written. The current next action
+  is in the coverage-gate section at the top of this file.
 - The Resume Instructions section immediately below is the merged
   minimal-CI note from PR #14, not the deprecation cleanup. The
   deprecation record follows that CI note.
@@ -35,8 +63,9 @@ on `origin/master` `db0cc12`. Workflow is `.github/workflows/tests.yml`.
 Local suite on Python 3.12.3 with no `.env` and
 `-W error::DeprecationWarning`: `758 passed in 13.56s`, no warnings
 summary, coverage total `76%`. The draft QA spec is applied.
-Raul's decision on the coverage threshold (`--cov-fail-under=70`), JUnit
-XML, and the `MIN_TESTS` gate is still pending. Red demo run
+The coverage threshold is now `--cov-fail-under=80` (coverage-gate
+section at the top). JUnit XML and the `MIN_TESTS` gate are still not
+enabled. Red demo run
 [37681557386](https://github.com/Waber/Investment-AI-Companion/actions/runs/37681557386)
 failed on purpose. Commit `806faef` was dropped before merge, so that SHA
 is not on master. Lint and format stay out of this workflow (issue #6).
@@ -67,12 +96,13 @@ the previous ChatGPT tooling was not available in that Cursor session.
   files still have pre-existing Black/flake8 debt; isort fails only
   `app/api/data_collection.py` among the edited files. `git diff --check`
   passed. Repo-wide lint was not run.
-- Next action: re-review [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
-  after the warning check stopped writing into the repo.
-  After merge, guarded Alembic baseline
-  and isolated PostgreSQL tests. Editable profiles and source-aware AI stay
-  later. Tooling config (issue #6) and minimal CI (issue #5) are separate
-  work and do not own this journal or work-state.
+- [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
+  is merged as `a10e196`. The next-action line that said to re-review it
+  was the state when this snapshot was written. Tooling config (issue #6,
+  PR #15, `b2541d7`) and minimal CI (issue #5, PR #14, `db0cc12`) are
+  merged too. The current next action is in the coverage-gate section
+  at the top of this file. Editable profiles and source-aware AI stay
+  later.
 - Account usage was not available in this Cursor session. Stop reason:
   bounded cleanup completed, not quota.
 
@@ -229,11 +259,12 @@ review/merge next-action line below was the state when this snapshot was written
 - Missing-update404 and website-update regressions are complete in ancestors `3a2b0af` and `731c513`.
 - Metric partial-update/null, uniqueness/rollback and collector regression coverage
   and JSON overflow handling are complete. Lifespan/CORS is merged (PR #2,
-  `b10d06e`). Pydantic/SQLAlchemy deprecation cleanup is implemented on
-  `cursor/deprecation-cleanup-7154` ([PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13))
-  and is awaiting review, not merged.
+  `b10d06e`). Pydantic/SQLAlchemy deprecation cleanup is merged as
+  [PR #13](https://github.com/Waber/Investment-AI-Companion/pull/13)
+  (`a10e196`).
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- Next after the deprecation-cleanup review: guarded migrations and automated
-  PostgreSQL integration tests. Do not assume the old demo runtime still exists.
+- Next after this PR: guarded migrations and automated PostgreSQL
+  integration tests (issues #8, #9, and #10). Do not assume the old demo
+  runtime still exists.

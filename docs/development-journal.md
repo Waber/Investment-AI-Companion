@@ -1,5 +1,104 @@
 # Development Journal
 
+## 2026-10-08 - Coverage gate at 80%
+
+- Scope: QA's two commits, applied with `git am` on
+  `cursor/coverage-threshold-80-c3a6` from `origin/master` `b2541d7`.
+  Authorship stays `QA prototype <qa@local>`. No production `.py` edits.
+  No test was rewritten after review. JUnit XML and the `MIN_TESTS` gate
+  stay off.
+- What the new tests cover: Yahoo Finance collector (a stand-in for
+  `yfinance.Ticker`, so nothing is downloaded), `init_db` and
+  `seed_sample_data` on a private in-memory SQLite engine, `get_db`
+  closing its session, company and metrics delete/404/500 responses,
+  repository paths the HTTP API does not hit by itself, CORS origin
+  parsing, `/api/v1/test-config`, and the placeholder
+  `fetch-financial-metrics` route. 55 new tests. The previous suite was
+  758.
+- Decision, 80% gate: `.github/workflows/tests.yml` and the README test
+  command add `--cov-fail-under=80`. pytest-cov fails the process when
+  the TOTAL for `app`, `main`, and `scripts` is below 80. `--cov-branch`
+  counts branches as well as statements. The table rounds TOTAL to a
+  whole percent; the sentence under the table is the exact figure the
+  gate uses.
+- Decision, tests left as QA wrote them. The `get_db` tests use a small
+  stand-in session so they can see that the real generator yields that
+  object and calls `close()`, including when the caller raises. The
+  repository tests inject `IntegrityError` because SQLite's message does
+  not contain the constraint name `uq_company_name_ticker`; they assert
+  the `ValueError` (or the re-raised `IntegrityError`) and that
+  `rollback` ran. The 500 tests inject a repository failure and assert
+  the HTTP body, including that a password in the exception text is not
+  returned. Those doubles drive a real branch. They are not assertions
+  that a mock was configured.
+- Company-shaped pins, left in place for the later instrument model
+  (GPW/US/EU stocks plus ETFs/ETCs). Each one matches today's code.
+  - `test_yahoo_finance_collector.py::test_company_info_maps_provider_fields`
+    pins the mapped company keys and the fixture name `Apple Inc.`.
+    Needed today. Extra keys would still pass.
+  - `test_company_info_falls_back_to_short_name_and_usd` pins the
+    `shortName` fallback and default currency `USD`. Needed today.
+  - `test_financial_statements_return_all_six_frames` pins the exact set
+    of six statement keys. Needed today. A new key would fail it.
+  - `test_key_metrics_map_ratios_from_provider_info` pins the ratio keys
+    the collector copies. It does not assert `debt_to_assets` (open
+    issue #21). Needed today for the keys it lists.
+  - `test_init_db.py::test_init_db_creates_tables_on_configured_engine`
+    requires tables `companies` and `financial_metrics` to exist. It is
+    a subset check. Needed today.
+  - `test_seed_sample_data_inserts_companies_and_apple_metrics` requires
+    the exact ticker list `AAPL`, `MSFT`, `TSLA` and two annual Apple
+    metrics for 2022 and 2023. Needed today; this is the seed catalog.
+  - `test_seed_sample_data_runs_once` requires 3 companies and 2 metrics.
+    Needed today.
+  - `test_delete_and_not_found_api.py` 404 tests require the detail
+    `Company not found`. Needed today.
+  - `test_delete_company_keeps_other_companies` requires the remaining
+    ticker list `[KEEP]`. Needed today for that one-row case.
+  - `test_create_company_business_error_returns_400` requires the detail
+    `Company name or ticker already exists`, which the test raises
+    itself. Needed today as a pass-through. It does not cover a real
+    duplicate insert (open issue #16).
+  - `test_data_collection_wiring.py::test_fetch_financial_metrics_is_a_documented_placeholder`
+    requires the placeholder body and ticker `AAPL`, which is the
+    request it sends. Needed today.
+  - `test_repository_edge_paths.py::test_company_create_maps_named_constraint_to_value_error`
+    requires `uq_company_name_ticker` in the error text. Needed today.
+  - `test_company_is_unique_checks_name_or_ticker` requires uniqueness on
+    name or ticker. Needed today.
+- Older journal lines that say PR #13 or PR #15 is not merged describe
+  the day those entries were written. Both are merged: PR #13 as
+  `a10e196`, PR #15 as `b2541d7`. PR #14 is merged as `db0cc12`.
+- Reviewer nits from PRs #14 and #15 (`persist-credentials: false`,
+  isort `known_first_party`, README lint wording) are not in this
+  change. They are a separate branch off master. Whichever of the two
+  pull requests merges second needs a rebase: both edit this journal
+  and `docs/work-state.md`.
+- Verification, from the repository root, no `.env` file, in a network
+  namespace whose connect to `1.1.1.1:443` failed. Python 3.12.3,
+  pytest 7.4.3, packages from `requirements.txt`. Command:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  - This branch: `813 passed in 11.89s`, no warnings summary, TOTAL
+    `92%`, exact total `91.77%`.
+  - Same command on `b2541d7` (master, without these tests): `758 passed
+    in 10.73s`, TOTAL `76%`, exact total `76.08%`, gate failed. That is
+    the point of the threshold.
+  - Random order seeds 7, 21, and 42, same flags: `813 passed` each,
+    exact total `91.77%`, no warnings summary.
+  - Each new test file collected and passed in its own process.
+  - An open audit saw no read or write of a `.env` inside the
+    repository. One existing test writes a `.env` under
+    `/tmp/pytest-of-ubuntu/...` and reads that temporary file. pytest-cov
+    writes a gitignored `.coverage` data file in the repo root; it was
+    deleted and is not part of the commit. No `__pycache__` was written
+    while `PYTHONDONTWRITEBYTECODE=1`.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+  Account usage was not available in this session; no percentage recorded.
+- Next after this PR: guarded Alembic baseline and isolated PostgreSQL
+  tests (issues #8, #9, and #10).
+- Published as [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
+  against master.
+
 ## 2026-10-07 - Tooling configuration
 
 - Scope: configuration and docs only. Black line length 79 with target
