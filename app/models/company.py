@@ -11,6 +11,11 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 # FX symbols (PKN.WA, BRK-B, ^GSPC, EURUSD=X). Control characters and
 # spaces are not in the class.
 TICKER_PATTERN = r"^[A-Z0-9._\-^=]{1,20}$"
+# The description column is Text, so the database would store a
+# paste of any size. 5000 characters is about a page: enough for a
+# provider summary, and the cap lives on the write models only so a
+# longer row that is already stored can still be read.
+DESCRIPTION_MAX_LENGTH = 5000
 _TICKER_RE = re.compile(TICKER_PATTERN)
 
 
@@ -96,9 +101,17 @@ class CompanyBase(BaseModel):
 
 
 class CompanyCreate(CompanyBase):
-    """Model for creating a new company."""
+    """Model for creating a new company.
 
-    pass
+    ``description`` is capped here and on update, not on the read
+    model. See ``DESCRIPTION_MAX_LENGTH``.
+    """
+
+    description: Optional[str] = Field(
+        None,
+        max_length=DESCRIPTION_MAX_LENGTH,
+        description="Brief company description",
+    )
 
 
 class CompanyUpdate(CompanyBase):
@@ -111,6 +124,11 @@ class CompanyUpdate(CompanyBase):
 
     name: Optional[str] = Field(None, max_length=255)
     ticker: Optional[str] = Field(None, pattern=TICKER_PATTERN)
+    description: Optional[str] = Field(
+        None,
+        max_length=DESCRIPTION_MAX_LENGTH,
+        description="Brief company description",
+    )
 
 
 class Company(CompanyBase):

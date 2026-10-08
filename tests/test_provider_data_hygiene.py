@@ -244,6 +244,31 @@ async def test_overlong_company_fields_are_422_on_create(client, field, value):
 
 
 @pytest.mark.asyncio
+async def test_huge_name_validation_body_stays_small(client):
+    """The 422 body must not echo a 200k-character name back to the client."""
+    name = "N" * 200_000
+    response = await client.post(
+        COMPANIES, json={"name": name, "ticker": "HUGE"}
+    )
+
+    assert response.status_code == 422
+    assert len(response.content) < 2_000
+    assert name not in response.text
+    assert _count(client) == 0
+
+
+@pytest.mark.asyncio
+async def test_description_longer_than_5000_characters_is_422(client):
+    response = await client.post(
+        COMPANIES,
+        json={"name": "D", "ticker": "DESC", "description": "d" * 5001},
+    )
+
+    assert response.status_code == 422
+    assert _count(client) == 0
+
+
+@pytest.mark.asyncio
 async def test_overlong_name_is_422_on_update(client):
     created = (
         await client.post(COMPANIES, json={"name": "Short", "ticker": "SHRT"})
