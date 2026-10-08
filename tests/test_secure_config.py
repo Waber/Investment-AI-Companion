@@ -5,6 +5,7 @@ and a comma-separated CORS value parses. Tracked files do not contain
 a local username or an absolute home or temporary path.
 """
 
+import re
 import runpy
 import subprocess
 import sys
@@ -359,6 +360,21 @@ def _personal_path_pattern() -> str:
     home = "/Use" + "rs/"
     temporary = "/private" + "/tmp"
     return f"{username}|{home}|{temporary}"
+
+
+def test_documented_commands_expand_tmpdir_and_home():
+    """A copied command must expand $TMPDIR and ~. Single quotes do not."""
+    documents = [ROOT / "README.md", ROOT / "DATABASE_SETUP.md"]
+    documents.extend((ROOT / "docs").rglob("*.md"))
+    single_quoted = re.compile(r"'[^'\n]*'")
+    frozen = []
+    for path in documents:
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            for match in single_quoted.finditer(line):
+                chunk = match.group(0)
+                if "$TMPDIR" in chunk or "~/" in chunk:
+                    frozen.append(f"{path.relative_to(ROOT)}:{lineno}:{chunk}")
+    assert frozen == []
 
 
 def test_tracked_files_have_no_personal_machine_paths():

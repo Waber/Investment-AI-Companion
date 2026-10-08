@@ -133,7 +133,8 @@ export DEMO_DIR=$TMPDIR/iac-demo.h7TbGw
 export PG_BIN=/opt/homebrew/opt/postgresql@14/bin
 export REPO=$TMPDIR/investment-api-demo
 export PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
-export DATABASE_URL='postgresql://demo@/investment_demo?host=$TMPDIR/iac-demo.h7TbGw&port=15432'
+# Double quotes so $TMPDIR expands. Single quotes would leave it literal.
+export DATABASE_URL="postgresql://demo@/investment_demo?host=$TMPDIR/iac-demo.h7TbGw&port=15432"
 ```
 
 Stop the foreground API with Ctrl-C. For the coordinator-started API, inspect the
