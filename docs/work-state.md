@@ -16,7 +16,8 @@
   a JSON list. pydantic-settings stays at 2.1.0 and both locks are
   unchanged. `DATABASE_URL` defaults to
   `postgresql://investment_ai@localhost:5432/investment_ai`.
-  Tracked docs use `~/projects/Investment-AI-Companion` and
+  Operator guides name `~/IdeaProjects/Investment-AI-Companion`.
+  Older notes use `~/projects/Investment-AI-Companion` and
   `$TMPDIR`. A `git grep` test fails if a personal home-directory
   prefix, the old temporary-directory prefix, or the previous
   local account name comes back. Tickers match

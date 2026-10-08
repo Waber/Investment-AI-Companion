@@ -37,7 +37,7 @@ worktree so no application restart or production-code change is required.
 
 ```bash
 cd $TMPDIR/investment-demo-fixtures
-PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
+PYTHON=~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 
 # Read-only preview; no POST, PUT, or DELETE.
 "$PYTHON" -m scripts.seed_demo --base-url http://127.0.0.1:8081

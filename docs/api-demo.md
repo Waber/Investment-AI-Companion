@@ -29,7 +29,7 @@ After the coordinator confirms the demo is ready:
 
 ```bash
 export BASE_URL=http://127.0.0.1:8081
-export PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
+export PYTHON=~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 curl -q --noproxy '*' -fsS "$BASE_URL/"
 "$PYTHON" $TMPDIR/investment-api-demo/scripts/smoke_demo.py --base-url "$BASE_URL"
 ```
@@ -129,12 +129,14 @@ The coordinator provisions PostgreSQL 14.19, role `demo`, database
 `investment_demo`. Existing startup runs `Base.metadata.create_all`; this demo
 does not add or run migrations. These commands reuse the existing cluster only.
 Do not run `initdb`, drop databases, or delete the runtime directory.
+This block is historical. Substitute your own `$TMPDIR` path; do not reuse
+another machine's temporary directory.
 
 ```bash
 export DEMO_DIR=$TMPDIR/iac-demo.h7TbGw
 export PG_BIN=/opt/homebrew/opt/postgresql@14/bin
 export REPO=$TMPDIR/investment-api-demo
-export PYTHON=~/projects/Investment-AI-Companion/.venv/bin/python
+export PYTHON=~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 # Double quotes so $TMPDIR expands. Single quotes would leave it literal.
 export DATABASE_URL="postgresql://demo@/investment_demo?host=$TMPDIR/iac-demo.h7TbGw&port=15432"
 ```
