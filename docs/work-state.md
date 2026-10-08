@@ -16,9 +16,8 @@
   `None`. Booleans are not treated as numbers, and total assets of
   zero is `None`. The mapping never reads `totalDebtPerShare` and
   makes no extra provider call. No other Yahoo field changed.
-- Incomplete: the collector interface and an offline fake (#24), bug
-  #19, and the rest of Demo v1. Alembic (#8), the PostgreSQL harness
-  (#9), and the instrument model (#26) stay later.
+- Incomplete: the queue in the next-action line is still open.
+  Alembic (#8) and the PostgreSQL harness (#9) stay later.
 - Tests: no `.env`, `DATABASE_URL` unset, the CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 838 passed in 15.33s, no warnings summary, TOTAL 92% (exact
@@ -28,8 +27,13 @@
   404/400 pin already passed on that commit.
 - Active agents: none.
 - Blockers: none.
-- Next action: #24 (collector interface + offline fake). Bug #19 can
-  be slotted in.
+- Next action: #11, the security/deps part. That is the FastAPI and
+  Starlette CVE upgrade, `requests`, `python-dotenv`, `black`,
+  `pytest`, removing unused pins, `yfinance>=1.7`, and a lock file
+  with hashes. After it come #45 and #47 together (secure config
+  defaults and neutral defaults, one pull request), then #24, #19,
+  #25 and #26 (with #16 and #17). #46 (pin Actions to SHAs) goes
+  into any pull request that touches CI.
 
 ## SQLite UTC timestamps and foreign keys: 2026-10-08
 
