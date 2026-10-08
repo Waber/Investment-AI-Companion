@@ -404,6 +404,15 @@ def test_documented_commands_expand_tmpdir_and_home():
     assert frozen == []
 
 
+def test_ide_startup_mentions_secret_key_length():
+    """A short SECRET_KEY is a settings error, not a database error."""
+    guide = (ROOT / "docs" / "ide-startup.md").read_text().splitlines()
+    settings = [line for line in guide if line.startswith("- Settings errors:")]
+    assert len(settings) == 1
+    assert "SECRET_KEY" in settings[0]
+    assert "at least 32 characters" in settings[0]
+
+
 def test_docs_say_an_unknown_host_is_rejected():
     """Operators need to see that ALLOWED_HOSTS is actually enforced."""
     needle = "Invalid host header"
