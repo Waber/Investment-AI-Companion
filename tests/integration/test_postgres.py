@@ -372,16 +372,18 @@ async def created_dup_company(postgres_client):
 _EXACT_DUPLICATE_XFAIL = (
     "Issue #16 is open. An exact duplicate ticker should be "
     "400 or 409 and leave one row. Today the duplicate is 500. "
-    "Remove this marker when that behaviour lands. Case folding "
-    "is a separate test."
+    "Remove this marker when that behaviour lands. A lowercase "
+    "ticker is uppercased first, so it hits this same 500."
 )
 
-# PRD open question 10. I1 is issue #26.
+# dup is stored as DUP, so this is the #16 unique-index 500.
+# The target is still a client error. strict=True fails the suite
+# when that 500 becomes 400 or 409.
 _CASE_FOLDING_XFAIL = (
-    "PRD open question 10: normalize ticker case in I1, "
-    "issue #26. dup should collide with DUP and return 400 or "
-    "409, leaving one row. Remove this marker when that "
-    "normalization lands."
+    "Ticker normalization uppercases dup to DUP, so this request "
+    "hits the same unique-index 500 as issue #16. The target is "
+    "still 400 or 409 and one row. Remove this marker when #16 "
+    "returns a client error."
 )
 
 
@@ -455,10 +457,12 @@ async def test_duplicate_ticker_is_a_client_error(
 async def test_lowercase_ticker_collides_with_uppercase(
     request, postgres_client, postgres_session_factory
 ):
-    """Target behaviour for ticker case folding.
+    """Lowercase dup is uppercased, then hits the #16 duplicate 500.
 
-    PRD open question 10 proposes that normalization in I1,
-    issue #26. This is not the exact-duplicate check from #16.
+    Issue #26 asked for a case collision to be its own client
+    error. Create and update now uppercase the ticker, so dup and
+    DUP are the same stored value. The strict xfail stays until
+    that unique-index 500 becomes 400 or 409.
     """
     created = await _create_company(postgres_client, "DUP", "A")
     assert created.status_code == 201, created.text
