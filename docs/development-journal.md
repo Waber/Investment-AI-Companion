@@ -1,5 +1,49 @@
 # Development Journal
 
+## 2026-10-08 - Code Reviewer round 1 on ff300e6
+
+- Scope: requested changes from the review of `ff300e6`, added
+  after the rebase onto `d7f6798`. Each item is its own commit.
+- B1: `max_length=20` stays on `FinancialMetricsCreate` only.
+  `FinancialMetricsUpdate` does not set `period_type`. A SQLite
+  row with a 25-character `period_type` returns HTTP 200 from
+  `GET /api/v1/financial-metrics/company/{id}`. `Company` and
+  `HistoricalData`, the other response models, have no write-time
+  length limits. A test locks that in.
+- Nit 1: README and `.env.example` say `ALLOWED_HOSTS` is
+  enforced, so any other Host gets HTTP 400 `Invalid host header`.
+- Nit 2: the IDE settings-errors line says to check `SECRET_KEY`
+  is at least 32 characters.
+- Nit 3: `ide-startup.md`, `api-demo.md`, and `demo-data.md` name
+  `~/IdeaProjects/Investment-AI-Companion`. The historical cluster
+  block tells the reader to substitute their own `$TMPDIR` path.
+  The personal-path guard still passes.
+- Nit 4: a missing `SECRET_KEY` defaults to `""`. `validate_default`
+  runs the existing validator, so the error includes
+  `token_urlsafe(32)` instead of a bare `Field required`.
+- Nit 5: `ALLOWED_HOSTS` entries are stored in lowercase, so
+  `LocalHost` is `localhost`. Whitespace and control characters
+  inside an entry are rejected, so `local host` fails startup.
+- Nit 6: the personal-path test requires `git grep` exit code 1.
+  Exit 0 is a match. Any other code is a failed search, not a pass.
+- Nit 7: the PostgreSQL `dup` versus `DUP` expected failure stays
+  strict. Uppercasing makes `dup` the same unique-index 500 as
+  issue #16, so the reason says that instead of claiming case
+  folding has not landed.
+- Follow-up on nit 4: the empty `SECRET_KEY` default made
+  `test_stray_dotenv_database_url_is_ignored` fail, because `""`
+  is a substring of every line. The check now runs only when the
+  code default is a non-empty string. The harness key in the
+  output is still required.
+- Verification: SQLite CI command, 965 passed, 119 deselected,
+  exact 92.79% (1145 statements, 77 missed, 256 branches, 14
+  partial). DSN, isolation, and skip-guard integration tests:
+  103 passed, no database. No local PostgreSQL or Docker, so the
+  API-level PostgreSQL job is left to GitHub Actions.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not
+  measured. Account usage was not available in this session; no
+  percentage recorded.
+
 ## 2026-10-08 - Rebase onto the merged PostgreSQL harness (#60, #9)
 
 - Scope: `cursor/secure-config-provider-hygiene-c91c` rebased onto

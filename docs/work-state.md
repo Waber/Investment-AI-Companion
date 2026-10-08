@@ -45,6 +45,19 @@
   return 422. The read model keeps `website` as plain text so a
   stored non-URL still lists. Security and QA approved
   `f1072cc`. The next action below is unchanged.
+- Code Reviewer round 1, on top of the rebase onto `d7f6798`:
+  `period_type` length stays on create only, so a stored
+  25-character value still lists. A missing `SECRET_KEY` defaults
+  to empty and the error names `token_urlsafe(32)`. The
+  integration check that the code-default secret is absent skips
+  an empty default, because that string is in every line. The
+  harness key is still required in the output.
+  `ALLOWED_HOSTS` entries are lowercased, and whitespace or
+  control characters are rejected. The personal-path guard
+  requires `git grep` exit 1. The PostgreSQL `dup` expected
+  failure records the #16 unique-index 500, because the ticker
+  is uppercased. Operator docs name the shared checkout and the
+  unknown-Host 400. The next action below is unchanged.
 - Incomplete: the queue in the next-action line is still open.
   Alembic (#8) stays later.
   `fetch-financial-metrics` is still a placeholder. It validates
@@ -65,6 +78,10 @@
   statements, 78 missed, 254 branches, 15 partial). After the
   website, CORS, and currency follow-ups: 954 passed, exact
   92.77% (1143 statements, 77 missed, 254 branches, 14 partial).
+  After the Code Reviewer round: 965 passed, 119 deselected,
+  exact 92.79% (1145 statements, 77 missed, 256 branches, 14
+  partial). DSN, isolation, and skip-guard integration tests:
+  103 passed. The PostgreSQL API tests were not run locally.
   `black --check`
   passed on the touched Python files.
 - Active agents: none.
