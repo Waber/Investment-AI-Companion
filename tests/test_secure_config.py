@@ -167,6 +167,25 @@ def test_unsafe_allowed_hosts_are_rejected(value):
         Settings(_env_file=None, SECRET_KEY=TEST_SECRET, ALLOWED_HOSTS=value)
 
 
+def test_allowed_host_case_is_folded():
+    settings = Settings(
+        _env_file=None,
+        SECRET_KEY=TEST_SECRET,
+        ALLOWED_HOSTS="LocalHost,127.0.0.1",
+    )
+
+    assert _hosts(settings) == ["localhost", "127.0.0.1"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["local host", "local\nhost", "local\x00host", "localhost\x7f"],
+)
+def test_allowed_hosts_reject_whitespace_and_controls(value):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, SECRET_KEY=TEST_SECRET, ALLOWED_HOSTS=value)
+
+
 def test_star_allowed_host_from_env_is_rejected(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", TEST_SECRET)
     monkeypatch.setenv("ALLOWED_HOSTS", '["*"]')

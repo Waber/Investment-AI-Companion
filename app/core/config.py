@@ -164,13 +164,23 @@ def _allowed_host_parts(value: object) -> List[str]:
         host = item.strip()
         if not host:
             raise ValueError("ALLOWED_HOSTS entries must not be empty")
+        # After strip, so a trailing space on "localhost" is fine, and
+        # "local host" is not. Control characters are not hostnames.
+        if any(
+            char.isspace() or ord(char) < 32 or ord(char) == 127
+            for char in host
+        ):
+            raise ValueError(
+                "ALLOWED_HOSTS entries must not contain whitespace "
+                "or control characters"
+            )
         if "*" in host:
             raise ValueError("ALLOWED_HOSTS must not contain '*'")
         if ":" in host:
             raise ValueError(
                 "ALLOWED_HOSTS entries must not include a port: " f"{host!r}"
             )
-        hosts.append(host)
+        hosts.append(host.lower())
     if not hosts:
         raise ValueError("ALLOWED_HOSTS must list at least one host")
     return hosts
