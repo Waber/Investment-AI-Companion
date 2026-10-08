@@ -473,6 +473,12 @@ def test_docs_say_an_unknown_host_is_rejected():
 
 
 def test_tracked_files_have_no_personal_machine_paths():
+    """git grep must report no matches, not a failed search.
+
+    Exit 0 means a personal path is in the tree. Exit 1 means the
+    pattern was absent. Any other code means git itself failed,
+    and an empty stdout in that case is not a pass.
+    """
     result = subprocess.run(
         ["git", "grep", "-n", "-E", _personal_path_pattern(), "--", "."],
         cwd=ROOT,
@@ -481,4 +487,5 @@ def test_tracked_files_have_no_personal_machine_paths():
         check=False,
     )
 
+    assert result.returncode == 1, result.stderr
     assert result.stdout == ""
