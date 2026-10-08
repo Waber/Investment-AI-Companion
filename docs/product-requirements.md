@@ -3,7 +3,7 @@
 - Status: draft v0.2, 2026-10-08. Prepared from the repository state at master `b2541d7` and Raul's decisions of 2026-10-08 (two rounds). v0.2 adds: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo.
 - Owner: Raul (product decisions). Prepared by the Project Manager agent for the Developer, QA Engineer and Code Reviewer.
 - Related docs: `AGENTS.md`, `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`, `docs/demo-data.md`, `docs/work-state.md`.
-- Research inputs (Researcher, 2026-10-08; in the repo under `docs/research/`): [market-data-sources.md](research/market-data-sources.md) (market-data sources) and [llm-comparison.md](research/llm-comparison.md) (LLM providers).
+- Research inputs (Researcher, 2026-10-08; land in the repo via PR under `docs/research/`): `docs/research/market-data-sources.md` (market-data sources) and `docs/research/llm-comparison.md` (LLM providers).
 - Items marked **[Decided]** were confirmed by Raul. Items marked **[Proposal]** still need his confirmation. Items marked **[Open]** are undecided.
 
 ## 1. Purpose and vision
@@ -145,7 +145,7 @@ Other model points:
 
 - **Provider-agnostic interface**, e.g. `AnalysisProvider.generate(input_snapshot, language) -> AnalysisReport`.
   - **Demo and tests:** a deterministic mock (PL and EN), no network.
-  - **Real provider [Decided]: Google Gemini, model Gemini 3.8 Flash** (per `research/llm-comparison.md`: #2 on the Vals Finance Agent v2 benchmark, native JSON-schema output). Implemented **only after the demo**, with the official `google-genai` SDK (#11 picks `google-genai` instead of upgrading `openai`).
+  - **Real provider [Decided]: Google Gemini, model Gemini 3.8 Flash** (per `docs/research/llm-comparison.md`: #2 on the Vals Finance Agent v2 benchmark, native JSON-schema output). Implemented **only after the demo**, with the official `google-genai` SDK (#11 picks `google-genai` instead of upgrading `openai`).
   - **Before going live:** a bake-off of 20–30 fixture analyses through Gemini 3.8 Flash, including **Polish-language quality**, measuring schema and citation-validation pass rate, real token use (including thinking tokens), cost and numeric accuracy. The Researcher's cheaper alternatives (OpenAI gpt-6-luna, Anthropic claude-haiku-5.5) may be included as baselines. The results decide whether Gemini 3.8 Flash ships as-is.
   - Notes from the research: Gemini 3.8 Flash promo pricing ($0.75/$3.75 per 1M tokens, ≈$0.013–0.024 per analysis) ends 2026-12-31 and doubles from 2027-01-01; an app used in the EEA must use the Gemini **paid** tier (no training on paid-tier data).
   - There is no silent fallback from a real provider to the mock in production.
@@ -162,7 +162,7 @@ Other model points:
 
 ## 7. Data source requirements
 
-Decision based on `research/market-data-sources.md` (tested on 2026-10-08).
+Decision based on `docs/research/market-data-sources.md` (tested on 2026-10-08).
 
 - **Primary [Decided]: yfinance**, upgraded from the pinned `0.2.33` to **`>=1.7`** (old versions break when Yahoo changes cookies/crumbs). Tested coverage: GPW stocks (`.WA`, back to 2000), GPW Beta ETFs, EU and US stocks, Xetra/LSE ETCs; shallow GPW fundamentals (about 4–5 years annual, about 6 quarters).
   - **Local cache and throttling:** every response is stored locally; refresh only on explicit request; throttle and batch calls; handle `YFRateLimitError` / "Too Many Requests" visibly.
@@ -249,7 +249,7 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 - #20 ↔ D1 (same root cause on SQLite); D1 and D3 → D2.
 - D1 → I1 → I2, I3; D3 → I2.
 - I1 and D2 → D4 → D5, D6, C1, W1, N1; I2 → D6, C1.
-- I1–I3, D4, D6, C1 → S1 → A1 → A2.
+- I1–I3, D4, D6, C1 → S1 → A1 → A2 (A1 hard-depends on I2; N1 is optional for A1, notes context is added once N1 is available).
 - All of P1–P4 → D7 and D8 → D9.
 - Demo done → #8 → #9 → #10; #11 → R1 and R2.
 - #12 stays deferred unless analysis tailoring needs it.
