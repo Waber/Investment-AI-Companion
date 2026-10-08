@@ -1,34 +1,51 @@
-from sqlalchemy import create_engine
+"""Database engine and the request-scoped session.
+
+SQLite does not enforce foreign keys unless every connection runs
+``PRAGMA foreign_keys=ON``. The pragma is per connection: a new
+physical connection starts with foreign keys off. Registering it on
+the application engine means the demo, scripts, and tests share one
+implementation. PostgreSQL enforces foreign keys itself, so the hook
+is not attached for that dialect.
+"""
+
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
 
-# Create SQLAlchemy engine - this manages the connection pool to the database
-# The URL format is: postgresql://username:password@host:port/database_name
-# We get these values from environment variables via settings
-engine = create_engine(
-    settings.DATABASE_URL,
-    # echo=True  # Uncomment to see SQL queries in console (useful for debugging)
-)
 
-# SessionLocal is a factory for creating database sessions
-# Each session represents a conversation with the database
+def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    """Enable foreign keys on one SQLite DB-API connection."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
+
+
+def create_db_engine(url, **kwargs):
+    """Create an engine and apply the SQLite foreign-key hook."""
+    db_engine = create_engine(url, **kwargs)
+    if db_engine.dialect.name == "sqlite":
+        event.listen(db_engine, "connect", enable_sqlite_foreign_keys)
+    return db_engine
+
+
+# The URL comes from settings (environment or .env). Tests that need a
+# private database call create_db_engine with their own URL instead of
+# reusing this engine.
+engine = create_db_engine(settings.DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for all database models (tables).
-# SQLAlchemy 2 provides declarative_base from sqlalchemy.orm.
-# This allows us to define models as Python classes that SQLAlchemy will convert to database tables
+# SQLAlchemy 2 exposes declarative_base from sqlalchemy.orm.
 Base = declarative_base()
 
-# Dependency function for FastAPI to inject database sessions into endpoints
+
 def get_db():
-    """
-    Creates a new database session for each request.
-    This ensures each API call gets its own database connection.
-    The session is automatically closed after the request completes.
-    """
+    """Yield one session for a request and always close it."""
     db = SessionLocal()
     try:
-        yield db  # Yield the session to the endpoint
+        yield db
     finally:
-        db.close()  # Always close the session, even if an error occurs
+        db.close()
