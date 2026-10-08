@@ -41,6 +41,27 @@ async def test_list_companies_returns_a_stored_blank_ticker(client):
     assert any(row["ticker"] == "" for row in response.json())
 
 
+@pytest.mark.asyncio
+async def test_list_companies_returns_a_stored_invalid_website(client):
+    """A legacy website that is not a URL must not fail the list."""
+    session = client.app.state.testing_session_local()
+    session.add(
+        CompanyDB(
+            name="Legacy Site",
+            ticker="SITE",
+            currency="USD",
+            website="not a url",
+        )
+    )
+    session.commit()
+    session.close()
+
+    response = await client.get(COMPANIES)
+
+    assert response.status_code == 200
+    assert any(row["website"] == "not a url" for row in response.json())
+
+
 def test_normalize_ticker_leaves_none_and_non_strings():
     assert normalize_ticker(None) is None
     assert normalize_ticker(12) == 12

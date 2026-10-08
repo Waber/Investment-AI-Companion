@@ -92,7 +92,11 @@ class CompanyBase(BaseModel):
     description: Optional[str] = Field(
         None, description="Brief company description"
     )
-    website: Optional[HttpUrl] = Field(None, description="Company website")
+    # Plain text on the read model. One stored value that is not a
+    # URL would otherwise fail HttpUrl validation and make
+    # GET /companies/ return 500. Create and update still require
+    # a real URL.
+    website: Optional[str] = Field(None, description="Company website")
     country: Optional[str] = Field(None, description="Country of origin")
     exchange: Optional[str] = Field(
         None, description="Stock exchange where the company is listed"
