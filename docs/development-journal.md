@@ -1,5 +1,27 @@
 # Development Journal
 
+## 2026-10-08 - Reviewer nits on the merged coverage gate
+
+- Scope: [PR #43](https://github.com/Waber/Investment-AI-Companion/pull/43)
+  on `cursor/reviewer-nits-minimal-c3a6`, rebased onto `origin/master`
+  `778735e`. [PR #22](https://github.com/Waber/Investment-AI-Companion/pull/22)
+  (80% coverage gate) is rebase-merged. Master's journal and work-state
+  sections from that pull request are kept. No production `.py` edits.
+- `actions/checkout` sets `persist-credentials: false`. The Tests job
+  never pushes, so the checkout token is not stored in `.git/config`.
+- isort `known_first_party` is `app`, `main`, and `scripts`.
+- The README lint section no longer names a file that fails isort. It
+  says older files still have formatting debt.
+- Work-state no longer says Code Reviewer approved `63822cd` and is
+  waiting on Raul. That line now says PR #22 is merged as `778735e`.
+  The live next action is the product-requirements section at the top
+  of `docs/work-state.md`.
+- Verification: no `.env`, Python 3.12.3, pytest 7.4.3:
+  `813 passed in 11.32s`, TOTAL exact `91.77%`. `--cov-fail-under=80`
+  passed.
+- AI model: Grok 4.7 (Cursor cloud agent). Elapsed time was not measured.
+  Account usage was not available in this session; no percentage recorded.
+
 ## 2026-10-08 - Product requirements and research docs
 
 - Scope: documentation only. Add Raul's product requirements (draft v0.2,
