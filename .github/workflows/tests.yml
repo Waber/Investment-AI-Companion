@@ -2,7 +2,8 @@
 #
 # One job. It installs requirements-dev.lock with pip --require-hashes
 # and runs pytest with a coverage report for app, main, and scripts.
-# It does not lint or start Postgres.
+# It does not lint or start Postgres. Every uses: action is pinned to
+# a full commit SHA with a trailing version comment.
 # Total coverage (statements plus branches) must stay at or above 80%.
 # JUnit XML and the MIN_TESTS gate are not enabled.
 name: Tests
@@ -36,11 +37,12 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Check out the repository
-        # v7 is the newest major tag for actions/checkout (v7.0.1) and runs
-        # on Node 24. v5 would also, and v4 is the one that warns about Node 20.
-        # persist-credentials false: the default stores the checkout token in
-        # .git/config so later steps can push. This job never pushes.
-        uses: actions/checkout@v7
+        # Pinned to the commit of the v7.0.1 tag (lightweight tag; the
+        # GitHub git ref for refs/tags/v7.0.1 is this commit). v7.0.1 runs
+        # on Node 24. persist-credentials false: the default stores the
+        # checkout token in .git/config so later steps can push. This job
+        # never pushes.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -49,9 +51,9 @@ jobs:
         run: test ! -e .env
 
       - name: Set up Python 3.12
-        # v7 is the newest major tag published for actions/setup-python
-        # (release v7.0.0). The floating v7 tag tracks that major line.
-        uses: actions/setup-python@v7
+        # Pinned to the commit of the v7.0.0 tag (lightweight tag; the
+        # GitHub git ref for refs/tags/v7.0.0 is this commit).
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
