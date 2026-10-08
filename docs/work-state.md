@@ -15,7 +15,8 @@
   are still open. Coverage PR #22 is still open.
 - Tests: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider`
   -> 758 passed in 6.48s, no warnings summary. GitHub Actions Tests on
-  this branch is the remaining check.
+  `6c0112c` succeeded:
+  https://github.com/Waber/Investment-AI-Companion/actions/runs/37755950125
 - Active agents: none.
 - Blockers: none for starting Demo v1. This branch and PR #22
   (`cursor/coverage-threshold-80-c3a6`) both edit this file and
