@@ -11,7 +11,9 @@
 - `--cov-fail-under=80` is enforced in `.github/workflows/tests.yml` and
   the README test command. The gate reads TOTAL for `app`, `main`, and
   `scripts`, statements plus branches. JUnit XML and the `MIN_TESTS` gate
-  are still not enabled.
+  are still not enabled. Raul chose this 80% threshold on 2026-10-08 at
+  10:48 Warsaw time, overriding the earlier 70% recommendation. The
+  Project Manager relayed that decision.
 - Local Python 3.12.3, pytest 7.4.3, no `.env`, no network route:
   `813 passed in 11.89s`, no warnings summary, TOTAL `92%` (exact
   `91.77%`). Random-order seeds 7, 21, and 42 passed the same way. The
@@ -28,8 +30,22 @@
   shell, statement keys are a subset, and company-shaped pins are marked
   `see #26`. `NEWS_API_KEY=x` no longer fails
   `test_test_config_marks_missing_settings`.
-- Next after this PR: guarded Alembic baseline and isolated PostgreSQL
-  tests (issues #8, #9, and #10).
+- Next action: Demo v1 issue
+  [#23](https://github.com/Waber/Investment-AI-Companion/issues/23)
+  together with bug
+  [#20](https://github.com/Waber/Investment-AI-Companion/issues/20)
+  first, then bugs
+  [#18](https://github.com/Waber/Investment-AI-Companion/issues/18)
+  and
+  [#21](https://github.com/Waber/Investment-AI-Companion/issues/21)
+  just before
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
+  then
+  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25),
+  then
+  [#26](https://github.com/Waber/Investment-AI-Companion/issues/26).
+  Issues #8, #9, and #10 come after the demo. PR #41 records the same
+  order.
 - Account usage was not available in this session. Stop reason: coverage
   gate delivered, not quota.
 
@@ -271,6 +287,8 @@ review/merge next-action line below was the state when this snapshot was written
 - Editable profiles and source-aware AI analysis remain unimplemented. Demo preferences are preserved in the approved September8 design/plan, not yet implemented.
 - Prior WIP dependency pin on `feature/research-workflow-and-hardening` conflicts with FastAPI and is NOT in this branch. Do not merge blindly.
 - This manually exercised PostgreSQL demo is not completion of the migration/integration-test task. Financial-metrics provider ingestion is still a placeholder.
-- Next after this PR: guarded migrations and automated PostgreSQL
-  integration tests (issues #8, #9, and #10). Do not assume the old demo
+- Current next action: Demo v1 issue #23 together with bug #20 first,
+  then bugs #18 and #21 just before #24, then #25, then #26. Issues
+  #8, #9, and #10 come after the demo. The coverage-gate section at the
+  top of this file is the live snapshot. Do not assume the old demo
   runtime still exists.
