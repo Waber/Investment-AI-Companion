@@ -142,6 +142,11 @@
   `tests/integration` and `tests/test_known_defects.py`.
   The docs tree, measured before this commit: 846 passed,
   37 deselected in 13.00s, exact 92.58%.
+  GitHub Actions on `8bfd7ba`
+  ([run 37834076658](https://github.com/Waber/Investment-AI-Companion/actions/runs/37834076658)):
+  SQLite job 846 passed, 37 deselected in 9.90s, TOTAL 93%.
+  PostgreSQL job 37 passed, 846 deselected in 1.20s.
+  Service version: `PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit`.
 - Work-state next action: unchanged. #45 and #47 together, with
   #50 if that fix stays small. Then #24, #19, #25, and #26 (with
   #16 and #17). This harness is done. #8 and #16 stay open.
