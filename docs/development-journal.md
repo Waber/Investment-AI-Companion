@@ -1,5 +1,47 @@
 # Development Journal
 
+## 2026-10-08 - QA fixes on /ui (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. QA reviewed head
+  `766fbfd`. The type filter and the skip link from the previous
+  entry stay. Disclaimer wording, the website http/https check,
+  autoescape, and the bind host are unchanged. No CDN was added.
+- Decision, history restore: `HX-History-Restore-Request: true`
+  returns the full page even when `HX-Request` is also set. HTMX
+  writes that response into `body`, so a fragment would drop the
+  header, the language switch, and the disclaimer. Every `/ui`
+  response sends `Vary: HX-Request`.
+- Decision, return path: `safe_next` still requires a `/ui` prefix.
+  It also rejects a `..` segment after decoding, so
+  `next=/ui/../api/v1/companies/` stays on `/ui`.
+- Decision, unknown id: `/ui/instruments/{id}` takes a string. A
+  non-integer such as `abc` renders the HTML 404. The API's JSON
+  422 handler is unchanged.
+- Decision, headers: `/ui` sends `Content-Security-Policy` with
+  `default-src 'self'`, `base-uri 'self'`, `form-action 'self'`,
+  and `frame-ancestors 'none'`, plus `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, and
+  `Referrer-Policy: no-referrer`. The local HTMX page does not
+  need another host.
+- Decision, docs and tests: the sqlite seed tests use
+  `postgresql://investment_ai@localhost:5432/investment_ai`. The
+  Settings default is unchanged. `docs/demo-data.md` says the
+  server filters the list. `SECRET_KEY` is still not required on
+  this branch, and `python main.py` still binds `0.0.0.0`. After
+  #61, the demo seed and uvicorn both need `SECRET_KEY` and the
+  bind becomes `127.0.0.1`. The template scan rejects `| safe`
+  with a space. `static/vendor/README.txt` records the sha256 of
+  the vendored htmx file.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 896 passed, 119 deselected, exact 94.89%. The docs commit
+  does not change Python and repeats that result. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - Type filter and keyboard focus on /ui (#29)
 
 - Scope: follow-up on

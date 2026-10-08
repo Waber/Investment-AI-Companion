@@ -22,6 +22,12 @@
   the demo. `docs/demo-data.md` has the exact commands. The UI
   tests are not `integration` tests, so the PostgreSQL job does
   not run them and the zero-skip guard does not count them.
+  QA follow-up on the same branch: history restore returns the
+  full page and `/ui` sends `Vary: HX-Request`; `..` cannot leave
+  `/ui`; a non-integer instrument id is an HTML 404; `/ui`
+  responses send the local CSP, frame denial, nosniff, and
+  referrer policy. Seed tests use the neutral postgres URL. The
+  vendored htmx sha256 is in `static/vendor/README.txt`.
 - Incomplete: #26 (instrument model, type/country/ISIN filters,
   ETF/ETC detail), #27 (demo-v2 prices), #28 (ETF/ETC attributes),
   and #25 (one-command demo). PR #61 is still the secure-defaults
@@ -35,7 +41,8 @@
   119 deselected, exact 92.58%; feature commit 892 passed,
   119 deselected, exact 94.79%; docs commit repeats 892 passed,
   119 deselected, exact 94.79%. The type-filter follow-up:
-  892 passed, 119 deselected, exact 94.81%. `-m integration`
+  892 passed, 119 deselected, exact 94.81%. The QA follow-up:
+  896 passed, 119 deselected, exact 94.89%. `-m integration`
   with no `TEST_POSTGRES_DSN`: 103 passed, 16 skipped, 892
   deselected. The 16 skips need PostgreSQL. The UI tests are
   deselected.
