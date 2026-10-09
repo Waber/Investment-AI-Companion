@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t['app_name'] }}</title>
+  <link rel="stylesheet" href="/static/ui.css">
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'>
+  <script src="/static/vendor/htmx-2.0.10.min.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">{{ t['nav.skip'] }}</a>
+  <header class="site-header">
+    <a class="brand" href="/ui">{{ t['app_name'] }}</a>
+    <nav>
+      <a href="/ui">{{ t['nav.instruments'] }}</a>
+      <span class="language-switch">
+        <span>{{ t['language.label'] }}</span>
+        <a href="/ui/language/pl?next={{ next_path | urlencode }}"{% if language == "pl" %} aria-current="true"{% endif %}>{{ t['language.pl'] }}</a>
+        <a href="/ui/language/en?next={{ next_path | urlencode }}"{% if language == "en" %} aria-current="true"{% endif %}>{{ t['language.en'] }}</a>
+      </span>
+    </nav>
+  </header>
+  <p class="disclaimer" role="note">{{ t['disclaimer'] }}</p>
+  <main id="main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

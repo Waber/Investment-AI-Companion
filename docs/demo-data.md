@@ -8,7 +8,31 @@
 The versioned source is [demo-v1.json](../fixtures/demo-v1.json), not a download
 of real securities or financial statements. All names, tickers, exchanges, and
 amounts are invented. No data-provider keys or investment decisions are involved.
-This fixture is for API and future frontend testing; it is not a real portfolio.
+This fixture is for API and UI testing; it is not a real portfolio.
+
+## Local /ui demo
+
+The server-rendered pages are at `/ui`. Copy-pasteable commands are
+in [Run the demo](RUN_DEMO.md). The seeder opens only the sqlite URL
+you pass. It does not read or change the default `DATABASE_URL`.
+
+`SECRET_KEY` is required for the seed and for uvicorn. Generate it
+with the command in that guide. Do not commit it. The documented
+bind is `127.0.0.1`. `python main.py` binds `127.0.0.1` as well.
+`ALLOWED_HOSTS` defaults to `localhost,127.0.0.1`.
+
+Those commands created 6 companies and 20 metric rows. `GET /ui`,
+`GET /ui/instruments/1`, the CSS, and the local HTMX file each
+returned 200. `demo/` is gitignored.
+
+- Polish is the default. The EN link stores `ui_lang` and comes back
+  to the same `/ui` path.
+- Rows from this fixture show the synthetic-data badge. The page
+  disclaimer stays visible. The output is research context, not a
+  recommendation.
+- A website is a link only when the view-model accepts `http` or
+  `https`. Anything else is plain text. An empty website is
+  "brak danych" / "no data".
 
 ## Scenarios
 
@@ -87,8 +111,9 @@ curl -q --noproxy '*' -fsS \
 ```
 
 For create/update/delete request examples and the isolated runtime's lifecycle,
-see [the API demo guide](api-demo.md). The fixture can be used for scenario
-selection in a future frontend; no frontend or filtering UI is added here.
+see [the API demo guide](api-demo.md). The `/ui` list and detail pages
+are in [Run the demo](RUN_DEMO.md). The server filters the seeded
+companies. The browser sends the form and swaps in the HTML fragment.
 
 ## Old SQLite demo databases
 

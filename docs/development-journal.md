@@ -1,5 +1,245 @@
 # Development Journal
 
+## 2026-10-09 - Rebase /ui onto secure defaults and add the demo guide (#29)
+
+- Scope: rebase
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63)
+  onto `origin/master` `8ee15e3` after PR #61 merged. Same branch
+  `cursor/ui-skeleton-htmx-aa8b`. No merge of master into the
+  branch. Disclaimer wording, autoescape, the website check, the
+  type filter, and the `/ui` id 404 rules stay.
+- Conflict, `main.py`: kept both import lines
+  (`TrustedHostMiddleware` and `StaticFiles` / the `/ui` router)
+  and both behaviours. CORS still uses `settings.cors_origins`.
+  `TrustedHostMiddleware` still wraps the app.
+  `python main.py` still binds `127.0.0.1`. `/ui` and `/static`
+  stay mounted.
+- Conflict, journal and work-state: #61's entries and the
+  personal-path clean-up stay. The `/ui` section stays the current
+  one. The first `/ui` commit had introduced the old personal
+  database URL in the sqlite seed tests. That string was replaced
+  with `postgresql://investment_ai@localhost:5432/investment_ai`
+  in that commit so the guard passes on every commit. No personal
+  path was put back.
+- Decision, docs: `docs/RUN_DEMO.md` is the copy-pasteable demo.
+  README links it near the top. `docs/demo-data.md` points there
+  instead of repeating the commands. `SECRET_KEY` is required.
+  The bind is `127.0.0.1`. `ALLOWED_HOSTS` is left at its default.
+- Verification: no `.env` during pytest. Each rebased commit
+  passed
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`.
+  Dependency commit: 965 passed, 119 deselected, exact 92.79%.
+  Feature commit: 1011 passed, 119 deselected, exact 94.61%.
+  Type-filter commit: 1011 passed, 119 deselected, exact 94.63%.
+  History-restore commit: 1015 passed, 119 deselected, exact
+  94.71%. ASCII-id commit: 1017 passed, 119 deselected, exact
+  94.72%. Review commit: 1019 passed, 119 deselected, exact
+  94.76%. The docs commits do not change Python and repeat the
+  count of the commit they follow. The demo commands in
+  `docs/RUN_DEMO.md` were run: seed created 6 companies and 20
+  metric rows, `/ui` returned 200 with the disclaimer and the
+  language switch, and a non-allowed Host returned 400.
+  `docker` is not installed here, so the README `docker run` was
+  not executed. `-m integration` with `TEST_POSTGRES_DSN` unset
+  was 103 passed, 16 skipped, 1019 deselected.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
+## 2026-10-08 - Review fixes for /ui ids and website links (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. Code review of head
+  `d64cbbb`. Disclaimer wording, autoescape, the type filter, and
+  `/api/v1` id parsing stay. `docs/demo-data.md` was not rewritten
+  for `SECRET_KEY` or the bind host. PR #61 is not in this branch.
+- Decision, ids: `int` raises `ValueError` on an ASCII digit
+  string longer than about 4300 characters, and that was a
+  plain-text 500. The helper now returns `None` when the string
+  is not ASCII, is not all digits, or is longer than 19
+  characters, before calling `int`. A value that still exceeds
+  `2**63 - 1` is also `None`. `01` and `007` are not a second URL
+  for rows 1 and 7. The single character `0` is still a normal
+  id. All of these misses are the existing HTML 404.
+- Decision, responses: every `/ui` response also sends
+  `Cache-Control: no-store`, next to `Vary: HX-Request`.
+- Decision, websites: a `javascript:` or `data:` URL is still
+  not a link when it has a host. Unicode format characters
+  (category `Cf`, including U+202E and U+200B) and DEL (code
+  point 127) are rejected in the view-model. Approved links
+  stay `http` or `https` with `rel="noopener noreferrer"`.
+- Decision, htmx: the config meta also sets `allowEval` and
+  `allowScriptTags` to false, next to `includeIndicatorStyles`.
+  The script stays the local file. No CDN.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 900 passed, 119 deselected, exact 94.95%. The docs commit
+  does not change Python and repeats that result. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
+## 2026-10-08 - ASCII instrument ids and htmx CSP config (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. Disclaimer wording,
+  autoescape, the http/https website check, and the type filter
+  stay. The JSON API is unchanged.
+- Decision, ids: `str.isdigit` is true for Unicode digits.
+  Superscript `²` made `int` raise (HTTP 500). Arabic-Indic `١`
+  became `1` and opened that company. A 23-digit value overflowed
+  SQLite's signed 64-bit integer. `/ui` now accepts an id only
+  when the string is ASCII, every character is a digit, and the
+  integer is `<= 2**63 - 1`. Anything else is the existing HTML
+  404.
+- Decision, htmx: `base.html` sets
+  `<meta name="htmx-config" content='{"includeIndicatorStyles":false}'>`
+  before the vendored script. HTMX otherwise injects an inline
+  style, which the page CSP does not allow.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 898 passed, 119 deselected, exact 94.91%. The docs commit
+  does not change Python and repeats that result. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
+## 2026-10-08 - QA fixes on /ui (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. QA reviewed head
+  `766fbfd`. The type filter and the skip link from the previous
+  entry stay. Disclaimer wording, the website http/https check,
+  autoescape, and the bind host are unchanged. No CDN was added.
+- Decision, history restore: `HX-History-Restore-Request: true`
+  returns the full page even when `HX-Request` is also set. HTMX
+  writes that response into `body`, so a fragment would drop the
+  header, the language switch, and the disclaimer. Every `/ui`
+  response sends `Vary: HX-Request`.
+- Decision, return path: `safe_next` still requires a `/ui` prefix.
+  It also rejects a `..` segment after decoding, so
+  `next=/ui/../api/v1/companies/` stays on `/ui`.
+- Decision, unknown id: `/ui/instruments/{id}` takes a string. A
+  non-integer such as `abc` renders the HTML 404. The API's JSON
+  422 handler is unchanged.
+- Decision, headers: `/ui` sends `Content-Security-Policy` with
+  `default-src 'self'`, `base-uri 'self'`, `form-action 'self'`,
+  and `frame-ancestors 'none'`, plus `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, and
+  `Referrer-Policy: no-referrer`. The local HTMX page does not
+  need another host.
+- Decision, docs and tests: the sqlite seed tests use
+  `postgresql://investment_ai@localhost:5432/investment_ai`. The
+  Settings default is unchanged. `docs/demo-data.md` says the
+  server filters the list. `SECRET_KEY` is still not required on
+  this branch, and `python main.py` still binds `0.0.0.0`. After
+  #61, the demo seed and uvicorn both need `SECRET_KEY` and the
+  bind becomes `127.0.0.1`. The template scan rejects `| safe`
+  with a space. `static/vendor/README.txt` records the sha256 of
+  the vendored htmx file.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 896 passed, 119 deselected, exact 94.89%. The docs commit
+  does not change Python and repeats that result. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
+## 2026-10-08 - Type filter and keyboard focus on /ui (#29)
+
+- Scope: follow-up on
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63),
+  same branch `cursor/ui-skeleton-htmx-aa8b`. Issue #29 asks the
+  list to filter by type, exchange, and currency. The list already
+  filtered by search, exchange, and currency. This adds type.
+  Disclaimer text, the bind host, and the website link rule are
+  unchanged.
+- Decision: the type dropdown is built from the distinct
+  `instrument_type` values the view-model returns. On this branch
+  that is `stock`. The option label is `type.stock` ("akcja" /
+  "stock"). The empty option is the existing "wszystkie" / "any"
+  string. An unknown `type` query matches no rows and returns 200.
+  A missing catalog key still renders, because `translate` returns
+  the key.
+- Decision, accessibility only: a skip link to `#main`, `scope="col"`
+  on the list table headers, and a `:focus-visible` outline. No
+  `outline: none`. No new external asset.
+- Verification: no `.env`, `DATABASE_URL` unset, the CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 892 passed, 119 deselected, exact 94.81%. `black --check`,
+  `isort`, and `flake8` passed on the touched Python files. In the
+  browser, choosing Typ "akcja" requested `type=stock` and kept the
+  six demo rows. `type=etf` returned the Polish empty state and
+  still offered "akcja". English showed "Type", "any", and "stock",
+  plus "Skip to main content" and seven `scope="col"` headers.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
+## 2026-10-08 - /ui instrument list and detail (D4, #29)
+
+- Scope: the first runnable UI demo, rebased onto `origin/master`
+  `d7f6798` after PR #60 (the PostgreSQL harness, #9). Branch
+  `cursor/ui-skeleton-htmx-aa8b`. Refs #29. This does not close #29,
+  and it does not start #26, #27, #28, or #25.
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63).
+  PR #61 (secure defaults) is still open and was not copied.
+- Decision, read model: templates bind to instrument view-models.
+  `CompanyDB` stays behind `app/ui/queries.py`. Every current row is
+  type `stock` until #26. A description that starts with
+  `[IAC-DEMO-V1]` is synthetic and shows the badge. The list filters
+  in Python (`casefold`) because the demo file is small and SQLite
+  `LIKE` is not the same case-fold for every character.
+- Decision, website links: `website_view` is the only place that
+  decides whether a stored string becomes an `href`. After stripping
+  whitespace, only an `http` or `https` URL with a host is a link
+  (`javascript:` and `data:` stay plain text). The template checks
+  `instrument.website.href` and copies `rel` from the view-model
+  (`noopener noreferrer`). An empty value uses the catalog string
+  "brak danych" / "no data".
+- Decision, pages: Jinja2 3.1.6 is pinned and locked. Autoescape is
+  on. HTMX 2.0.10 (Zero-Clause BSD) and the CSS are files under
+  `static/`; the script URL is root-relative, not a CDN. Language is
+  a cookie (`ui_lang`), Polish by default, with the same catalog
+  keys in PL and EN. Numbers and dates are formatted in Python, not
+  with `locale.setlocale`. `python-multipart` is not added.
+- Decision, demo database: `scripts/seed_demo.py --database-url`
+  writes sqlite through the same create/skip rules as the HTTP
+  seeder. File sqlite engines set `check_same_thread=False` so a
+  sync route can use a pooled connection. The personal
+  `DATABASE_URL` default is unchanged. PR #60 did not change
+  `requirements.txt` or either lock, so this pin was not recompiled.
+- Decision, PostgreSQL job: the UI tests are not marked
+  `integration`. The default command still deselects that marker.
+  The PostgreSQL job runs only `-m integration` and does not execute
+  these pages. Deselected tests are not skips, so the zero-skip
+  guard does not see them.
+- Verification: no `.env`, `DATABASE_URL` unset during pytest.
+  Dev venv `/tmp/iac-venv` (Python 3.12.3) installed from
+  `requirements-dev.lock` with `--require-hashes`. Command:
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  After the rebase onto `d7f6798`: the dependency commit was
+  846 passed, 119 deselected, exact 92.58%. The feature commit
+  was 892 passed, 119 deselected, exact 94.79%. The docs commit
+  does not change Python and repeats that 892 / 119 / 94.79%.
+  `-m integration` with no `TEST_POSTGRES_DSN` was 103 passed,
+  16 skipped, 892 deselected. Those 16 skips are the harness
+  tests that open PostgreSQL. The UI tests are in the 892
+  deselected, not in the skips.
+  `black --check`, `isort --check-only`, and `flake8` passed on the
+  touched Python files before the rebase. A separate venv installed
+  from `requirements.lock` only, then the commands in
+  `docs/demo-data.md` (with that venv's Python): seed created 6
+  companies and 20 metric rows; uvicorn on `127.0.0.1:8000` returned
+  200 for `/ui`, `/ui/instruments/1`, `/static/ui.css`, and the HTMX
+  file. In the browser, the list filter swapped to `DEMO_US_GROWTH`
+  only, the English cookie rendered "It is not financial advice",
+  and `https://vistula.example.com/` was a link with
+  `rel="noopener noreferrer"`.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - Code Reviewer round 1 on ff300e6
 
 - Scope: requested changes from the review of `ff300e6`, added

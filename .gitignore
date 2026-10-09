@@ -45,6 +45,9 @@ logs/
 *.db
 *.sqlite3
 
+# Disposable SQLite file created by the /ui demo commands.
+/demo/
+
 # Coverage reports
 htmlcov/
 .tox/

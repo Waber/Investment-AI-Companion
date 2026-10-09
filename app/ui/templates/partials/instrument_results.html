@@ -1,0 +1,43 @@
+<div id="instrument-results">
+  {% if instruments %}
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">{{ t['column.ticker'] }}</th>
+        <th scope="col">{{ t['column.name'] }}</th>
+        <th scope="col">{{ t['column.type'] }}</th>
+        <th scope="col">{{ t['column.exchange'] }}</th>
+        <th scope="col">{{ t['column.currency'] }}</th>
+        <th scope="col">{{ t['column.source'] }}</th>
+        <th scope="col">{{ t['column.as_of'] }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for instrument in instruments %}
+      <tr data-ticker="{{ instrument.ticker }}">
+        <td><a href="/ui/instruments/{{ instrument.id }}">{{ instrument.ticker if instrument.ticker else t['missing'] }}</a></td>
+        <td>
+          {{ instrument.name if instrument.name else t['missing'] }}
+          {% if instrument.is_synthetic %}
+          <span class="badge">{{ t['badge.synthetic'] }}</span>
+          {% endif %}
+        </td>
+        <td>{{ t['type.' ~ instrument.instrument_type] }}</td>
+        <td>{{ instrument.exchange if instrument.exchange else t['missing'] }}</td>
+        <td>{{ instrument.currency if instrument.currency else t['missing'] }}</td>
+        <td>{{ instrument.source if instrument.source else t['missing'] }}</td>
+        <td>
+          {% if instrument.as_of %}
+          {{ format_date(instrument.as_of, language) }}
+          {% else %}
+          <span class="missing">{{ t['missing'] }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>{{ t['list.empty'] }}</p>
+  {% endif %}
+</div>

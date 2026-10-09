@@ -4,6 +4,8 @@ Investment AI Companion is a FastAPI service for investment research workflows. 
 
 The application must not present generated output as financial advice. Analysis features should show sources, data freshness, assumptions, risks, and uncertainty.
 
+To run the local `/ui` demo, follow [Run the demo](docs/RUN_DEMO.md).
+
 ## Current Scope
 
 - FastAPI backend with API routes under `/api/v1`.

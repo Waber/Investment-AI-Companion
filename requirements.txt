@@ -9,9 +9,8 @@
 #
 #   python -m piptools compile --generate-hashes --strip-extras --output-file=requirements.lock requirements.txt
 #
-# --strip-extras does not change this runtime set's pins or hashes.
-# requirements.lock was left as compiled without that flag. The next
-# regeneration should pass it anyway.
+# --strip-extras does not drop hashes. This lock was compiled with
+# that flag, which is the command above.
 #
 # Install the lock, not this file, when you need the same set CI uses:
 #
@@ -48,3 +47,10 @@ alembic==1.12.1
 # Market data. The collector imports yfinance. Tests fake Ticker and
 # do not call Yahoo.
 yfinance>=1.7
+
+# Server-rendered pages under /ui. Jinja2 was left out of the
+# security/deps lock on purpose: nothing imported it until the UI
+# skeleton. 3.1.6 is the current release. The hashed lock records
+# the exact build. python-multipart stays out until the forms slice
+# needs it.
+jinja2>=3.1.6

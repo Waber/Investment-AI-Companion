@@ -1,10 +1,15 @@
-"""Create synthetic fixtures through an isolated loopback HTTP API.
+"""Create synthetic fixtures through an isolated loopback HTTP API,
+or into a sqlite file for the local /ui demo.
 
 Dry run is the default. Loopback alone does not prove database isolation.
 Existing rows are never updated or deleted. Runs are not atomic: concurrent
 runs can conflict, and HTTP failures can leave successful writes behind.
 Review the error, then rerun to discover persisted rows and resume; there is
 no rollback or cleanup. A timed-out POST may have persisted without a reply.
+
+``--database-url`` writes a sqlite file and does not read or change the
+personal ``DATABASE_URL`` default. Any non-sqlite URL is refused, so this
+command cannot be pointed at the personal PostgreSQL database.
 """
 
 import argparse
@@ -15,7 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib import request as http
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from scripts.smoke_demo import NoRedirect, loopback_base
 
@@ -355,21 +360,160 @@ def seed_demo(fixture, client, *, apply=False):
     return _summary(items, apply)
 
 
+class SqliteSeedClient:
+    """Answer ``seed_demo`` HTTP paths with the company repositories.
+
+    The seeder was written for an HTTP API. The /ui demo needs those
+    same rows in a sqlite file before uvicorn starts. This client keeps
+    the create/skip rules in ``seed_demo`` and only changes the transport.
+    The session is one the caller opened on the sqlite URL. This class
+    does not read ``settings.DATABASE_URL``.
+    """
+
+    def __init__(self, session):
+        from app.repositories.company_repository import CompanyRepository
+        from app.repositories.financial_metrics_repository import (
+            FinancialMetricsRepository,
+        )
+
+        self.companies = CompanyRepository(session)
+        self.metrics = FinancialMetricsRepository(session)
+
+    def request(self, method, path, payload=None):
+        from app.core.utc_datetime import as_utc
+        from app.models.company import CompanyCreate
+        from app.models.financial_metrics import FinancialMetricsCreate
+
+        parsed = urlsplit(path)
+        query = parse_qs(parsed.query)
+        skip = int(query.get("skip", ["0"])[0])
+        limit = int(query.get("limit", ["100"])[0])
+        if method == "GET" and parsed.path == COMPANIES:
+            rows = self.companies.get_all(skip=skip, limit=limit)
+            return [self._company_json(row) for row in rows]
+        company_prefix = f"{METRICS}company/"
+        if method == "GET" and parsed.path.startswith(company_prefix):
+            company_id = int(parsed.path.removeprefix(company_prefix))
+            rows = self.metrics.get_by_company(
+                company_id, skip=skip, limit=limit
+            )
+            return [self._metric_json(row, as_utc) for row in rows]
+        if method == "POST" and parsed.path == COMPANIES:
+            created = self.companies.create(CompanyCreate(**payload))
+            return self._company_json(created)
+        if method == "POST" and parsed.path == METRICS:
+            created = self.metrics.create(FinancialMetricsCreate(**payload))
+            return self._metric_json(created, as_utc)
+        raise ValueError(f"Unsupported seed request: {method} {path}")
+
+    @staticmethod
+    def _company_json(row):
+        return {
+            "id": row.id,
+            "ticker": row.ticker,
+            "description": row.description,
+        }
+
+    @staticmethod
+    def _metric_json(row, as_utc):
+        return {
+            "id": row.id,
+            "company_id": row.company_id,
+            "period_type": row.period_type,
+            "period_end": as_utc(row.period_end).isoformat(),
+        }
+
+
+def _sqlite_file_url(database_url):
+    """Return a sqlite URL, or raise without echoing the URL.
+
+    A mistake here must not open the personal PostgreSQL database, and
+    the error text must not repeat a password that was pasted into the
+    command.
+    """
+    from sqlalchemy.engine.url import make_url
+    from sqlalchemy.exc import ArgumentError
+
+    try:
+        parsed = make_url(database_url)
+    except ArgumentError as error:
+        raise ValueError("Invalid database URL.") from error
+    if parsed.get_backend_name() != "sqlite":
+        raise ValueError(
+            "The demo seed only accepts a sqlite URL. "
+            "It does not use or change the personal DATABASE_URL."
+        )
+    if not parsed.database:
+        raise ValueError("The sqlite URL is missing a file path.")
+    if parsed.database != ":memory:":
+        parent = Path(parsed.database).parent
+        if str(parent) not in {"", "."}:
+            parent.mkdir(parents=True, exist_ok=True)
+    return database_url
+
+
+def seed_sqlite_database(database_url, *, apply, fixture=None):
+    """Create tables on a sqlite URL and run the demo-v1 seeder.
+
+    The engine is built from ``database_url`` alone. Importing the
+    application also builds the process-wide engine from settings, but
+    this function never connects with that engine and never assigns
+    ``settings.DATABASE_URL``.
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    from app.core.database import Base, create_db_engine
+    from app.models.database_models import CompanyDB, FinancialMetricsDB
+
+    database_url = _sqlite_file_url(database_url)
+    mapped = {CompanyDB.__tablename__, FinancialMetricsDB.__tablename__}
+    engine = create_db_engine(database_url)
+    try:
+        missing = mapped - set(Base.metadata.tables)
+        if missing:
+            raise RuntimeError(f"Demo seed is missing tables: {missing}")
+        Base.metadata.create_all(bind=engine)
+        session = sessionmaker(
+            autocommit=False, autoflush=False, bind=engine
+        )()
+        try:
+            return seed_demo(
+                load_fixture() if fixture is None else fixture,
+                SqliteSeedClient(session),
+                apply=apply,
+            )
+        finally:
+            session.close()
+    finally:
+        engine.dispose()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", required=True, type=loopback_base)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--base-url", type=loopback_base)
+    target.add_argument(
+        "--database-url",
+        help=(
+            "Seed this sqlite file directly. "
+            "Does not read or change the personal DATABASE_URL."
+        ),
+    )
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Explicitly enable POSTs; default is a GET-only dry run",
+        help="Explicitly enable writes; default is a dry run",
     )
     args = parser.parse_args(argv)
     try:
-        result = seed_demo(
-            load_fixture(),
-            HttpClient(args.base_url),
-            apply=args.apply,
-        )
+        if args.database_url is not None:
+            result = seed_sqlite_database(args.database_url, apply=args.apply)
+        else:
+            result = seed_demo(
+                load_fixture(),
+                HttpClient(args.base_url),
+                apply=args.apply,
+            )
     except (SeedError, OSError, ValueError) as error:
         if isinstance(error, SeedError) and error.summary is not None:
             print(json.dumps(error.summary, indent=2))

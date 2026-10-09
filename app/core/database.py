@@ -6,9 +6,17 @@ physical connection starts with foreign keys off. Registering it on
 the application engine means the demo, scripts, and tests share one
 implementation. PostgreSQL enforces foreign keys itself, so the hook
 is not attached for that dialect.
+
+SQLite also refuses to use a connection on a thread other than the one
+that opened it, unless ``check_same_thread`` is False. FastAPI runs a
+sync route on a worker thread, and the pool may hand that worker a
+connection opened earlier. The file database used by the /ui demo needs
+the flag off. Callers can still pass their own value. PostgreSQL does
+not use the flag.
 """
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
@@ -24,7 +32,16 @@ def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
 
 
 def create_db_engine(url, **kwargs):
-    """Create an engine and apply the SQLite foreign-key hook."""
+    """Create an engine and apply the SQLite foreign-key hook.
+
+    A sqlite URL gets ``check_same_thread=False`` when the caller did
+    not set that argument. See the module docstring for why the demo
+    UI needs it. A postgresql URL is passed through unchanged.
+    """
+    if make_url(str(url)).get_backend_name() == "sqlite":
+        connect_args = dict(kwargs.pop("connect_args", None) or {})
+        connect_args.setdefault("check_same_thread", False)
+        kwargs["connect_args"] = connect_args
     db_engine = create_engine(url, **kwargs)
     if db_engine.dialect.name == "sqlite":
         event.listen(db_engine, "connect", enable_sqlite_foreign_keys)
