@@ -12,29 +12,19 @@ This fixture is for API and UI testing; it is not a real portfolio.
 
 ## Local /ui demo
 
-The server-rendered pages are at `/ui`. They read a sqlite file. Seed that
-file first, then start uvicorn against the same URL. The seeder opens only
-the URL you pass. It does not read or change the personal `DATABASE_URL`.
+The server-rendered pages are at `/ui`. Copy-pasteable commands are
+in [Run the demo](RUN_DEMO.md). The seeder opens only the sqlite URL
+you pass. It does not read or change the default `DATABASE_URL`.
 
-From the repository root:
+`SECRET_KEY` is required for the seed and for uvicorn. Generate it
+with the command in that guide. Do not commit it. The documented
+bind is `127.0.0.1`. `python main.py` binds `127.0.0.1` as well.
+`ALLOWED_HOSTS` defaults to `localhost,127.0.0.1`.
 
-```bash
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install --require-hashes -r requirements.lock
-python -m scripts.seed_demo --database-url "sqlite:///demo/investment_demo.db" --apply
-DATABASE_URL="sqlite:///demo/investment_demo.db" python -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
+Those commands created 6 companies and 20 metric rows. `GET /ui`,
+`GET /ui/instruments/1`, the CSS, and the local HTMX file each
+returned 200. `demo/` is gitignored.
 
-Open [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
-
-These commands were run from a clean virtualenv installed only from
-`requirements.lock` (jinja2 3.1.6). The seed created 6 companies and 20
-metric rows. `GET /ui`, `GET /ui/instruments/1`, the CSS, and the local
-HTMX file each returned 200. `demo/` is gitignored.
-
-- Bind the uvicorn command above to `127.0.0.1`. Do not start the
-  demo with `python main.py`: that entry point still binds `0.0.0.0`.
 - Polish is the default. The EN link stores `ui_lang` and comes back
   to the same `/ui` path.
 - Rows from this fixture show the synthetic-data badge. The page
@@ -43,9 +33,6 @@ HTMX file each returned 200. `demo/` is gitignored.
 - A website is a link only when the view-model accepts `http` or
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".
-- `SECRET_KEY` is not required for the commands above.
-  After #61, the demo seed and uvicorn both need `SECRET_KEY`, and
-  the bind becomes `127.0.0.1`.
 
 ## Scenarios
 
@@ -124,9 +111,9 @@ curl -q --noproxy '*' -fsS \
 ```
 
 For create/update/delete request examples and the isolated runtime's lifecycle,
-see [the API demo guide](api-demo.md). The `/ui` list and detail pages are
-documented above. The server filters the seeded companies. The browser
-sends the form and swaps in the HTML fragment.
+see [the API demo guide](api-demo.md). The `/ui` list and detail pages
+are in [Run the demo](RUN_DEMO.md). The server filters the seeded
+companies. The browser sends the form and swaps in the HTML fragment.
 
 ## Old SQLite demo databases
 

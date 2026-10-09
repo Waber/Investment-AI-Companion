@@ -1,5 +1,50 @@
 # Development Journal
 
+## 2026-10-09 - Rebase /ui onto secure defaults and add the demo guide (#29)
+
+- Scope: rebase
+  [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63)
+  onto `origin/master` `8ee15e3` after PR #61 merged. Same branch
+  `cursor/ui-skeleton-htmx-aa8b`. No merge of master into the
+  branch. Disclaimer wording, autoescape, the website check, the
+  type filter, and the `/ui` id 404 rules stay.
+- Conflict, `main.py`: kept both import lines
+  (`TrustedHostMiddleware` and `StaticFiles` / the `/ui` router)
+  and both behaviours. CORS still uses `settings.cors_origins`.
+  `TrustedHostMiddleware` still wraps the app.
+  `python main.py` still binds `127.0.0.1`. `/ui` and `/static`
+  stay mounted.
+- Conflict, journal and work-state: #61's entries and the
+  personal-path clean-up stay. The `/ui` section stays the current
+  one. The first `/ui` commit had introduced the old personal
+  database URL in the sqlite seed tests. That string was replaced
+  with `postgresql://investment_ai@localhost:5432/investment_ai`
+  in that commit so the guard passes on every commit. No personal
+  path was put back.
+- Decision, docs: `docs/RUN_DEMO.md` is the copy-pasteable demo.
+  README links it near the top. `docs/demo-data.md` points there
+  instead of repeating the commands. `SECRET_KEY` is required.
+  The bind is `127.0.0.1`. `ALLOWED_HOSTS` is left at its default.
+- Verification: no `.env` during pytest. Each rebased commit
+  passed
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`.
+  Dependency commit: 965 passed, 119 deselected, exact 92.79%.
+  Feature commit: 1011 passed, 119 deselected, exact 94.61%.
+  Type-filter commit: 1011 passed, 119 deselected, exact 94.63%.
+  History-restore commit: 1015 passed, 119 deselected, exact
+  94.71%. ASCII-id commit: 1017 passed, 119 deselected, exact
+  94.72%. Review commit: 1019 passed, 119 deselected, exact
+  94.76%. The docs commits do not change Python and repeat the
+  count of the commit they follow. The demo commands in
+  `docs/RUN_DEMO.md` were run: seed created 6 companies and 20
+  metric rows, `/ui` returned 200 with the disclaimer and the
+  language switch, and a non-allowed Host returned 400.
+  `docker` is not installed here, so the README `docker run` was
+  not executed. `-m integration` with `TEST_POSTGRES_DSN` unset
+  was 103 passed, 16 skipped, 1019 deselected.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session.
+
 ## 2026-10-08 - Review fixes for /ui ids and website links (#29)
 
 - Scope: follow-up on

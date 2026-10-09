@@ -3,9 +3,10 @@
 ## /ui instrument list and detail: 2026-10-08
 
 - Branch `cursor/ui-skeleton-htmx-aa8b`, rebased onto
-  `origin/master` `d7f6798` (PR #60).
+  `origin/master` `8ee15e3` (PR #61 merged; earlier base was
+  `d7f6798`, PR #60).
   [PR #63](https://github.com/Waber/Investment-AI-Companion/pull/63).
-  Refs #29.
+  Refs #29. The demo steps are in `docs/RUN_DEMO.md`.
 - Completed: server-rendered `/ui` list and detail over the current
   company rows. Polish by default, English by cookie. Search plus
   type, exchange, and currency filters. The type options are the
@@ -38,11 +39,10 @@
   `docs/demo-data.md` was not rewritten for #61.
 - Incomplete: #26 (instrument model, type/country/ISIN filters,
   ETF/ETC detail), #27 (demo-v2 prices), #28 (ETF/ETC attributes),
-  and #25 (one-command demo). PR #61 is still the secure-defaults
-  review and was not duplicated. After that PR merges, the demo
-  command also needs `SECRET_KEY` of at least 32 characters, not a
-  placeholder. Whichever of #61 and #63 lands second updates
-  `docs/demo-data.md`.
+  and #25 (one-command demo). PR #61 is merged. The demo seed
+  and uvicorn need `SECRET_KEY` of at least 32 characters.
+  `docs/demo-data.md` points at `docs/RUN_DEMO.md` and the bind
+  is `127.0.0.1`.
 - Tests: no `.env`, `DATABASE_URL` unset. The CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   after the rebase onto `d7f6798`: dependency commit 846 passed,
@@ -53,16 +53,25 @@
   896 passed, 119 deselected, exact 94.89%. The id and htmx
   config follow-up: 898 passed, 119 deselected, exact 94.91%.
   The review follow-up: 900 passed, 119 deselected, exact
-  94.95%. `-m integration`
-  with no `TEST_POSTGRES_DSN`: 103 passed, 16 skipped, 892
-  deselected. The 16 skips need PostgreSQL. The UI tests are
-  deselected.
+  94.95%. After the rebase onto `8ee15e3`: dependency commit
+  965 passed, 119 deselected, exact 92.79%; feature commit
+  1011 passed, 119 deselected, exact 94.61%; type-filter commit
+  1011 passed, 119 deselected, exact 94.63%; history-restore
+  commit 1015 passed, 119 deselected, exact 94.71%; ASCII-id
+  commit 1017 passed, 119 deselected, exact 94.72%; review
+  commit 1019 passed, 119 deselected, exact 94.76%. Docs
+  commits repeat the Python result of the commit they follow.
+  `-m integration`
+  with no `TEST_POSTGRES_DSN`, after this rebase: 103 passed,
+  16 skipped, 1019 deselected. The 16 skips need PostgreSQL.
+  The UI tests are deselected.
 - Active agents: none.
 - Blockers: none.
 - Next action: review pull request #63 (Refs #29). Do not start
-  #26, #27, #28, or #25 on this branch. After it merges, return to
-  PR #61 if it is still open (#45, #47, #50), then #24 and #19,
-  then #25 and #26 (with #16 and #17).
+  #26, #27, #28, or #25 on this branch. After it merges, the next
+  items are #24, #19, #25, and #26 (with #16 and #17). Demo
+  issues #24 through #40 use the `demo` label. Post-demo work
+  is #54 through #58.
 
 ## Secure defaults, neutral paths, and provider hygiene: 2026-10-08
 
