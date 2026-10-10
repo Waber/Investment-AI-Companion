@@ -4,6 +4,7 @@
 
 - Branch `docs/record-portfolio-issue-numbers`, based on
   `origin/master` `34f462a` (PR #64, squash-merged).
+  [PR #66](https://github.com/Waber/Investment-AI-Companion/pull/66).
 - Completed: PR #64 is on `origin/master`. Issue
   [#57](https://github.com/Waber/Investment-AI-Companion/issues/57)
   now includes several portfolios, holding edits, total value,

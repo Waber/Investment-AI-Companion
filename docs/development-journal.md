@@ -13,6 +13,9 @@
 - Verification: issue text plus
   `tests/test_secure_config.py::test_tracked_files_have_no_personal_machine_paths`
   (1 passed). The UI suite was not run.
+- Published as
+  [PR #66](https://github.com/Waber/Investment-AI-Companion/pull/66).
+  Not merged.
 - AI model: Grok 4.7 (Cursor). Account usage was not available
   in this session.
 
