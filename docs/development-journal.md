@@ -1,5 +1,42 @@
 # Development Journal
 
+## 2026-10-10 - Record portfolios, buy/sell signals, and the AI Portfolio
+
+- Scope: documentation only. Raul asked to check whether the
+  docs already describe three later features, and to add what was
+  missing on its own branch. No application code.
+- What was already written: section 12.3 stored private
+  portfolios and holdings (#57) without monitoring rules.
+  Section 12.4 already allowed post-demo buy/sell signals (#58)
+  and required a "not investment advice" notice on every signal.
+  An experimental model-managed portfolio was not described.
+- Decision, portfolios: several real portfolios. Add, edit and
+  remove holdings. Total value is the sum of holding market
+  values. Split by instrument type (stock, ETF, ETC). Gain/loss
+  per holding and for the portfolio. A missing price is not zero.
+  No FX conversion. No broker orders.
+- Decision, signals: the application, together with an agent, may
+  issue buy and sell signals. Raul does not want a notice that
+  this is not investment advice. The demo still has no signals.
+  The shipped `/ui` banner stays until a later UI change; it is
+  not a requirement anymore. Sources, freshness, assumptions,
+  risks and uncertainty stay.
+- Decision, AI Portfolio: a later virtual book, separate from
+  real portfolios. Editable virtual cash, a monthly top-up whose
+  amount is also editable, virtual purchases from the model's
+  predictions, and virtual sales when the model exits a position.
+  Performance tracking does not count added cash as gain. No
+  GitHub issue yet.
+- Files: `docs/product-requirements.md` (draft v0.4),
+  `AGENTS.md`, `README.md`, `docs/demo-data.md`,
+  `docs/RUN_DEMO.md`, this journal, `docs/work-state.md`.
+- Verification: no behaviour change. `tests/test_ui_pages.py`
+  still expects the current banner, and those tests were not
+  run. `tests/test_secure_config.py::test_tracked_files_have_no_personal_machine_paths`
+  was run after the edits.
+- AI model: Grok 4.7 (Cursor). Account usage was not available
+  in this session.
+
 ## 2026-10-09 - Rebase /ui onto secure defaults and add the demo guide (#29)
 
 - Scope: rebase

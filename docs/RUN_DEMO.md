@@ -53,9 +53,10 @@ and uvicorn need `SECRET_KEY`. The seed reads the sqlite path from
 The seed reports 6 companies created and 20 metric rows. The list
 shows `DEMO_PL_TECH`, `DEMO_US_GROWTH`, `DEMO_DE_INDUSTRY`,
 `DEMO_JP_STABLE`, `DEMO_SG_EARLY`, and `DEMO_PL_EMPTY`. Polish is
-the default. The disclaimer starts with "Nie jest poradą
-inwestycyjną". PL and EN switch the language with a cookie. English
-says "It is not financial advice."
+the default. PL and EN switch the language with a cookie. The
+current pages still show the older disclaimer ("Nie jest poradą
+inwestycyjną" / "It is not financial advice."). Product
+requirements v0.4 no longer require that notice.
 
 To reset, stop uvicorn, delete the file, and seed again:
 

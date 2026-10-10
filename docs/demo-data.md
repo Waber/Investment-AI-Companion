@@ -27,9 +27,9 @@ returned 200. `demo/` is gitignored.
 
 - Polish is the default. The EN link stores `ui_lang` and comes back
   to the same `/ui` path.
-- Rows from this fixture show the synthetic-data badge. The page
-  disclaimer stays visible. The output is research context, not a
-  recommendation.
+- Rows from this fixture show the synthetic-data badge. The current
+  `/ui` pages still show the older disclaimer banner. Product
+  requirements v0.4 no longer require that notice.
 - A website is a link only when the view-model accepts `http` or
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".

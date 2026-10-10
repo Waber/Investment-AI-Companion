@@ -1,5 +1,28 @@
 # Current Work State
 
+## Portfolio, signals, and AI Portfolio docs: 2026-10-10
+
+- Branch `docs/portfolio-signals-ai-portfolio`, based on
+  `origin/master` after PR #63. Documentation only.
+- Completed: product requirements draft v0.4. Several real
+  portfolios with add/edit/remove, total value, type split, and
+  gain/loss (#57 expanded in prose). Buy and sell signals may be
+  issued by the application together with an agent, and a
+  "not investment advice" notice is not required (#58). Later
+  experimental AI Portfolio (section 12.6); no GitHub issue yet.
+  The shipped `/ui` disclaimer banner is unchanged.
+- Incomplete: implementation of #24, #19, #25, #26, #57, #58,
+  and the AI Portfolio. Removing the current `/ui` banner is not
+  part of this docs change.
+- Tests: `test_tracked_files_have_no_personal_machine_paths`
+  after the edits. The UI suite was not run. No `.env` change.
+- Active agents: none.
+- Blockers: none.
+- Next action: review this documentation pull request. Do not
+  start portfolio, signal, or AI Portfolio implementation on
+  this branch. After it merges, the next implementation item
+  remains #24, then #19, #25, and #26 (with #16).
+
 ## /ui instrument list and detail: 2026-10-08
 
 - Branch `cursor/ui-skeleton-htmx-aa8b`, rebased onto
