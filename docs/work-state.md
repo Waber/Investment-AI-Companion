@@ -4,6 +4,7 @@
 
 - Branch `docs/portfolio-signals-ai-portfolio`, based on
   `origin/master` after PR #63. Documentation only.
+  [PR #64](https://github.com/Waber/Investment-AI-Companion/pull/64).
 - Completed: product requirements draft v0.4. Several real
   portfolios with add/edit/remove, total value, type split, and
   gain/loss (#57 expanded in prose). Buy and sell signals may be

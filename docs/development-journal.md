@@ -34,6 +34,9 @@
   still expects the current banner, and those tests were not
   run. `tests/test_secure_config.py::test_tracked_files_have_no_personal_machine_paths`
   was run after the edits.
+- Published as
+  [PR #64](https://github.com/Waber/Investment-AI-Companion/pull/64).
+  Not merged.
 - AI model: Grok 4.7 (Cursor). Account usage was not available
   in this session.
 
