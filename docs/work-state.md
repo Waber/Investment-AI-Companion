@@ -1,28 +1,52 @@
 # Current Work State
 
+## Portfolio issue numbers: 2026-10-10
+
+- Branch `docs/record-portfolio-issue-numbers`, based on
+  `origin/master` `34f462a` (PR #64, squash-merged).
+- Completed: PR #64 is on `origin/master`. Issue
+  [#57](https://github.com/Waber/Investment-AI-Companion/issues/57)
+  now includes several portfolios, holding edits, total value,
+  the type split and gain/loss. Issue
+  [#58](https://github.com/Waber/Investment-AI-Companion/issues/58)
+  allows buy and sell signals from the application and an agent,
+  without a not-advice notice. New issue
+  [#65](https://github.com/Waber/Investment-AI-Companion/issues/65)
+  is the AI Portfolio. All three stay `deferred`.
+- Incomplete: implementation of #24, #19, #25, #26, then later
+  #57, #58 and #65. The shipped `/ui` disclaimer banner is
+  unchanged.
+- Tests: `test_tracked_files_have_no_personal_machine_paths`
+  passed (1). The UI suite was not run.
+- Active agents: none.
+- Blockers: none.
+- Next action: review this short documentation pull request.
+  Do not start #57, #58 or #65 before the demo queue. The next
+  implementation item remains #24, then #19, #25, and #26
+  (with #16).
+
 ## Portfolio, signals, and AI Portfolio docs: 2026-10-10
 
 - Branch `docs/portfolio-signals-ai-portfolio`, based on
   `origin/master` after PR #63. Documentation only.
-  [PR #64](https://github.com/Waber/Investment-AI-Companion/pull/64).
+  [PR #64](https://github.com/Waber/Investment-AI-Companion/pull/64)
+  is merged on `origin/master` as `34f462a`.
 - Completed: product requirements draft v0.4. Several real
   portfolios with add/edit/remove, total value, type split, and
-  gain/loss (#57 expanded in prose). Buy and sell signals may be
-  issued by the application together with an agent, and a
-  "not investment advice" notice is not required (#58). Later
-  experimental AI Portfolio (section 12.6); no GitHub issue yet.
-  The shipped `/ui` disclaimer banner is unchanged.
-- Incomplete: implementation of #24, #19, #25, #26, #57, #58,
-  and the AI Portfolio. Removing the current `/ui` banner is not
-  part of this docs change.
+  gain/loss. Buy and sell signals may be issued by the
+  application together with an agent, and a "not investment
+  advice" notice is not required. Later experimental AI
+  Portfolio (section 12.6), now #65. The shipped `/ui`
+  disclaimer banner is unchanged.
+- Incomplete: implementation of #24, #19, #25, #26, #57, #58
+  and #65.
 - Tests: `test_tracked_files_have_no_personal_machine_paths`
-  after the edits. The UI suite was not run. No `.env` change.
+  after the v0.4 edits. The UI suite was not run.
 - Active agents: none.
 - Blockers: none.
-- Next action: review this documentation pull request. Do not
-  start portfolio, signal, or AI Portfolio implementation on
-  this branch. After it merges, the next implementation item
-  remains #24, then #19, #25, and #26 (with #16).
+- Next action when this section was written: review PR #64.
+  That review is done. The live next action is the section
+  above.
 
 ## /ui instrument list and detail: 2026-10-08
 

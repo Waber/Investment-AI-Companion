@@ -1,5 +1,21 @@
 # Development Journal
 
+## 2026-10-10 - Point the requirements at issues #57, #58 and #65
+
+- Scope: after PR #64 was squash-merged to `origin/master` as
+  `34f462a`, record the GitHub issues agents should pick up
+  later. No application code.
+- Decision: #57 and #58 stay the portfolio and signal issues.
+  Their bodies now match requirements v0.4, including several
+  monitored portfolios and buy/sell signals without a
+  not-advice notice. The AI Portfolio is a new deferred issue,
+  #65, so it is not folded into the real-portfolio work.
+- Verification: issue text plus
+  `tests/test_secure_config.py::test_tracked_files_have_no_personal_machine_paths`
+  (1 passed). The UI suite was not run.
+- AI model: Grok 4.7 (Cursor). Account usage was not available
+  in this session.
+
 ## 2026-10-10 - Record portfolios, buy/sell signals, and the AI Portfolio
 
 - Scope: documentation only. Raul asked to check whether the
