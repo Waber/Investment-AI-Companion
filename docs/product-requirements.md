@@ -1,6 +1,6 @@
 # Investment AI Companion: Product Requirements (Draft)
 
-- Status: draft v0.3, 2026-10-08. Prepared from the repository state at master `d568663` and Raul's decisions of 2026-10-08 (three rounds). v0.2 added: UI and database confirmed, PL/EN language switch, scoring in scope, yfinance as the primary data source, Gemini as the AI provider after the demo. **v0.3 adds the post-demo direction (section 12):** server deployment for the owner only, login, private portfolio holdings, and a scheduled market scanner with buy/sell/opportunity signals and notifications. "No authentication/hosting" and "the score is never a buy/sell signal" now apply to the **demo phase only**; the demo itself is unchanged (local, loopback, no auth, no signals). Section 4 criteria US3.1 and US6 keep the disclaimer in both phases.
+- Status: draft v0.4, 2026-10-10. v0.3 (2026-10-08) added the post-demo direction in section 12: server deployment for the owner only, login, private portfolio holdings, and a scheduled market scanner with buy/sell/opportunity signals. **v0.4 records Raul's decisions of 2026-10-10:** several real portfolios that can be monitored (total value, split by instrument type, gain and loss per holding and for the portfolio); the application, together with an agent, may issue buy and sell signals, and the product does not require a notice that this is not investment advice; a later experimental **AI Portfolio** with editable virtual cash that increases every month. The demo phase still has no live portfolios and no live signals. The shipped `/ui` still shows the older disclaimer banner; that banner is no longer a product requirement.
 - Owner: Raul (product decisions). Prepared by the Project Manager agent for the Developer, QA Engineer and Code Reviewer.
 - Related docs: `AGENTS.md`, `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md`, `docs/demo-data.md`, `docs/work-state.md`.
 - Research inputs (Researcher, 2026-10-08; land in the repo via PR under `docs/research/`): `docs/research/market-data-sources.md` (market-data sources), `docs/research/llm-comparison.md` (LLM providers), and `docs/research/hosting-options.md` (hosting options; research input, not a decision).
@@ -17,7 +17,7 @@ Investment AI Companion is Raul's personal investment research tool. In the demo
 
 It is also a project for learning Python, so code and docs must stay readable for a developer who is still learning (see `AGENTS.md`).
 
-The tool supports research and decision hygiene. In both phases it never gives financial advice. **In the demo phase** it never gives buy/sell instructions. After the demo, Raul wants personal buy/sell/"interesting company" signals (section 12); they are **personal decision support, not financial advice**. In both phases, **transparency is a principle**: every analysis, score and signal shows its sources, how fresh the data is, its assumptions, its risks and its uncertainty.
+The tool supports research and decision hygiene. **In the demo phase** it does not give buy/sell instructions. After the demo, the application, together with an agent, may issue buy and sell signals (section 12). Raul decided on 2026-10-10 that the product does not need to tell the user that this is not investment advice. **Transparency stays:** every analysis, score and signal shows its sources, how fresh the data is, its assumptions, its risks and its uncertainty.
 
 ## 2. User and context
 
@@ -32,7 +32,7 @@ The tool supports research and decision hygiene. In both phases it never gives f
 **In scope**
 1. An overview of each instrument (stock, ETF, ETC) with its metrics, comparisons between instruments, and trends over time.
 2. A watchlist of tracked instruments.
-3. AI analysis of a selected instrument: cited sources, base/upside/downside scenarios, risks, assumptions, freshness, and the not-financial-advice guardrails.
+3. AI analysis of a selected instrument: cited sources, base/upside/downside scenarios, risks, assumptions and freshness. A notice that the text is not investment advice is not required (decision 2026-10-10, section 12).
 4. Real market data via **yfinance** (primary) behind a collector interface, plus an offline fake for demo and tests.
 5. Personal notes and investment theses attached to instruments.
 6. A server-rendered web UI **[Decided]**: Jinja2 + HTMX inside FastAPI under `/ui`, pure Python, with a PL/EN switch.
@@ -42,8 +42,8 @@ The tool supports research and decision hygiene. In both phases it never gives f
 **Out of scope**
 - Bonds, derivatives (futures, options, CFDs), crypto, mutual funds outside ETFs.
 - Trading, order execution and broker API integration.
-- Holdings and allocations, portfolio performance tracking: **demo phase only**; post-demo portfolio holdings are planned (section 12, #57).
-- Buy/sell/hold signals, recommendations, target prices or "best pick" rankings: **demo phase only**; post-demo scanner signals are planned (section 12, #58).
+- Holdings and allocations, portfolio performance tracking: **demo phase only**; post-demo portfolios are planned (section 12.3, #57), including several portfolios, holding edits, total value, a split by instrument type, and gain/loss. The experimental AI Portfolio is a later slice (section 12.6).
+- Buy/sell/hold signals, recommendations, target prices or "best pick" rankings: **demo phase only**; post-demo buy and sell signals are planned (section 12.4, #58). The application and an agent may issue them. A "not investment advice" notice is not required.
 - Multiple users and mobile apps. Authentication and hosting: **demo phase only** (section 12, #48, #56).
 - Paid AI calls in the demo or in automated tests.
 - Redis, Elasticsearch, news and social-media scraping. These are listed as "planned" in `.env.example` and `CONVERSATION.md` but are not part of this product scope. Schedulers: demo phase only (the post-demo market scanner needs one, section 12).
@@ -71,7 +71,7 @@ The tool supports research and decision hygiene. In both phases it never gives f
   - [ ] There is no FX conversion unless one is decided later (see section 10).
 - **US1.5** As Raul or a visitor, I want to switch the UI between Polish and English.
   - [ ] Polish is the default on first visit. The switch is visible on every page, and the choice persists across pages and restarts (e.g. a cookie; no account needed).
-  - [ ] All UI text, labels, the disclaimer, badges and error messages exist in both languages; a missing translation falls back to Polish and is caught by a test.
+  - [ ] All UI text, labels, badges and error messages exist in both languages; a missing translation falls back to Polish and is caught by a test. A "not investment advice" notice is not part of that catalog.
   - [ ] Number and date formatting follows the selected language. APIs keep ISO and machine formats.
   - [ ] Data values (instrument names, source excerpts) are not translated.
 
@@ -88,7 +88,7 @@ The tool supports research and decision hygiene. In both phases it never gives f
   - [ ] The analysis language equals the UI language at request time and is stored with the analysis.
   - [ ] Every factual observation cites at least one known evidence ID. An analysis with unknown citations is rejected and is not saved.
   - [ ] Freshness warnings appear for evidence older than 180 days (the existing spec) or dated in the future.
-  - [ ] The disclaimer is always visible (both phases). In the demo there is no imperative buy/sell language.
+  - [ ] In the demo there is no imperative buy/sell language. A "not investment advice" notice is not required in either phase (decision 2026-10-10).
 - **US3.2** As Raul, I want to see past analyses for an instrument, so that I can compare them over time.
   - [ ] Each saved analysis keeps an immutable snapshot of its inputs, plus the provider, model, prompt version, language and creation time.
 - **US3.3** In demo mode and in tests, the analysis comes from a deterministic mock (PL and EN). It is labelled clearly as a demo analysis and makes no network calls.
@@ -116,7 +116,7 @@ The tool supports research and decision hygiene. In both phases it never gives f
   - [ ] Components use criteria that fit the instrument type (stock vs ETF/ETC); the default component set per type is **[Open]** (section 10, Q4).
   - [ ] Missing or stale inputs are visible: a missing component is shown as "brak danych" / "no data" and excluded, the remaining weights are renormalized **[Proposal]**, and the score shows a coverage indicator (e.g. "4 of 6 components") and the oldest input date.
   - [ ] Weights are configurable (a settings page or config file **[Proposal]**). Changing weights recomputes scores and the page shows which weight set and score version were used.
-  - [ ] **Demo phase:** the score is never labelled or styled as a buy/sell/hold signal or recommendation (no "kupuj"/"buy", no traffic-light advice). **Both phases:** the disclaimer is shown next to the score in both languages. Post-demo signals (section 12) stay a separate view and do not change the demo rule.
+  - [ ] **Demo phase:** the score is never labelled or styled as a buy/sell/hold signal or recommendation (no "kupuj"/"buy", no traffic-light advice). A "not investment advice" notice is not required next to the score. Post-demo signals (section 12) stay a separate view and do not change the demo rule for the score.
   - [ ] The score appears on the detail page and in the comparison view; scores of different instrument types are not presented as directly comparable.
   - [ ] Unit tests pin the formula for fixture inputs, including missing data and custom weights.
 
@@ -136,8 +136,9 @@ The model generalizes from `companies` to `instruments`. Today's `companies` and
 | `ScoreWeights` / `InstrumentScore` | Weight set per instrument type (version, weights per component); computed score with per-component breakdown, inputs' "as of" dates, weight-set version and computed time. Persisting computed scores vs computing on request is **[Proposal: compute on request in v1]**. |
 | `Analysis` | Instrument, language, input snapshot, report content, provider and model metadata, prompt version, created date. No profile link. |
 | UI language | Stored client-side (cookie) in v1; no user table. |
-| `Portfolio`, `Holding` (post-demo) | Owner, portfolio name, base currency; holding = instrument, quantity, cost and currency, dates (or derived from transactions). **Not built in the demo** (section 12, #57). |
-| `Signal` (post-demo) | Instrument, type (buy candidate / sell or review / interesting company), triggering rules, inputs with sources and as-of dates, score version, rationale, risks, status. **Not built in the demo** (section 12, #58). |
+| `Portfolio`, `Holding` (post-demo) | Owner, portfolio name, base currency. Several portfolios. A holding is an instrument, quantity, cost and currency, and dates (or derived from transactions). Monitoring needs a market price with source and "as of", market value, and gain/loss versus cost. **Not built in the demo** (section 12.3, #57). |
+| `Signal` (post-demo) | Instrument, type (buy / sell, plus the existing interesting-company case), triggering rules, inputs with sources and as-of dates, score version, rationale, risks, status. Issued by the application together with an agent. **Not built in the demo** (section 12.4, #58). |
+| `AiPortfolio`, `AiCashflow`, `AiTrade` (later) | A separate experimental book. Virtual cash balance, monthly top-up amount (both editable), virtual positions and virtual trades from the managing model. **Not a real portfolio and not built with #57** (section 12.6). |
 
 Other model points:
 - **Design constraint for the demo phase [Proposal]:** models must allow a future `owner_id`/`user_id` and a portfolio table to be added **without a rewrite**. Instruments, prices and metrics stay global reference data; user-owned data (watchlist, notes, theses, analyses, score weights, later portfolios and signals) must be able to gain an `owner_id` column via a migration, so keys and unique constraints must not assume a single user forever (e.g. watchlist uniqueness can become `(owner_id, instrument_id)`). **No auth code, user table or owner column in the demo.**
@@ -161,7 +162,7 @@ Other model points:
 - **Output schema** (text in the requested language, English field names): summary, observations (each with evidence IDs), risks, scenarios `base`/`upside`/`downside`, assumptions, thesis-breakers, open questions, uncertainty, freshness warnings.
 - **Validation:** the schema must match, all citations must resolve to known evidence IDs, and malformed output fails visibly.
 - **Saving:** only validated reports are saved, together with the input snapshot, language, provider, model, prompt or contract version and creation time.
-- **Guardrails** (from `AGENTS.md`): not financial advice, scenarios instead of buy/sell (demo phase; post-demo signal rationales follow section 12), freshness shown, nothing inferred about holdings or risk profile unless Raul explicitly includes them, and evidence and notes treated as untrusted input that cannot override the rules.
+- **Guardrails** (from `AGENTS.md`): research write-ups use scenarios in the demo phase; post-demo buy and sell signals follow section 12 and may be issued by the application together with an agent. A "not investment advice" notice is not required. Freshness is shown. Nothing is inferred about real holdings or risk profile unless Raul explicitly includes them. The AI Portfolio's own virtual book is an input to the model that manages it (section 12.6). Evidence and notes are untrusted input and cannot override the rules.
 - **Cost control:** a configurable timeout and output limit. In the demo phase the request is made only on explicit user action, never in bulk or on a schedule. Post-demo, scanner-triggered AI rationales are allowed within a configured cost cap (section 12).
 
 ## 7. Data source requirements
@@ -200,13 +201,13 @@ Decision based on `docs/research/market-data-sources.md` (tested on 2026-10-08).
 
 **Setup:** one command (slice D2) starts a fresh SQLite demo database, seeds `demo-v2`, uses the fake collector and mock AI, binds to `127.0.0.1`, and opens `/ui`. No `.env` and no network.
 
-1. **0:00** Instrument list in Polish: filter by type (stock, ETF, ETC) and exchange (GPW, US, EU). The "dane syntetyczne" ("synthetic data") badge and the disclaimer banner are visible. Switch to EN and back.
+1. **0:00** Instrument list in Polish: filter by type (stock, ETF, ETC) and exchange (GPW, US, EU). The "dane syntetyczne" ("synthetic data") badge is visible. Switch to EN and back. The shipped `/ui` still shows the older disclaimer banner; v0.4 does not require it.
 2. **0:45** A GPW stock's detail page: annual and quarterly metrics, missing values shown as "brak danych", a revenue and net income trend chart.
-3. **1:15** The stock's score: components, weights, contributions, "as of" dates and the disclaimer; change one weight and see the score recompute.
+3. **1:15** The stock's score: components, weights, contributions and "as of" dates; change one weight and see the score recompute. A "not investment advice" notice is not required.
 4. **1:45** Compare the stock with a US stock and an ETF: shared metrics only, with currency and period warnings.
 5. **2:15** Add two instruments to the watchlist, then open the watchlist with its "as of" dates and stale markers.
 6. **2:45** Add a note and an active thesis with a thesis-breaker.
-7. **3:15** Run a (mock) AI analysis in Polish, then one in English: scenarios, risks, citations that link to evidence, freshness warnings and the disclaimer. Then open the analysis history.
+7. **3:15** Run a (mock) AI analysis in Polish, then one in English: scenarios, risks, citations that link to evidence, and freshness warnings. Then open the analysis history. A "not investment advice" notice is not required.
 8. **4:00** "Refresh data" with the fake collector shows provenance updating. Close.
 
 **Done when:** the QA Engineer's checklist passes on a clean clone, a CI job starts demo mode and requests every page in both languages, and the Code Reviewer approves the UI review.
@@ -221,7 +222,7 @@ Resolved in v0.2:
 Still open:
 1. **AI provider rollout:** Gemini 3.8 Flash is chosen; open is the bake-off outcome (Polish quality, schema pass rate, cost after the 2027 price change). **[Proposal]** run the bake-off on `demo-v2` fixtures right after the demo; keep gpt-6-luna as the documented low-cost alternative if Gemini fails it.
 2. **Data source depth:** yfinance is primary; open is whether GPW fundamentals (4–5 years) are deep enough. **[Proposal]** start with yfinance only; revisit EODHD Fundamentals or an ESEF importer only if the shallow history blocks real use.
-3. **Disclaimer:** exact Polish and English wording and placement (global banner, on each analysis and score, in exports). **[Proposal]** global banner plus a short line on every analysis and score; wording reviewed by the Code Reviewer in D8.
+3. ~~**Disclaimer:** exact Polish and English wording and placement.~~ **Resolved 2026-10-10:** the product does not require a "not investment advice" notice. The shipped `/ui` banner can be removed later; new copy does not add one.
 4. **Score components and default weights:** which components per type? **[Proposal]** stocks: profitability (ROE, net margin), valuation (P/E, P/B), balance sheet (debt-to-equity, current ratio), growth (revenue YoY); ETFs/ETCs: cost (TER), size (AUM), volatility, max drawdown, tracking (when available). Equal default weights per type.
 5. **ETF/ETC metrics:** which fund attributes and price metrics (TER, AUM, tracking difference, volatility, drawdown, returns over N periods)? **[Proposal]** TER, AUM, issuer, underlying, domicile, distribution policy, plus price-derived 1y/3y return, volatility and max drawdown.
 6. **Cross-currency comparisons:** show native currencies only, or add FX conversion (needs an FX source)? **[Proposal]** native currencies only in v1, with a warning.
@@ -249,14 +250,15 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 |---|---|---|
 | **P1 Demo foundation** | **D1** timezone-aware UTC timestamps and foreign keys on SQLite (Dev). **D3** collector interface plus offline fake, selected by config (Dev). **D2** one-command demo mode (Dev). | #20 (overlaps D1); #7 hygiene recommendation (Code Reviewer, any time, not blocking) |
 | **P2 Instrument model** | **I1** generalize `companies` to `instruments` with app-owned stock/ETF/ETC types, the `(ticker, exchange)` key and ISIN (Dev). **I2** `PriceBar` storage plus `demo-v2` fixture (Dev, QA). **I3** ETF/ETC attributes (Dev). | #16, #17 |
-| **P3 UI (pure Python)** | **D4** UI skeleton with the PL/EN switch: layout, disclaimer, list and detail pages, bundled assets (Dev). **D6** trend charts (Dev). **C1** comparison view (Dev). **W1** watchlist (Dev). **N1** notes and theses (Dev). **D5** create/edit/delete forms (Dev). | D4/D5 add explicit `jinja2` and `python-multipart` pins (recorded in #11) |
-| **P3b Scoring** | **S1** transparent instrument score: components, weights, freshness, configurable weights, disclaimer (Dev; Code Reviewer checks no-signal wording). After I1–I3, D4, D6, C1; before A1. | — |
+| **P3 UI (pure Python)** | **D4** UI skeleton with the PL/EN switch: layout, list and detail pages, bundled assets (Dev). The shipped pages still include the older disclaimer banner; v0.4 does not require it. **D6** trend charts (Dev). **C1** comparison view (Dev). **W1** watchlist (Dev). **N1** notes and theses (Dev). **D5** create/edit/delete forms (Dev). | D4/D5 add explicit `jinja2` and `python-multipart` pins (recorded in #11) |
+| **P3b Scoring** | **S1** transparent instrument score: components, weights, freshness, configurable weights (Dev; Code Reviewer checks that the demo score is not a buy/sell signal). After I1–I3, D4, D6, C1; before A1. | — |
 | **P4 AI (mocked)** | **A1** provider interface, deterministic PL/EN mock, report schema, citation validation, saving (Dev). **A2** analysis UI and history, language follows the UI (Dev). | #12 deferred; no profile dependency |
-| **P5 Demo acceptance** | **D7** demo checklist plus CI demo job (QA). **D8** UI and security review, including disclaimer and score wording (Code Reviewer). **D9** README "Run the demo" and refreshed work-state (Dev). | PR #22 coverage gate |
+| **P5 Demo acceptance** | **D7** demo checklist plus CI demo job (QA). **D8** UI and security review, including score wording (Code Reviewer). A missing "not investment advice" notice is not a review failure. **D9** README "Run the demo" and refreshed work-state (Dev). | PR #22 coverage gate |
 | **P6 Persistence and real data (after the demo)** | **#8** first Alembic migration capturing the instrument schema → **#9** opt-in PostgreSQL harness (QA) → **#10** switch to migrations. **R1** yfinance adapter with cache, throttling and the ISIN-keyed type mapping (Dev). The `yfinance>=1.7` pin itself moved with #11's security/deps part. **R2** Gemini adapter via `google-genai` plus the 20–30 analysis bake-off incl. Polish quality (Dev, QA). | `google-genai` still waits for R2. `jinja2` and `python-multipart` wait for D4/D5. #21 with R1 |
-| **P7 Server, login, portfolio, signals (after P6) [Decided direction 2026-10-08]** | **#56** server deployment: hosting, HTTPS, secrets, encrypted backups (Dev, Security Engineer). **#48** authentication: login, sessions, rate limiting, 2FA [Open] (Dev, Security Engineer). **#57** portfolio holdings: model, manual/CSV import, privacy (Dev). **#58** market scanner with buy/sell/opportunity signals and notifications (Dev, Code Reviewer). | #45, #52 security baseline |
+| **P7 Server, login, portfolio, signals (after P6) [Decided direction 2026-10-08; portfolio and signals expanded 2026-10-10]** | **#56** server deployment: hosting, HTTPS, secrets, encrypted backups (Dev, Security Engineer). **#48** authentication: login, sessions, rate limiting, 2FA [Open] (Dev, Security Engineer). **#57** several real portfolios: add, edit and remove holdings, total value, split by instrument type, gain/loss per holding and for the portfolio, privacy (Dev). **#58** market scanner; the application and an agent may issue buy and sell signals, without a "not investment advice" notice (Dev, Code Reviewer). | #45, #52 security baseline |
+| **P8 AI Portfolio (after P7) [Decided direction 2026-10-10]** | Experimental virtual portfolio managed by a model. Editable virtual cash, a monthly top-up, virtual trades from the model's predictions, and a track of how that book performs. No broker orders. Issue not opened yet. | #57, #58, R2 #55 |
 
-**Issue map (Demo v1, label `demo`):** D1 #23, D3 #24, D2 #25, I1 #26, I2 #27, I3 #28, D4 #29, D6 #30, C1 #31, W1 #32, N1 #33, D5 #34, S1 #35, A1 #36, A2 #37, D7 #38, D8 #39, D9 #40. Post-demo: R1 #54, R2 #55; P7 (label `deferred`): #48 authentication, #56 server deployment, #57 portfolio holdings, #58 market scanner and signals.
+**Issue map (Demo v1, label `demo`):** D1 #23, D3 #24, D2 #25, I1 #26, I2 #27, I3 #28, D4 #29, D6 #30, C1 #31, W1 #32, N1 #33, D5 #34, S1 #35, A1 #36, A2 #37, D7 #38, D8 #39, D9 #40. Post-demo: R1 #54, R2 #55; P7 (label `deferred`): #48 authentication, #56 server deployment, #57 portfolio holdings, #58 market scanner and signals. P8 AI Portfolio is specified in section 12.6; no GitHub issue yet.
 
 **Dependencies:**
 - #20 ↔ D1 (same root cause on SQLite); D1 and D3 → D2.
@@ -265,7 +267,7 @@ Already done: #4 deprecation cleanup (PR #13), #5 CI (PR #14), #6 tooling (PR #1
 - I1–I3, D4, D6, C1 → S1 → A1 → A2 (A1 hard-depends on I2; N1 is optional for A1, notes context is added once N1 is available).
 - All of P1–P4 → D7 and D8 → D9.
 - On 2026-10-08 the Project Manager moved #11's security/deps part ahead of the demo after the Security Engineer's review found CVEs. That part is the FastAPI and Starlette CVE upgrade, the `requests` and `python-dotenv` floors, removal of unused pins, the runtime/dev split, and the hashed lock. It is scheduled before the demo. After it: #45 and #47 together, with #50 if that fix stays small, then the remaining demo slices. Demo done → #8 → #9 → #10. `google-genai` stays with R2. `jinja2` and `python-multipart` stay with D4/D5.
-- P7: #45 → #48 → #56 (no internet exposure before auth); #48 and I1 → #57; R1 (#54), R2 (#55) and S1 (#35) → #58 (optional input from #57).
+- P7: #45 → #48 → #56 (no internet exposure before auth); #48 and I1 → #57; R1 (#54), R2 (#55) and S1 (#35) → #58 (optional input from #57). P8 AI Portfolio starts after #57 and #58, and uses the real analysis model from R2 (#55).
 - #12 stays deferred unless analysis tailoring needs it.
 
 ## 12. Post-demo direction (2026-10-08)
@@ -288,22 +290,46 @@ Raul, 2026-10-08 (translated from Polish): *"Maybe not in the demo, but later we
 - **Ideally 2FA** (TOTP with recovery codes) [Open, Q18].
 - All pages and API routes require auth except a minimal health check.
 
-### 12.3 Portfolio holdings as private data [Decided direction; import Open] (#57)
-- Raul's current portfolios and holdings are stored in the app and treated as **private data**: owner-scoped, only visible when logged in, never in logs, error pages or AI prompts unless Raul explicitly includes them on a request.
+### 12.3 Real portfolios [Decided direction 2026-10-10; import Open] (#57)
+- Raul can create **more than one portfolio** and monitor each one. Portfolios and holdings are **private data**: owner-scoped, only visible when logged in, never in logs, error pages or AI prompts unless Raul explicitly includes them on a request.
+- For each portfolio he can **add, edit and remove** a holding (a listed stock, ETF or ETC already in the instrument model). Editing covers quantity, cost and currency. Removing a holding drops it from that portfolio and does not delete the instrument.
+- **Monitoring** for one portfolio:
+  - market value of each holding (quantity times a stored price, with source, currency and "as of");
+  - **total value**, the sum of those market values, shown in the portfolio base currency when the holding currency matches it; a different currency is listed in its own currency with a warning and is not converted (same rule as Q6 until an FX source is decided);
+  - a **split by instrument type** (stock, ETF, ETC): count of holdings and share of total value;
+  - **gain/loss of each holding** against its cost, as an amount and as a percent;
+  - **gain/loss of the portfolio**, the sum of the holding gain/loss amounts that share the base currency.
+- A missing price is "brak danych" / "no data". It is not treated as zero, and that holding is left out of the total and out of the type-value split, with a visible count of excluded holdings.
 - Import by manual entry and/or CSV [Open, Q17]; no broker API integration or order execution.
 - **Encryption at rest** (volume and/or column level) and inclusion in encrypted backups are considered and decided in #56/#57.
 
 ### 12.4 Market scanner and signals [Decided direction; rules Open] (#58)
 - A **scheduled market scanner** runs on the server [frequency Open, Q16] over the watchlist, holdings and a configurable universe, within data-provider limits (R1 cache and throttling).
-- It produces **buy candidate**, **sell / review** and **interesting company** signals.
+- It produces **buy**, **sell** and **interesting company** signals. The application, together with an agent, may issue the buy and sell signals. That is allowed product behaviour, not a wording to avoid.
 - Every signal is **explainable**: triggering rules, input values with sources and as-of dates, score breakdown and version, a rationale, **risks** and what would invalidate it, plus a coverage/confidence indicator. Signals are deterministic first; an optional AI rationale (R2) follows the section 6 validation and citation rules and is never the sole basis of a signal.
 - **Notifications** via a channel to be chosen [Open, Q15], with dedup/cooldown; no portfolio amounts in notifications unless Raul opts in.
-- **Signals are personal decision support for Raul, not investment advice.** Every signal view and notification says so (PL/EN). Every signal shows the disclaimer in both languages. Only the "no buy/sell signal" rule is demo-only. No automated trading.
+- **No "not investment advice" notice.** Raul decided on 2026-10-10 that signal views and notifications do not need to say that the signal is not investment advice. The demo phase still does not show buy/sell signals. No automated trading and no broker orders: a signal does not place a trade.
 - Scanner AI rationales run within a configured monthly budget limit. The limit's value is **[Open]** for Raul.
 - Holdings and portfolio data (quantity, cost, amounts) are never sent in AI prompts by default. That covers scanner rationales and any other AI prompt. A user-requested analysis may include them only when Raul explicitly includes them on that request, which is the exception already stated for holdings.
 - The **score transparency principle (US6) stays**: the score remains a transparent, explainable, configurable score; signals are a separate layer built on it and on other rules.
 
 ### 12.5 What this changes in earlier sections
-- Sections 1, 2, 3, 6 and 8: "no authentication/hosting", "no holdings", "no schedulers" and "never a buy/sell signal" now apply to the **demo phase only**. Section 4 (US3.1, US6): the no-buy/sell wording is demo-only; the disclaimer stays in both phases, including on post-demo signals.
-- Section 5: new post-demo entities (`Portfolio`, `Holding`, `Signal`) and the demo-phase design constraint (future `owner_id`, no auth code in the demo).
-- Section 10: new open questions 14–18. Section 11: new phase P7.
+- Sections 1, 2, 3, 6 and 8: "no authentication/hosting", "no holdings", "no schedulers" and "never a buy/sell signal" apply to the **demo phase only**. Section 4 (US3.1, US6): the no-buy/sell wording on the score and on demo analyses is demo-only. A "not investment advice" notice is not required in either phase (decision 2026-10-10).
+- Section 5: post-demo entities (`Portfolio`, `Holding`, `Signal`, and later `AiPortfolio`) and the demo-phase design constraint (future `owner_id`, no auth code in the demo).
+- Section 10: open questions 14–18. Section 11: phase P7, plus P8 for the AI Portfolio.
+
+### 12.6 AI Portfolio [Decided direction 2026-10-10; after P7]
+The name in the product and in the UI may stay **AI Portfolio**.
+
+This is a later experiment, separate from Raul's real portfolios in section 12.3. It exists to watch how a model does on the market. It does not place broker orders and it does not change real holdings.
+
+- Raul can create one AI Portfolio (more than one is **[Open]**).
+- The book starts with a **virtual cash** balance. That balance is editable.
+- The balance **increases once a month** by a configured amount. That monthly amount is editable. Editing it does not rewrite past top-ups.
+- Each top-up is stored (amount, date) so the performance view can separate cash added by Raul from gain and loss on virtual positions.
+- The managing model sees this portfolio's virtual cash and virtual positions. It does not see Raul's real portfolios unless he explicitly includes them on that request.
+- The model records **virtual purchases** from its own predictions: instrument, quantity, price used, "as of", and the prediction or signal it acted on. A purchase cannot spend more virtual cash than the book has.
+- Because the book is managed, the model may also record a **virtual sale** that reduces or closes a position and returns virtual cash. Sales use the same stored price rules as purchases.
+- The monitoring view matches section 12.3 for this book: total virtual value (cash plus positions), split by instrument type, gain/loss per position, and gain/loss for the AI Portfolio as a whole. Cash added by the monthly top-up is not counted as investment gain.
+- Prices come from the same stored market data as real portfolios. A missing price is "brak danych" / "no data", not zero.
+- The demo does not include the AI Portfolio. No GitHub issue is open for this slice yet.

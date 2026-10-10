@@ -2,7 +2,7 @@
 
 Investment AI Companion is a FastAPI service for investment research workflows. It stores company data, financial metrics, and market-data collection results that can support analysis and decision hygiene.
 
-The application must not present generated output as financial advice. Analysis features should show sources, data freshness, assumptions, risks, and uncertainty.
+Analysis, scores and signals show sources, data freshness, assumptions, risks and uncertainty. The product does not require a notice that output is not investment advice (decision 2026-10-10, `docs/product-requirements.md` section 12). Buy and sell signals, real portfolios and the later AI Portfolio are specified there and are not in the current demo.
 
 To run the local `/ui` demo, follow [Run the demo](docs/RUN_DEMO.md).
 

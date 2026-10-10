@@ -52,11 +52,12 @@ Use rebase so history stays a straight line. Linear history is easier to read, b
 
 ## Investment Domain Rules
 
-- This app supports investment research and decision hygiene; it must not present outputs as financial advice.
-- Show source, data freshness, assumptions, risks, and uncertainty for market data and AI analysis.
-- Prefer scenarios over imperative buy/sell language: base case, upside case, downside case, and thesis-breakers.
+- Show source, data freshness, assumptions, risks, and uncertainty for market data, scores, AI analysis, and signals.
+- Research write-ups use scenarios: base case, upside case, downside case, and thesis-breakers.
+- The application, together with an agent, may issue buy and sell signals. Raul decided on 2026-10-10 that the product does not need a notice that this is not investment advice. Do not add that notice to new copy. The rule is recorded in `docs/product-requirements.md` section 12.
+- The shipped `/ui` demo still contains the older disclaimer banner. That banner is no longer a product requirement.
 - Never infer a private portfolio, risk tolerance, or investment style from unavailable chat history. Use explicit project data or user-provided inputs.
-- Keep investor preferences explicit and editable when that feature is implemented.
+- Real portfolios and the later AI Portfolio stay explicit and editable. Do not put Raul's real holdings into a model prompt unless he includes them on that request. The AI Portfolio's own virtual cash and positions are inputs to the model that manages that portfolio.
 
 ## Quality Gates
 
