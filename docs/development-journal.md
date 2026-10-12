@@ -15,17 +15,20 @@
   normal run behaves as before; tests and the demo (#25) select `fake`.
   The fake takes stock profiles from `fixtures/demo-v1.json`, so the
   `[IAC-DEMO-V1]` marker and the `/ui` synthetic badge keep working;
-  fake funds carry the marker too. Fund key metrics are all `None`;
-  `debt_to_assets` from the balance sheet
-  goes to R1 (#54); the ETF/MUTUALFUND guard is added now. Provenance is
-  carried by collector results but not yet stored or returned.
+  fake funds carry the marker too. Fund key metrics are all `None`.
+  Fake stock metrics follow the fixture's latest annual row: P/E is
+  `None` for a net loss, ROE and margin have the sign of net income, and
+  `debt_to_equity` is a percent like Yahoo's. `debt_to_assets` from the
+  balance sheet goes to R1 (#54); the ETF/MUTUALFUND guard is added now.
+  Provenance is carried by collector results but not yet stored or
+  returned.
   `DEMO_PL_EMPTY` keeps its profile (fetch-company creates it); its key
   metrics and history are "no data" (`None`). fetch-company: no data is
   404 (provider-neutral text), `ProviderError` is 502
   `Data provider error`.
 - Task 4 extras: yfinance 1.7 hides exceptions, so an unknown ticker gave
-  a near-empty `info`. `fetch_company_info` now returns `None` without a
-  name (404, not 502). Provenance is built outside the `try`, so a bad
+  a near-empty `info`. `fetch_company_info` and `fetch_key_metrics` now
+  return `None` without a name (404, not 502; one shared helper). Provenance is built outside the `try`, so a bad
   clock is a `ValueError`, not a 502.
 - Network guard (tests only, `tests/network_guard.py`): an autouse
   fixture makes any connect, `connect_ex`, `create_connection`,
@@ -39,30 +42,41 @@
   `requests`, which the guard sees. A test makes a real yfinance call
   with raising stand-ins under the guard (socket, curl_cffi, no proxy,
   dummy cookie cache), so it cannot reach the network even if the guard
-  regresses; it asserts the guard recorded the attempt. Tests marked `integration` are exempt (PostgreSQL). The
-  Windows asyncio proactor loop is not covered.
+  regresses; it asserts the guard recorded the attempt. Tests marked
+  `integration` are exempt (PostgreSQL). The Windows asyncio proactor
+  loop is not covered.
 - Verification: full CI command (`pytest -q -p no:cacheprovider
   -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
-  --cov-branch --cov-fail-under=80`): 1097 passed, 121 deselected,
-  coverage 95.21% (baseline 1019 passed, 94.76%). `pytest -m
+  --cov-branch --cov-fail-under=80`): 1102 passed, 121 deselected,
+  coverage 95.22% (baseline 1019 passed, 94.76%). `pytest -m
   integration`: 105 passed, 16 skipped (no PostgreSQL here, so the
-  PostgreSQL tests were not run). `pytest -m ''`: 1202 passed, 16
+  PostgreSQL tests were not run). `pytest -m ''`: 1207 passed, 16
   skipped. Scoped black and isort clean; flake8 shows two E501 lines in
   `tests/test_provider_data_hygiene.py` that exist on master.
-- Backlog: Yahoo `fetch_key_metrics` returns an all-None dict for an
-  unknown ticker (yfinance `hide_exceptions`); handed to R1 (#54).
-  Part 2 of #24 and #25 remain.
+- Backlog: under yfinance `hide_exceptions`, a Yahoo HTTP failure can
+  look like "no data" (404) or an empty history instead of a
+  `ProviderError`; fix in R1 (#54), documented on the collector class.
+  Fund key metrics (52-week range, average volume, beta, dividend yield
+  from the fake bars) belong to I2 (#27) and I3 (#28). Part 2 of #24
+  and #25 remain.
 - AI model: Claude Opus 5.5 (Claude Code) as controller; Claude Sonnet
   5.5 implementers for Tasks 1-4 and the review fixes; reviewers Claude
   Sonnet 5.5 (Tasks 1-2) and Claude Opus 5.5 (Tasks 3-4). Account usage
   was not available in this session.
 - Time tracking (2026-10-12, +0200): session start 14:12 (the
   controller's first command; not in git; setup, Python 3.12 venv,
-  baseline run, plans). Git times: plan fe3f9f1 14:34; Task 1
-  8d45444 14:36; Task 2 7782bc0 14:40; Task 3 9d34ca7 14:45; Task 4
-  958c17a 14:57, d85b1a5 14:57, 2ebb474 14:58; review fixes 2af9e19
-  15:13 and fa6586b 15:13; round 2 beb8021 15:27; round-2 docs commit
-  15:27. Total 14:12 to 15:27.
+  baseline run, plans). Git times, by commit subject: "docs: plan the
+  collector interface" 14:34; "feat: add provider-neutral data collector
+  contracts" 14:36; "feat: add deterministic offline FakeCollector"
+  14:40; "feat: put the Yahoo collector on the contracts" 14:45;
+  "feat: select the data collector with DATA_COLLECTOR" 14:57; "style:
+  sort imports" 14:57; "docs: document DATA_COLLECTOR" 14:58; "test:
+  force the fake collector in every selection mode" 15:13; "docs:
+  correct the collector docs" 15:13; "test: make the guard tests unable
+  to reach the network" 15:27; "docs: correct the journal after the
+  second review" 15:27; "fix: return no data for unknown Yahoo key
+  metrics" 15:53; final-wave docs commit 15:53. Total 14:12 to
+  15:53.
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 

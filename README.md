@@ -100,6 +100,8 @@ refuses to start when it is missing, shorter than that, or still a known
 placeholder in any letter case. Generate one with
 `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 (that prints 43 characters).
+`DATA_COLLECTOR` picks the market-data collector behind fetch-company:
+`yahoo` (live Yahoo Finance, the default) or `fake` (offline, synthetic).
 `ALLOWED_HOSTS` is enforced, so a request with any other Host gets
 400 Invalid host header.
 `DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need

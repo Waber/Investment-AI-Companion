@@ -6,14 +6,16 @@
   `25e7eba`. Not pushed, no pull request yet.
 - Completed: contracts, `FakeCollector`, Yahoo collector on the
   contracts, `DATA_COLLECTOR` setting with `get_collector()`, test
-  network guard, docs, Task 4 review fixes. Full suite 1097 passed,
-  coverage 95.21%; `-m integration` 105 passed, 16 skipped; `-m ''`
-  1202 passed, 16 skipped. The PostgreSQL tests were not run (no
+  network guard, docs, review fixes (final wave included). Full suite
+  1102 passed, coverage 95.22%; `-m integration` 105 passed, 16
+  skipped; `-m ''` 1207 passed, 16 skipped. The PostgreSQL tests were not run (no
   `TEST_POSTGRES_DSN`; the 16 skips).
 - Incomplete: part 2 of #24 (cache, rate limit, backoff, currency
   normalization), then #25. Provenance is not yet stored or returned.
-  Yahoo `fetch_key_metrics` returns an all-None dict for an unknown
-  ticker (handed to R1 #54). The guard cannot see libpq or libcurl.
+  Under yfinance `hide_exceptions` a Yahoo HTTP failure can look like
+  "no data" instead of a `ProviderError` (fix in R1 #54). Fund key
+  metrics from the fake bars belong to I2 #27 and I3 #28. The guard
+  cannot see libpq or libcurl.
 - Active agents: none. Blockers: none.
 - Stop reason: end of Task 4, a planned review boundary. Account usage
   was not available in this session.
