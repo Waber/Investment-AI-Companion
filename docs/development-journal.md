@@ -8,8 +8,8 @@
   `Sourced`, `ProviderError`, capability protocols), an offline
   `FakeCollector`, the Yahoo collector moved onto the contracts, and a
   `DATA_COLLECTOR` setting (`fake` or `yahoo`) behind the new
-  `get_collector()` dependency. Tests force `fake` and fail on any
-  non-loopback socket connect.
+  `get_collector()` dependency. The root `conftest.py` forces `fake` (all
+  selection modes) and makes yfinance use `requests`.
 - Decisions: #24 is split. Part 2 (cache, rate limit, backoff, currency
   normalization) is a later PR. `DATA_COLLECTOR` defaults to `yahoo` so a
   normal run behaves as before; tests and the demo (#25) select `fake`.
@@ -19,26 +19,45 @@
   `DEMO_PL_EMPTY` is "no data". `debt_to_assets` from the balance sheet
   goes to R1 (#54); the ETF/MUTUALFUND guard is added now. Provenance is
   carried by collector results but not yet stored or returned.
-  fetch-company: no data is 404 (provider-neutral text), `ProviderError`
+  `DEMO_PL_EMPTY` keeps its profile (fetch-company creates it); its key
+  metrics and history are "no data" (`None`). fetch-company: no data is 404 (provider-neutral text), `ProviderError`
   is 502 `Data provider error`.
 - Task 4 extras: yfinance 1.7 hides exceptions, so an unknown ticker gave
   a near-empty `info`. `fetch_company_info` now returns `None` without a
   name (404, not 502). Provenance is built outside the `try`, so a bad
   clock is a `ValueError`, not a 502.
+- Network guard (tests only, `tests/network_guard.py`): an autouse
+  fixture makes any connect, `connect_ex`, `create_connection`,
+  `getaddrinfo` or `gethostbyname` to a non-loopback address fail. Every
+  blocked attempt is recorded and also fails the test at teardown, so a
+  swallowed error is still caught. It sees Python code that uses the
+  `socket` module (`requests`, `urllib3`, `httpx`). It cannot see C
+  clients that open their own sockets: libpq (psycopg2) and libcurl
+  (`curl_cffi`). yfinance 1.7 prefers `curl_cffi`, so the root
+  `conftest.py` sets `YF_DISABLE_CURL_CFFI=1` and yfinance uses
+  `requests`, which the guard sees (a test proves a real yfinance call
+  is blocked). Tests marked `integration` are exempt (PostgreSQL). The
+  Windows asyncio proactor loop is not covered.
 - Verification: full CI command (`pytest -q -p no:cacheprovider
   -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
-  --cov-branch --cov-fail-under=80`): 1090 passed, 119 deselected,
+  --cov-branch --cov-fail-under=80`): 1097 passed, 121 deselected,
   coverage 95.21% (baseline 1019 passed, 94.76%). `pytest -m
-  integration`: 103 passed, 16 skipped (no PostgreSQL here). Scoped
-  black and isort clean; flake8 shows two E501 lines in
+  integration`: 105 passed, 16 skipped (no PostgreSQL here, so the
+  PostgreSQL tests were not run). `pytest -m ''`: 1202 passed, 16
+  skipped. Scoped black and isort clean; flake8 shows two E501 lines in
   `tests/test_provider_data_hygiene.py` that exist on master.
+- Backlog: Yahoo `fetch_key_metrics` returns an all-None dict for an
+  unknown ticker (yfinance `hide_exceptions`); handed to R1 (#54).
+  Part 2 of #24 and #25 remain.
 - AI model: Claude Opus 5.5 (Claude Code) as controller; Claude Sonnet
-  5.5 implementers for Tasks 1-4; reviewers Claude Sonnet 5.5 (Tasks 1-2)
-  and Claude Opus 5.5 (Task 3). Account usage was not available in this
-  session.
-- Time tracking (from git, 2026-10-12, +0200): session about 14:10 with
-  setup and baseline; plan 14:34; Task 1 14:36; Task 2 14:40; Task 3
-  14:45; Task 4 code 14:57; docs about 15:05. About 55 minutes.
+  5.5 implementers for Tasks 1-4 and the review fixes; reviewers Claude
+  Sonnet 5.5 (Tasks 1-2) and Claude Opus 5.5 (Tasks 3-4). Account usage
+  was not available in this session.
+- Time tracking (git, 2026-10-12, +0200): session start 14:12 (setup,
+  Python 3.12 venv, baseline run, plans); plan fe3f9f1 14:34; Task 1
+  8d45444 14:36; Task 2 7782bc0 14:40; Task 3 9d34ca7 14:45; Task 4
+  958c17a 14:57, d85b1a5 14:57, 2ebb474 14:58; review fixes 2af9e19
+  15:13; fix-round docs commit 15:13. Total 14:12 to 15:13, 1 h 1 min.
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 

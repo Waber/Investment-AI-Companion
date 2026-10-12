@@ -40,8 +40,10 @@ returned 200. `demo/` is gitignored.
 use the offline `FakeCollector` instead of Yahoo Finance. It serves the
 stock profiles from this fixture plus the funds `DEMO_ETF_WORLD` and
 `DEMO_ETC_GOLD`, all with the `[IAC-DEMO-V1]` marker. An unknown ticker
-(and `DEMO_PL_EMPTY`) returns 404. The default is `yahoo`; the tests
-always use `fake`.
+returns 404. `DEMO_PL_EMPTY` has a profile, so fetch-company creates it
+(200); only its key metrics and price history are "no data" (`None`).
+The default is `yahoo`. The test suite sets `fake` itself, in every
+pytest selection mode, so a shell value cannot turn tests online.
 
 ## Scenarios
 
