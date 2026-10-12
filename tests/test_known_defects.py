@@ -18,7 +18,7 @@ import logging
 
 import pytest
 
-from app.api.data_collection import get_yahoo_finance_collector
+from app.api.data_collection import get_collector
 from app.data_collectors import yahoo_finance
 from app.data_collectors.base import ProviderError
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
@@ -65,8 +65,8 @@ async def test_same_instant_with_other_offset_is_a_duplicate(client):
 
 @pytest.mark.asyncio
 async def test_fetch_company_500_does_not_leak_exception_text(client):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(RuntimeError("password=hunter2"))
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        RuntimeError("password=hunter2")
     )
 
     response = await client.post(FETCH, json={"ticker": "FAIL"})
@@ -113,8 +113,8 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
     ``logger.exception`` attaches the traceback, so the secret stays in
     the server log and is not copied into the HTTP detail.
     """
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(RuntimeError("password=hunter2"))
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        RuntimeError("password=hunter2")
     )
 
     with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
@@ -133,19 +133,15 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
 @pytest.mark.asyncio
 async def test_fetch_company_404_and_400_stay_unchanged(client):
     """No provider data stays 404. A ValueError stays 400 with its text."""
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: NullCollector()
-    )
+    client.app.dependency_overrides[get_collector] = lambda: NullCollector()
     missing = await client.post(FETCH, json={"ticker": "miss"})
     assert missing.status_code == 404
     assert missing.json()["detail"] == (
         "Company with ticker MISS not found at the data provider"
     )
 
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(
-            ValueError("Company name or ticker already exists")
-        )
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        ValueError("Company name or ticker already exists")
     )
     conflict = await client.post(FETCH, json={"ticker": "dupe"})
     assert conflict.status_code == 400
@@ -337,9 +333,7 @@ async def test_blank_ticker_is_rejected_on_create(client, ticker):
 @pytest.mark.parametrize("ticker", ["", "   "])
 async def test_blank_ticker_is_rejected_by_fetch_company(client, ticker):
     """fetch-company rejects an empty or whitespace ticker before Yahoo."""
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector()
-    )
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector()
     before = _company_count(client)
 
     response = await client.post(FETCH, json={"ticker": ticker})
@@ -359,8 +353,8 @@ async def test_fetch_company_provider_error_is_502_without_provider_text(
     """
     error = ProviderError("password=hunter2")
     error.__cause__ = RuntimeError("password=hunter2")
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(error)
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        error
     )
     before = _company_count(client)
 

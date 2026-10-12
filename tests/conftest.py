@@ -6,6 +6,12 @@ import os
 # missing-key failure deletes this name first.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-0123456789")
 
+# fetch-company must never call live Yahoo Finance from a test. The
+# assignment is deliberate (not setdefault): a developer shell that sets
+# DATA_COLLECTOR=yahoo must not turn the suite into an online run.
+os.environ["DATA_COLLECTOR"] = "fake"
+
+import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
@@ -13,6 +19,19 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core.database import Base, create_db_engine, get_db  # noqa: E402
 from main import create_app  # noqa: E402
+from tests import network_guard  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def block_network(request, monkeypatch):
+    """Fail a test that connects to a non-loopback address.
+
+    Loopback and Unix sockets stay allowed. Tests marked ``integration``
+    are not guarded: they connect to a PostgreSQL server, which may be
+    on another machine and is chosen by the developer, not by the code.
+    """
+    if request.node.get_closest_marker("integration") is None:
+        network_guard.install(monkeypatch)
 
 
 @pytest_asyncio.fixture()

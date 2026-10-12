@@ -153,6 +153,13 @@ class YahooFinanceCollector:
             stock = yf.Ticker(ticker)
             info = stock.info
 
+            # yfinance 1.7 sets hide_exceptions=True, so an unknown
+            # ticker returns a near-empty ``info`` dict instead of
+            # raising. No name means no data for this ticker.
+            if not (info.get("longName") or info.get("shortName")):
+                logger.warning("No company info found for %r", ticker)
+                return None
+
             # Extract relevant information
             company_info = {
                 "name": info.get("longName") or info.get("shortName"),
@@ -171,11 +178,13 @@ class YahooFinanceCollector:
             }
 
             logger.info("Successfully fetched company info for %r", ticker)
-            return Sourced(company_info, self._provenance())
 
         except Exception as e:
             logger.error("Error fetching company info for %r: %r", ticker, e)
             raise ProviderError("Yahoo Finance company info failed") from e
+        # Outside the try: a bad clock is a programming error (ValueError),
+        # not a provider failure.
+        return Sourced(company_info, self._provenance())
 
     def fetch_historical_data(
         self, ticker: str, period: str = "1y", interval: str = "1d"
@@ -330,7 +339,7 @@ class YahooFinanceCollector:
         Example:
             >>> collector = YahooFinanceCollector()
             >>> metrics = collector.fetch_key_metrics('AAPL')
-            >>> print(metrics['pe_ratio'])
+            >>> print(metrics.value['pe_ratio'])
         """
         try:
             logger.info("Fetching key metrics for %r", ticker)
@@ -382,11 +391,13 @@ class YahooFinanceCollector:
             }
 
             logger.info("Successfully fetched key metrics for %r", ticker)
-            return Sourced(metrics, self._provenance())
 
         except Exception as e:
             logger.error("Error fetching key metrics for %r: %r", ticker, e)
             raise ProviderError("Yahoo Finance key metrics failed") from e
+        # Outside the try: a bad clock is a programming error (ValueError),
+        # not a provider failure.
+        return Sourced(metrics, self._provenance())
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:
         """

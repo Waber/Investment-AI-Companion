@@ -104,7 +104,7 @@ def test_collector_implements_the_capabilities_yahoo_can_serve(collector):
 
 
 def test_default_clock_is_timezone_aware_utc(install_ticker):
-    install_ticker(info={})
+    install_ticker(info={"longName": "Apple Inc."})
 
     result = YahooFinanceCollector().fetch_company_info("AAPL")
 
@@ -462,3 +462,33 @@ def test_price_history_raises_provider_error_for_unreadable_frame(
         collector.fetch_price_history("ODD")
 
     assert isinstance(caught.value.__cause__, KeyError)
+
+
+def test_company_info_is_none_when_yfinance_returns_near_empty_info(
+    install_ticker, collector
+):
+    # yfinance 1.7 sets hide_exceptions=True: an unknown ticker gives a
+    # near-empty info dict instead of raising.
+    install_ticker(info={"trailingPegRatio": None})
+
+    assert collector.fetch_company_info("NOPE") is None
+
+
+def test_company_info_naive_clock_is_a_value_error_not_provider_error(
+    install_ticker,
+):
+    install_ticker(info={"longName": "Apple Inc."})
+    naive = YahooFinanceCollector(clock=lambda: datetime(2026, 1, 1))
+
+    with pytest.raises(ValueError):
+        naive.fetch_company_info("AAPL")
+
+
+def test_key_metrics_naive_clock_is_a_value_error_not_provider_error(
+    install_ticker,
+):
+    install_ticker(info={"trailingPE": 10.0})
+    naive = YahooFinanceCollector(clock=lambda: datetime(2026, 1, 1))
+
+    with pytest.raises(ValueError):
+        naive.fetch_key_metrics("AAPL")

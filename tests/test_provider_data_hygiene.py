@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from app.api.data_collection import (
     FetchCompanyRequest,
     fetch_company_data,
-    get_yahoo_finance_collector,
+    get_collector,
 )
 from app.data_collectors import yahoo_finance
 from app.data_collectors.base import ProviderError
@@ -145,10 +145,8 @@ async def test_valid_tickers_are_accepted_on_create(client, ticker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", VALID_TICKERS)
 async def test_valid_tickers_are_accepted_by_fetch_company(client, ticker):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector(
-            {"name": f"Fetched {ticker}", "currency": "USD"}
-        )
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": f"Fetched {ticker}", "currency": "USD"}
     )
 
     response = await client.post(FETCH, json={"ticker": ticker})
@@ -169,8 +167,8 @@ async def test_create_strips_and_uppercases_ticker(client):
 
 @pytest.mark.asyncio
 async def test_fetch_strips_and_uppercases_ticker(client):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": "Orlen", "currency": "USD"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Orlen", "currency": "USD"}
     )
 
     response = await client.post(FETCH, json={"ticker": "  pkn.wa  "})
@@ -211,8 +209,8 @@ async def test_control_character_ticker_is_rejected_on_create(client, ticker):
 async def test_control_character_ticker_is_rejected_by_fetch_company(
     client, ticker
 ):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": "C", "currency": "USD"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "C", "currency": "USD"}
     )
     before = _count(client)
 
@@ -302,14 +300,12 @@ async def test_huge_name_validation_body_stays_small(client):
 async def test_provider_description_over_the_cap_is_stored_truncated(client):
     """Yahoo summaries can exceed the user cap. Fetch stores the first 5000."""
     description = "d" * 6000
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector(
-            {
-                "name": "Long Summary",
-                "currency": "USD",
-                "description": description,
-            }
-        )
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {
+            "name": "Long Summary",
+            "currency": "USD",
+            "description": description,
+        }
     )
 
     response = await client.post(FETCH, json={"ticker": "LONG"})
@@ -348,8 +344,8 @@ async def test_overlong_name_is_422_on_update(client):
 @pytest.mark.asyncio
 async def test_pence_currency_round_trips_unchanged(client):
     """Yahoo sends GBp for London pence. Uppercasing it would be GBP, 100x off."""
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": "Vodafone", "currency": "GBp"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Vodafone", "currency": "GBp"}
     )
 
     created = await client.post(FETCH, json={"ticker": "VOD"})
@@ -447,10 +443,8 @@ def test_read_models_do_not_carry_write_length_limits():
 async def test_provider_validation_error_is_502_without_input(client, caplog):
     """QA repro: a bad provider website must not be echoed to the client."""
     secret = "not a url secret=abc"
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector(
-            {"name": "Secret Co", "website": secret, "currency": "USD"}
-        )
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Secret Co", "website": secret, "currency": "USD"}
     )
 
     with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
@@ -471,8 +465,8 @@ async def test_provider_validation_error_is_502_without_input(client, caplog):
 @pytest.mark.asyncio
 async def test_provider_overlong_name_is_502(client):
     long_name = "N" * 300
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": long_name, "currency": "USD"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": long_name, "currency": "USD"}
     )
 
     response = await client.post(FETCH, json={"ticker": "LONG"})
@@ -487,8 +481,8 @@ async def test_provider_overlong_name_is_502(client):
 
 @pytest.mark.asyncio
 async def test_provider_bad_currency_is_502(client):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": "Ok", "currency": "USDD"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Ok", "currency": "USDD"}
     )
 
     response = await client.post(FETCH, json={"ticker": "CURR"})
@@ -509,8 +503,8 @@ async def test_failed_update_returns_fixed_500(client, monkeypatch, caplog):
         return None
 
     monkeypatch.setattr(CompanyRepository, "update", update_returns_none)
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": "Exists", "currency": "USD"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Exists", "currency": "USD"}
     )
 
     with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
@@ -528,8 +522,8 @@ async def test_company_name_with_newline_does_not_forge_a_log_line(
 ):
     """A newline in the provider name must stay inside one log record."""
     name = "Acme\nINFO forged-admin-login"
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: PayloadCollector({"name": name, "currency": "USD"})
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": name, "currency": "USD"}
     )
 
     with caplog.at_level(logging.INFO, logger="app.api.data_collection"):

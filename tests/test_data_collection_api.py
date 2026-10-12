@@ -1,6 +1,6 @@
 import pytest
 
-from app.api.data_collection import get_yahoo_finance_collector
+from app.api.data_collection import get_collector
 from tests.collector_stubs import sourced
 
 
@@ -22,7 +22,7 @@ class FakeYahooFinanceCollector:
 
 @pytest.mark.asyncio
 async def test_fetch_company_uses_injected_collector(client):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
+    client.app.dependency_overrides[get_collector] = (
         lambda: FakeYahooFinanceCollector()
     )
 

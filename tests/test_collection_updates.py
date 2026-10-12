@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
-from app.api.data_collection import get_yahoo_finance_collector
+from app.api.data_collection import get_collector
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from tests.collector_stubs import sourced
 
@@ -36,7 +36,7 @@ class RecordingCollector:
 @pytest.fixture
 def collector(client):
     fake = RecordingCollector()
-    client.app.dependency_overrides[get_yahoo_finance_collector] = lambda: fake
+    client.app.dependency_overrides[get_collector] = lambda: fake
     return fake
 
 
