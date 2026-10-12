@@ -1,5 +1,21 @@
 # Current Work State
 
+## Pagination bounds (#19): 2026-10-12
+
+- Branch `fix/pagination-bounds-19`, based on `25e7eba`. Not pushed.
+- Completed: `skip >= 0` and `1 <= limit <= 1000` on the three list
+  endpoints, shared in `app/api/pagination.py`. New tests in
+  `tests/test_pagination_bounds.py`.
+- Incomplete: the owner's or Code Reviewer's OK on
+  `MAX_PAGE_LIMIT = 1000`. Pull request not opened.
+- Tests: new file 23 passed. Full CI command 1042 passed, 119
+  deselected, coverage 94.78%. The integration tests were not run
+  (no PostgreSQL here).
+- Active agents: none.
+- Blockers: none.
+- Next action: Code Reviewer review, then open the pull request
+  (Closes #19).
+
 ## Portfolio issue numbers: 2026-10-10
 
 - Branch `docs/record-portfolio-issue-numbers`, based on

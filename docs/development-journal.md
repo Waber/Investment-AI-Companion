@@ -1,5 +1,36 @@
 # Development Journal
 
+## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
+
+- Scope: `GET /api/v1/companies/`, `GET /api/v1/financial-metrics/`
+  and `GET /api/v1/financial-metrics/company/{company_id}`. `skip`
+  must be at least 0 and `limit` must be 1 to 1000. Out-of-range
+  values return 422 through the existing validation handler. Before
+  this, `limit=-1` reached SQL and SQLite read it as no limit.
+- Decision: `MAX_PAGE_LIMIT = 1000`, the value proposed in the
+  issue. The default stays `limit=100`, `skip=0`. The bounds live
+  in `app/api/pagination.py` as two `Annotated[int, Query(...)]`
+  types, so the three endpoints share one definition. The value
+  1000 awaits the owner's or the Code Reviewer's OK in the pull
+  request, as the issue requires.
+- Tests: the strict-xfail test named in the issue is not on the
+  remote (`qa/known-defects-xfail`), so
+  `tests/test_pagination_bounds.py` was written from the task
+  brief. It covers 422 for `skip=-1`, `limit=-1`, `limit=0` and
+  `limit=1001`, 200 for `limit=1000` and `skip=0&limit=1`, the
+  default page of 100 with 101 rows, and the `loc` of the error.
+  RED: 12 cases returned 200 instead of 422. GREEN: 23 passed.
+- Verification: `python -m pytest -q -p no:cacheprovider
+  tests/test_pagination_bounds.py` (23 passed). The full CI command
+  gave 1042 passed, 119 deselected, total coverage 94.78%.
+  `black`, `isort` and `flake8` are clean on the two new files.
+  `companies.py` and `financial_metrics.py` already had isort and
+  flake8 findings on master; this change adds none.
+- AI model: Claude Sonnet 5.5 implementer via Claude Code, Claude
+  Opus 5.5 controller. Account usage was not available in this
+  session.
+- Time: started 2026-10-12 about 14:40 +0200.
+
 ## 2026-10-10 - Point the requirements at issues #57, #58 and #65
 
 - Scope: after PR #64 was squash-merged to `origin/master` as
