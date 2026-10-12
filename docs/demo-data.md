@@ -34,6 +34,15 @@ returned 200. `demo/` is gitignored.
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".
 
+## Offline collector
+
+`DATA_COLLECTOR=fake` makes `POST /api/v1/data-collection/fetch-company`
+use the offline `FakeCollector` instead of Yahoo Finance. It serves the
+stock profiles from this fixture plus the funds `DEMO_ETF_WORLD` and
+`DEMO_ETC_GOLD`, all with the `[IAC-DEMO-V1]` marker. An unknown ticker
+(and `DEMO_PL_EMPTY`) returns 404. The default is `yahoo`; the tests
+always use `fake`.
+
 ## Scenarios
 
 | Ticker | Country / currency | Scenario |

@@ -1,5 +1,45 @@
 # Development Journal
 
+## 2026-10-12 - Collector interface and offline fake, part 1 (#24)
+
+- Scope: part 1 of
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24).
+  Provider-neutral contracts (`app/data_collectors/base.py`: provenance,
+  `Sourced`, `ProviderError`, capability protocols), an offline
+  `FakeCollector`, the Yahoo collector moved onto the contracts, and a
+  `DATA_COLLECTOR` setting (`fake` or `yahoo`) behind the new
+  `get_collector()` dependency. Tests force `fake` and fail on any
+  non-loopback socket connect.
+- Decisions: #24 is split. Part 2 (cache, rate limit, backoff, currency
+  normalization) is a later PR. `DATA_COLLECTOR` defaults to `yahoo` so a
+  normal run behaves as before; tests and the demo (#25) select `fake`.
+  The fake takes stock profiles from `fixtures/demo-v1.json`, so the
+  `[IAC-DEMO-V1]` marker and the `/ui` synthetic badge keep working;
+  fake funds carry the marker too. Fund key metrics are all `None`;
+  `DEMO_PL_EMPTY` is "no data". `debt_to_assets` from the balance sheet
+  goes to R1 (#54); the ETF/MUTUALFUND guard is added now. Provenance is
+  carried by collector results but not yet stored or returned.
+  fetch-company: no data is 404 (provider-neutral text), `ProviderError`
+  is 502 `Data provider error`.
+- Task 4 extras: yfinance 1.7 hides exceptions, so an unknown ticker gave
+  a near-empty `info`. `fetch_company_info` now returns `None` without a
+  name (404, not 502). Provenance is built outside the `try`, so a bad
+  clock is a `ValueError`, not a 502.
+- Verification: full CI command (`pytest -q -p no:cacheprovider
+  -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
+  --cov-branch --cov-fail-under=80`): 1090 passed, 119 deselected,
+  coverage 95.21% (baseline 1019 passed, 94.76%). `pytest -m
+  integration`: 103 passed, 16 skipped (no PostgreSQL here). Scoped
+  black and isort clean; flake8 shows two E501 lines in
+  `tests/test_provider_data_hygiene.py` that exist on master.
+- AI model: Claude Opus 5.5 (Claude Code) as controller; Claude Sonnet
+  5.5 implementers for Tasks 1-4; reviewers Claude Sonnet 5.5 (Tasks 1-2)
+  and Claude Opus 5.5 (Task 3). Account usage was not available in this
+  session.
+- Time tracking (from git, 2026-10-12, +0200): session about 14:10 with
+  setup and baseline; plan 14:34; Task 1 14:36; Task 2 14:40; Task 3
+  14:45; Task 4 code 14:57; docs about 15:05. About 55 minutes.
+
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 
 - Scope: `GET /api/v1/companies/`, `GET /api/v1/financial-metrics/`

@@ -1,5 +1,21 @@
 # Current Work State
 
+## Collector interface, part 1 of #24: 2026-10-12
+
+- Branch `feature/collector-interface-24`, based on `origin/master`
+  `25e7eba`. Not pushed, no pull request yet.
+- Completed: contracts, `FakeCollector`, Yahoo collector on the
+  contracts, `DATA_COLLECTOR` setting with `get_collector()`, test
+  network guard, docs. Full suite 1090 passed, coverage 95.21%;
+  integration selection 103 passed, 16 skipped.
+- Incomplete: part 2 of #24 (cache, rate limit, backoff, currency
+  normalization), then #25. Provenance is not yet stored or returned.
+- Active agents: none. Blockers: none.
+- Stop reason: end of Task 4, a planned review boundary. Account usage
+  was not available in this session.
+- Next action: Code Reviewer review of the branch, then open the pull
+  request (Refs #24); then part 2 of #24, then #25.
+
 ## Pagination bounds (#19): 2026-10-12
 
 - Branch `fix/pagination-bounds-19`, based on `25e7eba`.

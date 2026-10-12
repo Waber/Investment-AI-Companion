@@ -115,7 +115,9 @@ the local API logs rather than assuming a 500 proves nothing was written.
 ## External Collection Is Not Part Of This Demo
 
 `POST /api/v1/data-collection/fetch-company` with `{"ticker":"AAPL"}` is optional,
-uses an external Yahoo Finance network call, and can create or update a company.
+uses an external Yahoo Finance network call (with `DATA_COLLECTOR=yahoo`, the
+default), and can create or update a company. With `DATA_COLLECTOR=fake` it uses
+the offline synthetic collector instead (see [Demo data](demo-data.md)).
 It is **UNVERIFIED and was not run** for this demo; do not include it in smoke
 tests. It is not covered by the synthetic-record cleanup above.
 
