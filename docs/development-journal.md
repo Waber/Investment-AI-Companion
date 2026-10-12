@@ -43,13 +43,24 @@
     and `financial_metrics.py` (flake8: 14 findings, same count
     now). The new import lines sit in the old order in those files
     and the branch does not re-sort them.
-  - The integration tests were not run (no PostgreSQL here).
+  - `python -m pytest -q -p no:cacheprovider -m integration` with
+    no `TEST_POSTGRES_DSN`: 103 passed, 16 skipped. The 16 skips
+    need PostgreSQL.
+- Review: the Code Reviewer agent (Claude Opus 5.5) found 2
+  Important and 8 Minor issues and approved `MAX_PAGE_LIMIT = 1000`.
+  All were fixed except the commit trailer, which names the model
+  that wrote the commits. A scoped re-review (Claude Sonnet 5.5)
+  marked every finding addressed.
+- Published as
+  [PR #67](https://github.com/Waber/Investment-AI-Companion/pull/67).
+  Not merged. The owner's OK on 1000 is asked for in the PR.
 - AI model: Claude Sonnet 5.5 implementer via Claude Code, Claude
   Opus 5.5 controller. Account usage was not available in this
   session.
 - Time: session started about 14:10 +0200 (setup, baseline run,
   plans). Plan commit 14:34, implementation commit 14:37. Review
   and the fix round followed; the fix round ended at 14:47 +0200.
+  The pull request was opened at 14:59 +0200.
 
 ## 2026-10-10 - Point the requirements at issues #57, #58 and #65
 
