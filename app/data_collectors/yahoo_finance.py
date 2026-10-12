@@ -93,6 +93,16 @@ def _debt_to_assets(info: Dict[str, Any]) -> Optional[float]:
         return None
 
 
+def _has_no_data(info: Dict[str, Any]) -> bool:
+    """True when ``info`` looks like an unknown ticker.
+
+    yfinance 1.7 sets hide_exceptions=True, so an unknown ticker returns
+    a near-empty ``info`` dict instead of raising. No name means no data
+    for this ticker.
+    """
+    return not (info.get("longName") or info.get("shortName"))
+
+
 class YahooFinanceCollector:
     """
     Collector for fetching stock market data from Yahoo Finance.
@@ -109,6 +119,11 @@ class YahooFinanceCollector:
     method logs and raises ``ProviderError``. ``raise ... from exc``
     chains the original exception as ``__cause__`` (like the cause of a
     Java exception), so the traceback still shows what really failed.
+
+    Known limitation: yfinance 1.7 hides some exceptions
+    (hide_exceptions=True). A Yahoo HTTP failure can therefore look like
+    "no data" (``None``, so fetch-company answers 404) or an empty
+    history instead of raising ``ProviderError``. To fix in R1 (#54).
     """
 
     def __init__(self, clock: Optional[Callable[[], datetime]] = None):
@@ -153,10 +168,7 @@ class YahooFinanceCollector:
             stock = yf.Ticker(ticker)
             info = stock.info
 
-            # yfinance 1.7 sets hide_exceptions=True, so an unknown
-            # ticker returns a near-empty ``info`` dict instead of
-            # raising. No name means no data for this ticker.
-            if not (info.get("longName") or info.get("shortName")):
+            if _has_no_data(info):
                 logger.warning("No company info found for %r", ticker)
                 return None
 
@@ -345,6 +357,10 @@ class YahooFinanceCollector:
             logger.info("Fetching key metrics for %r", ticker)
             stock = yf.Ticker(ticker)
             info = stock.info
+
+            if _has_no_data(info):
+                logger.warning("No key metrics found for %r", ticker)
+                return None
 
             # Extract key metrics
             metrics = {

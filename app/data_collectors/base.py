@@ -99,6 +99,9 @@ class ProviderError(Exception):
     ``None`` for that. This is deliberately not a ``ValueError``: the
     fetch-company handler maps ``ValueError`` to HTTP 400 (the caller's
     fault), while a provider failure is a 502 (the upstream's fault).
+
+    The code that raises it logs the cause (the provider's own error)
+    first, so callers should not log the provider text again.
     """
 
 

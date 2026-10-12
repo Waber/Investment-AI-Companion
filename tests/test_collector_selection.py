@@ -154,15 +154,16 @@ def offline_network(monkeypatch, block_network):
     yield reached
 
 
-def test_guard_blocks_a_non_loopback_connect(block_network):
+def test_guard_blocks_a_non_loopback_connect(offline_network, block_network):
     with pytest.raises(NetworkBlockedError):
         socket.create_connection(("192.0.2.1", 80), timeout=1)
 
     assert len(block_network) == 1  # recorded, so a swallowed error fails
+    assert offline_network == []  # the guard stopped it, not a stand-in
     block_network.clear()
 
 
-def test_guard_blocks_connect_and_connect_ex(block_network):
+def test_guard_blocks_connect_and_connect_ex(offline_network, block_network):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         with pytest.raises(NetworkBlockedError):
@@ -171,6 +172,7 @@ def test_guard_blocks_connect_and_connect_ex(block_network):
             sock.connect_ex(("192.0.2.1", 80))
     finally:
         sock.close()
+    assert offline_network == []
     block_network.clear()
 
 
@@ -257,13 +259,14 @@ def test_a_yfinance_call_is_blocked_before_any_network_io(
     block_network.clear()
 
 
-def test_every_blocked_attempt_is_recorded(block_network):
+def test_every_blocked_attempt_is_recorded(offline_network, block_network):
     try:
         socket.create_connection(("192.0.2.1", 80), timeout=1)
     except Exception:  # code under test may swallow the guard error
         pass
 
     assert len(block_network) == 1
+    assert offline_network == []
     block_network.clear()
 
 

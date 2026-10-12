@@ -152,22 +152,49 @@ def test_required_coverage_exchanges():
     assert collector.fetch_company_info("DEMO_DE_INDUSTRY") is not None
 
 
-def test_key_metrics_debt_to_assets_for_stocks():
-    collector = FakeCollector()
-    for ticker in STOCKS_WITH_METRICS:
-        metrics = collector.fetch_key_metrics(ticker).value
-        assert tuple(metrics) == KEY_METRIC_FIELDS
-        for key in (
-            "pe_ratio",
-            "pb_ratio",
-            "roe",
-            "profit_margin",
-            "current_ratio",
-            "debt_to_equity",
-            "revenue_growth",
-        ):
-            assert metrics[key] is not None
-        assert 0 < metrics["debt_to_assets"] < 1
+def latest_annual_rows():
+    """Ticker -> the newest annual row and the one before it."""
+    rows = {}
+    for entry in json.loads(FIXTURE.read_text())["companies"]:
+        annual = [m for m in entry["metrics"] if m["period_type"] == "annual"]
+        if annual:
+            rows[entry["company"]["ticker"]] = annual[-2:]
+    return rows
+
+
+@pytest.mark.parametrize("ticker", STOCKS_WITH_METRICS)
+def test_key_metrics_are_consistent_with_the_fixture(ticker):
+    previous, latest = latest_annual_rows()[ticker]
+    metrics = FakeCollector().fetch_key_metrics(ticker).value
+
+    assert tuple(metrics) == KEY_METRIC_FIELDS
+    income = latest["net_income"]
+    if income > 0:
+        assert metrics["pe_ratio"] is not None and metrics["pe_ratio"] > 0
+    else:
+        assert metrics["pe_ratio"] is None  # not meaningful, never a number
+    assert (metrics["roe"] > 0) == (income > 0)
+    assert (metrics["profit_margin"] > 0) == (income > 0)
+    assert metrics["roe"] == pytest.approx(
+        income / latest["total_equity"], abs=0.001
+    )
+    assert metrics["debt_to_assets"] == pytest.approx(
+        latest["total_liabilities"] / latest["total_assets"], abs=0.001
+    )
+    assert 0 < metrics["debt_to_assets"] < 1
+    # debt_to_equity is a percent, like Yahoo's debtToEquity.
+    assert metrics["debt_to_equity"] == pytest.approx(
+        100 * latest["total_liabilities"] / latest["total_equity"], abs=1
+    )
+    if previous["revenue"]:
+        growth = latest["revenue"] / previous["revenue"] - 1
+        assert metrics["revenue_growth"] == pytest.approx(growth, abs=0.001)
+    else:
+        assert metrics["revenue_growth"] is None
+    if latest["revenue"]:
+        assert metrics["profit_margin"] == pytest.approx(
+            income / latest["revenue"], abs=0.001
+        )
 
 
 def test_key_metrics_none_for_empty_company():

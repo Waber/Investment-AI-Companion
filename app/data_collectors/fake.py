@@ -111,58 +111,64 @@ FUNDS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Hand-picked, plausible key metrics. Ratios are fractions (0.12 = 12%).
+# Key metrics, consistent with the latest annual row of the demo fixture
+# (profit margin and ROE have the sign of net income, debt_to_assets is
+# liabilities / assets). Ratios are fractions (0.12 = 12%), except
+# debt_to_equity, which is a percent like Yahoo's ``debtToEquity``
+# (150.0 means 1.5x). A None is "not meaningful or not computable":
+# pe_ratio is None when net income is not positive, and revenue_growth
+# is None when the previous year's revenue is zero.
 # DEMO_PL_EMPTY is deliberately absent: it models "no data".
-STOCK_METRICS: Dict[str, Dict[str, float]] = {
+STOCK_METRICS: Dict[str, Dict[str, Optional[float]]] = {
     "DEMO_PL_TECH": {
         "pe_ratio": 24.5,
         "pb_ratio": 4.1,
-        "roe": 0.14,
+        "roe": 0.127,
         "profit_margin": 0.14,
         "current_ratio": 2.1,
         "debt_to_equity": 45.0,
         "revenue_growth": 0.2,
-        "debt_to_assets": 0.31,
+        "debt_to_assets": 0.312,
     },
     "DEMO_US_GROWTH": {
-        "pe_ratio": 38.0,
+        "pe_ratio": None,  # net loss
         "pb_ratio": 9.2,
-        "roe": 0.22,
-        "profit_margin": 0.18,
+        "roe": -0.04,
+        "profit_margin": -0.021,
         "current_ratio": 1.8,
-        "debt_to_equity": 60.0,
-        "revenue_growth": 0.28,
-        "debt_to_assets": 0.35,
+        "debt_to_equity": 108.0,
+        "revenue_growth": 0.469,
+        "debt_to_assets": 0.519,
     },
     "DEMO_DE_INDUSTRY": {
         "pe_ratio": 15.2,
         "pb_ratio": 2.0,
-        "roe": 0.11,
-        "profit_margin": 0.08,
+        "roe": 0.022,
+        "profit_margin": 0.015,
         "current_ratio": 1.5,
-        "debt_to_equity": 80.0,
-        "revenue_growth": 0.04,
-        "debt_to_assets": 0.42,
+        "debt_to_equity": 107.0,
+        "revenue_growth": -0.097,
+        "debt_to_assets": 0.516,
     },
     "DEMO_JP_STABLE": {
         "pe_ratio": 13.4,
         "pb_ratio": 1.2,
-        "roe": 0.09,
-        "profit_margin": 0.07,
+        "roe": 0.067,
+        "profit_margin": 0.081,
         "current_ratio": 1.9,
-        "debt_to_equity": 35.0,
-        "revenue_growth": 0.02,
-        "debt_to_assets": 0.25,
+        "debt_to_equity": 51.0,
+        "revenue_growth": 0.019,
+        "debt_to_assets": 0.337,
     },
     "DEMO_SG_EARLY": {
-        "pe_ratio": 55.0,
+        "pe_ratio": None,  # net loss
         "pb_ratio": 6.5,
-        "roe": 0.05,
-        "profit_margin": 0.03,
+        "roe": -0.818,
+        "profit_margin": -9.0,
         "current_ratio": 3.2,
-        "debt_to_equity": 20.0,
-        "revenue_growth": 0.45,
-        "debt_to_assets": 0.15,
+        "debt_to_equity": 91.0,
+        "revenue_growth": None,  # previous revenue was zero
+        "debt_to_assets": 0.476,
     },
 }
 
@@ -211,7 +217,7 @@ def _make_bar(day: date, index: int, params: tuple) -> PriceBar:
     open_ = trend * (
         1 + amplitude * math.sin(2 * math.pi * (index - 1) / wave_period)
     )
-    spread = 1 + 0.01 * (1 + math.sin(index))  # 1% to 2% above/below
+    spread = 1 + 0.01 * (1 + math.sin(index))  # 0% to 2% above/below
     high = max(open_, close) * spread
     low = min(open_, close) / spread
     volume = int(base_volume * (1 + 0.3 * math.sin(index / 3.0)))

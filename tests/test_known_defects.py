@@ -86,7 +86,7 @@ class _Ticker:
     """yfinance.Ticker stand-in whose info only has a per-share debt field."""
 
     def __init__(self, symbol):
-        self.info = {"totalDebtPerShare": 7.5}
+        self.info = {"longName": "Test Co", "totalDebtPerShare": 7.5}
 
 
 class _InfoTicker:
@@ -153,7 +153,8 @@ async def test_fetch_company_404_and_400_stay_unchanged(client):
 def _patch_info(monkeypatch, info):
     # setattr restores the class attribute after the test. Assigning
     # _InfoTicker.info directly would leak into the next test.
-    monkeypatch.setattr(_InfoTicker, "info", info)
+    # A name marks the payload as a real ticker (no name means no data).
+    monkeypatch.setattr(_InfoTicker, "info", {"longName": "Test Co", **info})
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _InfoTicker)
 
 
@@ -256,9 +257,10 @@ def test_debt_to_assets_is_none_when_inputs_are_missing(monkeypatch, info):
     """
     _patch_info(monkeypatch, info)
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL").value
+    result = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics is not None
+    assert result is not None
+    metrics = result.value
     assert metrics["debt_to_assets"] is None
 
 
@@ -278,9 +280,10 @@ def test_debt_to_assets_overflow_keeps_the_other_metrics(monkeypatch):
         },
     )
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL").value
+    result = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics is not None
+    assert result is not None
+    metrics = result.value
     assert metrics["debt_to_assets"] is None
     assert metrics["pe_ratio"] == 12.5
 
@@ -298,9 +301,10 @@ def test_debt_to_assets_accepts_numpy_reals(monkeypatch):
         },
     )
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL").value
+    result = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics is not None
+    assert result is not None
+    metrics = result.value
     assert metrics["debt_to_assets"] == 0.25
     assert metrics["pe_ratio"] == 30.1
 

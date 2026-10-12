@@ -86,7 +86,7 @@ def collector():
     return YahooFinanceCollector(clock=lambda: NOW)
 
 
-def assert_provider_error(call, caplog=None):
+def assert_provider_error(call):
     """The call raises ProviderError and keeps the original as the cause."""
     with pytest.raises(ProviderError) as caught:
         call()
@@ -239,6 +239,7 @@ def test_financial_statements_raise_provider_error(
 def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
     install_ticker(
         info={
+            "longName": "Apple Inc.",
             "trailingPE": 30.1,
             "forwardPE": 27.5,
             "priceToBook": 45.2,
@@ -306,7 +307,7 @@ def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
 def test_key_metrics_are_none_when_provider_omits_them(
     install_ticker, collector
 ):
-    install_ticker(info={})
+    install_ticker(info={"longName": "Apple Inc."})
 
     metrics = collector.fetch_key_metrics("BARE").value
 
@@ -317,7 +318,7 @@ def test_key_metrics_are_none_when_provider_omits_them(
 def test_key_metrics_carry_provenance_and_the_shared_keys(
     install_ticker, collector
 ):
-    install_ticker(info={})
+    install_ticker(info={"longName": "Apple Inc."})
 
     result = collector.fetch_key_metrics("BARE")
 
@@ -336,6 +337,7 @@ def test_debt_to_assets_is_none_for_funds(
     # sheet total, so the ratio would be meaningless.
     install_ticker(
         info={
+            "longName": "Some Fund",
             "quoteType": quote_type,
             "totalDebt": 10.0,
             "totalAssets": 100.0,
@@ -349,7 +351,12 @@ def test_debt_to_assets_is_none_for_funds(
 
 def test_debt_to_assets_is_kept_for_equity(install_ticker, collector):
     install_ticker(
-        info={"quoteType": "EQUITY", "totalDebt": 10.0, "totalAssets": 100.0}
+        info={
+            "longName": "Apple Inc.",
+            "quoteType": "EQUITY",
+            "totalDebt": 10.0,
+            "totalAssets": 100.0,
+        }
     )
 
     assert collector.fetch_key_metrics("EQ").value["debt_to_assets"] == 0.1
@@ -487,8 +494,18 @@ def test_company_info_naive_clock_is_a_value_error_not_provider_error(
 def test_key_metrics_naive_clock_is_a_value_error_not_provider_error(
     install_ticker,
 ):
-    install_ticker(info={"trailingPE": 10.0})
+    install_ticker(info={"longName": "Apple Inc.", "trailingPE": 10.0})
     naive = YahooFinanceCollector(clock=lambda: datetime(2026, 1, 1))
 
     with pytest.raises(ValueError):
         naive.fetch_key_metrics("AAPL")
+
+
+def test_key_metrics_are_none_when_yfinance_returns_near_empty_info(
+    install_ticker, collector
+):
+    # Same yfinance 1.7 hide_exceptions case as for company info: an
+    # all-None metrics dict would claim data that does not exist.
+    install_ticker(info={"trailingPegRatio": None})
+
+    assert collector.fetch_key_metrics("NOPE") is None
