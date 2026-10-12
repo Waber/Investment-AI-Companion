@@ -16,12 +16,13 @@
   The fake takes stock profiles from `fixtures/demo-v1.json`, so the
   `[IAC-DEMO-V1]` marker and the `/ui` synthetic badge keep working;
   fake funds carry the marker too. Fund key metrics are all `None`;
-  `DEMO_PL_EMPTY` is "no data". `debt_to_assets` from the balance sheet
+  `debt_to_assets` from the balance sheet
   goes to R1 (#54); the ETF/MUTUALFUND guard is added now. Provenance is
   carried by collector results but not yet stored or returned.
   `DEMO_PL_EMPTY` keeps its profile (fetch-company creates it); its key
-  metrics and history are "no data" (`None`). fetch-company: no data is 404 (provider-neutral text), `ProviderError`
-  is 502 `Data provider error`.
+  metrics and history are "no data" (`None`). fetch-company: no data is
+  404 (provider-neutral text), `ProviderError` is 502
+  `Data provider error`.
 - Task 4 extras: yfinance 1.7 hides exceptions, so an unknown ticker gave
   a near-empty `info`. `fetch_company_info` now returns `None` without a
   name (404, not 502). Provenance is built outside the `try`, so a bad
@@ -35,8 +36,10 @@
   clients that open their own sockets: libpq (psycopg2) and libcurl
   (`curl_cffi`). yfinance 1.7 prefers `curl_cffi`, so the root
   `conftest.py` sets `YF_DISABLE_CURL_CFFI=1` and yfinance uses
-  `requests`, which the guard sees (a test proves a real yfinance call
-  is blocked). Tests marked `integration` are exempt (PostgreSQL). The
+  `requests`, which the guard sees. A test makes a real yfinance call
+  with raising stand-ins under the guard (socket, curl_cffi, no proxy,
+  dummy cookie cache), so it cannot reach the network even if the guard
+  regresses; it asserts the guard recorded the attempt. Tests marked `integration` are exempt (PostgreSQL). The
   Windows asyncio proactor loop is not covered.
 - Verification: full CI command (`pytest -q -p no:cacheprovider
   -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
@@ -53,11 +56,13 @@
   5.5 implementers for Tasks 1-4 and the review fixes; reviewers Claude
   Sonnet 5.5 (Tasks 1-2) and Claude Opus 5.5 (Tasks 3-4). Account usage
   was not available in this session.
-- Time tracking (git, 2026-10-12, +0200): session start 14:12 (setup,
-  Python 3.12 venv, baseline run, plans); plan fe3f9f1 14:34; Task 1
+- Time tracking (2026-10-12, +0200): session start 14:12 (the
+  controller's first command; not in git; setup, Python 3.12 venv,
+  baseline run, plans). Git times: plan fe3f9f1 14:34; Task 1
   8d45444 14:36; Task 2 7782bc0 14:40; Task 3 9d34ca7 14:45; Task 4
   958c17a 14:57, d85b1a5 14:57, 2ebb474 14:58; review fixes 2af9e19
-  15:13; fix-round docs commit 15:13. Total 14:12 to 15:13, 1 h 1 min.
+  15:13 and fa6586b 15:13; round 2 beb8021 15:27; round-2 docs commit
+  15:27. Total 14:12 to 15:27.
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 
