@@ -50,8 +50,8 @@ def list_companies(
     Retrieve a list of companies with pagination support.
 
     Args:
-        skip: Number of records to skip (for pagination), at least 0
-        limit: Maximum number of records to return, from 1 to MAX_PAGE_LIMIT
+        skip: Number of records to skip (for pagination), 0 or more
+        limit: Maximum number of records to return, from 1 to 1000
         db: Database session injected by FastAPI dependency
 
     Returns:
