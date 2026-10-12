@@ -28,8 +28,9 @@
   `Data provider error`.
 - Task 4 extras: yfinance 1.7 hides exceptions, so an unknown ticker gave
   a near-empty `info`. `fetch_company_info` and `fetch_key_metrics` now
-  return `None` without a name (404, not 502; one shared helper). Provenance is built outside the `try`, so a bad
-  clock is a `ValueError`, not a 502.
+  return `None` without a name (404, not 502; one shared helper).
+  Provenance is built outside the `try`, so a bad clock is a
+  `ValueError`, not a 502.
 - Network guard (tests only, `tests/network_guard.py`): an autouse
   fixture makes any connect, `connect_ex`, `create_connection`,
   `getaddrinfo` or `gethostbyname` to a non-loopback address fail. Every
@@ -57,26 +58,40 @@
   look like "no data" (404) or an empty history instead of a
   `ProviderError`; fix in R1 (#54), documented on the collector class.
   Fund key metrics (52-week range, average volume, beta, dividend yield
-  from the fake bars) belong to I2 (#27) and I3 (#28). Part 2 of #24
-  and #25 remain.
+  from the fake bars) belong to I2 (#27) and I3 (#28). The fake P/E is
+  not yet consistent with P/B divided by ROE (for example
+  `DEMO_DE_INDUSTRY`); fix with the demo-v2 data in I2 (#27). Part 2 of
+  #24 and #25 remain.
+- Review: each task had a task review; Task 4 needed two fix rounds
+  (the fake setting under integration selections, and the guard not
+  seeing yfinance's `curl_cffi`). The final whole-branch review asked
+  for one fix wave (Yahoo key metrics for an unknown ticker, fake
+  metrics against the fixture, docs); its scoped re-review said ready
+  to merge.
 - AI model: Claude Opus 5.5 (Claude Code) as controller; Claude Sonnet
   5.5 implementers for Tasks 1-4 and the review fixes; reviewers Claude
-  Sonnet 5.5 (Tasks 1-2) and Claude Opus 5.5 (Tasks 3-4). Account usage
-  was not available in this session.
+  Sonnet 5.5 (Tasks 1-2, re-reviews of #19) and Claude Opus 5.5
+  (Tasks 3-4, Task 4 re-reviews, the final review and its re-review).
+  Account usage was not available in this session.
 - Time tracking (2026-10-12, +0200): session start 14:12 (the
   controller's first command; not in git; setup, Python 3.12 venv,
   baseline run, plans). Git times, by commit subject: "docs: plan the
   collector interface" 14:34; "feat: add provider-neutral data collector
   contracts" 14:36; "feat: add deterministic offline FakeCollector"
   14:40; "feat: put the Yahoo collector on the contracts" 14:45;
-  "feat: select the data collector with DATA_COLLECTOR" 14:57; "style:
-  sort imports" 14:57; "docs: document DATA_COLLECTOR" 14:58; "test:
+  "feat: select the data collector with DATA_COLLECTOR" 14:57 (an
+  import-sort fix at 14:57 was folded into it before the push);
+  "docs: document DATA_COLLECTOR" 14:58; "test:
   force the fake collector in every selection mode" 15:13; "docs:
   correct the collector docs" 15:13; "test: make the guard tests unable
   to reach the network" 15:27; "docs: correct the journal after the
   second review" 15:27; "fix: return no data for unknown Yahoo key
-  metrics" 15:53; final-wave docs commit 15:53. Total 14:12 to
-  15:53.
+  metrics" 15:53; final-wave docs commit 15:53; the controller's
+  closing docs commit after the final re-review. Before the push, the
+  controller rewrote two co-author trailers (Tasks 1 and 2 were written
+  by Claude Sonnet 5.5 but carried the Opus line from the plan) and
+  folded the import-sort commit; the tree did not change. Total 14:12
+  to 15:58 (the closing docs commit).
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 
