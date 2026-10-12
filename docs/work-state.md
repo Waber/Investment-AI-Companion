@@ -3,12 +3,14 @@
 ## Pagination bounds (#19): 2026-10-12
 
 - Branch `fix/pagination-bounds-19`, based on `25e7eba`. Not pushed.
-- Completed: `skip >= 0` and `1 <= limit <= 1000` on the three list
-  endpoints, shared in `app/api/pagination.py`. New tests in
-  `tests/test_pagination_bounds.py`.
+  [Plan](superpowers/plans/2026-10-12-pagination-bounds.md).
+- Completed: `0 <= skip <= 2**63 - 1` and `1 <= limit <= 1000` on
+  the three list endpoints, shared in `app/api/pagination.py`. New
+  tests in `tests/test_pagination_bounds.py`. Review fixes applied,
+  including the skip upper bound.
 - Incomplete: the owner's or Code Reviewer's OK on
   `MAX_PAGE_LIMIT = 1000`. Pull request not opened.
-- Tests: new file 23 passed. Full CI command 1042 passed, 119
+- Tests: new file 32 passed. Full CI command 1051 passed, 119
   deselected, coverage 94.78%. The integration tests were not run
   (no PostgreSQL here).
 - Active agents: none.

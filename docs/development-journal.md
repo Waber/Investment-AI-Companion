@@ -18,18 +18,38 @@
   `tests/test_pagination_bounds.py` was written from the task
   brief. It covers 422 for `skip=-1`, `limit=-1`, `limit=0` and
   `limit=1001`, 200 for `limit=1000` and `skip=0&limit=1`, the
-  default page of 100 with 101 rows, and the `loc` of the error.
-  RED: 12 cases returned 200 instead of 422. GREEN: 23 passed.
-- Verification: `python -m pytest -q -p no:cacheprovider
-  tests/test_pagination_bounds.py` (23 passed). The full CI command
-  gave 1042 passed, 119 deselected, total coverage 94.78%.
-  `black`, `isort` and `flake8` are clean on the two new files.
-  `companies.py` and `financial_metrics.py` already had isort and
-  flake8 findings on master; this change adds none.
+  default page of 100 with 101 rows (companies and both metrics
+  lists), the `loc` of the error, and the OpenAPI minimum, maximum
+  and default. RED: 12 cases returned 200 instead of 422.
+- Found in review: `skip=9223372036854775808` returned HTTP 500 on
+  SQLite (integer overflow). `skip` now has `le=2**63 - 1`
+  (`MAX_SKIP`, the signed 64-bit maximum). `2**63` returns 422 and
+  `2**63 - 1` returns 200.
+- Verification, from the worktree root with the Python 3.12 venv:
+  - `python -m pytest -q -p no:cacheprovider
+    tests/test_pagination_bounds.py`: 32 passed.
+  - `python -m pytest -q -p no:cacheprovider
+    tests/test_delete_and_not_found_api.py tests/test_seed_demo.py`:
+    72 passed.
+  - `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider
+    -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
+    --cov-branch --cov-report=term-missing --cov-fail-under=80`:
+    1051 passed, 119 deselected, total coverage 94.78%.
+  - `python -m black --check` on the four changed `.py` files:
+    clean. `python -m isort --check-only` and `python -m flake8` on
+    `app/api/pagination.py` and `tests/test_pagination_bounds.py`:
+    clean.
+  - isort and flake8 already failed on master for `companies.py`
+    and `financial_metrics.py` (flake8: 14 findings, same count
+    now). The new import lines sit in the old order in those files
+    and the branch does not re-sort them.
+  - The integration tests were not run (no PostgreSQL here).
 - AI model: Claude Sonnet 5.5 implementer via Claude Code, Claude
   Opus 5.5 controller. Account usage was not available in this
   session.
-- Time: started 2026-10-12 about 14:40 +0200.
+- Time: session started about 14:10 +0200 (setup, baseline run,
+  plans). Plan commit 14:34, implementation commit 14:37. Review
+  and the fix round followed; the fix round ended at 14:47 +0200.
 
 ## 2026-10-10 - Point the requirements at issues #57, #58 and #65
 
