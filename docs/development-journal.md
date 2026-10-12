@@ -92,6 +92,12 @@
   by Claude Sonnet 5.5 but carried the Opus line from the plan) and
   folded the import-sort commit; the tree did not change. Total 14:12
   to 15:58 (the closing docs commit).
+- Published as
+  [PR #68](https://github.com/Waber/Investment-AI-Companion/pull/68)
+  (Refs #24, part 1). Not merged. The owner chose to push; the pull
+  request was opened at 17:17 +0200. The R1 hand-offs are posted on
+  [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668)
+  at 17:19.
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 

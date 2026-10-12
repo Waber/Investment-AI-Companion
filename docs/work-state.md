@@ -3,7 +3,10 @@
 ## Collector interface, part 1 of #24: 2026-10-12
 
 - Branch `feature/collector-interface-24`, based on `origin/master`
-  `25e7eba`. Not pushed, no pull request yet.
+  `25e7eba`.
+  [PR #68](https://github.com/Waber/Investment-AI-Companion/pull/68)
+  (Refs #24, part 1), not merged. R1 hand-offs posted on
+  [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668).
 - Completed: contracts, `FakeCollector`, Yahoo collector on the
   contracts, `DATA_COLLECTOR` setting with `get_collector()`, test
   network guard, docs, review fixes (final wave included). The final
@@ -20,13 +23,14 @@
   ROE, belong to I2 #27 and I3 #28. The guard cannot see libpq or
   libcurl.
 - Active agents: none. Blockers: none.
-- Stop reason: the branch is complete and reviewed; pushing and
-  opening the pull request wait for the owner's go-ahead. Account
-  usage was not available in this session.
-- Next action: push and open the pull request (Refs #24) once the
-  owner authorizes it. PR #67 (#19) also adds top entries to this file
-  and the journal; whichever merges second rebases and keeps both.
-  Then part 2 of #24, then #25.
+- Stop reason: PR #68 is open and waits for the owner's review and
+  merge; agents do not merge. Account usage was not available in this
+  session.
+- Next action: the owner reviews PR #68 and merges it with "Rebase and
+  merge". PR #67 (#19) also adds top entries to this file and the
+  journal; whichever merges second rebases onto `origin/master`, keeps
+  both entries, and pushes with `--force-with-lease`. Then part 2 of
+  #24, then #25.
 
 ## Pagination bounds (#19): 2026-10-12
 
