@@ -13,10 +13,23 @@ then does not import the application, and the SQLite suite is
 unchanged. ``tests/conftest.py`` is not modified.
 """
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Set before anything can import the app or yfinance. This file is the
+# one place that does it, because it runs first in every selection mode
+# (the integration branch below imports ``Settings`` before
+# ``tests/conftest.py`` is loaded). Assignment, not setdefault: a
+# developer shell must not turn the suite into an online run.
+# - DATA_COLLECTOR=fake: fetch-company uses the offline collector.
+# - YF_DISABLE_CURL_CFFI=1: yfinance falls back to ``requests``, which
+#   opens Python sockets that the network guard sees. Its default,
+#   curl_cffi (libcurl, written in C), would bypass the guard.
+os.environ["DATA_COLLECTOR"] = "fake"
+os.environ["YF_DISABLE_CURL_CFFI"] = "1"
 
 
 def _isolate_when_integration_is_selected() -> None:

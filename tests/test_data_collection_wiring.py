@@ -1,4 +1,4 @@
-"""Default provider wiring and the placeholder metrics endpoint."""
+"""The fetch-financial-metrics placeholder endpoint."""
 
 import pytest
 

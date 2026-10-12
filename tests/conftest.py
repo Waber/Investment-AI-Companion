@@ -6,10 +6,8 @@ import os
 # missing-key failure deletes this name first.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-0123456789")
 
-# fetch-company must never call live Yahoo Finance from a test. The
-# assignment is deliberate (not setdefault): a developer shell that sets
-# DATA_COLLECTOR=yahoo must not turn the suite into an online run.
-os.environ["DATA_COLLECTOR"] = "fake"
+# DATA_COLLECTOR=fake and YF_DISABLE_CURL_CFFI are set in the root
+# conftest.py, which pytest imports first (see the comment there).
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
@@ -24,14 +22,26 @@ from tests import network_guard  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def block_network(request, monkeypatch):
-    """Fail a test that connects to a non-loopback address.
+    """Fail a test that reaches a non-loopback address or host name.
 
-    Loopback and Unix sockets stay allowed. Tests marked ``integration``
-    are not guarded: they connect to a PostgreSQL server, which may be
-    on another machine and is chosen by the developer, not by the code.
+    Loopback and Unix sockets stay allowed. The guard patches Python's
+    ``socket`` module only, so it cannot see C clients such as libpq.
+    Tests marked ``integration`` are exempt because they connect to a
+    PostgreSQL server that the developer chooses (``TEST_POSTGRES_DSN``),
+    which may not be on this machine.
+
+    The fixture yields the list of blocked attempts. Code under test can
+    swallow the error, so a non-empty list fails the test at teardown. A
+    test that blocks on purpose calls ``attempts.clear()``.
     """
-    if request.node.get_closest_marker("integration") is None:
-        network_guard.install(monkeypatch)
+    if request.node.get_closest_marker("integration") is not None:
+        yield []
+        return
+    network_guard.install(monkeypatch)
+    yield network_guard.ATTEMPTS
+    attempts = list(network_guard.ATTEMPTS)
+    network_guard.ATTEMPTS.clear()
+    assert not attempts, f"Network access was attempted: {attempts}"
 
 
 @pytest_asyncio.fixture()

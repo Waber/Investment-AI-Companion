@@ -1,6 +1,8 @@
 """DATA_COLLECTOR setting, the get_collector dependency and the guard."""
 
+import os
 import socket
+import tempfile
 
 import pytest
 from pydantic import ValidationError
@@ -11,6 +13,7 @@ from app.data_collectors import yahoo_finance
 from app.data_collectors.fake import FakeCollector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.repositories.company_repository import CompanyRepository
+from tests import network_guard
 from tests.network_guard import NetworkBlockedError
 
 FETCH_URL = "/api/v1/data-collection/fetch-company"
@@ -99,12 +102,15 @@ async def test_fetch_company_with_the_fake_returns_404_for_unknown(client):
     assert company_rows(client) == []
 
 
-def test_guard_blocks_a_non_loopback_connect():
+def test_guard_blocks_a_non_loopback_connect(block_network):
     with pytest.raises(NetworkBlockedError):
         socket.create_connection(("192.0.2.1", 80), timeout=1)
 
+    assert len(block_network) == 1  # recorded, so a swallowed error fails
+    block_network.clear()
 
-def test_guard_blocks_connect_and_connect_ex():
+
+def test_guard_blocks_connect_and_connect_ex(block_network):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         with pytest.raises(NetworkBlockedError):
@@ -113,6 +119,23 @@ def test_guard_blocks_connect_and_connect_ex():
             sock.connect_ex(("192.0.2.1", 80))
     finally:
         sock.close()
+    block_network.clear()
+
+
+def test_guard_blocks_dns_lookups(block_network):
+    with pytest.raises(NetworkBlockedError):
+        socket.getaddrinfo("example.com", 80)
+    with pytest.raises(NetworkBlockedError):
+        socket.gethostbyname("example.com")
+
+    assert len(block_network) == 2
+    block_network.clear()
+
+
+def test_guard_blocks_a_non_string_host_without_crashing(block_network):
+    with pytest.raises(NetworkBlockedError):
+        network_guard.refuse_remote((2, 80))
+    block_network.clear()
 
 
 def test_guard_allows_a_loopback_connect():
@@ -124,6 +147,67 @@ def test_guard_allows_a_loopback_connect():
         client.close()
     finally:
         server.close()
+
+
+def test_guard_allows_an_ipv6_loopback_connect():
+    server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    try:
+        server.bind(("::1", 0))
+    except OSError:
+        server.close()
+        pytest.skip("IPv6 loopback is not available on this machine")
+    server.listen(1)
+    try:
+        client = socket.create_connection(server.getsockname()[:2], timeout=2)
+        client.close()
+    finally:
+        server.close()
+
+
+def test_guard_allows_a_unix_socket():
+    # A short path: AF_UNIX paths are limited to about 100 characters.
+    with tempfile.TemporaryDirectory(dir="/tmp") as folder:
+        path = os.path.join(folder, "s")
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(path)
+        server.listen(1)
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            client.connect(path)
+        finally:
+            client.close()
+            server.close()
+
+
+def test_yfinance_uses_requests_so_the_guard_can_see_it():
+    from yfinance import _http
+
+    assert _http.HAS_CURL_CFFI is False
+
+
+def test_a_yfinance_call_is_blocked_before_any_network_io(block_network):
+    # No stub on purpose: this is the real yfinance transport. The guard
+    # refuses the DNS lookup, so nothing leaves the machine. yfinance
+    # may swallow the error, which is why the attempt list is the proof.
+    import yfinance as yf
+
+    try:
+        yf.Ticker("AAPL").info
+    except Exception:
+        pass
+
+    assert block_network, "yfinance reached the network without the guard"
+    block_network.clear()
+
+
+def test_every_blocked_attempt_is_recorded(block_network):
+    try:
+        socket.create_connection(("192.0.2.1", 80), timeout=1)
+    except Exception:  # code under test may swallow the guard error
+        pass
+
+    assert len(block_network) == 1
+    block_network.clear()
 
 
 class NearEmptyTicker:

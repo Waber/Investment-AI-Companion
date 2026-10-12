@@ -332,7 +332,7 @@ async def test_blank_ticker_is_rejected_on_create(client, ticker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", ["", "   "])
 async def test_blank_ticker_is_rejected_by_fetch_company(client, ticker):
-    """fetch-company rejects an empty or whitespace ticker before Yahoo."""
+    """fetch-company rejects an empty or whitespace ticker (422)."""
     client.app.dependency_overrides[get_collector] = lambda: FakeCollector()
     before = _company_count(client)
 
@@ -349,7 +349,7 @@ async def test_fetch_company_provider_error_is_502_without_provider_text(
     """ProviderError is 502 with a fixed body; the log names the ticker.
 
     Neither the body nor the log carries the provider's own text. The
-    Yahoo collector already logged the raw error in its own module.
+    collector already logged the raw error in its own module.
     """
     error = ProviderError("password=hunter2")
     error.__cause__ = RuntimeError("password=hunter2")
