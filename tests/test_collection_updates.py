@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.api.data_collection import get_yahoo_finance_collector
 from app.models.database_models import CompanyDB, FinancialMetricsDB
+from tests.collector_stubs import sourced
 
 COLLECTION_URL = "/api/v1/data-collection/fetch-company"
 PROVIDER_FIELDS = {
@@ -27,7 +28,9 @@ class RecordingCollector:
 
     def fetch_company_info(self, ticker):
         self.calls.append(ticker)
-        return self.result
+        if self.result is None:
+            return None
+        return sourced(self.result)
 
 
 @pytest.fixture
@@ -168,7 +171,7 @@ async def test_missing_provider_data_preserves_entire_database(
 
     assert response.status_code == 404, response.text
     assert response.json()["detail"] == (
-        f"Company with ticker {ticker.upper()} not found on Yahoo Finance"
+        f"Company with ticker {ticker.upper()} not found at the data provider"
     )
     assert collector.calls == [ticker.upper()]
     await assert_readback(client, *records)

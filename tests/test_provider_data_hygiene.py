@@ -18,12 +18,14 @@ from app.api.data_collection import (
     get_yahoo_finance_collector,
 )
 from app.data_collectors import yahoo_finance
+from app.data_collectors.base import ProviderError
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.models.company import Company, CompanyCreate, normalize_ticker
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from app.models.financial_metrics import FinancialMetrics
 from app.models.historical_data import HistoricalData
 from app.repositories.company_repository import CompanyRepository
+from tests.collector_stubs import sourced
 
 COMPANIES = "/api/v1/companies/"
 METRICS = "/api/v1/financial-metrics/"
@@ -103,7 +105,7 @@ class PayloadCollector:
         self.payload = payload
 
     def fetch_company_info(self, ticker):
-        return dict(self.payload)
+        return sourced(dict(self.payload))
 
 
 def _count(client) -> int:
@@ -548,7 +550,8 @@ def test_yahoo_error_text_with_newline_does_not_forge_a_log_line(
 
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Boom)
     with caplog.at_level(logging.ERROR, logger=yahoo_finance.__name__):
-        assert YahooFinanceCollector().fetch_company_info("FAIL") is None
+        with pytest.raises(ProviderError):
+            YahooFinanceCollector().fetch_company_info("FAIL")
 
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 
@@ -561,9 +564,9 @@ def test_yahoo_logs_do_not_split_on_a_newline_ticker(monkeypatch, caplog):
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Info)
     ticker = "ACME\nINFO forged-admin-login"
     with caplog.at_level(logging.INFO, logger=yahoo_finance.__name__):
-        info = YahooFinanceCollector().fetch_company_info(ticker)
+        result = YahooFinanceCollector().fetch_company_info(ticker)
 
-    assert info is not None
+    assert result is not None
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 
 
@@ -577,7 +580,8 @@ def test_yahoo_error_log_does_not_split_on_a_newline_ticker(
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Boom)
     ticker = "ACME\nINFO forged-admin-login"
     with caplog.at_level(logging.INFO, logger=yahoo_finance.__name__):
-        assert YahooFinanceCollector().fetch_company_info(ticker) is None
+        with pytest.raises(ProviderError):
+            YahooFinanceCollector().fetch_company_info(ticker)
 
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 

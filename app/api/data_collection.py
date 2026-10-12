@@ -19,6 +19,7 @@ from pydantic import (
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.data_collectors.base import ProviderError
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.models.company import (
     DESCRIPTION_MAX_LENGTH,
@@ -138,14 +139,17 @@ def fetch_company_data(
         company_repo = CompanyRepository(db)
 
         # Fetch company info from Yahoo Finance
-        company_info = collector.fetch_company_info(ticker)
+        # The collector returns the data together with its provenance.
+        # This endpoint stores only the data, so it reads ``.value``.
+        result = collector.fetch_company_info(ticker)
+        company_info = result.value if result is not None else None
 
         if not company_info:
             raise HTTPException(
                 status_code=404,
                 detail=(
                     f"Company with ticker {ticker} "
-                    "not found on Yahoo Finance"
+                    "not found at the data provider"
                 ),
             )
 
@@ -227,6 +231,13 @@ def fetch_company_data(
             status_code=502,
             detail="Provider returned invalid company data",
         )
+    except ProviderError:
+        # ProviderError is not a ValueError, so it is not a 400. The
+        # provider's own text (the exception cause) stays out of the
+        # body and out of this line: the Yahoo collector already logged
+        # it in its own module. %r keeps the ticker on one log line.
+        logger.error("Data provider error for ticker %r", ticker)
+        raise HTTPException(status_code=502, detail="Data provider error")
     except ValueError as e:
         # Handle uniqueness violations. The message is a fixed business
         # error, not a provider traceback, so it stays in the response.
