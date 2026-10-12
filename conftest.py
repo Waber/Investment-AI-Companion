@@ -8,9 +8,10 @@ from an empty temporary directory, so the file is never applied.
 A test ``SECRET_KEY`` is set first so a later required-secret rule
 does not crash that import.
 
-The default SQLite command does not select that marker. This file
-then does not import the application, and the SQLite suite is
-unchanged. ``tests/conftest.py`` is not modified.
+The default SQLite command does not select that marker, so that
+branch does not run. ``DATA_COLLECTOR`` and ``YF_DISABLE_CURL_CFFI``
+are set below in every mode. ``tests/conftest.py`` is not modified
+by the integration branch.
 """
 
 import os

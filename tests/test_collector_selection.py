@@ -43,7 +43,7 @@ def test_unknown_data_collector_fails_settings(monkeypatch):
 
 
 def test_tests_run_with_the_fake_collector():
-    # tests/conftest.py forces the variable before the app is imported.
+    # The root conftest.py forces the variable before the app is imported.
     assert settings.DATA_COLLECTOR == "fake"
 
 
@@ -102,6 +102,58 @@ async def test_fetch_company_with_the_fake_returns_404_for_unknown(client):
     assert company_rows(client) == []
 
 
+@pytest.fixture
+def offline_network(monkeypatch, block_network):
+    """Make it impossible for a guard test to reach the network.
+
+    1. Replace the socket primitives with stand-ins that raise, then
+       re-install the guard so it wraps the stand-ins. A call the guard
+       lets through reaches a stand-in, never the operating system.
+    2. Make curl_cffi (libcurl, which the guard cannot see) raise too.
+    3. Remove proxy settings, so no request can be sent to a proxy.
+    4. Give yfinance dummy caches, so the developer's real
+       ``cookies.db`` is never read.
+
+    Yields the list of stand-ins that were reached. It must stay empty.
+    """
+    reached = []
+
+    def standin(name):
+        def refuse(*args, **kwargs):
+            reached.append(name)
+            raise RuntimeError(f"stand-in {name} reached")
+
+        return refuse
+
+    for name in ("getaddrinfo", "gethostbyname", "create_connection"):
+        monkeypatch.setattr(socket, name, standin(name))
+    for name in ("connect", "connect_ex"):
+        monkeypatch.setattr(socket.socket, name, standin(name))
+    network_guard.install(monkeypatch)
+
+    curl_session = pytest.importorskip("curl_cffi.requests.session")
+    curl = pytest.importorskip("curl_cffi.curl")
+    monkeypatch.setattr(curl_session.Session, "request", standin("curl"))
+    monkeypatch.setattr(curl.Curl, "perform", standin("curl"))
+
+    for name in ("HTTP", "HTTPS", "ALL"):
+        monkeypatch.delenv(f"{name}_PROXY", raising=False)
+        monkeypatch.delenv(f"{name.lower()}_proxy", raising=False)
+    # "*" makes requests and urllib skip system (macOS) proxy settings.
+    monkeypatch.setenv("NO_PROXY", "*")
+    monkeypatch.setenv("no_proxy", "*")
+
+    from yfinance import cache
+
+    monkeypatch.setattr(
+        cache._CookieCacheManager, "_Cookie_cache", cache._CookieCacheDummy()
+    )
+    monkeypatch.setattr(
+        cache._TzCacheManager, "_tz_cache", cache._TzCacheDummy()
+    )
+    yield reached
+
+
 def test_guard_blocks_a_non_loopback_connect(block_network):
     with pytest.raises(NetworkBlockedError):
         socket.create_connection(("192.0.2.1", 80), timeout=1)
@@ -122,13 +174,14 @@ def test_guard_blocks_connect_and_connect_ex(block_network):
     block_network.clear()
 
 
-def test_guard_blocks_dns_lookups(block_network):
+def test_guard_blocks_dns_lookups(offline_network, block_network):
     with pytest.raises(NetworkBlockedError):
         socket.getaddrinfo("example.com", 80)
     with pytest.raises(NetworkBlockedError):
         socket.gethostbyname("example.com")
 
     assert len(block_network) == 2
+    assert offline_network == []  # the guard stopped both lookups
     block_network.clear()
 
 
@@ -185,10 +238,13 @@ def test_yfinance_uses_requests_so_the_guard_can_see_it():
     assert _http.HAS_CURL_CFFI is False
 
 
-def test_a_yfinance_call_is_blocked_before_any_network_io(block_network):
-    # No stub on purpose: this is the real yfinance transport. The guard
-    # refuses the DNS lookup, so nothing leaves the machine. yfinance
-    # may swallow the error, which is why the attempt list is the proof.
+def test_a_yfinance_call_is_blocked_before_any_network_io(
+    offline_network, block_network
+):
+    # A real yfinance call (no stub on yf.Ticker). Every layer below the
+    # guard is a raising stand-in, so this cannot reach the network even
+    # if the guard or the curl_cffi fallback regresses. yfinance may
+    # swallow the guard's error, so the attempt list is the proof.
     import yfinance as yf
 
     try:
@@ -196,7 +252,8 @@ def test_a_yfinance_call_is_blocked_before_any_network_io(block_network):
     except Exception:
         pass
 
-    assert block_network, "yfinance reached the network without the guard"
+    assert block_network, "the guard did not see the yfinance request"
+    assert offline_network == [], f"reached below the guard: {offline_network}"
     block_network.clear()
 
 
