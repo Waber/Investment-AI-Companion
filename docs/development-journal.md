@@ -98,6 +98,16 @@
   request was opened at 17:17 +0200. The R1 hand-offs are posted on
   [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668)
   at 17:19.
+- Rebase (2026-10-13): the owner merged PR #67 (#19) first, at 14:38
+  +0200, as merge commit `114c93a`. The branch was rebased onto it.
+  Only `docs/development-journal.md` and `docs/work-state.md`
+  conflicted, because both pull requests added a top entry. Both
+  entries are kept (#24 above #19), and the #19 work-state section now
+  says PR #67 is merged. The #67 code came in unchanged. After the
+  rebase: CI command 1134 passed, 121 deselected, coverage 95.24%;
+  `-m integration` 105 passed, 16 skipped; `-m ''` 1239 passed, 16
+  skipped. Pushed with `--force-with-lease` (see this commit's git
+  time).
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 
