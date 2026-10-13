@@ -76,9 +76,12 @@
 ## Collector interface, part 1 of #24: 2026-10-12
 
 - Branch `feature/collector-interface-24`, rebased on 2026-10-13 onto
-  `origin/master` `114c93a` (PR #67 merged).
+  `114c93a` (PR #67).
   [PR #68](https://github.com/Waber/Investment-AI-Companion/pull/68)
-  (Refs #24, part 1), not merged. R1 hand-offs posted on
+  (Refs #24, part 1) merged on 2026-10-13 as merge commit `107adf0`.
+  The merge closed #24 by mistake, so #24 was reopened for part 2
+  ([comment](https://github.com/Waber/Investment-AI-Companion/issues/24#issuecomment-6146030726)).
+  R1 hand-offs posted on
   [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668).
 - Completed: contracts, `FakeCollector`, Yahoo collector on the
   contracts, `DATA_COLLECTOR` setting with `get_collector()`, test
@@ -87,7 +90,7 @@
   rebase: full suite 1134 passed, coverage 95.24%; `-m integration`
   105 passed, 16 skipped; `-m ''` 1239 passed, 16 skipped. The
   PostgreSQL tests were not run locally (no `TEST_POSTGRES_DSN`; the
-  16 skips); CI runs them on PR #68.
+  16 skips). CI passed on PR #68, SQLite and PostgreSQL.
   [Plan](superpowers/plans/2026-10-12-collector-interface.md).
 - Incomplete: part 2 of #24 (cache, rate limit, backoff, currency
   normalization), then #25. Provenance is not yet stored or returned.
@@ -96,12 +99,16 @@
   metrics from the fake bars, and a fake P/E consistent with P/B and
   ROE, belong to I2 #27 and I3 #28. The guard cannot see libpq or
   libcurl.
-- Active agents: none. Blockers: none.
-- Stop reason: PR #68 is open and waits for the owner's review and
-  merge; agents do not merge. Account usage was not available in this
-  session.
-- Next action: the owner reviews PR #68 and merges it with "Rebase and
-  merge". Then part 2 of #24, then #25.
+- Active agents: none. Blockers: none. The session worktrees and the
+  merged local branches are removed. The remote branches
+  `feature/collector-interface-24` and `fix/pagination-bounds-19` and
+  two local `backup/collector-24-*` refs are left for the owner to
+  delete.
+- Stop reason: part 1 is merged; part 2 is not started. Account usage
+  was not available in this session.
+- Next action: part 2 of #24 (the cache, rate limit and backoff
+  wrapper, and currency normalization) on a new branch from
+  `origin/master`, then #25.
 
 ## Pagination bounds (#19): 2026-10-12
 
