@@ -1,5 +1,26 @@
 # Current Work State
 
+## Pagination bounds (#19): 2026-10-12
+
+- Branch `fix/pagination-bounds-19`, based on `25e7eba`.
+  [PR #67](https://github.com/Waber/Investment-AI-Companion/pull/67)
+  (Closes #19). [Plan](superpowers/plans/2026-10-12-pagination-bounds.md).
+- Completed: `0 <= skip <= 2**63 - 1` and `1 <= limit <= 1000` on
+  the three list endpoints, shared in `app/api/pagination.py`. New
+  tests in `tests/test_pagination_bounds.py`. Code Reviewer
+  approved after one fix round, including the skip upper bound.
+- Incomplete: the owner's OK on `MAX_PAGE_LIMIT = 1000` (the Code
+  Reviewer approved the value). PR #67 is not merged.
+- Tests: new file 32 passed. Full CI command 1051 passed, 119
+  deselected, coverage 94.78%. `-m integration` without
+  PostgreSQL: 103 passed, 16 skipped.
+- Active agents: none on this branch. Part 1 of #24 is in progress
+  on `feature/collector-interface-24`.
+- Blockers: none.
+- Next action: the owner reviews PR #67 and confirms 1000, then
+  merges with "Rebase and merge". The other open branch
+  (`feature/collector-interface-24`) will rebase onto it.
+
 ## Portfolio issue numbers: 2026-10-10
 
 - Branch `docs/record-portfolio-issue-numbers`, based on

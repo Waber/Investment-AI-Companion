@@ -10,6 +10,7 @@ from app.models.database_models import FinancialMetricsDB
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
 )
+from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
 from app.core.database import get_db
 from datetime import datetime, timezone
 
@@ -54,14 +55,16 @@ def db_to_metrics_model(db_metrics: FinancialMetricsDB) -> FinancialMetrics:
 
 @router.get("/", response_model=List[FinancialMetrics])
 def list_financial_metrics(
-    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+    skip: Skip = 0,
+    limit: Limit = DEFAULT_PAGE_LIMIT,
+    db: Session = Depends(get_db),
 ):
     """
     Retrieve a list of financial metrics with pagination support.
 
     Args:
-        skip: Number of records to skip (for pagination)
-        limit: Maximum number of records to return
+        skip: Number of records to skip (for pagination), 0 or more
+        limit: Maximum number of records to return, from 1 to 1000
         db: Database session injected by FastAPI dependency
 
     Returns:
@@ -101,8 +104,8 @@ def get_financial_metrics(metrics_id: int, db: Session = Depends(get_db)):
 @router.get("/company/{company_id}", response_model=List[FinancialMetrics])
 def get_company_financial_metrics(
     company_id: int,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = DEFAULT_PAGE_LIMIT,
     db: Session = Depends(get_db),
 ):
     """
@@ -110,8 +113,8 @@ def get_company_financial_metrics(
 
     Args:
         company_id: The ID of the company
-        skip: Number of records to skip (for pagination)
-        limit: Maximum number of records to return
+        skip: Number of records to skip (for pagination), 0 or more
+        limit: Maximum number of records to return, from 1 to 1000
         db: Database session injected by FastAPI dependency
 
     Returns:

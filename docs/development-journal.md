@@ -1,5 +1,67 @@
 # Development Journal
 
+## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
+
+- Scope: `GET /api/v1/companies/`, `GET /api/v1/financial-metrics/`
+  and `GET /api/v1/financial-metrics/company/{company_id}`. `skip`
+  must be at least 0 and `limit` must be 1 to 1000. Out-of-range
+  values return 422 through the existing validation handler. Before
+  this, `limit=-1` reached SQL and SQLite read it as no limit.
+- Decision: `MAX_PAGE_LIMIT = 1000`, the value proposed in the
+  issue. The default stays `limit=100`, `skip=0`. The bounds live
+  in `app/api/pagination.py` as two `Annotated[int, Query(...)]`
+  types, so the three endpoints share one definition. The value
+  1000 awaits the owner's or the Code Reviewer's OK in the pull
+  request, as the issue requires.
+- Tests: the strict-xfail test named in the issue is not on the
+  remote (`qa/known-defects-xfail`), so
+  `tests/test_pagination_bounds.py` was written from the task
+  brief. It covers 422 for `skip=-1`, `limit=-1`, `limit=0` and
+  `limit=1001`, 200 for `limit=1000` and `skip=0&limit=1`, the
+  default page of 100 with 101 rows (companies and both metrics
+  lists), the `loc` of the error, and the OpenAPI minimum, maximum
+  and default. RED: 12 cases returned 200 instead of 422.
+- Found in review: `skip=9223372036854775808` returned HTTP 500 on
+  SQLite (integer overflow). `skip` now has `le=2**63 - 1`
+  (`MAX_SKIP`, the signed 64-bit maximum). `2**63` returns 422 and
+  `2**63 - 1` returns 200.
+- Verification, from the worktree root with the Python 3.12 venv:
+  - `python -m pytest -q -p no:cacheprovider
+    tests/test_pagination_bounds.py`: 32 passed.
+  - `python -m pytest -q -p no:cacheprovider
+    tests/test_delete_and_not_found_api.py tests/test_seed_demo.py`:
+    72 passed.
+  - `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider
+    -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
+    --cov-branch --cov-report=term-missing --cov-fail-under=80`:
+    1051 passed, 119 deselected, total coverage 94.78%.
+  - `python -m black --check` on the four changed `.py` files:
+    clean. `python -m isort --check-only` and `python -m flake8` on
+    `app/api/pagination.py` and `tests/test_pagination_bounds.py`:
+    clean.
+  - isort and flake8 already failed on master for `companies.py`
+    and `financial_metrics.py` (flake8: 14 findings, same count
+    now). The new import lines sit in the old order in those files
+    and the branch does not re-sort them.
+  - `python -m pytest -q -p no:cacheprovider -m integration` with
+    no `TEST_POSTGRES_DSN`: 103 passed, 16 skipped. The 16 skips
+    need PostgreSQL.
+- Review: the Code Reviewer agent (Claude Opus 5.5) found 2
+  Important and 8 Minor issues and approved `MAX_PAGE_LIMIT = 1000`.
+  All were fixed except the commit trailer, which names the model
+  that wrote the commits. A scoped re-review (Claude Sonnet 5.5)
+  marked every finding addressed.
+- Published as
+  [PR #67](https://github.com/Waber/Investment-AI-Companion/pull/67).
+  Not merged. The owner's OK on 1000 is asked for in the PR.
+- AI model: Claude Sonnet 5.5 implementer via Claude Code, Claude
+  Opus 5.5 controller. Account usage was not available in this
+  session.
+- Time: session started about 14:10 +0200 (setup, baseline run,
+  plans). Plan commit 14:34, implementation commit 14:37. Review
+  and the fix round followed; the fix round ended at 14:47 +0200.
+  The pull request was opened at 14:59 +0200.
+
 ## 2026-10-10 - Point the requirements at issues #57, #58 and #65
 
 - Scope: after PR #64 was squash-merged to `origin/master` as

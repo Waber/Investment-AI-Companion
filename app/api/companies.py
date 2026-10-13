@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.company import Company, CompanyCreate, CompanyUpdate
 from app.models.database_models import CompanyDB
 from app.repositories.company_repository import CompanyRepository
+from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
 from app.core.database import get_db
 from datetime import datetime, timezone
 
@@ -41,14 +42,16 @@ def db_to_company_model(db_company: CompanyDB) -> Company:
 
 @router.get("/", response_model=List[Company])
 def list_companies(
-    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+    skip: Skip = 0,
+    limit: Limit = DEFAULT_PAGE_LIMIT,
+    db: Session = Depends(get_db),
 ):
     """
     Retrieve a list of companies with pagination support.
 
     Args:
-        skip: Number of records to skip (for pagination)
-        limit: Maximum number of records to return
+        skip: Number of records to skip (for pagination), 0 or more
+        limit: Maximum number of records to return, from 1 to 1000
         db: Database session injected by FastAPI dependency
 
     Returns:
