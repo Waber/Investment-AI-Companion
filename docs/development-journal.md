@@ -94,8 +94,8 @@
   to 15:58 (the closing docs commit).
 - Published as
   [PR #68](https://github.com/Waber/Investment-AI-Companion/pull/68)
-  (Refs #24, part 1). Not merged. The owner chose to push; the pull
-  request was opened at 17:17 +0200. The R1 hand-offs are posted on
+  (Refs #24, part 1). The owner chose to push; the pull request was
+  opened at 17:17 +0200. The R1 hand-offs are posted on
   [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668)
   at 17:19.
 - Rebase (2026-10-13): the owner merged PR #67 (#19) first, at 14:38
@@ -108,6 +108,16 @@
   `-m integration` 105 passed, 16 skipped; `-m ''` 1239 passed, 16
   skipped. Pushed with `--force-with-lease` (see this commit's git
   time).
+- Merged (2026-10-13): the owner merged PR #68 at 14:48 +0200 as merge
+  commit `107adf0`, after CI passed on SQLite and PostgreSQL. The merge
+  also closed #24. The PR body said it "does not close" the issue, and
+  GitHub reads "close" followed by an issue number as a closing
+  keyword, even after "does not". Part 2 is still open, so #24 was
+  reopened at 14:55 with a comment that lists part 2. Lesson: a
+  partial delivery says only "Refs" and never puts a closing keyword
+  before the issue number. The session worktrees and the merged local
+  branches were removed. The merged remote branches and two backup refs
+  are left for the owner.
 
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 
