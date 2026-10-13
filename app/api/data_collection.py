@@ -18,7 +18,10 @@ from pydantic import (
 )
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.data_collectors.base import InstrumentLookup, ProviderError
+from app.data_collectors.fake import FakeCollector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.models.company import (
     DESCRIPTION_MAX_LENGTH,
@@ -32,7 +35,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data-collection", tags=["data-collection"])
 
 
-def get_yahoo_finance_collector() -> YahooFinanceCollector:
+def get_collector() -> InstrumentLookup:
+    """Return the collector chosen by ``DATA_COLLECTOR``.
+
+    The setting is read on every call (not at import), so a test can
+    change it with ``monkeypatch``. Tests that need other behavior
+    replace this function through ``app.dependency_overrides``.
+    """
+    if settings.DATA_COLLECTOR == "fake":
+        return FakeCollector()
     return YahooFinanceCollector()
 
 
@@ -102,13 +113,15 @@ class FetchCompanyResponse(BaseModel):
 def fetch_company_data(
     request: FetchCompanyRequest,
     db: Session = Depends(get_db),
-    collector: YahooFinanceCollector = Depends(get_yahoo_finance_collector),
+    collector: InstrumentLookup = Depends(get_collector),
 ):
     """
-    Fetch company data from Yahoo Finance and create/update it in the database.
+    Fetch company data from the configured provider and create/update it.
+
+    The provider is chosen by ``DATA_COLLECTOR`` (``yahoo`` or ``fake``).
 
     This endpoint:
-    1. Fetches company information from Yahoo Finance
+    1. Fetches company information from the provider
     2. Creates a new company in the database if it doesn't exist
     3. Updates existing company if it already exists
     4. Returns the company ID
@@ -138,14 +151,17 @@ def fetch_company_data(
         company_repo = CompanyRepository(db)
 
         # Fetch company info from Yahoo Finance
-        company_info = collector.fetch_company_info(ticker)
+        # The collector returns the data together with its provenance.
+        # This endpoint stores only the data, so it reads ``.value``.
+        result = collector.fetch_company_info(ticker)
+        company_info = result.value if result is not None else None
 
         if not company_info:
             raise HTTPException(
                 status_code=404,
                 detail=(
                     f"Company with ticker {ticker} "
-                    "not found on Yahoo Finance"
+                    "not found at the data provider"
                 ),
             )
 
@@ -227,6 +243,13 @@ def fetch_company_data(
             status_code=502,
             detail="Provider returned invalid company data",
         )
+    except ProviderError:
+        # ProviderError is not a ValueError, so it is not a 400. The
+        # provider's own text (the exception cause) stays out of the
+        # body and out of this line: the collector already logged it in
+        # its own module. %r keeps the ticker on one log line.
+        logger.error("Data provider error for ticker %r", ticker)
+        raise HTTPException(status_code=502, detail="Data provider error")
     except ValueError as e:
         # Handle uniqueness violations. The message is a fixed business
         # error, not a provider traceback, so it stays in the response.

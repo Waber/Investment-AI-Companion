@@ -1,25 +1,54 @@
 # Current Work State
 
+## Collector interface, part 1 of #24: 2026-10-12
+
+- Branch `feature/collector-interface-24`, rebased on 2026-10-13 onto
+  `origin/master` `114c93a` (PR #67 merged).
+  [PR #68](https://github.com/Waber/Investment-AI-Companion/pull/68)
+  (Refs #24, part 1), not merged. R1 hand-offs posted on
+  [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668).
+- Completed: contracts, `FakeCollector`, Yahoo collector on the
+  contracts, `DATA_COLLECTOR` setting with `get_collector()`, test
+  network guard, docs, review fixes (final wave included). The final
+  whole-branch review's re-review says ready to merge. After the
+  rebase: full suite 1134 passed, coverage 95.24%; `-m integration`
+  105 passed, 16 skipped; `-m ''` 1239 passed, 16 skipped. The
+  PostgreSQL tests were not run locally (no `TEST_POSTGRES_DSN`; the
+  16 skips); CI runs them on PR #68.
+  [Plan](superpowers/plans/2026-10-12-collector-interface.md).
+- Incomplete: part 2 of #24 (cache, rate limit, backoff, currency
+  normalization), then #25. Provenance is not yet stored or returned.
+  Under yfinance `hide_exceptions` a Yahoo HTTP failure can look like
+  "no data" instead of a `ProviderError` (fix in R1 #54). Fund key
+  metrics from the fake bars, and a fake P/E consistent with P/B and
+  ROE, belong to I2 #27 and I3 #28. The guard cannot see libpq or
+  libcurl.
+- Active agents: none. Blockers: none.
+- Stop reason: PR #68 is open and waits for the owner's review and
+  merge; agents do not merge. Account usage was not available in this
+  session.
+- Next action: the owner reviews PR #68 and merges it with "Rebase and
+  merge". Then part 2 of #24, then #25.
+
 ## Pagination bounds (#19): 2026-10-12
 
 - Branch `fix/pagination-bounds-19`, based on `25e7eba`.
   [PR #67](https://github.com/Waber/Investment-AI-Companion/pull/67)
-  (Closes #19). [Plan](superpowers/plans/2026-10-12-pagination-bounds.md).
+  (Closes #19), merged on 2026-10-13 as merge commit `114c93a`; #19
+  is closed. [Plan](superpowers/plans/2026-10-12-pagination-bounds.md).
 - Completed: `0 <= skip <= 2**63 - 1` and `1 <= limit <= 1000` on
   the three list endpoints, shared in `app/api/pagination.py`. New
   tests in `tests/test_pagination_bounds.py`. Code Reviewer
   approved after one fix round, including the skip upper bound.
-- Incomplete: the owner's OK on `MAX_PAGE_LIMIT = 1000` (the Code
-  Reviewer approved the value). PR #67 is not merged.
+- Incomplete: none. The owner merged PR #67 with
+  `MAX_PAGE_LIMIT = 1000`.
 - Tests: new file 32 passed. Full CI command 1051 passed, 119
   deselected, coverage 94.78%. `-m integration` without
   PostgreSQL: 103 passed, 16 skipped.
-- Active agents: none on this branch. Part 1 of #24 is in progress
-  on `feature/collector-interface-24`.
+- Active agents: none.
 - Blockers: none.
-- Next action: the owner reviews PR #67 and confirms 1000, then
-  merges with "Rebase and merge". The other open branch
-  (`feature/collector-interface-24`) will rebase onto it.
+- Next action: none for #19. `feature/collector-interface-24`
+  (PR #68) is rebased onto it.
 
 ## Portfolio issue numbers: 2026-10-10
 

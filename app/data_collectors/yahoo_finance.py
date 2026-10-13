@@ -8,11 +8,43 @@ Yahoo Finance using the yfinance library.
 import logging
 import math
 import numbers
-from typing import Any, Dict, Optional
+from datetime import date, datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
 
+import pandas as pd
 import yfinance as yf
 
+from app.data_collectors.base import (
+    PriceBar,
+    Provenance,
+    ProviderError,
+    Sourced,
+)
+
 logger = logging.getLogger(__name__)
+
+SOURCE = "yahoo_finance"
+
+# yfinance quoteType values for which ``totalAssets`` is assets under
+# management, not a balance-sheet total.
+FUND_QUOTE_TYPES = ("ETF", "MUTUALFUND")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _float_or_none(value: Any) -> Optional[float]:
+    """NaN and missing become None, never 0."""
+    if value is None or pd.isna(value):
+        return None
+    return float(value)
+
+
+def _int_or_none(value: Any) -> Optional[int]:
+    if value is None or pd.isna(value):
+        return None
+    return int(value)
 
 
 def _is_real_number(value: Any) -> bool:
@@ -36,7 +68,8 @@ def _debt_to_assets(info: Dict[str, Any]) -> Optional[float]:
     call the provider again. With yfinance, ``info`` has no
     ``totalAssets`` for equities, so the value is usually None. For
     ETFs, ``totalAssets`` is assets under management, not a
-    balance-sheet total. #24 moves this to ``balance_sheet``.
+    balance-sheet total, so ``fetch_key_metrics`` skips this function
+    for funds. The ``balance_sheet`` ratio is R1 (#54).
 
     Missing values, non-numbers, NaN, infinity, negative debt, and a
     non-positive asset total are None. A huge integer can make
@@ -60,19 +93,57 @@ def _debt_to_assets(info: Dict[str, Any]) -> Optional[float]:
         return None
 
 
+def _has_no_data(info: Dict[str, Any]) -> bool:
+    """True when ``info`` looks like an unknown ticker.
+
+    yfinance 1.7 sets hide_exceptions=True, so an unknown ticker returns
+    a near-empty ``info`` dict instead of raising. No name means no data
+    for this ticker.
+    """
+    return not (info.get("longName") or info.get("shortName"))
+
+
 class YahooFinanceCollector:
     """
     Collector for fetching stock market data from Yahoo Finance.
 
     This class wraps the yfinance library to provide a clean interface
     for fetching various types of financial data.
+
+    It implements the ``InstrumentLookup``, ``PriceHistory`` and
+    ``Fundamentals`` capabilities from ``base``. It does not implement
+    ``FundAttributes`` yet (I3 #28, R1 #54). The other ``fetch_*``
+    methods are Yahoo-specific helpers outside those contracts.
+
+    Error contract: "no data" is ``None``. When yfinance fails, each
+    method logs and raises ``ProviderError``. ``raise ... from exc``
+    chains the original exception as ``__cause__`` (like the cause of a
+    Java exception), so the traceback still shows what really failed.
+
+    Known limitation: yfinance 1.7 hides some exceptions
+    (hide_exceptions=True). A Yahoo HTTP failure can therefore look like
+    "no data" (``None``, so fetch-company answers 404) or an empty
+    history instead of raising ``ProviderError``. To fix in R1 (#54).
     """
 
-    def __init__(self):
-        """Initialize the Yahoo Finance collector."""
-        pass
+    def __init__(self, clock: Optional[Callable[[], datetime]] = None):
+        """Initialize the collector.
 
-    def fetch_company_info(self, ticker: str) -> Optional[Dict[str, Any]]:
+        ``clock`` returns the current time. Tests pass a fixed one; the
+        default is the current UTC time.
+        """
+        self._clock = clock or _utc_now
+
+    def _provenance(self, as_of: Optional[date] = None) -> Provenance:
+        # Yahoo ``info`` does not say which date it describes, so as_of
+        # stays None unless the caller knows it (the last price bar).
+        return Provenance(
+            source=SOURCE, retrieved_at=self._clock(), as_of=as_of
+        )
+
+    def fetch_company_info(
+        self, ticker: str
+    ) -> Optional[Sourced[Dict[str, Any]]]:
         """
         Fetch basic company information for a given ticker.
 
@@ -80,18 +151,26 @@ class YahooFinanceCollector:
             ticker: Stock ticker symbol (e.g., 'AAPL', 'MSFT', 'TSLA')
 
         Returns:
-            Dictionary containing company information or None if not found
+            The company dict (keys: ``COMPANY_INFO_FIELDS``) with its
+            provenance.
+
+        Raises:
+            ProviderError: when yfinance fails.
 
         Example:
             >>> collector = YahooFinanceCollector()
-            >>> info = collector.fetch_company_info('AAPL')
-            >>> print(info['longName'])
+            >>> result = collector.fetch_company_info('AAPL')
+            >>> print(result.value['name'])
             Apple Inc.
         """
         try:
             logger.info("Fetching company info for ticker: %r", ticker)
             stock = yf.Ticker(ticker)
             info = stock.info
+
+            if _has_no_data(info):
+                logger.warning("No company info found for %r", ticker)
+                return None
 
             # Extract relevant information
             company_info = {
@@ -111,11 +190,13 @@ class YahooFinanceCollector:
             }
 
             logger.info("Successfully fetched company info for %r", ticker)
-            return company_info
 
         except Exception as e:
             logger.error("Error fetching company info for %r: %r", ticker, e)
-            return None
+            raise ProviderError("Yahoo Finance company info failed") from e
+        # Outside the try: a bad clock is a programming error (ValueError),
+        # not a provider failure.
+        return Sourced(company_info, self._provenance())
 
     def fetch_historical_data(
         self, ticker: str, period: str = "1y", interval: str = "1d"
@@ -131,7 +212,10 @@ class YahooFinanceCollector:
                 1h, 1d, 5d, 1wk, 1mo, 3mo
 
         Returns:
-            DataFrame with historical data or None if error
+            DataFrame with historical data, or None when there is none
+
+        Raises:
+            ProviderError: when yfinance fails.
 
         Example:
             >>> collector = YahooFinanceCollector()
@@ -160,7 +244,38 @@ class YahooFinanceCollector:
             logger.error(
                 "Error fetching historical data for %r: %r", ticker, e
             )
+            raise ProviderError("Yahoo Finance historical data failed") from e
+
+    def fetch_price_history(
+        self, ticker: str, period: str = "1y", interval: str = "1d"
+    ) -> Optional[Sourced[List[PriceBar]]]:
+        """
+        Fetch price bars, oldest first. ``as_of`` is the last bar's day.
+
+        Built on ``fetch_historical_data``. NaN becomes None. Returns
+        None when Yahoo has no history; raises ``ProviderError`` when
+        yfinance fails or the frame cannot be read.
+        """
+        hist = self.fetch_historical_data(ticker, period, interval)
+        if hist is None:
             return None
+        try:
+            bars = [
+                PriceBar(
+                    day=pd.Timestamp(index).date(),
+                    open=_float_or_none(row["Open"]),
+                    high=_float_or_none(row["High"]),
+                    low=_float_or_none(row["Low"]),
+                    close=_float_or_none(row["Close"]),
+                    volume=_int_or_none(row["Volume"]),
+                )
+                for index, row in hist.iterrows()
+            ]
+        except Exception as e:
+            logger.error("Error reading price history for %r: %r", ticker, e)
+            raise ProviderError("Yahoo Finance price history failed") from e
+        bars.sort(key=lambda bar: bar.day)
+        return Sourced(bars, self._provenance(as_of=bars[-1].day))
 
     def fetch_financial_statements(
         self, ticker: str
@@ -172,7 +287,10 @@ class YahooFinanceCollector:
             ticker: Stock ticker symbol
 
         Returns:
-            Dictionary with financial statements or None if error
+            Dictionary with financial statements
+
+        Raises:
+            ProviderError: when yfinance fails.
 
         Example:
             >>> collector = YahooFinanceCollector()
@@ -204,27 +322,45 @@ class YahooFinanceCollector:
                 ticker,
                 e,
             )
-            return None
+            raise ProviderError(
+                "Yahoo Finance financial statements failed"
+            ) from e
 
-    def fetch_key_metrics(self, ticker: str) -> Optional[Dict[str, Any]]:
+    def fetch_key_metrics(
+        self, ticker: str
+    ) -> Optional[Sourced[Dict[str, Any]]]:
         """
         Fetch key financial metrics and ratios.
+
+        ``debt_to_assets`` is None for ETFs and mutual funds, where
+        ``totalAssets`` is assets under management. Yahoo types ETCs as
+        ``EQUITY``, so they stay on the ``info`` path until the
+        app-owned instrument type (#26). The ``balance_sheet`` ratio is
+        R1 (#54).
 
         Args:
             ticker: Stock ticker symbol
 
         Returns:
-            Dictionary with key metrics or None if error
+            The metrics dict (keys: ``KEY_METRIC_FIELDS``) with its
+            provenance.
+
+        Raises:
+            ProviderError: when yfinance fails.
 
         Example:
             >>> collector = YahooFinanceCollector()
             >>> metrics = collector.fetch_key_metrics('AAPL')
-            >>> print(metrics['pe_ratio'])
+            >>> print(metrics.value['pe_ratio'])
         """
         try:
             logger.info("Fetching key metrics for %r", ticker)
             stock = yf.Ticker(ticker)
             info = stock.info
+
+            if _has_no_data(info):
+                logger.warning("No key metrics found for %r", ticker)
+                return None
 
             # Extract key metrics
             metrics = {
@@ -253,7 +389,11 @@ class YahooFinanceCollector:
                 # Debt metrics. debt_to_assets is a ratio from totals
                 # already on info, never totalDebtPerShare.
                 "debt_to_equity": info.get("debtToEquity"),
-                "debt_to_assets": _debt_to_assets(info),
+                "debt_to_assets": (
+                    None
+                    if info.get("quoteType") in FUND_QUOTE_TYPES
+                    else _debt_to_assets(info)
+                ),
                 # Dividend metrics
                 "dividend_yield": info.get("dividendYield"),
                 "payout_ratio": info.get("payoutRatio"),
@@ -267,11 +407,13 @@ class YahooFinanceCollector:
             }
 
             logger.info("Successfully fetched key metrics for %r", ticker)
-            return metrics
 
         except Exception as e:
             logger.error("Error fetching key metrics for %r: %r", ticker, e)
-            return None
+            raise ProviderError("Yahoo Finance key metrics failed") from e
+        # Outside the try: a bad clock is a programming error (ValueError),
+        # not a provider failure.
+        return Sourced(metrics, self._provenance())
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:
         """
@@ -282,7 +424,10 @@ class YahooFinanceCollector:
             limit: Maximum number of news articles to fetch
 
         Returns:
-            List of news articles or None if error
+            List of news articles
+
+        Raises:
+            ProviderError: when yfinance fails.
         """
         try:
             logger.info("Fetching news for %r", ticker)
@@ -301,7 +446,7 @@ class YahooFinanceCollector:
 
         except Exception as e:
             logger.error("Error fetching news for %r: %r", ticker, e)
-            return None
+            raise ProviderError("Yahoo Finance news failed") from e
 
     def fetch_recommendations(self, ticker: str) -> Optional[Any]:
         """
@@ -311,7 +456,10 @@ class YahooFinanceCollector:
             ticker: Stock ticker symbol
 
         Returns:
-            DataFrame with recommendations or None if error
+            DataFrame with recommendations, or None when there are none
+
+        Raises:
+            ProviderError: when yfinance fails.
         """
         try:
             logger.info("Fetching recommendations for %r", ticker)
@@ -331,4 +479,4 @@ class YahooFinanceCollector:
             logger.error(
                 "Error fetching recommendations for %r: %r", ticker, e
             )
-            return None
+            raise ProviderError("Yahoo Finance recommendations failed") from e

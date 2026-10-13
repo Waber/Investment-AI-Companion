@@ -4,11 +4,22 @@ No network: every test replaces yfinance.Ticker for the module under test.
 """
 
 import logging
+from datetime import date, datetime, timezone
 
 import pandas as pd
 import pytest
 
 from app.data_collectors import yahoo_finance
+from app.data_collectors.base import (
+    COMPANY_INFO_FIELDS,
+    KEY_METRIC_FIELDS,
+    Fundamentals,
+    FundAttributes,
+    InstrumentLookup,
+    PriceBar,
+    PriceHistory,
+    ProviderError,
+)
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 
 STATEMENT_ATTRIBUTES = {
@@ -67,9 +78,37 @@ def exploding_ticker(monkeypatch):
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", ExplodingTicker)
 
 
+NOW = datetime(2026, 5, 6, 7, 8, 9, tzinfo=timezone.utc)
+
+
 @pytest.fixture
 def collector():
-    return YahooFinanceCollector()
+    return YahooFinanceCollector(clock=lambda: NOW)
+
+
+def assert_provider_error(call):
+    """The call raises ProviderError and keeps the original as the cause."""
+    with pytest.raises(ProviderError) as caught:
+        call()
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    assert "provider failure" in str(caught.value.__cause__)
+    # The wrapper's own text is fixed; the provider text is only the cause.
+    assert "provider failure" not in str(caught.value)
+
+
+def test_collector_implements_the_capabilities_yahoo_can_serve(collector):
+    assert isinstance(collector, InstrumentLookup)
+    assert isinstance(collector, PriceHistory)
+    assert isinstance(collector, Fundamentals)
+    assert not isinstance(collector, FundAttributes)
+
+
+def test_default_clock_is_timezone_aware_utc(install_ticker):
+    install_ticker(info={"longName": "Apple Inc."})
+
+    result = YahooFinanceCollector().fetch_company_info("AAPL")
+
+    assert result.provenance.retrieved_at.utcoffset().total_seconds() == 0
 
 
 # company-shaped pin, see #26
@@ -90,7 +129,8 @@ def test_company_info_maps_provider_fields(install_ticker, collector):
         }
     )
 
-    info = collector.fetch_company_info("aapl")
+    result = collector.fetch_company_info("aapl")
+    info = result.value
 
     assert created[0].symbol == "aapl"
     assert info["name"] == "Apple Inc."
@@ -113,17 +153,31 @@ def test_company_info_falls_back_to_short_name_and_usd(
 ):
     install_ticker(info={"shortName": "Short Co"})
 
-    info = collector.fetch_company_info("shrt")
+    info = collector.fetch_company_info("shrt").value
 
     assert info["name"] == "Short Co"
     assert info["currency"] == "USD"
 
 
-def test_company_info_returns_none_and_logs_on_provider_error(
+def test_company_info_carries_provenance_and_the_shared_keys(
+    install_ticker, collector
+):
+    install_ticker(info={"longName": "Apple Inc."})
+
+    result = collector.fetch_company_info("AAPL")
+
+    assert tuple(result.value) == COMPANY_INFO_FIELDS
+    assert result.provenance.source == "yahoo_finance"
+    assert result.provenance.as_of is None
+    assert result.provenance.retrieved_at == NOW
+    assert result.provenance.synthetic is False
+
+
+def test_company_info_raises_provider_error_and_logs(
     exploding_ticker, collector, caplog
 ):
     with caplog.at_level(logging.ERROR, logger=yahoo_finance.__name__):
-        assert collector.fetch_company_info("FAIL") is None
+        assert_provider_error(lambda: collector.fetch_company_info("FAIL"))
 
     assert "Error fetching company info for 'FAIL'" in caplog.text
 
@@ -156,10 +210,8 @@ def test_historical_data_returns_none_when_empty(install_ticker, collector):
     assert collector.fetch_historical_data("EMPTY") is None
 
 
-def test_historical_data_returns_none_on_provider_error(
-    exploding_ticker, collector
-):
-    assert collector.fetch_historical_data("FAIL") is None
+def test_historical_data_raises_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_historical_data("FAIL"))
 
 
 # company-shaped pin, see #26
@@ -177,16 +229,17 @@ def test_financial_statements_return_all_six_frames(install_ticker, collector):
         assert statements[key] is frames[attribute]
 
 
-def test_financial_statements_return_none_on_provider_error(
+def test_financial_statements_raise_provider_error(
     exploding_ticker, collector
 ):
-    assert collector.fetch_financial_statements("FAIL") is None
+    assert_provider_error(lambda: collector.fetch_financial_statements("FAIL"))
 
 
 # company-shaped pin, see #26
 def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
     install_ticker(
         info={
+            "longName": "Apple Inc.",
             "trailingPE": 30.1,
             "forwardPE": 27.5,
             "priceToBook": 45.2,
@@ -215,7 +268,7 @@ def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
         }
     )
 
-    metrics = collector.fetch_key_metrics("AAPL")
+    metrics = collector.fetch_key_metrics("AAPL").value
 
     # This fixture has no totalDebt or totalAssets, so the ratio is
     # None (issue #21). It must not fall back to a per-share field.
@@ -254,18 +307,115 @@ def test_key_metrics_map_ratios_from_provider_info(install_ticker, collector):
 def test_key_metrics_are_none_when_provider_omits_them(
     install_ticker, collector
 ):
-    install_ticker(info={})
+    install_ticker(info={"longName": "Apple Inc."})
 
-    metrics = collector.fetch_key_metrics("BARE")
+    metrics = collector.fetch_key_metrics("BARE").value
 
     assert metrics["pe_ratio"] is None
     assert metrics["market_cap"] is None
 
 
-def test_key_metrics_return_none_on_provider_error(
-    exploding_ticker, collector
+def test_key_metrics_carry_provenance_and_the_shared_keys(
+    install_ticker, collector
 ):
-    assert collector.fetch_key_metrics("FAIL") is None
+    install_ticker(info={"longName": "Apple Inc."})
+
+    result = collector.fetch_key_metrics("BARE")
+
+    assert tuple(result.value) == KEY_METRIC_FIELDS
+    assert result.provenance.source == "yahoo_finance"
+    assert result.provenance.as_of is None
+    assert result.provenance.retrieved_at == NOW
+    assert result.provenance.synthetic is False
+
+
+@pytest.mark.parametrize("quote_type", ["ETF", "MUTUALFUND"])
+def test_debt_to_assets_is_none_for_funds(
+    install_ticker, collector, quote_type
+):
+    # For a fund, totalAssets is assets under management, not a balance
+    # sheet total, so the ratio would be meaningless.
+    install_ticker(
+        info={
+            "longName": "Some Fund",
+            "quoteType": quote_type,
+            "totalDebt": 10.0,
+            "totalAssets": 100.0,
+        }
+    )
+
+    metrics = collector.fetch_key_metrics("FUND").value
+
+    assert metrics["debt_to_assets"] is None
+
+
+def test_debt_to_assets_is_kept_for_equity(install_ticker, collector):
+    install_ticker(
+        info={
+            "longName": "Apple Inc.",
+            "quoteType": "EQUITY",
+            "totalDebt": 10.0,
+            "totalAssets": 100.0,
+        }
+    )
+
+    assert collector.fetch_key_metrics("EQ").value["debt_to_assets"] == 0.1
+
+
+def test_key_metrics_raise_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_key_metrics("FAIL"))
+
+
+def make_history():
+    index = pd.to_datetime(["2026-01-02", "2026-01-05"])
+    return pd.DataFrame(
+        {
+            "Open": [10.0, float("nan")],
+            "High": [11.0, 13.0],
+            "Low": [9.5, 12.0],
+            "Close": [10.5, 12.5],
+            "Volume": [1000, 2000],
+        },
+        index=index,
+    )
+
+
+def test_price_history_converts_rows_to_bars(install_ticker, collector):
+    created = install_ticker(history_frame=make_history())
+
+    result = collector.fetch_price_history("MSFT", period="5d", interval="1d")
+
+    assert created[0].history_calls == [("5d", "1d")]
+    assert result.value == [
+        PriceBar(date(2026, 1, 2), 10.0, 11.0, 9.5, 10.5, 1000),
+        PriceBar(date(2026, 1, 5), None, 13.0, 12.0, 12.5, 2000),
+    ]
+    assert result.provenance.source == "yahoo_finance"
+    assert result.provenance.as_of == date(2026, 1, 5)
+    assert result.provenance.retrieved_at == NOW
+    assert result.provenance.synthetic is False
+    assert isinstance(result.value[0].volume, int)
+
+
+def test_price_history_volume_nan_is_none(install_ticker, collector):
+    frame = make_history()
+    frame["Volume"] = [float("nan"), 5.0]
+    install_ticker(history_frame=frame)
+
+    bars = collector.fetch_price_history("MSFT").value
+
+    assert bars[0].volume is None
+    assert bars[1].volume == 5
+
+
+def test_price_history_is_none_for_empty_frame(install_ticker, collector):
+    install_ticker(history_frame=pd.DataFrame())
+
+    assert collector.fetch_price_history("EMPTY") is None
+
+
+def test_price_history_raises_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_price_history("FAIL"))
 
 
 def test_news_is_limited(install_ticker, collector):
@@ -285,8 +435,8 @@ def test_news_is_empty_list_when_provider_has_none(
     assert collector.fetch_news("AAPL") == []
 
 
-def test_news_returns_none_on_provider_error(exploding_ticker, collector):
-    assert collector.fetch_news("FAIL") is None
+def test_news_raises_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_news("FAIL"))
 
 
 def test_recommendations_return_frame(install_ticker, collector):
@@ -305,7 +455,57 @@ def test_recommendations_return_none_when_missing_or_empty(
     assert collector.fetch_recommendations("AAPL") is None
 
 
-def test_recommendations_return_none_on_provider_error(
-    exploding_ticker, collector
+def test_recommendations_raise_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_recommendations("FAIL"))
+
+
+def test_price_history_raises_provider_error_for_unreadable_frame(
+    install_ticker, collector
 ):
-    assert collector.fetch_recommendations("FAIL") is None
+    # A frame without the OHLCV columns is a parse failure, not "no data".
+    install_ticker(history_frame=pd.DataFrame({"Close": [1.0]}))
+
+    with pytest.raises(ProviderError) as caught:
+        collector.fetch_price_history("ODD")
+
+    assert isinstance(caught.value.__cause__, KeyError)
+
+
+def test_company_info_is_none_when_yfinance_returns_near_empty_info(
+    install_ticker, collector
+):
+    # yfinance 1.7 sets hide_exceptions=True: an unknown ticker gives a
+    # near-empty info dict instead of raising.
+    install_ticker(info={"trailingPegRatio": None})
+
+    assert collector.fetch_company_info("NOPE") is None
+
+
+def test_company_info_naive_clock_is_a_value_error_not_provider_error(
+    install_ticker,
+):
+    install_ticker(info={"longName": "Apple Inc."})
+    naive = YahooFinanceCollector(clock=lambda: datetime(2026, 1, 1))
+
+    with pytest.raises(ValueError):
+        naive.fetch_company_info("AAPL")
+
+
+def test_key_metrics_naive_clock_is_a_value_error_not_provider_error(
+    install_ticker,
+):
+    install_ticker(info={"longName": "Apple Inc.", "trailingPE": 10.0})
+    naive = YahooFinanceCollector(clock=lambda: datetime(2026, 1, 1))
+
+    with pytest.raises(ValueError):
+        naive.fetch_key_metrics("AAPL")
+
+
+def test_key_metrics_are_none_when_yfinance_returns_near_empty_info(
+    install_ticker, collector
+):
+    # Same yfinance 1.7 hide_exceptions case as for company info: an
+    # all-None metrics dict would claim data that does not exist.
+    install_ticker(info={"trailingPegRatio": None})
+
+    assert collector.fetch_key_metrics("NOPE") is None

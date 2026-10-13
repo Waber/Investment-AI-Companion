@@ -18,9 +18,11 @@ import logging
 
 import pytest
 
-from app.api.data_collection import get_yahoo_finance_collector
+from app.api.data_collection import get_collector
 from app.data_collectors import yahoo_finance
+from app.data_collectors.base import ProviderError
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
+from tests.collector_stubs import sourced
 
 COMPANIES = "/api/v1/companies/"
 METRICS = "/api/v1/financial-metrics/"
@@ -40,7 +42,7 @@ class FakeCollector:
     def fetch_company_info(self, ticker):
         if self.error:
             raise self.error
-        return {"name": f"Fetched {ticker}", "currency": "USD"}
+        return sourced({"name": f"Fetched {ticker}", "currency": "USD"})
 
 
 @pytest.mark.asyncio
@@ -63,8 +65,8 @@ async def test_same_instant_with_other_offset_is_a_duplicate(client):
 
 @pytest.mark.asyncio
 async def test_fetch_company_500_does_not_leak_exception_text(client):
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(RuntimeError("password=hunter2"))
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        RuntimeError("password=hunter2")
     )
 
     response = await client.post(FETCH, json={"ticker": "FAIL"})
@@ -84,7 +86,7 @@ class _Ticker:
     """yfinance.Ticker stand-in whose info only has a per-share debt field."""
 
     def __init__(self, symbol):
-        self.info = {"totalDebtPerShare": 7.5}
+        self.info = {"longName": "Test Co", "totalDebtPerShare": 7.5}
 
 
 class _InfoTicker:
@@ -99,7 +101,7 @@ class _InfoTicker:
 def test_debt_to_assets_is_not_debt_per_share(monkeypatch):
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Ticker)
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL").value
 
     assert metrics["debt_to_assets"] is None
 
@@ -111,8 +113,8 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
     ``logger.exception`` attaches the traceback, so the secret stays in
     the server log and is not copied into the HTTP detail.
     """
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(RuntimeError("password=hunter2"))
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        RuntimeError("password=hunter2")
     )
 
     with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
@@ -131,19 +133,15 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
 @pytest.mark.asyncio
 async def test_fetch_company_404_and_400_stay_unchanged(client):
     """No provider data stays 404. A ValueError stays 400 with its text."""
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: NullCollector()
-    )
+    client.app.dependency_overrides[get_collector] = lambda: NullCollector()
     missing = await client.post(FETCH, json={"ticker": "miss"})
     assert missing.status_code == 404
     assert missing.json()["detail"] == (
-        "Company with ticker MISS not found on Yahoo Finance"
+        "Company with ticker MISS not found at the data provider"
     )
 
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector(
-            ValueError("Company name or ticker already exists")
-        )
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        ValueError("Company name or ticker already exists")
     )
     conflict = await client.post(FETCH, json={"ticker": "dupe"})
     assert conflict.status_code == 400
@@ -155,7 +153,8 @@ async def test_fetch_company_404_and_400_stay_unchanged(client):
 def _patch_info(monkeypatch, info):
     # setattr restores the class attribute after the test. Assigning
     # _InfoTicker.info directly would leak into the next test.
-    monkeypatch.setattr(_InfoTicker, "info", info)
+    # A name marks the payload as a real ticker (no name means no data).
+    monkeypatch.setattr(_InfoTicker, "info", {"longName": "Test Co", **info})
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _InfoTicker)
 
 
@@ -183,7 +182,7 @@ def test_debt_to_assets_is_total_debt_over_total_assets(
         },
     )
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL").value
 
     assert metrics["debt_to_assets"] == expected
 
@@ -258,9 +257,10 @@ def test_debt_to_assets_is_none_when_inputs_are_missing(monkeypatch, info):
     """
     _patch_info(monkeypatch, info)
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+    result = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics is not None
+    assert result is not None
+    metrics = result.value
     assert metrics["debt_to_assets"] is None
 
 
@@ -280,9 +280,10 @@ def test_debt_to_assets_overflow_keeps_the_other_metrics(monkeypatch):
         },
     )
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+    result = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics is not None
+    assert result is not None
+    metrics = result.value
     assert metrics["debt_to_assets"] is None
     assert metrics["pe_ratio"] == 12.5
 
@@ -300,9 +301,10 @@ def test_debt_to_assets_accepts_numpy_reals(monkeypatch):
         },
     )
 
-    metrics = YahooFinanceCollector().fetch_key_metrics("AAPL")
+    result = YahooFinanceCollector().fetch_key_metrics("AAPL")
 
-    assert metrics is not None
+    assert result is not None
+    metrics = result.value
     assert metrics["debt_to_assets"] == 0.25
     assert metrics["pe_ratio"] == 30.1
 
@@ -334,13 +336,38 @@ async def test_blank_ticker_is_rejected_on_create(client, ticker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ticker", ["", "   "])
 async def test_blank_ticker_is_rejected_by_fetch_company(client, ticker):
-    """fetch-company rejects an empty or whitespace ticker before Yahoo."""
-    client.app.dependency_overrides[get_yahoo_finance_collector] = (
-        lambda: FakeCollector()
-    )
+    """fetch-company rejects an empty or whitespace ticker (422)."""
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector()
     before = _company_count(client)
 
     response = await client.post(FETCH, json={"ticker": ticker})
 
     assert response.status_code == 422
+    assert _company_count(client) == before
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_provider_error_is_502_without_provider_text(
+    client, caplog
+):
+    """ProviderError is 502 with a fixed body; the log names the ticker.
+
+    Neither the body nor the log carries the provider's own text. The
+    collector already logged the raw error in its own module.
+    """
+    error = ProviderError("password=hunter2")
+    error.__cause__ = RuntimeError("password=hunter2")
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
+        error
+    )
+    before = _company_count(client)
+
+    with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
+        response = await client.post(FETCH, json={"ticker": "fail"})
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Data provider error"}
+    assert "hunter2" not in response.text
+    assert "'FAIL'" in caplog.text
+    assert "hunter2" not in caplog.text
     assert _company_count(client) == before

@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional
+from typing import List, Literal, Optional
 from urllib.parse import urlsplit
 
 from pydantic import AnyHttpUrl, Field, ValidationError, field_validator
@@ -262,6 +262,19 @@ class Settings(BaseSettings):
                 'python -c "import secrets; print(secrets.token_urlsafe(32))".'
             )
         return cleaned
+
+    # Which market-data collector fetch-company uses. The default keeps
+    # today's behavior (live Yahoo Finance). The tests and the one-command
+    # demo (#25) select "fake", an offline collector with synthetic data.
+    DATA_COLLECTOR: Literal["fake", "yahoo"] = "yahoo"
+
+    @field_validator("DATA_COLLECTOR", mode="before")
+    @classmethod
+    def normalize_data_collector(cls, value: object) -> object:
+        # " Fake " works. Anything else is left for Literal to reject.
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
     # Logging
     LOG_LEVEL: str = "INFO"

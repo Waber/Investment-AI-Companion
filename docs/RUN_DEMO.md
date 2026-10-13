@@ -48,6 +48,10 @@ uvicorn so the sqlite URL is the one just exported. Both the seed
 and uvicorn need `SECRET_KEY`. The seed reads the sqlite path from
 `--database-url` and does not open the default PostgreSQL URL.
 
+For a fully offline demo, also export `DATA_COLLECTOR=fake`. fetch-company
+then serves the synthetic demo tickers instead of calling Yahoo Finance
+(`yahoo` is the default).
+
 ## What you will see
 
 The seed reports 6 companies created and 20 metric rows. The list

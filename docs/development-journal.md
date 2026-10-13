@@ -1,5 +1,114 @@
 # Development Journal
 
+## 2026-10-12 - Collector interface and offline fake, part 1 (#24)
+
+- Scope: part 1 of
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24).
+  Provider-neutral contracts (`app/data_collectors/base.py`: provenance,
+  `Sourced`, `ProviderError`, capability protocols), an offline
+  `FakeCollector`, the Yahoo collector moved onto the contracts, and a
+  `DATA_COLLECTOR` setting (`fake` or `yahoo`) behind the new
+  `get_collector()` dependency. The root `conftest.py` forces `fake` (all
+  selection modes) and makes yfinance use `requests`.
+- Decisions: #24 is split. Part 2 (cache, rate limit, backoff, currency
+  normalization) is a later PR. `DATA_COLLECTOR` defaults to `yahoo` so a
+  normal run behaves as before; tests and the demo (#25) select `fake`.
+  The fake takes stock profiles from `fixtures/demo-v1.json`, so the
+  `[IAC-DEMO-V1]` marker and the `/ui` synthetic badge keep working;
+  fake funds carry the marker too. Fund key metrics are all `None`.
+  Fake stock metrics follow the fixture's latest annual row: P/E is
+  `None` for a net loss, ROE and margin have the sign of net income, and
+  `debt_to_equity` is a percent like Yahoo's. `debt_to_assets` from the
+  balance sheet goes to R1 (#54); the ETF/MUTUALFUND guard is added now.
+  Provenance is carried by collector results but not yet stored or
+  returned.
+  `DEMO_PL_EMPTY` keeps its profile (fetch-company creates it); its key
+  metrics and history are "no data" (`None`). fetch-company: no data is
+  404 (provider-neutral text), `ProviderError` is 502
+  `Data provider error`.
+- Task 4 extras: yfinance 1.7 hides exceptions, so an unknown ticker gave
+  a near-empty `info`. `fetch_company_info` and `fetch_key_metrics` now
+  return `None` without a name (404, not 502; one shared helper).
+  Provenance is built outside the `try`, so a bad clock is a
+  `ValueError`, not a 502.
+- Network guard (tests only, `tests/network_guard.py`): an autouse
+  fixture makes any connect, `connect_ex`, `create_connection`,
+  `getaddrinfo` or `gethostbyname` to a non-loopback address fail. Every
+  blocked attempt is recorded and also fails the test at teardown, so a
+  swallowed error is still caught. It sees Python code that uses the
+  `socket` module (`requests`, `urllib3`, `httpx`). It cannot see C
+  clients that open their own sockets: libpq (psycopg2) and libcurl
+  (`curl_cffi`). yfinance 1.7 prefers `curl_cffi`, so the root
+  `conftest.py` sets `YF_DISABLE_CURL_CFFI=1` and yfinance uses
+  `requests`, which the guard sees. A test makes a real yfinance call
+  with raising stand-ins under the guard (socket, curl_cffi, no proxy,
+  dummy cookie cache), so it cannot reach the network even if the guard
+  regresses; it asserts the guard recorded the attempt. Tests marked
+  `integration` are exempt (PostgreSQL). The Windows asyncio proactor
+  loop is not covered.
+- Verification: full CI command (`pytest -q -p no:cacheprovider
+  -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
+  --cov-branch --cov-fail-under=80`): 1102 passed, 121 deselected,
+  coverage 95.22% (baseline 1019 passed, 94.76%). `pytest -m
+  integration`: 105 passed, 16 skipped (no PostgreSQL here, so the
+  PostgreSQL tests were not run). `pytest -m ''`: 1207 passed, 16
+  skipped. Scoped black and isort clean; flake8 shows two E501 lines in
+  `tests/test_provider_data_hygiene.py` that exist on master.
+- Backlog: under yfinance `hide_exceptions`, a Yahoo HTTP failure can
+  look like "no data" (404) or an empty history instead of a
+  `ProviderError`; fix in R1 (#54), documented on the collector class.
+  Fund key metrics (52-week range, average volume, beta, dividend yield
+  from the fake bars) belong to I2 (#27) and I3 (#28). The fake P/E is
+  not yet consistent with P/B divided by ROE (for example
+  `DEMO_DE_INDUSTRY`); fix with the demo-v2 data in I2 (#27). Part 2 of
+  #24 and #25 remain.
+- Review: each task had a task review; Task 4 needed two fix rounds
+  (the fake setting under integration selections, and the guard not
+  seeing yfinance's `curl_cffi`). The final whole-branch review asked
+  for one fix wave (Yahoo key metrics for an unknown ticker, fake
+  metrics against the fixture, docs); its scoped re-review said ready
+  to merge.
+- AI model: Claude Opus 5.5 (Claude Code) as controller; Claude Sonnet
+  5.5 implementers for Tasks 1-4 and the review fixes; reviewers Claude
+  Sonnet 5.5 (Tasks 1-2, re-reviews of #19) and Claude Opus 5.5
+  (Tasks 3-4, Task 4 re-reviews, the final review and its re-review).
+  Account usage was not available in this session.
+- Time tracking (2026-10-12, +0200): session start 14:12 (the
+  controller's first command; not in git; setup, Python 3.12 venv,
+  baseline run, plans). Git times, by commit subject: "docs: plan the
+  collector interface" 14:34; "feat: add provider-neutral data collector
+  contracts" 14:36; "feat: add deterministic offline FakeCollector"
+  14:40; "feat: put the Yahoo collector on the contracts" 14:45;
+  "feat: select the data collector with DATA_COLLECTOR" 14:57 (an
+  import-sort fix at 14:57 was folded into it before the push);
+  "docs: document DATA_COLLECTOR" 14:58; "test:
+  force the fake collector in every selection mode" 15:13; "docs:
+  correct the collector docs" 15:13; "test: make the guard tests unable
+  to reach the network" 15:27; "docs: correct the journal after the
+  second review" 15:27; "fix: return no data for unknown Yahoo key
+  metrics" 15:53; final-wave docs commit 15:53; the controller's
+  closing docs commit after the final re-review. Before the push, the
+  controller rewrote two co-author trailers (Tasks 1 and 2 were written
+  by Claude Sonnet 5.5 but carried the Opus line from the plan) and
+  folded the import-sort commit; the tree did not change. Total 14:12
+  to 15:58 (the closing docs commit).
+- Published as
+  [PR #68](https://github.com/Waber/Investment-AI-Companion/pull/68)
+  (Refs #24, part 1). Not merged. The owner chose to push; the pull
+  request was opened at 17:17 +0200. The R1 hand-offs are posted on
+  [#54](https://github.com/Waber/Investment-AI-Companion/issues/54#issuecomment-6127198668)
+  at 17:19.
+- Rebase (2026-10-13): the owner merged PR #67 (#19) first, at 14:38
+  +0200, as merge commit `114c93a`. The branch was rebased onto it.
+  Only `docs/development-journal.md` and `docs/work-state.md`
+  conflicted, because both pull requests added a top entry. Both
+  entries are kept (#24 above #19), and the #19 work-state section now
+  says PR #67 is merged. The #67 code came in unchanged. After the
+  rebase: CI command 1134 passed, 121 deselected, coverage 95.24%;
+  `-m integration` 105 passed, 16 skipped; `-m ''` 1239 passed, 16
+  skipped. Pushed with `--force-with-lease` (see this commit's git
+  time).
+
 ## 2026-10-12 - Bound skip and limit on the list endpoints (#19)
 
 - Scope: `GET /api/v1/companies/`, `GET /api/v1/financial-metrics/`
