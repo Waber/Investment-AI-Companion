@@ -11,8 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 # FX symbols (PKN.WA, BRK-B, ^GSPC, EURUSD=X). Control characters and
 # spaces are not in the class.
 TICKER_PATTERN = r"^[A-Z0-9._\-^=]{1,20}$"
-# Three letters, either case. GBp is London pence and must not become GBP.
+# Three ASCII letters, either case, before normalization.
 _CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
+# Yahoo's minor-unit codes, where the letter case is the meaning:
+# GBp is London pence (GBP / 100) and ZAc is South African cents. They
+# are kept exactly as sent. Every other code is uppercased.
+MINOR_UNIT_CURRENCIES = frozenset({"GBp", "ZAc"})
 # The description column is Text, so the database would store a
 # paste of any size. 5000 characters is about a page: enough for a
 # provider summary, and the cap lives on the write models only so a
@@ -47,6 +51,23 @@ def normalize_ticker(value: object) -> object:
     return normalized
 
 
+def normalize_currency(value: object) -> object:
+    """Uppercase a three-letter currency code, except Yahoo minor units.
+
+    ``usd`` and ``Usd`` become ``USD``, so one currency is stored as one
+    code. ``GBp`` and ``ZAc`` stay as sent; ``gbp`` becomes ``GBP``,
+    because only the exact spelling ``GBp`` means pence. ``None`` and
+    non-strings are left for the field type to handle.
+    """
+    if value is None or not isinstance(value, str):
+        return value
+    if _CURRENCY_RE.fullmatch(value) is None:
+        raise ValueError("currency must be exactly three letters")
+    if value in MINOR_UNIT_CURRENCIES:
+        return value
+    return value.upper()
+
+
 class _CompanyWriteChecks(BaseModel):
     """Ticker and currency checks for create and update only.
 
@@ -65,15 +86,7 @@ class _CompanyWriteChecks(BaseModel):
     @field_validator("currency", mode="before", check_fields=False)
     @classmethod
     def _normalize_currency(cls, value: object) -> object:
-        # Length and letters only. Case stays as the provider sent it:
-        # Yahoo's GBp is pence, and uppercasing it would mean pounds.
-        if value is None or not isinstance(value, str):
-            return value
-        if _CURRENCY_RE.fullmatch(value) is None:
-            raise ValueError(
-                "currency must be exactly three letters; case is unchanged"
-            )
-        return value
+        return normalize_currency(value)
 
 
 class CompanyBase(BaseModel):
