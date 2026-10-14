@@ -105,11 +105,12 @@ placeholder in any letter case. Generate one with
 With `yahoo`, fetch-company calls Yahoo through a guard
 (`app/data_collectors/guard.py`): an in-memory cache, a rate limit and
 retries. A repeat request within the cache time does not reach Yahoo,
-and the data keeps its original retrieval time. A "not found" answer is
-cached too, but only for `COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` (5
-minutes by default), because Yahoo can report a hidden failure as no
-data. The cache belongs to
-one process, starts empty, and changed settings apply after a restart.
+and the data keeps its original retrieval time (fetch-company does not
+store that time yet). A "not found" answer is cached too, but only for
+`COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` (5 minutes by default), because
+Yahoo can report a hidden failure as no data. The cache and the rate
+limit belong to one process (several workers each get their own limit),
+the cache starts empty, and changed settings apply after a restart.
 A full rate limit, or a provider error after the last retry, returns
 502 `Data provider error`. The limits, with their defaults:
 
