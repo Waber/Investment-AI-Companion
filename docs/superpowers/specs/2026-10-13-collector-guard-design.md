@@ -3,6 +3,9 @@
 Date: 2026-10-13. Issue: [#24](https://github.com/Waber/Investment-AI-Companion/issues/24),
 part 2. Part 1 is PR #68. Real Yahoo error mapping is R1 (#54).
 
+Amended 2026-10-14 after the final review: a "no data" result has its
+own, shorter cache time.
+
 ## Goal
 
 The two open items of #24:
@@ -79,8 +82,10 @@ sleep=time.sleep, rand=random.random)` returns a guarded collector.
 3. **Cache miss:** loop over attempts `1 .. max_retries + 1`:
    1. Take a rate-limit slot (below).
    2. Call the inner method.
-   3. Success, including `None` ("no data"): store a deep copy with
-      the capability's TTL, return the result.
+   3. Success: store a deep copy, return the result. A real value uses
+      the capability's TTL. `None` ("no data") uses the shorter
+      `min(capability TTL, COLLECTOR_CACHE_TTL_NO_DATA_SECONDS)`. Store
+      nothing when that TTL is `0`.
    4. `TransientProviderError`: if attempts remain, sleep the backoff
       delay and try again; otherwise re-raise it.
    5. Any other exception: propagate unchanged. Nothing is cached.
@@ -97,6 +102,12 @@ only shallowly).
 - After an insert, if the size is over `COLLECTOR_CACHE_MAX_ENTRIES`,
   the least recently used entry is dropped.
 - TTL `0` for a capability means that capability is never cached.
+- "No data" (`None`) is cached for `min(capability TTL,
+  COLLECTOR_CACHE_TTL_NO_DATA_SECONDS)`, 300 s by default. Why:
+  yfinance 1.7 can report a hidden Yahoo HTTP failure as no data, and
+  caching that for the full TTL (24 h for company info) would turn one
+  blip into a false 404 "not found" for a day. `0` never caches no
+  data. Lookups are unchanged: the stored `expires_at` decides.
 
 ### Rate limit
 
@@ -162,6 +173,7 @@ with `Field(ge=..., le=...)`, and a model validator checks
 | `COLLECTOR_CACHE_TTL_KEY_METRICS_SECONDS` | int | 3600 | 0..604800 | Ratios move with the price. |
 | `COLLECTOR_CACHE_TTL_PRICE_HISTORY_SECONDS` | int | 900 | 0..604800 | Price bars. |
 | `COLLECTOR_CACHE_TTL_FUND_ATTRIBUTES_SECONDS` | int | 86400 | 0..604800 | Fund data. |
+| `COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` | int | 300 | 0..604800 | A "no data" answer; capped by the capability's TTL. `0` = never cache no data. |
 | `COLLECTOR_CACHE_MAX_ENTRIES` | int | 256 | 1..10000 | LRU bound; a 5-year history is about 1260 bars. |
 | `COLLECTOR_RATE_LIMIT_CALLS` | int | 30 | 1..10000 | Provider calls per window. |
 | `COLLECTOR_RATE_LIMIT_PERIOD_SECONDS` | float | 60 | > 0, <= 3600 | Window length. |
@@ -196,7 +208,8 @@ All offline. The network guard stays on. A `FakeClock` provides
 delay. `rand` is a scripted sequence.
 
 - Cache: hit and miss per capability; expiry at the TTL; TTL `0`;
-  `None` is cached; `ProviderError` and `TransientProviderError` are
+  `None` is cached, but only for the no-data TTL (shorter, capped by
+  the capability TTL, `0` = never); `ProviderError` and `TransientProviderError` are
   not; mutating a returned dict does not change the next hit; LRU
   eviction at the bound; keyword and positional arguments share an
   entry; a cache hit keeps the original `retrieved_at`.
