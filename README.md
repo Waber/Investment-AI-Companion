@@ -123,6 +123,7 @@ A full rate limit, or a provider error after the last retry, returns
 | `COLLECTOR_RETRY_MAX_RETRIES` | 2 | Retries for a temporary provider error. |
 | `COLLECTOR_BACKOFF_BASE_SECONDS` | 1 | Ceiling of the first random retry delay. |
 | `COLLECTOR_BACKOFF_MAX_SECONDS` | 8 | Largest retry delay ceiling. |
+
 `ALLOWED_HOSTS` is enforced, so a request with any other Host gets
 400 Invalid host header.
 `DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need
