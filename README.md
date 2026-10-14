@@ -120,7 +120,7 @@ A full rate limit, or a provider error after the last retry, returns
 | `COLLECTOR_CACHE_TTL_KEY_METRICS_SECONDS` | 3600 | Cache time for key metrics. |
 | `COLLECTOR_CACHE_TTL_PRICE_HISTORY_SECONDS` | 900 | Cache time for price history. |
 | `COLLECTOR_CACHE_TTL_FUND_ATTRIBUTES_SECONDS` | 86400 | Cache time for fund data. |
-| `COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` | 300 | Cache time for a "not found" answer; never longer than the row above for that data. `0` turns it off. |
+| `COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` | 300 | Cache time for a "not found" answer; never longer than that data's own cache time. `0` turns it off. |
 | `COLLECTOR_CACHE_MAX_ENTRIES` | 256 | The least recently used entry is dropped beyond this. |
 | `COLLECTOR_RATE_LIMIT_CALLS` | 30 | Provider calls allowed per period. |
 | `COLLECTOR_RATE_LIMIT_PERIOD_SECONDS` | 60 | Length of the rate-limit window. |
