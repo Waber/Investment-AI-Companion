@@ -2,7 +2,13 @@ import json
 from typing import List, Literal, Optional
 from urllib.parse import urlsplit
 
-from pydantic import AnyHttpUrl, Field, ValidationError, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # These strings used to be defaults. They are rejected so a copied
@@ -275,6 +281,53 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip().lower()
         return value
+
+    # Limits for the guard in front of the real collector
+    # (app/data_collectors/guard.py): a cache, a rate limit and retries.
+    # Field(ge=..., le=...) works like Bean Validation @Min/@Max in
+    # Java: a value out of range stops startup. Times are in seconds.
+    # A cache TTL of 0 turns the cache off for that capability.
+    COLLECTOR_CACHE_TTL_COMPANY_INFO_SECONDS: int = Field(
+        86400, ge=0, le=604800
+    )
+    COLLECTOR_CACHE_TTL_KEY_METRICS_SECONDS: int = Field(3600, ge=0, le=604800)
+    COLLECTOR_CACHE_TTL_PRICE_HISTORY_SECONDS: int = Field(
+        900, ge=0, le=604800
+    )
+    COLLECTOR_CACHE_TTL_FUND_ATTRIBUTES_SECONDS: int = Field(
+        86400, ge=0, le=604800
+    )
+    COLLECTOR_CACHE_MAX_ENTRIES: int = Field(256, ge=1, le=10000)
+    COLLECTOR_RATE_LIMIT_CALLS: int = Field(30, ge=1, le=10000)
+    # allow_inf_nan=False: "nan" or "inf" in .env fails with a clear
+    # "finite number" error instead of a confusing range error.
+    COLLECTOR_RATE_LIMIT_PERIOD_SECONDS: float = Field(
+        60.0, gt=0, le=3600, allow_inf_nan=False
+    )
+    COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS: float = Field(
+        5.0, ge=0, le=60, allow_inf_nan=False
+    )
+    COLLECTOR_RETRY_MAX_RETRIES: int = Field(2, ge=0, le=5)
+    COLLECTOR_BACKOFF_BASE_SECONDS: float = Field(
+        1.0, gt=0, le=60, allow_inf_nan=False
+    )
+    COLLECTOR_BACKOFF_MAX_SECONDS: float = Field(
+        8.0, gt=0, le=300, allow_inf_nan=False
+    )
+
+    @model_validator(mode="after")
+    def backoff_max_is_not_below_base(self) -> "Settings":
+        # A model validator sees every field at once, so it can compare
+        # two of them. mode="after" runs it on the built object.
+        if (
+            self.COLLECTOR_BACKOFF_MAX_SECONDS
+            < self.COLLECTOR_BACKOFF_BASE_SECONDS
+        ):
+            raise ValueError(
+                "COLLECTOR_BACKOFF_MAX_SECONDS must not be below "
+                "COLLECTOR_BACKOFF_BASE_SECONDS"
+            )
+        return self
 
     # Logging
     LOG_LEVEL: str = "INFO"
