@@ -1,5 +1,32 @@
 # Current Work State
 
+## Collector guard, part 2 of #24: 2026-10-14
+
+- Branch `feature/collector-guard-24`, based on `origin/master`
+  `107adf0`. Not pushed, no pull request yet.
+  [Spec](superpowers/specs/2026-10-13-collector-guard-design.md),
+  [plan](superpowers/plans/2026-10-13-collector-guard.md).
+- Completed: the guard (cache, rate limit, retries) in front of Yahoo,
+  twelve `COLLECTOR_*` settings, currency in uppercase except `GBp`
+  and `ZAc`, docs, task reviews, the final review and its fix wave.
+  The re-review says ready to merge. CI command: 1259 passed, 121
+  deselected, coverage 95.68%. `-m integration`: 105 passed, 16
+  skipped. The PostgreSQL tests were not run locally (no
+  `TEST_POSTGRES_DSN`).
+- Incomplete: mapping yfinance errors to `TransientProviderError` (R1
+  #54); storing `retrieved_at`; mypy typing of the guarded class; then
+  #25. With this branch, every item of #24 is done (part 1 in PR #68).
+- Open pull request that touches this file: PR #69 (docs) updates the
+  part 1 section below. Whichever merges second rebases onto
+  `origin/master` and keeps both entries.
+- Active agents: none. Blockers: none.
+- Stop reason: the branch is complete and reviewed. Pushing and opening
+  the pull request wait for the owner's go-ahead. Account usage was not
+  available in this session.
+- Next action: push and open the pull request once the owner
+  authorizes it; it can close #24, since both remaining items are done.
+  Then #25.
+
 ## Collector interface, part 1 of #24: 2026-10-12
 
 - Branch `feature/collector-interface-24`, rebased on 2026-10-13 onto
