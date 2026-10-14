@@ -1,7 +1,12 @@
-"""The collector guard in fake time: capabilities and the cache."""
+"""The collector guard in fake time.
+
+Tests the capabilities, the cache, the rate limit, retries and threads.
+"""
 
 import logging
 import threading
+import time
+from collections import deque
 
 import pytest
 
@@ -533,6 +538,18 @@ def test_guard_logs_name_the_ticker_but_never_the_provider_text(caplog):
     assert "retry 1 of 2" in caplog.text
     assert "Rate limit reached" in caplog.text
     assert "'ACME'" in caplog.text
+    assert "fetch_company_info" in caplog.text
+    guard_records = [
+        record
+        for record in caplog.records
+        if record.name == "app.data_collectors.guard"
+        and (
+            "retry 1 of 2" in record.getMessage()
+            or "Rate limit reached" in record.getMessage()
+        )
+    ]
+    assert len(guard_records) == 2
+    assert {r.levelno for r in guard_records} == {logging.WARNING}
 
 
 def test_threads_never_exceed_the_rate_limit():
@@ -541,6 +558,23 @@ def test_threads_never_exceed_the_rate_limit():
     guarded = make(inner, clock, rate_limit_calls=3, rate_limit_max_wait=0)
     barrier = threading.Barrier(10)
     outcomes = []
+
+    class SlowLenDeque(deque):
+        """A deque whose len() pauses after it counts.
+
+        In CPython the GIL makes the guard's check-then-append almost
+        atomic, so a missing lock would go unnoticed. The pause opens
+        the window between "is there room?" and "take the slot", so
+        without the lock more than 3 threads get through. With the
+        lock, the other threads wait and the test passes.
+        """
+
+        def __len__(self):
+            size = super().__len__()
+            time.sleep(0.001)
+            return size
+
+    guarded._calls = SlowLenDeque()
 
     def worker(number):
         barrier.wait()
@@ -559,6 +593,46 @@ def test_threads_never_exceed_the_rate_limit():
     assert outcomes.count("ok") == 3
     assert outcomes.count("limited") == 7
     assert inner.calls == 3
+
+
+def test_total_rate_limit_wait_is_bounded_and_lock_is_free_while_sleeping():
+    clock = FakeClock()
+    inner = CountingLookup()
+    lock_states = []
+    stolen = []
+
+    def sleep(seconds):
+        lock_states.append(guarded._lock.locked())
+        clock.sleep(seconds)
+        if not stolen:
+            # Another "thread" takes the slot that just freed up, as a
+            # real second request could while this one was sleeping.
+            with guarded._lock:
+                guarded._calls.append(clock())
+            stolen.append(True)
+
+    guarded = guard_collector(
+        inner,
+        GuardPolicy(
+            rate_limit_calls=1,
+            rate_limit_period=10,
+            rate_limit_max_wait=15,
+        ),
+        clock=clock,
+        sleep=sleep,
+    )
+    # The window is full: the one slot was taken just now.
+    guarded._calls.append(clock())
+
+    with pytest.raises(ProviderError) as excinfo:
+        guarded.fetch_company_info("ACME")
+
+    # First wait: 10 s (within 15). Second wait would be 10 s more: the
+    # total 20 s is over the max, although each wait alone is not.
+    assert type(excinfo.value) is ProviderError
+    assert clock.sleeps == [10]
+    assert inner.calls == 0
+    assert lock_states == [False]
 
 
 def test_lock_is_not_held_during_the_provider_call():
