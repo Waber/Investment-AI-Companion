@@ -258,7 +258,7 @@ class _GuardedBase:
                 wait = self._calls[0] + period - now
             if waited + wait > self._policy.rate_limit_max_wait:
                 logger.warning(
-                    "Rate limit reached for %s %r: %d calls per %.0f s",
+                    "Rate limit reached for %s %r: %d calls per %g s",
                     method_name,
                     ticker,
                     self._policy.rate_limit_calls,
