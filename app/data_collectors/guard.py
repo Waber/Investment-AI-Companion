@@ -52,6 +52,7 @@ _SETTING_NAMES = {
     "ttl_key_metrics": "COLLECTOR_CACHE_TTL_KEY_METRICS_SECONDS",
     "ttl_price_history": "COLLECTOR_CACHE_TTL_PRICE_HISTORY_SECONDS",
     "ttl_fund_attributes": "COLLECTOR_CACHE_TTL_FUND_ATTRIBUTES_SECONDS",
+    "ttl_no_data": "COLLECTOR_CACHE_TTL_NO_DATA_SECONDS",
     "cache_max_entries": "COLLECTOR_CACHE_MAX_ENTRIES",
     "rate_limit_calls": "COLLECTOR_RATE_LIMIT_CALLS",
     "rate_limit_period": "COLLECTOR_RATE_LIMIT_PERIOD_SECONDS",
@@ -84,6 +85,7 @@ class GuardPolicy:
     ttl_key_metrics: int = 3600
     ttl_price_history: int = 900
     ttl_fund_attributes: int = 86400
+    ttl_no_data: int = 300
     cache_max_entries: int = 256
     rate_limit_calls: int = 30
     rate_limit_period: float = 60.0
@@ -183,7 +185,17 @@ class _GuardedBase:
                 return value
         result = self._call_provider(method_name, method, bound)
         if use_cache:
-            self._cache_put(key, result, ttl)
+            # A "no data" answer (None) is kept for a shorter time:
+            # yfinance can report a hidden HTTP failure as None, and the
+            # full TTL (up to 24 h) would make one blip a long false
+            # "not found". min() keeps the capability TTL as the cap.
+            stored_ttl = (
+                ttl
+                if result is not None
+                else min(ttl, self._policy.ttl_no_data)
+            )
+            if stored_ttl > 0:
+                self._cache_put(key, result, stored_ttl)
         return result
 
     def _call_provider(

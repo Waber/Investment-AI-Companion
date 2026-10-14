@@ -156,6 +156,53 @@ def test_no_data_is_cached():
     assert len(inner.calls) == 1
 
 
+def test_no_data_expires_at_the_no_data_ttl():
+    inner = SpyCollector()
+    clock = FakeClock()
+    guarded = make(inner, clock, ttl_company_info=100, ttl_no_data=10)
+    guarded.fetch_company_info("UNKNOWN")
+    guarded.fetch_company_info("DEMO_PL_TECH")
+
+    clock.advance(10)
+    guarded.fetch_company_info("UNKNOWN")
+    guarded.fetch_company_info("DEMO_PL_TECH")
+
+    # "No data" was fetched again; the real value is still cached.
+    assert inner.calls == [
+        ("fetch_company_info", "UNKNOWN"),
+        ("fetch_company_info", "DEMO_PL_TECH"),
+        ("fetch_company_info", "UNKNOWN"),
+    ]
+
+
+def test_no_data_ttl_zero_never_caches_no_data():
+    inner = SpyCollector()
+    guarded = make(inner, FakeClock(), ttl_no_data=0)
+
+    guarded.fetch_company_info("UNKNOWN")
+    guarded.fetch_company_info("UNKNOWN")
+    guarded.fetch_company_info("DEMO_PL_TECH")
+    guarded.fetch_company_info("DEMO_PL_TECH")
+
+    assert inner.calls == [
+        ("fetch_company_info", "UNKNOWN"),
+        ("fetch_company_info", "UNKNOWN"),
+        ("fetch_company_info", "DEMO_PL_TECH"),
+    ]
+
+
+def test_no_data_ttl_is_capped_by_the_capability_ttl():
+    inner = SpyCollector()
+    clock = FakeClock()
+    guarded = make(inner, clock, ttl_company_info=5, ttl_no_data=300)
+    guarded.fetch_company_info("UNKNOWN")
+
+    clock.advance(5)
+    guarded.fetch_company_info("UNKNOWN")
+
+    assert len(inner.calls) == 2
+
+
 def test_no_data_for_one_capability_does_not_answer_another():
     inner = SpyCollector()
     guarded = make(inner, FakeClock())

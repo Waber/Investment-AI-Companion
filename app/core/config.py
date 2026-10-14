@@ -297,6 +297,11 @@ class Settings(BaseSettings):
     COLLECTOR_CACHE_TTL_FUND_ATTRIBUTES_SECONDS: int = Field(
         86400, ge=0, le=604800
     )
+    # How long a "no data" answer (None) is cached. Short on purpose:
+    # yfinance can report a hidden HTTP failure as no data, and a long
+    # TTL would turn one failure into a false "not found" for hours.
+    # The capability's own TTL still caps it. 0 = never cache no data.
+    COLLECTOR_CACHE_TTL_NO_DATA_SECONDS: int = Field(300, ge=0, le=604800)
     COLLECTOR_CACHE_MAX_ENTRIES: int = Field(256, ge=1, le=10000)
     COLLECTOR_RATE_LIMIT_CALLS: int = Field(30, ge=1, le=10000)
     # allow_inf_nan=False: "nan" or "inf" in .env fails with a clear
