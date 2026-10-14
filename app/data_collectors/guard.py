@@ -4,7 +4,10 @@ Cache, rate limit and retry in front of a real market-data collector.
 ``guard_collector(inner, policy)`` returns an object that has the same
 capability methods as ``inner``, and only those. A call first looks in
 a TTL cache, so a repeat call within the TTL does not reach the
-provider. A cache miss calls the provider through ``_call_provider``.
+provider. A cache miss takes a slot in a sliding-window rate limit and
+calls the provider. A ``TransientProviderError`` is retried after an
+exponential backoff with full jitter; after the last retry it reaches
+the caller.
 
 Java analogy: the returned object is like
 ``java.lang.reflect.Proxy.newProxyInstance`` given only the interfaces
@@ -24,10 +27,10 @@ import logging
 import random
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Callable, Dict, Hashable, List, Optional, Tuple
+from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple
 
 from app.data_collectors.base import (
     Fundamentals,
@@ -35,7 +38,9 @@ from app.data_collectors.base import (
     InstrumentLookup,
     PriceBar,
     PriceHistory,
+    ProviderError,
     Sourced,
+    TransientProviderError,
 )
 
 logger = logging.getLogger(__name__)
@@ -137,14 +142,18 @@ class _GuardedBase:
         self._sleep = sleep
         self._rand = rand
         # FastAPI runs sync endpoints in a thread pool, so two requests
-        # can use this object at once. The lock guards the cache. It is
-        # never held while the provider is called, so one slow call does
-        # not block cache hits for other requests.
+        # can use this object at once. The lock guards the cache and the
+        # rate-limit window. It is never held while the provider is
+        # called or while sleeping, so one slow call does not block
+        # other requests.
         self._lock = threading.Lock()
         # Key -> (expires_at, value). OrderedDict keeps the least
         # recently used entry first, like Java's LinkedHashMap in
         # access order.
         self._cache: OrderedDict[Hashable, Tuple[float, Any]] = OrderedDict()
+        # Start times of the provider calls in the current window,
+        # oldest first. A deque is a double-ended queue (ArrayDeque).
+        self._calls: Deque[float] = deque()
 
     @property
     def inner(self) -> Any:
@@ -183,8 +192,84 @@ class _GuardedBase:
         method: Callable[..., Any],
         bound: inspect.BoundArguments,
     ) -> Any:
-        """Call the provider once with the bound arguments."""
-        return method(*bound.args, **bound.kwargs)
+        """Call the provider under the rate limit, retrying if transient.
+
+        Only ``TransientProviderError`` is retried, after a backoff
+        delay. Every attempt takes its own rate-limit slot. Any other
+        exception, and the last transient one, reaches the caller.
+        """
+        ticker = bound.arguments.get("ticker")
+        retries = self._policy.max_retries
+        attempt = 1
+        while True:
+            self._acquire_slot(method_name, ticker)
+            try:
+                return method(*bound.args, **bound.kwargs)
+            except TransientProviderError:
+                if attempt > retries:
+                    raise
+                delay = self._backoff_delay(attempt)
+                # The inner collector logged the provider's own text.
+                # This line names only the method and the ticker.
+                logger.warning(
+                    "Transient provider error in %s for %r; "
+                    "retry %d of %d in %.2f s",
+                    method_name,
+                    ticker,
+                    attempt,
+                    retries,
+                    delay,
+                )
+                self._sleep(delay)
+                attempt += 1
+
+    def _acquire_slot(self, method_name: str, ticker: Any) -> None:
+        """Wait for a free slot in the sliding window, or fail.
+
+        At most ``rate_limit_calls`` provider calls may start within any
+        ``rate_limit_period``. When the window is full, wait until the
+        oldest call leaves it, as long as the total wait stays within
+        ``rate_limit_max_wait``. Otherwise raise a plain
+        ``ProviderError`` without calling the provider. It is not
+        transient, because a retry would only wait again.
+        """
+        period = self._policy.rate_limit_period
+        waited = 0.0
+        while True:
+            with self._lock:
+                now = self._clock()
+                while self._calls and self._calls[0] <= now - period:
+                    self._calls.popleft()
+                if len(self._calls) < self._policy.rate_limit_calls:
+                    self._calls.append(now)
+                    return
+                wait = self._calls[0] + period - now
+            if waited + wait > self._policy.rate_limit_max_wait:
+                logger.warning(
+                    "Rate limit reached for %s %r: %d calls per %.0f s",
+                    method_name,
+                    ticker,
+                    self._policy.rate_limit_calls,
+                    period,
+                )
+                raise ProviderError("Local rate limit reached")
+            # Sleep outside the lock, then check again: another thread
+            # may have taken the slot meanwhile.
+            self._sleep(wait)
+            waited += wait
+
+    def _backoff_delay(self, retry: int) -> float:
+        """Full jitter: a random time up to an exponential ceiling.
+
+        Retry 1 waits up to ``backoff_base``, retry 2 up to twice that,
+        and so on, never more than ``backoff_max``. Random delays stop
+        many clients from retrying at the same moment.
+        """
+        ceiling = min(
+            self._policy.backoff_max,
+            self._policy.backoff_base * 2 ** (retry - 1),
+        )
+        return self._rand() * ceiling
 
     def _cache_get(self, key: Hashable) -> Tuple[bool, Any]:
         """``(True, copy)`` for a live entry, ``(False, None)`` otherwise.
