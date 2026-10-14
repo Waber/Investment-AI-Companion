@@ -15,6 +15,7 @@ from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+from app.api.data_collection import reset_collector  # noqa: E402
 from app.core.database import Base, create_db_engine, get_db  # noqa: E402
 from main import create_app  # noqa: E402
 from tests import network_guard  # noqa: E402
@@ -42,6 +43,18 @@ def block_network(request, monkeypatch):
     attempts = list(network_guard.ATTEMPTS)
     network_guard.ATTEMPTS.clear()
     assert not attempts, f"Network access was attempted: {attempts}"
+
+
+@pytest.fixture(autouse=True)
+def fresh_shared_collector():
+    """Each test starts and ends without the shared Yahoo collector.
+
+    It lives at module level, so the cache or rate-limit state of one
+    test would otherwise leak into the next.
+    """
+    reset_collector()
+    yield
+    reset_collector()
 
 
 @pytest_asyncio.fixture()

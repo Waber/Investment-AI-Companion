@@ -7,9 +7,10 @@ import tempfile
 import pytest
 from pydantic import ValidationError
 
-from app.api.data_collection import get_collector
+from app.api.data_collection import get_collector, reset_collector
 from app.core.config import Settings, settings
 from app.data_collectors import yahoo_finance
+from app.data_collectors.base import FundAttributes, InstrumentLookup
 from app.data_collectors.fake import FakeCollector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.repositories.company_repository import CompanyRepository
@@ -53,10 +54,43 @@ def test_get_collector_returns_the_fake(monkeypatch):
     assert isinstance(get_collector(), FakeCollector)
 
 
-def test_get_collector_returns_yahoo(monkeypatch):
+def test_get_collector_returns_one_guarded_yahoo(monkeypatch):
     monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
 
-    assert isinstance(get_collector(), YahooFinanceCollector)
+    first = get_collector()
+
+    assert isinstance(first.inner, YahooFinanceCollector)
+    assert get_collector() is first
+    assert isinstance(first, InstrumentLookup)
+    assert not isinstance(first, FundAttributes)
+
+
+def test_reset_collector_builds_a_new_guarded_yahoo(monkeypatch):
+    monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
+    first = get_collector()
+
+    reset_collector()
+
+    assert get_collector() is not first
+
+
+def test_shared_yahoo_reads_the_guard_settings(monkeypatch):
+    monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
+    monkeypatch.setattr(settings, "COLLECTOR_RATE_LIMIT_CALLS", 7)
+    monkeypatch.setattr(
+        settings, "COLLECTOR_CACHE_TTL_COMPANY_INFO_SECONDS", 0
+    )
+
+    policy = get_collector().policy
+
+    assert policy.rate_limit_calls == 7
+    assert policy.ttl_company_info == 0
+
+
+def test_fake_mode_is_not_guarded(monkeypatch):
+    monkeypatch.setattr(settings, "DATA_COLLECTOR", "fake")
+
+    assert type(get_collector()) is FakeCollector
 
 
 def company_rows(client):

@@ -1,6 +1,7 @@
 """COLLECTOR_* settings and the GuardPolicy built from them."""
 
 from dataclasses import fields
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -191,3 +192,15 @@ def test_backoff_max_equal_to_base_is_accepted(monkeypatch):
     )
 
     assert built.COLLECTOR_BACKOFF_MAX_SECONDS == 4.0
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_every_guard_setting_is_documented():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+    for name in DEFAULTS:
+        assert name in readme, name
+        assert f"{name}=" in example, name

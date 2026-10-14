@@ -6,6 +6,7 @@ financial data providers like Yahoo Finance.
 """
 
 import logging
+import threading
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.data_collectors.base import InstrumentLookup, ProviderError
 from app.data_collectors.fake import FakeCollector
+from app.data_collectors.guard import GuardPolicy, guard_collector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.models.company import (
     DESCRIPTION_MAX_LENGTH,
@@ -35,8 +37,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data-collection", tags=["data-collection"])
 
 
+# fetch-company in "yahoo" mode uses one guarded Yahoo collector for
+# every request, so the cache and the rate limit see all of them. It is
+# a module-level variable (like a static field in Java), built on first
+# use from the settings. The lock stops two first requests from each
+# building one.
+_shared_collector: Optional[InstrumentLookup] = None
+_shared_collector_lock = threading.Lock()
+
+
 def get_collector() -> InstrumentLookup:
     """Return the collector chosen by ``DATA_COLLECTOR``.
+
+    ``fake`` gives a new offline ``FakeCollector``. It is not guarded:
+    it never calls the network. ``yahoo`` gives the shared Yahoo
+    collector behind the cache, rate limit and retries of
+    ``app.data_collectors.guard``.
 
     The setting is read on every call (not at import), so a test can
     change it with ``monkeypatch``. Tests that need other behavior
@@ -44,7 +60,30 @@ def get_collector() -> InstrumentLookup:
     """
     if settings.DATA_COLLECTOR == "fake":
         return FakeCollector()
-    return YahooFinanceCollector()
+    return _shared_yahoo_collector()
+
+
+def _shared_yahoo_collector() -> InstrumentLookup:
+    # "global" lets this function assign the module-level variable;
+    # without it the assignment would create a local variable.
+    global _shared_collector
+    with _shared_collector_lock:
+        if _shared_collector is None:
+            _shared_collector = guard_collector(
+                YahooFinanceCollector(), GuardPolicy.from_settings(settings)
+            )
+        return _shared_collector
+
+
+def reset_collector() -> None:
+    """Forget the shared Yahoo collector, with its cache and rate limit.
+
+    The next ``yahoo`` request builds a new one from the current
+    settings. Tests call this around every test.
+    """
+    global _shared_collector
+    with _shared_collector_lock:
+        _shared_collector = None
 
 
 class FetchCompanyRequest(BaseModel):
