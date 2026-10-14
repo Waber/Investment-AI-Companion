@@ -67,8 +67,10 @@ curl -q --noproxy '*' -fsS -X PUT "$BASE_URL/api/v1/companies/$COMPANY_ID" \
 
 PUT updates only supplied fields. Omitting `website` preserves it; explicit
 `null` clears it. URLs must be valid HTTP(S) URLs and can be normalized on return.
-Currency is stored exactly as sent, including letter case: Yahoo's `GBp` means
-pence, and rewriting it to `GBP` would treat the amount as pounds.
+Currency is stored in uppercase (`usd` becomes `USD`). Yahoo's
+minor-unit codes `GBp` (pence) and `ZAc` (South African cents) are kept
+exactly as sent: rewriting `GBp` to `GBP` would treat the amount as
+pounds.
 
 ```bash
 METRICS_JSON=$(curl -q --noproxy '*' -fsS -X POST "$BASE_URL/api/v1/financial-metrics/" \
