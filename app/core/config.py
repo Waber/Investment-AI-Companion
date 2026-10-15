@@ -49,7 +49,7 @@ COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS = 120
 # 16 stays under a typical pool of 40 so /ui and the JSON API remain.
 COLLECTOR_MAX_INFLIGHT_MIN = 1
 COLLECTOR_MAX_INFLIGHT_MAX = 16
-COLLECTOR_MAX_RETRIES_MIN = 1
+COLLECTOR_MAX_RETRIES_MIN = 0
 COLLECTOR_MAX_RETRIES_MAX = 5
 COLLECTOR_BACKOFF_BASE_MAX_SECONDS = 60
 COLLECTOR_BACKOFF_CAP_MAX_SECONDS = 120
@@ -347,7 +347,7 @@ class Settings(BaseSettings):
         ge=COLLECTOR_MAX_INFLIGHT_MIN,
         le=COLLECTOR_MAX_INFLIGHT_MAX,
     )
-    # Extra attempts after the first. 2 means three upstream calls.
+    # Extra attempts after the first. 0 is a single call. 2 means three.
     COLLECTOR_MAX_RETRIES: int = Field(
         default=2,
         ge=COLLECTOR_MAX_RETRIES_MIN,

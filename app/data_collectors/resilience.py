@@ -52,8 +52,8 @@ Four protections, all in this process (not on disk):
   provider cannot ride out on the exception text. The log line names
   the exception class, not that text.
 
-``COLLECTOR_MAX_RETRIES`` is the number of extra attempts. 2 means
-three calls.
+``COLLECTOR_MAX_RETRIES`` is the number of extra attempts. 0 means
+one call. 2 means three calls.
 
 The lock is the same job as a Java ``synchronized`` block. Uvicorn runs
 sync endpoints on a thread pool, so two requests can enter the wrapper

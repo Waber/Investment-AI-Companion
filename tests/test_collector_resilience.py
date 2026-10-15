@@ -494,6 +494,19 @@ def test_deadline_refuses_a_rate_limit_wait_that_would_not_fit():
     assert clock.slept == []
 
 
+def test_zero_retries_is_a_single_attempt():
+    """0 means one upstream call, then the fixed provider error."""
+    inner = Flaky(YFRateLimitError())
+    wrapped, clock = _wrap(inner, max_retries=0)
+    with pytest.raises(ProviderError) as caught:
+        wrapped.fetch_company_info("AAA")
+
+    assert inner.calls == 1
+    assert clock.slept == []
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert "secret-host" not in str(caught.value)
+
+
 def test_backoff_stays_inside_the_exponential_cap():
     inner = Flaky(YFRateLimitError())
     wrapped, clock = _wrap(
@@ -861,6 +874,12 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
     assert custom.COLLECTOR_CACHE_TTL_SECONDS == 10.5
     assert custom.COLLECTOR_RATE_LIMIT_PER_MINUTE == 12
     assert custom.COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS == 0
+    assert (
+        _build_settings(
+            monkeypatch, COLLECTOR_MAX_RETRIES="0"
+        ).COLLECTOR_MAX_RETRIES
+        == 0
+    )
 
     for name, value in (
         ("COLLECTOR_CACHE_TTL_SECONDS", "0"),
@@ -878,7 +897,7 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
         ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "nan"),
         ("COLLECTOR_MAX_INFLIGHT", "0"),
         ("COLLECTOR_MAX_INFLIGHT", "17"),
-        ("COLLECTOR_MAX_RETRIES", "0"),
+        ("COLLECTOR_MAX_RETRIES", "-1"),
         ("COLLECTOR_MAX_RETRIES", "6"),
         ("COLLECTOR_BACKOFF_BASE_SECONDS", "0"),
         ("COLLECTOR_BACKOFF_BASE_SECONDS", "61"),
