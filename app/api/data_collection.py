@@ -75,6 +75,9 @@ def get_collector() -> InstrumentLookup:
                 YahooFinanceCollector(),
                 cache_ttl_seconds=settings.COLLECTOR_CACHE_TTL_SECONDS,
                 rate_limit_per_minute=settings.COLLECTOR_RATE_LIMIT_PER_MINUTE,
+                rate_limit_max_wait_seconds=(
+                    settings.COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS
+                ),
                 max_retries=settings.COLLECTOR_MAX_RETRIES,
                 backoff_base_seconds=settings.COLLECTOR_BACKOFF_BASE_SECONDS,
                 backoff_max_seconds=settings.COLLECTOR_BACKOFF_MAX_SECONDS,

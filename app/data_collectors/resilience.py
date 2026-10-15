@@ -24,7 +24,13 @@ Three protections, all in this process (not on disk):
   time of each upstream call and waits until the oldest one is 60
   seconds old. Cache hits are not upstream calls and do not count.
   Waiting uses the injected ``sleep``, so tests move a fake clock
-  instead of pausing.
+  instead of pausing. The wait is capped
+  (``COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS``, default 5, allowed 0 to
+  60). A worker that slept for the rest of the window would be gone
+  for other requests, the same problem as blocking a servlet thread
+  for a minute. If the slot is further away than the cap, the call
+  raises ``ProviderError`` immediately, does not sleep, and does not
+  record a slot, because Yahoo was never called.
 - Retry with exponential backoff and full jitter. A transient failure
   (rate limit, HTTP 429, timeout, connection error) is tried again.
   The wait is a random number from 0 up to ``min(max, base * 2^attempt)``
@@ -74,6 +80,8 @@ from app.core.config import (
     COLLECTOR_MAX_RETRIES_MAX,
     COLLECTOR_MAX_RETRIES_MIN,
     COLLECTOR_RATE_LIMIT_MAX_PER_MINUTE,
+    COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS,
+    COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS,
     COLLECTOR_RATE_LIMIT_MIN_PER_MINUTE,
 )
 from app.data_collectors.base import (
@@ -191,6 +199,7 @@ class ResilientCollector:
         rng: Optional[Callable[[float, float], float]] = None,
         cache_ttl_seconds: float = 300,
         rate_limit_per_minute: int = 30,
+        rate_limit_max_wait_seconds: float = 5,
         max_retries: int = 2,
         backoff_base_seconds: float = 0.5,
         backoff_max_seconds: float = 8,
@@ -211,6 +220,12 @@ class ResilientCollector:
             rate_limit_per_minute,
             COLLECTOR_RATE_LIMIT_MIN_PER_MINUTE,
             COLLECTOR_RATE_LIMIT_MAX_PER_MINUTE,
+        )
+        self._rate_limit_max_wait = _require_float(
+            "rate_limit_max_wait_seconds",
+            rate_limit_max_wait_seconds,
+            COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS,
+            COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS,
         )
         self._max_retries = _require_int(
             "max_retries",
@@ -355,7 +370,14 @@ class ResilientCollector:
         return value
 
     def _take_token(self) -> None:
-        """Block until this upstream call fits in the last 60 seconds."""
+        """Wait until this call fits in the last 60 seconds, or fail.
+
+        The sleep is outside the lock so a cache hit on another thread
+        is not stuck behind it. If the wait would be longer than the
+        cap, fail before sleeping and before recording a slot. The
+        message is the same fixed sentence as a retry give-up, so the
+        API keeps answering 502 and the provider's text stays out.
+        """
         while True:
             with self._lock:
                 now = self._clock()
@@ -368,7 +390,8 @@ class ResilientCollector:
                     self._attempts.append(now)
                     return
                 # Calls a full window old were just removed, so this
-                # wait is positive. Sleeping outside the lock lets a
-                # cache hit on another thread proceed.
+                # wait is positive and at most 60 seconds.
                 wait = RATE_LIMIT_WINDOW_SECONDS - (now - self._attempts[0])
+                if wait > self._rate_limit_max_wait:
+                    raise ProviderError(TEMPORARY_FAILURE_MESSAGE)
             self._sleep(wait)

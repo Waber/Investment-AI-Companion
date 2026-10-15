@@ -104,8 +104,10 @@ placeholder in any letter case. Generate one with
 `yahoo` (live Yahoo Finance, the default) or `fake` (offline, synthetic).
 The live collector sits behind one in-process wrapper for the life of
 the process: a TTL cache of successful fetches, at most
-`COLLECTOR_RATE_LIMIT_PER_MINUTE` upstream calls in any 60 seconds, and
-retry with jitter (`COLLECTOR_MAX_RETRIES`,
+`COLLECTOR_RATE_LIMIT_PER_MINUTE` upstream calls in any 60 seconds.
+A request waits at most `COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS`
+(default 5) for a free slot, then fails instead of blocking a worker.
+It retries with jitter (`COLLECTOR_MAX_RETRIES`,
 `COLLECTOR_BACKOFF_BASE_SECONDS`, `COLLECTOR_BACKOFF_MAX_SECONDS`).
 The fake collector is not wrapped. The ranges and defaults are in
 `.env.example`.

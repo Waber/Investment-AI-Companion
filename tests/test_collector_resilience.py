@@ -46,6 +46,7 @@ ENV_EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
 _LIMIT_NAMES = (
     "COLLECTOR_CACHE_TTL_SECONDS",
     "COLLECTOR_RATE_LIMIT_PER_MINUTE",
+    "COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS",
     "COLLECTOR_MAX_RETRIES",
     "COLLECTOR_BACKOFF_BASE_SECONDS",
     "COLLECTOR_BACKOFF_MAX_SECONDS",
@@ -116,9 +117,12 @@ def _fixed_time():
 
 def _wrap(inner, **overrides):
     clock = overrides.pop("clock", None) or FakeClock()
+    sleep = overrides.pop("sleep", None)
+    if sleep is None:
+        sleep = clock.sleep
     settings = {
         "clock": clock,
-        "sleep": clock.sleep,
+        "sleep": sleep,
         "rng": lambda low, high: high,
         "cache_ttl_seconds": 30,
         "rate_limit_per_minute": 100,
@@ -211,7 +215,11 @@ def test_cache_drops_the_least_recently_used_entry():
 
 def test_rate_limit_blocks_until_the_oldest_call_ages_out():
     inner = FakeCollector()
-    wrapped, clock = _wrap(inner, rate_limit_per_minute=2)
+    wrapped, clock = _wrap(
+        inner,
+        rate_limit_per_minute=2,
+        rate_limit_max_wait_seconds=60,
+    )
     wrapped.fetch_company_info("DEMO_PL_TECH")
     wrapped.fetch_company_info("DEMO_US_GROWTH")
     started = time.perf_counter()
@@ -225,7 +233,11 @@ def test_rate_limit_blocks_until_the_oldest_call_ages_out():
     wrapped.fetch_company_info("DEMO_JP_STABLE")
     assert clock.slept == [60.0]
 
-    staggered, staggered_clock = _wrap(inner, rate_limit_per_minute=2)
+    staggered, staggered_clock = _wrap(
+        inner,
+        rate_limit_per_minute=2,
+        rate_limit_max_wait_seconds=60,
+    )
     staggered.fetch_company_info("DEMO_PL_TECH")
     staggered_clock.now = 10
     staggered.fetch_company_info("DEMO_US_GROWTH")
@@ -235,12 +247,101 @@ def test_rate_limit_blocks_until_the_oldest_call_ages_out():
 
 def test_cache_hits_do_not_spend_rate_limit_tokens():
     inner = FakeCollector()
-    wrapped, clock = _wrap(inner, rate_limit_per_minute=1)
+    wrapped, clock = _wrap(
+        inner,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=60,
+    )
     wrapped.fetch_company_info("DEMO_PL_TECH")
     wrapped.fetch_company_info("DEMO_PL_TECH")
     assert clock.slept == []
     wrapped.fetch_company_info("DEMO_US_GROWTH")
     assert clock.slept == [60.0]
+
+
+def test_rate_limit_wait_over_the_cap_fails_without_a_slot():
+    """A wait longer than the cap fails immediately and takes no slot.
+
+    The fake clock records the sleep. A rejected call must not move it,
+    and must not be remembered: once the original slot ages out, the
+    next call goes straight through.
+    """
+    inner = CountingFake()
+    wrapped, clock = _wrap(
+        inner,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=5,
+    )
+    wrapped.fetch_company_info("DEMO_PL_TECH")
+    clock.now = 10
+    with pytest.raises(ProviderError) as caught:
+        wrapped.fetch_company_info("DEMO_US_GROWTH")
+
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert caught.value.__cause__ is None
+    assert clock.slept == []
+    assert clock.now == 10
+    assert inner.calls == 1
+
+    clock.now = 60
+    wrapped.fetch_company_info("DEMO_US_GROWTH")
+    assert inner.calls == 2
+    assert clock.slept == []
+
+
+def test_rate_limit_wait_equal_to_the_cap_still_waits():
+    inner = CountingFake()
+    wrapped, clock = _wrap(
+        inner,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=5,
+    )
+    wrapped.fetch_company_info("DEMO_PL_TECH")
+    clock.now = 55
+    wrapped.fetch_company_info("DEMO_US_GROWTH")
+    assert clock.slept == [5.0]
+    assert inner.calls == 2
+
+
+def test_a_second_thread_fails_fast_inside_the_rate_limit_cap():
+    """Limit of 1, two real threads. The second call must not block.
+
+    The first call is inside the upstream fetch, holding the only
+    slot. The second would otherwise sleep for nearly 60 seconds.
+    The cap is 5 seconds. Failing fast means the real clock moves
+    far less than that, and the rejected call does not take a slot.
+    """
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Holding:
+        def fetch_company_info(self, ticker):
+            entered.set()
+            assert release.wait(timeout=5)
+            return sourced({"ticker": ticker})
+
+    wrapped, _clock = _wrap(
+        Holding(),
+        clock=time.monotonic,
+        sleep=time.sleep,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=5,
+    )
+    holder = threading.Thread(target=wrapped.fetch_company_info, args=("AAA",))
+    holder.start()
+    assert entered.wait(timeout=2)
+    started = time.monotonic()
+    try:
+        with pytest.raises(ProviderError) as caught:
+            wrapped.fetch_company_info("BBB")
+        elapsed = time.monotonic() - started
+        assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+        assert elapsed < 1.0
+        assert len(wrapped._attempts) == 1
+    finally:
+        release.set()
+        holder.join(timeout=2)
+    assert not holder.is_alive()
 
 
 def test_backoff_stays_inside_the_exponential_cap():
@@ -474,6 +575,18 @@ def test_constructor_rejects_limits_outside_the_settings_bounds():
         ResilientCollector(inner, rate_limit_per_minute=0)
     with pytest.raises(ValueError):
         ResilientCollector(inner, rate_limit_per_minute=True)
+    marker = "wait-secret-marker"
+    with pytest.raises(ValueError) as caught:
+        ResilientCollector(inner, rate_limit_max_wait_seconds=marker)
+    assert marker not in str(caught.value)
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, rate_limit_max_wait_seconds=-1)
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, rate_limit_max_wait_seconds=61)
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, rate_limit_max_wait_seconds=float("nan"))
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, rate_limit_max_wait_seconds=True)
     with pytest.raises(ValueError):
         ResilientCollector(inner, backoff_base_seconds=0)
     with pytest.raises(ValueError):
@@ -523,6 +636,7 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
     built = _build_settings(monkeypatch)
     assert built.COLLECTOR_CACHE_TTL_SECONDS == 300
     assert built.COLLECTOR_RATE_LIMIT_PER_MINUTE == 30
+    assert built.COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS == 5
     assert built.COLLECTOR_MAX_RETRIES == 2
     assert built.COLLECTOR_BACKOFF_BASE_SECONDS == 0.5
     assert built.COLLECTOR_BACKOFF_MAX_SECONDS == 8
@@ -531,12 +645,14 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
         monkeypatch,
         COLLECTOR_CACHE_TTL_SECONDS="10.5",
         COLLECTOR_RATE_LIMIT_PER_MINUTE="12",
+        COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS="0",
         COLLECTOR_MAX_RETRIES="1",
         COLLECTOR_BACKOFF_BASE_SECONDS="0.25",
         COLLECTOR_BACKOFF_MAX_SECONDS="2",
     )
     assert custom.COLLECTOR_CACHE_TTL_SECONDS == 10.5
     assert custom.COLLECTOR_RATE_LIMIT_PER_MINUTE == 12
+    assert custom.COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS == 0
 
     for name, value in (
         ("COLLECTOR_CACHE_TTL_SECONDS", "0"),
@@ -545,6 +661,10 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
         ("COLLECTOR_RATE_LIMIT_PER_MINUTE", "0"),
         ("COLLECTOR_RATE_LIMIT_PER_MINUTE", "121"),
         ("COLLECTOR_RATE_LIMIT_PER_MINUTE", "1.5"),
+        ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "-0.1"),
+        ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "60.1"),
+        ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "nan"),
+        ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "inf"),
         ("COLLECTOR_MAX_RETRIES", "0"),
         ("COLLECTOR_MAX_RETRIES", "6"),
         ("COLLECTOR_BACKOFF_BASE_SECONDS", "0"),
@@ -561,6 +681,14 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
             COLLECTOR_BACKOFF_BASE_SECONDS="30",
             COLLECTOR_BACKOFF_MAX_SECONDS="1",
         )
+
+    marker = "wait-secret-marker"
+    with pytest.raises(Exception) as caught:
+        _build_settings(
+            monkeypatch,
+            COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS=marker,
+        )
+    assert marker not in str(caught.value)
 
 
 def test_env_example_documents_the_collector_limits():
@@ -599,6 +727,17 @@ async def test_yahoo_wrapper_reuses_the_cache_across_requests(
     assert CountingTicker.calls == 1
 
 
+def test_yahoo_wrapper_reads_the_rate_limit_cap(monkeypatch):
+    monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
+    monkeypatch.setattr(settings, "COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", 7)
+    reset_cached_collector()
+    try:
+        collector = get_collector()
+        assert collector._rate_limit_max_wait == 7
+    finally:
+        reset_cached_collector()
+
+
 @pytest.mark.asyncio
 async def test_wrapper_give_up_is_502_and_no_data_stays_404(client):
     class Empty:
@@ -629,6 +768,26 @@ async def test_wrapper_give_up_is_502_and_no_data_stays_404(client):
     assert response.json()["detail"] == "Data provider error"
     assert "secret-host" not in response.text
     assert "Too Many Requests" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_over_the_cap_is_still_502(client):
+    """Failing the cap is a provider error, same status as a give-up."""
+    inner = FakeCollector()
+    wrapped, clock = _wrap(
+        inner,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=5,
+    )
+    client.app.dependency_overrides[get_collector] = lambda: wrapped
+    first = await client.post(FETCH_URL, json={"ticker": "DEMO_PL_TECH"})
+    second = await client.post(FETCH_URL, json={"ticker": "DEMO_US_GROWTH"})
+
+    assert first.status_code == 200
+    assert second.status_code == 502
+    assert second.json()["detail"] == "Data provider error"
+    assert clock.slept == []
+    assert "temporarily unavailable" not in second.text
 
 
 def test_direct_sourced_round_trip_preserves_provenance_fields():
