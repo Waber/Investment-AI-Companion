@@ -608,6 +608,38 @@ def test_transient_errors_are_retried(error):
     assert result.value["ticker"] == "AAA"
 
 
+def test_a_transient_context_is_retried_when_the_cause_is_not():
+    """``raise ProviderError from ValueError`` can still hide a rate limit.
+
+    ``__cause__`` is the ValueError. The rate-limit error stays on
+    ``__context__``. That link is worth retrying. The exception text
+    is not.
+    """
+
+    class Once:
+        def __init__(self):
+            self.calls = 0
+
+        def fetch_company_info(self, ticker):
+            self.calls += 1
+            if self.calls == 1:
+                try:
+                    raise YFRateLimitError()
+                except YFRateLimitError:
+                    raise ProviderError("wrapped secret-host") from ValueError(
+                        "parse"
+                    )
+            return sourced({"ticker": ticker})
+
+    inner = Once()
+    wrapped, clock = _wrap(inner, max_retries=1, rng=lambda low, high: 0)
+    result = wrapped.fetch_company_info("AAA")
+
+    assert inner.calls == 2
+    assert result.value["ticker"] == "AAA"
+    assert clock.slept == []
+
+
 def test_rate_limit_hidden_inside_provider_error_is_retried():
     cause = YFRateLimitError()
     error = ProviderError("Yahoo Finance company info failed")

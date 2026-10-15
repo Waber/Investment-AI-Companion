@@ -70,7 +70,8 @@ comes from the inner collector's own clock.
 
 yfinance is not imported here. ``YFRateLimitError`` is recognised by
 class name, including when the Yahoo collector has already wrapped it
-as the ``__cause__`` of a ``ProviderError`` (Java's "cause").
+as the ``__cause__`` of a ``ProviderError`` (Java's "cause") or left
+it on ``__context__``.
 """
 
 import copy
@@ -145,17 +146,24 @@ _MISS = object()
 
 
 def _is_transient(exc: BaseException) -> bool:
-    """True when this exception, or its cause, is worth retrying."""
+    """True when this exception, its cause, or its context is retried.
+
+    ``raise New() from Other()`` sets ``__cause__`` and can leave a
+    different error on ``__context__`` (Java would have one cause).
+    A rate-limit error on either link is worth retrying. The walk
+    does not read the exception text.
+    """
     seen = set()
-    current: Optional[BaseException] = exc
-    while current is not None and id(current) not in seen:
+    stack = [exc]
+    while stack:
+        current = stack.pop()
+        if current is None or id(current) in seen:
+            continue
         seen.add(id(current))
         if _is_transient_one(current):
             return True
-        nxt = current.__cause__
-        if nxt is None:
-            nxt = current.__context__
-        current = nxt
+        stack.append(current.__cause__)
+        stack.append(current.__context__)
     return False
 
 
