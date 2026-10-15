@@ -10,11 +10,42 @@ of real securities or financial statements. All names, tickers, exchanges, and
 amounts are invented. No data-provider keys or investment decisions are involved.
 This fixture is for API and UI testing; it is not a real portfolio.
 
+## One command
+
+From the repository root, with the runtime requirements installed and
+no `.env` file:
+
+```bash
+python -m scripts.run_demo
+```
+
+That creates a fresh SQLite file at `demo/investment_demo.db`
+(git-ignored), seeds this `demo-v1` fixture, selects the fake
+collector, and serves [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
+The host is `127.0.0.1`. The command does not read `DATABASE_URL` from
+`.env` or from the shell, and it refuses any database that is not that
+SQLite file, including a `demo/` directory that is a symlink. It always
+generates a fresh `SECRET_KEY` for the process, even when the shell
+already has one. The key is not printed and it is not written to disk.
+If the port is already in use, the command stops and leaves the
+database file unchanged.
+
+Run the command again to replace the file and seed from scratch.
+`--reset` is that same default, written out. `--keep` reuses the file
+and only inserts fixture rows that are missing, so a second run does
+not duplicate them. `--reset` and `--keep` cannot be combined.
+
+```bash
+python -m scripts.run_demo --keep
+python -m scripts.run_demo --port 8000
+```
+
 ## Local /ui demo
 
-The server-rendered pages are at `/ui`. Copy-pasteable commands are
-in [Run the demo](RUN_DEMO.md). The seeder opens only the sqlite URL
-you pass. It does not read or change the default `DATABASE_URL`.
+The one command above is the short path. The steps in
+[Run the demo](RUN_DEMO.md) are the same pieces, run by hand. The
+server-rendered pages are at `/ui`. The seeder opens only the sqlite
+URL you pass. It does not read or change the default `DATABASE_URL`.
 
 `SECRET_KEY` is required for the seed and for uvicorn. Generate it
 with the command in that guide. Do not commit it. The documented

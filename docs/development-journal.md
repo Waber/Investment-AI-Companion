@@ -1,5 +1,83 @@
 # Development Journal
 
+## 2026-10-15 - Security and QA review of the offline demo (#25)
+
+- Scope: review fixes on the same branch as
+  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25).
+  Security N1 and the QA medium finding are the same hole: a `demo/`
+  directory that is a symlink was followed by `Path.resolve`, so a
+  reset could delete a database outside the checkout. Security N2:
+  always generate a fresh `SECRET_KEY`. QA low: check the port before
+  deleting the file. QA nit: one line in `docs/RUN_DEMO.md` pointing
+  at `python -m scripts.run_demo`.
+- Decisions: `refuse_symlink_escape` refuses a symlink at `demo/`, at
+  `investment_demo.db`, at a parent that is still inside the checkout,
+  and when the checkout path passed in is itself a symlink. Following
+  the link must also leave `demo` as a direct child of that checkout.
+  `remove_database_files` refuses again before `unlink`. The command
+  binds `127.0.0.1` and the chosen port before it builds or seeds, and
+  exits with a fixed message when that port is taken. `resolve_secret_key`
+  no longer reads the shell. The generated key is still not printed and
+  not written to disk. The absolute database path in the banner stays
+  (security N3).
+- Verification: no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1175 passed, 121 deselected, total coverage 95.41%. Scoped
+  `black`, `isort`, and `flake8` on `scripts/run_demo.py` and
+  `tests/test_run_demo.py` passed. PostgreSQL was not run locally
+  (no `TEST_POSTGRES_DSN`). GitHub Actions
+  [run 38705460114](https://github.com/Waber/Investment-AI-Companion/actions/runs/38705460114)
+  on `4449053` completed with conclusion success: SQLite job
+  `116323646312` success, PostgreSQL job `116323646645` success.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-15, UTC): review fixes started about 08:11.
+  Full SQLite suite finished 08:21.
+- Next: #26 together with #16, after CI on this commit is green.
+
+## 2026-10-15 - One-command offline demo (#25)
+
+- Scope: [#25](https://github.com/Waber/Investment-AI-Companion/issues/25).
+  `python -m scripts.run_demo` creates `demo/investment_demo.db`, seeds
+  `demo-v1`, selects the fake collector, and serves the app on
+  `127.0.0.1`. The printed page is `/ui` because that router is on
+  master. UI templates and static files were not edited.
+- Decisions: the database is fresh unless `--keep` is passed. `--reset`
+  is the default written out; the two flags cannot be combined. The
+  only accepted URL is the absolute SQLite file
+  `demo/investment_demo.db`. `postgresql://` and any other path are
+  refused, and the error does not repeat the URL. Settings are built
+  with explicit arguments and `_env_file=None`. Those values are
+  published in the process environment before the app is imported, and
+  copied onto the shared settings object, so a personal `DATABASE_URL`
+  in `.env` or in the shell is not the demo database. `SECRET_KEY` is
+  taken from the process environment when it is set; otherwise the
+  process generates one with `secrets.token_urlsafe(32)`. It is not
+  printed and it is not written to disk. `uvicorn.run` is called with
+  `host="127.0.0.1"`. `main.py` already binds `127.0.0.1` in its
+  `__main__` block; the demo does not call that block.
+  `app/data_collectors/` and the currency code were not edited, so this
+  branch does not wrap the fake collector. PR #70 is in review and
+  touches the live-collector wrapper plus those docs files.
+- Verification: no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1170 passed, 121 deselected, total coverage 95.60%. Scoped
+  `black`, `isort`, and `flake8` on `scripts/run_demo.py` and
+  `tests/test_run_demo.py` passed. PostgreSQL was not run locally
+  (no `TEST_POSTGRES_DSN`). GitHub Actions
+  [run 38703046058](https://github.com/Waber/Investment-AI-Companion/actions/runs/38703046058)
+  on `8cde777` completed with conclusion success: SQLite job
+  `116315619295` success, PostgreSQL job `116315618716` success.
+  A manual loopback run
+  with `DATABASE_URL` and `SECRET_KEY` unset and no `.env` printed
+  the URL, seeded 6 companies and 20 metrics, and served `/`,
+  `/docs`, `/ui`, and the company list on `127.0.0.1`. A second run
+  with `--keep` reported 0 created and 6 companies already present.
+  The console text did not include a secret.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-15, UTC): session start 07:39. Full SQLite
+  suite finished 08:00.
+- Next: #26 together with #16.
+
 ## 2026-10-12 - Collector interface and offline fake, part 1 (#24)
 
 - Scope: part 1 of
