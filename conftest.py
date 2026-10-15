@@ -80,3 +80,25 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 _isolate_when_integration_is_selected()
+
+
+@pytest.fixture(autouse=True)
+def reset_cached_live_collector():
+    """Drop the process-wide Yahoo wrapper around every test.
+
+    ``get_collector()`` keeps one wrapped collector for the process, the
+    same idea as a static field on a Java singleton. That object, its
+    cache and its rate-limit window would otherwise survive into the
+    next test. ``test_yahoo_near_empty_info_is_a_404_not_a_502`` used to
+    see the wrapper left by
+    ``test_yahoo_wrapper_reuses_the_cache_across_requests``.
+
+    The import stays inside the fixture. This file must not import the
+    application at module level, because the integration branch isolates
+    ``.env`` before ``Settings`` is first constructed.
+    """
+    from app.api.data_collection import reset_cached_collector
+
+    reset_cached_collector()
+    yield
+    reset_cached_collector()

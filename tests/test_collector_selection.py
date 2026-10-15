@@ -307,6 +307,12 @@ class NearEmptyTicker:
 
 @pytest.mark.asyncio
 async def test_yahoo_near_empty_info_is_a_404_not_a_502(client, monkeypatch):
+    # The live wrapper is process-wide. This test must not see the one
+    # left by an earlier yahoo test, or the cache and the rate-limit
+    # window from that test decide this response.
+    from app.api import data_collection
+
+    assert data_collection._yahoo_collector is None
     monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", NearEmptyTicker)
 
