@@ -1,5 +1,42 @@
 # Current Work State
 
+## Collector cache, rate limit, retry, and currency (#24, part 2): 2026-10-15
+
+- Branch `cursor/collector-resilience-currency-ed10`, based on
+  `origin/master` `107adf0` (PR #68 merged). One pull request to
+  `master`, [PR #70](https://github.com/Waber/Investment-AI-Companion/pull/70).
+  Not merged. Refs #24. QA round 1 and Security round 1 are on this
+  branch, on top of `ddaac93`. The HTTP status for a provider failure
+  stays 502. Concurrent-miss de-duplication (security N2) is handed
+  to R1 #54.
+- Completed: `ResilientCollector` in front of Yahoo, plus the QA
+  and security follow-ups. The wait for a rate-limit slot is capped,
+  sleeps in one call share a deadline, and only a few cache misses
+  may run at once. The cache key uppercases the ticker. Currency
+  rejects non-ASCII before strip and upper. Unexpected collector
+  errors become `ProviderError`. `__context__` is retried when it
+  is transient. `COLLECTOR_MAX_RETRIES` may be 0. The live wrapper
+  is reset around every test. The fake collector is not wrapped.
+  The `math.isfinite` guard and the 404-versus-502 split are
+  unchanged.
+  [Plan for part 1](superpowers/plans/2026-10-12-collector-interface.md).
+- Incomplete: none in this slice. Handed to R1 #54: balance-sheet
+  `debt_to_assets`, yfinance `hide_exceptions`, a durable cache
+  with explicit refresh and batching, and de-duplicating concurrent
+  cache misses (security N2). Fund metrics and a consistent fake
+  P/E stay with #27 and #28. Legacy currency case stays until the
+  #8 migration.
+- Tests: no `.env`, `DATABASE_URL` unset. The CI command on the
+  follow-up head (after `d47e8be`, before this docs commit): 1187
+  passed, 121 deselected, exact 95.86%. PostgreSQL was not run
+  locally. Scoped black, isort and flake8 were clean on the touched
+  Python files.
+- Active agents: none. Blockers: none.
+- Stop reason: QA round 1 and Security round 1 are committed and
+  waiting for CI on PR #70. Account usage was not available in this
+  session.
+- Next action: #25, the one-command offline demo.
+
 ## Collector interface, part 1 of #24: 2026-10-12
 
 - Branch `feature/collector-interface-24`, rebased on 2026-10-13 onto
@@ -26,9 +63,11 @@
 - Active agents: none. Blockers: none.
 - Stop reason: PR #68 is open and waits for the owner's review and
   merge; agents do not merge. Account usage was not available in this
-  session.
-- Next action: the owner reviews PR #68 and merges it with "Rebase and
-  merge". Then part 2 of #24, then #25.
+  session. That was the state when this section was written. PR #68
+  is merged as `107adf0`. Part 2 is the section above.
+- Next action when this section was written: the owner reviews PR #68
+  and merges it with "Rebase and merge". Then part 2 of #24, then
+  #25. The live next action is #25, in the section above.
 
 ## Pagination bounds (#19): 2026-10-12
 

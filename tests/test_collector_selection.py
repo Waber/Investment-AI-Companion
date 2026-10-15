@@ -7,9 +7,15 @@ import tempfile
 import pytest
 from pydantic import ValidationError
 
-from app.api.data_collection import get_collector
+from app.api.data_collection import get_collector, reset_cached_collector
 from app.core.config import Settings, settings
 from app.data_collectors import yahoo_finance
+from app.data_collectors.base import (
+    Fundamentals,
+    FundAttributes,
+    InstrumentLookup,
+    PriceHistory,
+)
 from app.data_collectors.fake import FakeCollector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.repositories.company_repository import CompanyRepository
@@ -48,15 +54,37 @@ def test_tests_run_with_the_fake_collector():
 
 
 def test_get_collector_returns_the_fake(monkeypatch):
-    monkeypatch.setattr(settings, "DATA_COLLECTOR", "fake")
+    """The offline fake is not wrapped and is not cached.
 
-    assert isinstance(get_collector(), FakeCollector)
+    It never calls Yahoo. A rate limit would slow the demo, and a cache
+    would hide the clock tests use for provenance.
+    """
+    monkeypatch.setattr(settings, "DATA_COLLECTOR", "fake")
+    first = get_collector()
+    second = get_collector()
+
+    assert isinstance(first, FakeCollector)
+    assert type(first).__name__ != "ResilientCollector"
+    assert first is not second
 
 
 def test_get_collector_returns_yahoo(monkeypatch):
-    monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
+    """The live collector is one wrapped instance for the whole process.
 
-    assert isinstance(get_collector(), YahooFinanceCollector)
+    A new object on every call would throw away the cache.
+    """
+    monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
+    reset_cached_collector()
+    first = get_collector()
+    second = get_collector()
+
+    assert first is second
+    assert type(first).__name__ == "ResilientCollector"
+    assert isinstance(first.inner, YahooFinanceCollector)
+    assert isinstance(first, InstrumentLookup)
+    assert isinstance(first, PriceHistory)
+    assert isinstance(first, Fundamentals)
+    assert not isinstance(first, FundAttributes)
 
 
 def company_rows(client):
@@ -279,6 +307,12 @@ class NearEmptyTicker:
 
 @pytest.mark.asyncio
 async def test_yahoo_near_empty_info_is_a_404_not_a_502(client, monkeypatch):
+    # The live wrapper is process-wide. This test must not see the one
+    # left by an earlier yahoo test, or the cache and the rate-limit
+    # window from that test decide this response.
+    from app.api import data_collection
+
+    assert data_collection._yahoo_collector is None
     monkeypatch.setattr(settings, "DATA_COLLECTOR", "yahoo")
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", NearEmptyTicker)
 

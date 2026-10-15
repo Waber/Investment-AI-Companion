@@ -2,7 +2,13 @@ import json
 from typing import List, Literal, Optional
 from urllib.parse import urlsplit
 
-from pydantic import AnyHttpUrl, Field, ValidationError, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # These strings used to be defaults. They are rejected so a copied
@@ -16,6 +22,37 @@ _REJECTED_SECRET_KEYS = frozenset(
 )
 # token_urlsafe(32) is 43 characters. 32 is the shortest value we accept.
 _MIN_SECRET_KEY_LENGTH = 32
+
+# Bounds for the live collector's in-process cache and retry. The
+# wrapper in app/data_collectors/resilience.py uses the same numbers,
+# so a direct constructor cannot pick a value Settings would reject.
+# The rate-limit ceiling is 120 per minute (2 per second): higher than
+# that is already hammering Yahoo's unofficial API. The TTL ceiling is
+# one day. More than 5 extra retries, or a single backoff over 2
+# minutes, turns one request into a long stall. The rate-limit wait
+# has its own cap: a worker that sleeps for the rest of the 60-second
+# window is unavailable to every other request.
+COLLECTOR_CACHE_TTL_MIN_SECONDS = 1
+COLLECTOR_CACHE_TTL_MAX_SECONDS = 86_400
+COLLECTOR_RATE_LIMIT_MIN_PER_MINUTE = 1
+COLLECTOR_RATE_LIMIT_MAX_PER_MINUTE = 120
+COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS = 0
+COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS = 60
+# One fetch, including rate-limit waits and retry sleeps. 15 seconds
+# is enough for the default cap (5) plus the default backoff and
+# still returns the worker. 120 is the longest a single request may
+# sit there. The upstream call itself is not interrupted.
+COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS = 1
+COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS = 120
+# How many collector calls may run or wait at once. Extra calls fail
+# immediately instead of taking another worker from uvicorn's pool.
+# 16 stays under a typical pool of 40 so /ui and the JSON API remain.
+COLLECTOR_MAX_INFLIGHT_MIN = 1
+COLLECTOR_MAX_INFLIGHT_MAX = 16
+COLLECTOR_MAX_RETRIES_MIN = 0
+COLLECTOR_MAX_RETRIES_MAX = 5
+COLLECTOR_BACKOFF_BASE_MAX_SECONDS = 60
+COLLECTOR_BACKOFF_CAP_MAX_SECONDS = 120
 
 
 def _cors_origin_parts(value: object) -> List[str]:
@@ -275,6 +312,74 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip().lower()
         return value
+
+    # In-process cache, rate limit and retry for the live collector.
+    # The fake collector is not wrapped. See resilience.py.
+    COLLECTOR_CACHE_TTL_SECONDS: float = Field(
+        default=300,
+        ge=COLLECTOR_CACHE_TTL_MIN_SECONDS,
+        le=COLLECTOR_CACHE_TTL_MAX_SECONDS,
+    )
+    COLLECTOR_RATE_LIMIT_PER_MINUTE: int = Field(
+        default=30,
+        ge=COLLECTOR_RATE_LIMIT_MIN_PER_MINUTE,
+        le=COLLECTOR_RATE_LIMIT_MAX_PER_MINUTE,
+    )
+    # Longest a request may block while a rate-limit slot frees up.
+    # 0 refuses immediately when any wait is needed. 60 is the whole
+    # window. Past that, one call can freeze the API and /ui.
+    COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS: float = Field(
+        default=5,
+        ge=COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS,
+        le=COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS,
+    )
+    # Budget for every sleep in one collector call (rate-limit waits
+    # and retry backoff). The upstream call itself is not cancelled.
+    COLLECTOR_TOTAL_DEADLINE_SECONDS: float = Field(
+        default=15,
+        ge=COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS,
+        le=COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS,
+    )
+    # Permits for collector calls that miss the cache. A full set
+    # fails the extra request instead of parking another worker.
+    COLLECTOR_MAX_INFLIGHT: int = Field(
+        default=4,
+        ge=COLLECTOR_MAX_INFLIGHT_MIN,
+        le=COLLECTOR_MAX_INFLIGHT_MAX,
+    )
+    # Extra attempts after the first. 0 is a single call. 2 means three.
+    COLLECTOR_MAX_RETRIES: int = Field(
+        default=2,
+        ge=COLLECTOR_MAX_RETRIES_MIN,
+        le=COLLECTOR_MAX_RETRIES_MAX,
+    )
+    COLLECTOR_BACKOFF_BASE_SECONDS: float = Field(
+        default=0.5,
+        gt=0,
+        le=COLLECTOR_BACKOFF_BASE_MAX_SECONDS,
+    )
+    COLLECTOR_BACKOFF_MAX_SECONDS: float = Field(
+        default=8,
+        gt=0,
+        le=COLLECTOR_BACKOFF_CAP_MAX_SECONDS,
+    )
+
+    @model_validator(mode="after")
+    def backoff_cap_covers_the_base(self):
+        """The cap has to sit at or above the first wait.
+
+        Otherwise the "maximum" is a smaller number than the base and
+        the setting does not mean what it says.
+        """
+        if (
+            self.COLLECTOR_BACKOFF_MAX_SECONDS
+            < self.COLLECTOR_BACKOFF_BASE_SECONDS
+        ):
+            raise ValueError(
+                "COLLECTOR_BACKOFF_MAX_SECONDS must be greater than or "
+                "equal to COLLECTOR_BACKOFF_BASE_SECONDS"
+            )
+        return self
 
     # Logging
     LOG_LEVEL: str = "INFO"

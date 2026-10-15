@@ -102,6 +102,19 @@ placeholder in any letter case. Generate one with
 (that prints 43 characters).
 `DATA_COLLECTOR` picks the market-data collector behind fetch-company:
 `yahoo` (live Yahoo Finance, the default) or `fake` (offline, synthetic).
+The live collector sits behind one in-process wrapper for the life of
+the process: a TTL cache of successful fetches, at most
+`COLLECTOR_RATE_LIMIT_PER_MINUTE` upstream calls in any 60 seconds.
+A request waits at most `COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS`
+(default 5) for a free slot, then fails instead of blocking a worker.
+Every sleep in that call, waits and retry backoff together, stays
+inside `COLLECTOR_TOTAL_DEADLINE_SECONDS` (default 15). At most
+`COLLECTOR_MAX_INFLIGHT` calls (default 4) may run or wait at once;
+a further call fails instead of taking another worker.
+It retries with jitter (`COLLECTOR_MAX_RETRIES`,
+`COLLECTOR_BACKOFF_BASE_SECONDS`, `COLLECTOR_BACKOFF_MAX_SECONDS`).
+The fake collector is not wrapped. The ranges and defaults are in
+`.env.example`.
 `ALLOWED_HOSTS` is enforced, so a request with any other Host gets
 400 Invalid host header.
 `DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need
