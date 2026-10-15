@@ -102,6 +102,33 @@ placeholder in any letter case. Generate one with
 (that prints 43 characters).
 `DATA_COLLECTOR` picks the market-data collector behind fetch-company:
 `yahoo` (live Yahoo Finance, the default) or `fake` (offline, synthetic).
+With `yahoo`, fetch-company calls Yahoo through a guard
+(`app/data_collectors/guard.py`): an in-memory cache, a rate limit and
+retries. A repeat request within the cache time does not reach Yahoo,
+and the data keeps its original retrieval time (fetch-company does not
+store that time yet). A "not found" answer is cached too, but only for
+`COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` (5 minutes by default), because
+Yahoo can report a hidden failure as no data. The cache and the rate
+limit belong to one process (several workers each get their own limit),
+the cache starts empty, and changed settings apply after a restart.
+A full rate limit, or a provider error after the last retry, returns
+502 `Data provider error`. The limits, with their defaults:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `COLLECTOR_CACHE_TTL_COMPANY_INFO_SECONDS` | 86400 | Cache time for company profiles. `0` turns it off. |
+| `COLLECTOR_CACHE_TTL_KEY_METRICS_SECONDS` | 3600 | Cache time for key metrics. |
+| `COLLECTOR_CACHE_TTL_PRICE_HISTORY_SECONDS` | 900 | Cache time for price history. |
+| `COLLECTOR_CACHE_TTL_FUND_ATTRIBUTES_SECONDS` | 86400 | Cache time for fund data. |
+| `COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` | 300 | Cache time for a "not found" answer; never longer than that data's own cache time. `0` turns it off. |
+| `COLLECTOR_CACHE_MAX_ENTRIES` | 256 | The least recently used entry is dropped beyond this. |
+| `COLLECTOR_RATE_LIMIT_CALLS` | 30 | Provider calls allowed per period. |
+| `COLLECTOR_RATE_LIMIT_PERIOD_SECONDS` | 60 | Length of the rate-limit window. |
+| `COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS` | 5 | How long a call may wait for a free slot. |
+| `COLLECTOR_RETRY_MAX_RETRIES` | 2 | Retries for a temporary provider error. |
+| `COLLECTOR_BACKOFF_BASE_SECONDS` | 1 | Ceiling of the first random retry delay. |
+| `COLLECTOR_BACKOFF_MAX_SECONDS` | 8 | Largest retry delay ceiling. |
+
 `ALLOWED_HOSTS` is enforced, so a request with any other Host gets
 400 Invalid host header.
 `DEBUG` defaults to false. Set `DEBUG=True` in `.env` only when you need

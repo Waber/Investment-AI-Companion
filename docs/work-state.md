@@ -1,5 +1,37 @@
 # Current Work State
 
+## Collector guard, part 2 of #24: 2026-10-14
+
+- Branch `feature/collector-guard-24`, based on `origin/master`
+  `107adf0`. Pushed on 2026-10-15 as
+  [PR #72](https://github.com/Waber/Investment-AI-Companion/pull/72),
+  which closes #24 on merge. Not merged.
+  [Spec](superpowers/specs/2026-10-13-collector-guard-design.md),
+  [plan](superpowers/plans/2026-10-13-collector-guard.md).
+- Completed: the guard (cache, rate limit, retries) in front of Yahoo,
+  twelve `COLLECTOR_*` settings, currency in uppercase except `GBp`
+  and `ZAc`, docs, task reviews, the final review and its fix wave.
+  The re-review says ready to merge. CI command: 1259 passed, 121
+  deselected, coverage 95.68%. `-m integration`: 105 passed, 16
+  skipped. The PostgreSQL tests were not run locally (no
+  `TEST_POSTGRES_DSN`).
+- Incomplete: mapping yfinance errors to `TransientProviderError` (R1
+  #54); storing `retrieved_at`; mypy typing of the guarded class; then
+  #25. With this branch, every item of #24 is done (part 1 in PR #68).
+- Overlapping pull requests:
+  - PR #70 (Cursor Agent, opened on 2026-10-15) implements the same
+    part 2 of #24. It and PR #72 are alternatives; only one should be
+    merged.
+  - PR #69 (docs) updates the part 1 section below. Whichever merges
+    second rebases onto `origin/master` and keeps both entries.
+  - PR #71 (Cursor Agent) is open for #25.
+- Active agents: none. Blockers: none.
+- Stop reason: PR #72 is open and waits for the owner's review and
+  merge; agents do not merge. Account usage was not available in this
+  session.
+- Next action: the owner picks PR #72 or PR #70, merges it with
+  "Rebase and merge", and closes the other. Then #25 (see PR #71).
+
 ## Collector interface, part 1 of #24: 2026-10-12
 
 - Branch `feature/collector-interface-24`, rebased on 2026-10-13 onto

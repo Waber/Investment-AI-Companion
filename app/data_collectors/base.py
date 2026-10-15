@@ -105,6 +105,16 @@ class ProviderError(Exception):
     """
 
 
+class TransientProviderError(ProviderError):
+    """A provider failure that may pass if the same call is repeated.
+
+    Examples: the provider rate-limited us (HTTP 429), or a request
+    timed out. The collector guard retries only this error, after a
+    backoff delay. A plain ``ProviderError`` (a parse error, a bad
+    response) is not retried. Both become HTTP 502 in fetch-company.
+    """
+
+
 @dataclass(frozen=True)
 class Provenance:
     """Where a result came from and what date it describes.

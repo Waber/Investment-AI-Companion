@@ -1,5 +1,90 @@
 # Development Journal
 
+## 2026-10-14 - Collector guard and currency normalization, part 2 (#24)
+
+- Scope: the two open items of
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24).
+  `app/data_collectors/guard.py` adds `guard_collector(inner, policy)`:
+  a TTL cache per capability (LRU-bounded, deep copies, the original
+  `retrieved_at` kept), a sliding-window rate limit, and retries of
+  `TransientProviderError` with full-jitter exponential backoff.
+  Twelve `COLLECTOR_*` settings with bounds are in `app/core/config.py`.
+  With `DATA_COLLECTOR=yahoo`, `get_collector()` returns one shared
+  guarded Yahoo collector; `fake` mode is unchanged. Currency codes are
+  stored in uppercase except Yahoo's `GBp` and `ZAc`.
+  [Spec](superpowers/specs/2026-10-13-collector-guard-design.md),
+  [plan](superpowers/plans/2026-10-13-collector-guard.md).
+- Decisions by the owner: the guard sits in front of Yahoo now, not only
+  as a hook. Defaults: profiles 24 h, metrics 1 h, prices 15 min, funds
+  24 h; 30 provider calls per 60 s with a 5 s max wait; 2 retries with
+  a 1 to 8 s backoff.
+- Decisions by the controller:
+  - The guard class is built from one mixin per capability the inner
+    collector has, not with `__getattr__`. In Python 3.12, `isinstance`
+    against a protocol uses `inspect.getattr_static`, which does not
+    see `__getattr__` (checked on 3.12.15). A guarded Yahoo collector
+    is therefore not a `FundAttributes`.
+  - A full rate limit raises a plain `ProviderError` (HTTP 502) and is
+    not retried. The max wait is cumulative per attempt.
+  - After the final review, a "no data" answer got its own cache time,
+    `COLLECTOR_CACHE_TTL_NO_DATA_SECONDS` (300 s, capped by the
+    capability's TTL). yfinance can report a hidden HTTP failure as no
+    data, and a 24 h cache would turn one failure into a false 404 for
+    a day. The spec was amended.
+  - Mapping yfinance errors to `TransientProviderError` stays in R1
+    (#54), so the retry path is exercised by tests only for now.
+  - Stored currency rows are not rewritten, because there are no
+    migrations. An old lowercase row can show as a separate `/ui`
+    currency filter option.
+- Verification: the CI command (`pytest -q -p no:cacheprovider
+  -W error::DeprecationWarning --cov=app --cov=main --cov=scripts
+  --cov-branch --cov-fail-under=80`) gives 1259 passed, 121 deselected,
+  coverage 95.68% (baseline 1134 passed, 95.24%). `pytest -m
+  integration` gives 105 passed, 16 skipped (no PostgreSQL here).
+  Scoped black and isort are clean; flake8 shows only the two E501
+  lines in `tests/test_provider_data_hygiene.py` that are on `master`.
+  The thread test fails in 10 of 10 runs with a no-op lock and passes
+  10 of 10 with the real lock.
+- Backlog: store `retrieved_at` (for example in
+  `companies.last_data_update`) so the data age is visible after a
+  cache hit; typing of the guarded class for mypy (not a CI gate yet);
+  two optional test nits (the max-wait test hangs instead of failing on
+  a lock-held-while-sleeping regression, which CI's 15-minute timeout
+  catches; log assertions on the combined text). Then #25.
+- Review: every task had a task review. Task 1 needed one fix round
+  (the commit trailer had no blank line before it) and Task 4 one (the
+  README table needed a blank line after it). The final whole-branch
+  review found one Important gap (the no-data cache time) and three
+  test gaps (a thread test that could not see a missing lock, no test
+  for the cumulative max wait, a log test without the method name and
+  level). One fix wave closed them, and the scoped re-review said ready
+  to merge. The controller's closing commit fixed one README wording
+  nit from that re-review.
+- Pull request: [PR #72](https://github.com/Waber/Investment-AI-Companion/pull/72),
+  opened on 2026-10-15 with the owner's go-ahead. It closes #24 on
+  merge. PR #70 from Cursor Agent, opened the same morning, implements
+  the same part 2; the owner merges one of the two and closes the
+  other.
+- AI model: Claude Opus 5.5 (Claude Code) as controller (spec, plan,
+  rulings, this entry). Implementers: Claude Haiku 4.5 (Tasks 1 and 5)
+  and Claude Sonnet 5.5 (Tasks 2 to 4 and the final fix wave).
+  Reviewers: Claude Sonnet 5.5 (Tasks 1, 2, 4 and 5), Claude Opus 5.5
+  (Task 3, the final review and its re-review), and Claude Haiku 4.5
+  (the two small fix re-reviews). Account usage was not available in
+  this session.
+- Time tracking (+0200): 2026-10-13, part 2 started at 15:00 (the
+  owner's request; design questions and answers, not in git); spec
+  commit 17:57; plan commit 18:15. 2026-10-14, execution started at
+  11:22 (the owner chose subagent-driven). Git times by commit subject:
+  "feat: add the collector guard settings and policy" 11:28; "feat: add
+  the collector guard with capabilities and a TTL cache" 11:33; "feat:
+  add the rate limit and retry with backoff" 11:37; "feat: put the
+  collector guard in front of Yahoo" 11:44 and its README fix 11:47;
+  "feat: store currency codes in uppercase" 11:50; the final review,
+  then the fix wave 12:07 to 12:10; the controller's closing docs
+  commit after the re-review. 2026-10-15: branch pushed and PR #72
+  opened at 13:13.
+
 ## 2026-10-12 - Collector interface and offline fake, part 1 (#24)
 
 - Scope: part 1 of

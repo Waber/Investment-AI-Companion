@@ -20,7 +20,12 @@ from app.api.data_collection import (
 from app.data_collectors import yahoo_finance
 from app.data_collectors.base import ProviderError
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
-from app.models.company import Company, CompanyCreate, normalize_ticker
+from app.models.company import (
+    Company,
+    CompanyCreate,
+    normalize_currency,
+    normalize_ticker,
+)
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from app.models.financial_metrics import FinancialMetrics
 from app.models.historical_data import HistoricalData
@@ -357,9 +362,37 @@ async def test_pence_currency_round_trips_unchanged(client):
     assert stored.json()["currency"] == "GBp"
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("usd", "USD"),
+        ("Usd", "USD"),
+        ("USD", "USD"),
+        ("eur", "EUR"),
+        ("gbp", "GBP"),
+        ("GBP", "GBP"),
+        ("GBp", "GBp"),
+        ("ZAc", "ZAc"),
+        ("zac", "ZAC"),
+        ("ILA", "ILA"),
+        (None, None),
+    ],
+)
+def test_normalize_currency(value, expected):
+    assert normalize_currency(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value", ["US1", "US", "USDD", " usd", "usd ", "u$d", "", "ŁÓD"]
+)
+def test_normalize_currency_rejects_a_bad_shape(value):
+    with pytest.raises(ValueError, match="exactly three letters"):
+        normalize_currency(value)
+
+
 @pytest.mark.asyncio
-async def test_currency_keeps_case_and_rejects_a_non_letter_code(client):
-    kept = await client.post(
+async def test_currency_is_uppercased_and_a_non_letter_code_rejected(client):
+    created = await client.post(
         COMPANIES,
         json={"name": "Dollar", "ticker": "USDX", "currency": "usd"},
     )
@@ -368,9 +401,56 @@ async def test_currency_keeps_case_and_rejects_a_non_letter_code(client):
         json={"name": "Bad", "ticker": "BADC", "currency": "US1"},
     )
 
-    assert kept.status_code == 201
-    assert kept.json()["currency"] == "usd"
+    assert created.status_code == 201
+    assert created.json()["currency"] == "USD"
     assert rejected.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_currency_update_is_uppercased(client):
+    created = (
+        await client.post(
+            COMPANIES,
+            json={"name": "Euro", "ticker": "EURX", "currency": "USD"},
+        )
+    ).json()
+    url = f"/api/v1/companies/{created['id']}"
+
+    updated = await client.put(url, json={"currency": "eur"})
+
+    assert updated.status_code == 200
+    assert (await client.get(url)).json()["currency"] == "EUR"
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_uppercases_a_lowercase_currency(client):
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Acme", "currency": "usd"}
+    )
+
+    created = await client.post(FETCH, json={"ticker": "ACME"})
+
+    assert created.status_code == 200
+    stored = await client.get(
+        f"/api/v1/companies/{created.json()['company_id']}"
+    )
+    assert stored.json()["currency"] == "USD"
+
+
+@pytest.mark.asyncio
+async def test_rand_cents_currency_round_trips_unchanged(client):
+    """Yahoo sends ZAc for South African cents. ZAC would lose that."""
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Naspers", "currency": "ZAc"}
+    )
+
+    created = await client.post(FETCH, json={"ticker": "NPN.JO"})
+
+    assert created.status_code == 200
+    stored = await client.get(
+        f"/api/v1/companies/{created.json()['company_id']}"
+    )
+    assert stored.json()["currency"] == "ZAc"
 
 
 @pytest.mark.asyncio
