@@ -44,6 +44,11 @@ COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS = 60
 # sit there. The upstream call itself is not interrupted.
 COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS = 1
 COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS = 120
+# How many collector calls may run or wait at once. Extra calls fail
+# immediately instead of taking another worker from uvicorn's pool.
+# 16 stays under a typical pool of 40 so /ui and the JSON API remain.
+COLLECTOR_MAX_INFLIGHT_MIN = 1
+COLLECTOR_MAX_INFLIGHT_MAX = 16
 COLLECTOR_MAX_RETRIES_MIN = 1
 COLLECTOR_MAX_RETRIES_MAX = 5
 COLLECTOR_BACKOFF_BASE_MAX_SECONDS = 60
@@ -334,6 +339,13 @@ class Settings(BaseSettings):
         default=15,
         ge=COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS,
         le=COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS,
+    )
+    # Permits for collector calls that miss the cache. A full set
+    # fails the extra request instead of parking another worker.
+    COLLECTOR_MAX_INFLIGHT: int = Field(
+        default=4,
+        ge=COLLECTOR_MAX_INFLIGHT_MIN,
+        le=COLLECTOR_MAX_INFLIGHT_MAX,
     )
     # Extra attempts after the first. 2 means three upstream calls.
     COLLECTOR_MAX_RETRIES: int = Field(

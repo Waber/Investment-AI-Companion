@@ -7,7 +7,7 @@ structural: the wrapper does not declare ``implements``. After
 has, because ``isinstance`` looks for those method names. A wrapper
 around Yahoo therefore does not claim ``FundAttributes``.
 
-Three protections, all in this process (not on disk):
+Four protections, all in this process (not on disk):
 
 - A TTL cache. Only a successful result is stored. ``None`` ("no data")
   and ``ProviderError`` are not, so a missing ticker or a failure is
@@ -35,6 +35,11 @@ Three protections, all in this process (not on disk):
   covers every sleep in that one call: rate-limit waits and retry
   backoff together. A sleep that would pass the deadline is refused.
   The clock does not interrupt the upstream call itself.
+- A small semaphore (``COLLECTOR_MAX_INFLIGHT``, default 4, allowed
+  1 to 16). Cache hits do not take a permit. A miss that cannot get
+  one fails immediately, the same way ``Semaphore.tryAcquire`` fails
+  in Java, so a queue of waiting fetches cannot occupy every worker
+  in uvicorn's thread pool.
 - Retry with exponential backoff and full jitter. A transient failure
   (rate limit, HTTP 429, timeout, connection error) is tried again.
   The wait is a random number from 0 up to ``min(max, base * 2^attempt)``
@@ -81,6 +86,8 @@ from app.core.config import (
     COLLECTOR_BACKOFF_CAP_MAX_SECONDS,
     COLLECTOR_CACHE_TTL_MAX_SECONDS,
     COLLECTOR_CACHE_TTL_MIN_SECONDS,
+    COLLECTOR_MAX_INFLIGHT_MAX,
+    COLLECTOR_MAX_INFLIGHT_MIN,
     COLLECTOR_MAX_RETRIES_MAX,
     COLLECTOR_MAX_RETRIES_MIN,
     COLLECTOR_RATE_LIMIT_MAX_PER_MINUTE,
@@ -207,6 +214,7 @@ class ResilientCollector:
         rate_limit_per_minute: int = 30,
         rate_limit_max_wait_seconds: float = 5,
         total_deadline_seconds: float = 15,
+        max_inflight: int = 4,
         max_retries: int = 2,
         backoff_base_seconds: float = 0.5,
         backoff_max_seconds: float = 8,
@@ -239,6 +247,12 @@ class ResilientCollector:
             total_deadline_seconds,
             COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS,
             COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS,
+        )
+        self._max_inflight = _require_int(
+            "max_inflight",
+            max_inflight,
+            COLLECTOR_MAX_INFLIGHT_MIN,
+            COLLECTOR_MAX_INFLIGHT_MAX,
         )
         self._max_retries = _require_int(
             "max_retries",
@@ -274,6 +288,7 @@ class ResilientCollector:
             _MAX_CACHE_ENTRIES_LIMIT,
         )
         self._lock = threading.Lock()
+        self._inflight = threading.BoundedSemaphore(self._max_inflight)
         self._cache: "OrderedDict[Tuple, Tuple[float, Any]]" = OrderedDict()
         self._attempts: Deque[float] = deque()
         for name, protocol in _CAPABILITIES:
@@ -293,7 +308,13 @@ class ResilientCollector:
             hit = self._recall(key)
         if hit is not _MISS:
             return hit
-        result = self._call_upstream(name, args, kwargs)
+        # blocking=False is tryAcquire: this worker must not park here.
+        if not self._inflight.acquire(blocking=False):
+            raise ProviderError(TEMPORARY_FAILURE_MESSAGE)
+        try:
+            result = self._call_upstream(name, args, kwargs)
+        finally:
+            self._inflight.release()
         if result is None or key is None:
             return result
         with self._lock:

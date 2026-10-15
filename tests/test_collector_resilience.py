@@ -6,11 +6,13 @@ success paths. Stubs supply errors a fake never raises.
 """
 
 import ast
+import asyncio
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import anyio
 import pytest
 import requests
 
@@ -48,6 +50,7 @@ _LIMIT_NAMES = (
     "COLLECTOR_RATE_LIMIT_PER_MINUTE",
     "COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS",
     "COLLECTOR_TOTAL_DEADLINE_SECONDS",
+    "COLLECTOR_MAX_INFLIGHT",
     "COLLECTOR_MAX_RETRIES",
     "COLLECTOR_BACKOFF_BASE_SECONDS",
     "COLLECTOR_BACKOFF_MAX_SECONDS",
@@ -305,6 +308,47 @@ def test_rate_limit_wait_equal_to_the_cap_still_waits():
     wrapped.fetch_company_info("DEMO_US_GROWTH")
     assert clock.slept == [5.0]
     assert inner.calls == 2
+
+
+def test_inflight_limit_fails_the_extra_call_without_waiting():
+    """One permit. A second call does not sit on the rate-limit wait.
+
+    The first call is inside the upstream fetch, so the rate-limit
+    window is full and a waiter would sleep. The inflight limit
+    refuses the second call before that sleep and does not take a slot.
+    """
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Holding:
+        def fetch_company_info(self, ticker):
+            entered.set()
+            assert release.wait(timeout=5)
+            return sourced({"ticker": ticker})
+
+    clock = FakeClock()
+    wrapped, _clock = _wrap(
+        Holding(),
+        clock=clock,
+        sleep=clock.sleep,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=60,
+        total_deadline_seconds=120,
+        max_inflight=1,
+    )
+    holder = threading.Thread(target=wrapped.fetch_company_info, args=("AAA",))
+    holder.start()
+    assert entered.wait(timeout=2)
+    try:
+        with pytest.raises(ProviderError) as caught:
+            wrapped.fetch_company_info("BBB")
+        assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+        assert clock.slept == []
+        assert len(wrapped._attempts) == 1
+    finally:
+        release.set()
+        holder.join(timeout=2)
+    assert not holder.is_alive()
 
 
 def test_a_second_thread_fails_fast_inside_the_rate_limit_cap():
@@ -666,6 +710,12 @@ def test_constructor_rejects_limits_outside_the_settings_bounds():
         )
     assert "deadline-secret-marker" not in str(caught.value)
     with pytest.raises(ValueError):
+        ResilientCollector(inner, max_inflight=0)
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, max_inflight=17)
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, max_inflight=True)
+    with pytest.raises(ValueError):
         ResilientCollector(inner, backoff_base_seconds=0)
     with pytest.raises(ValueError):
         ResilientCollector(inner, backoff_max_seconds=0)
@@ -716,6 +766,7 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
     assert built.COLLECTOR_RATE_LIMIT_PER_MINUTE == 30
     assert built.COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS == 5
     assert built.COLLECTOR_TOTAL_DEADLINE_SECONDS == 15
+    assert built.COLLECTOR_MAX_INFLIGHT == 4
     assert built.COLLECTOR_MAX_RETRIES == 2
     assert built.COLLECTOR_BACKOFF_BASE_SECONDS == 0.5
     assert built.COLLECTOR_BACKOFF_MAX_SECONDS == 8
@@ -747,6 +798,8 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
         ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "0"),
         ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "121"),
         ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "nan"),
+        ("COLLECTOR_MAX_INFLIGHT", "0"),
+        ("COLLECTOR_MAX_INFLIGHT", "17"),
         ("COLLECTOR_MAX_RETRIES", "0"),
         ("COLLECTOR_MAX_RETRIES", "6"),
         ("COLLECTOR_BACKOFF_BASE_SECONDS", "0"),
@@ -877,6 +930,78 @@ async def test_rate_limit_over_the_cap_is_still_502(client):
     assert second.json()["detail"] == "Data provider error"
     assert clock.slept == []
     assert "temporarily unavailable" not in second.text
+
+
+@pytest.mark.asyncio
+async def test_saturated_collector_does_not_block_other_routes(client):
+    """A stuck fetch must not freeze the company list or /ui.
+
+    The thread pool is cut to three workers. One fetch holds the only
+    inflight permit. Two more fetches would otherwise take the
+    remaining workers and wait on the rate limit. They fail at once,
+    and the list routes still answer.
+    """
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Holding:
+        def fetch_company_info(self, ticker):
+            entered.set()
+            assert release.wait(timeout=5)
+            return sourced(
+                {
+                    "name": "Hold Co",
+                    "ticker": ticker,
+                    "currency": "USD",
+                }
+            )
+
+    wrapped, _clock = _wrap(
+        Holding(),
+        clock=time.monotonic,
+        sleep=time.sleep,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=60,
+        total_deadline_seconds=120,
+        max_inflight=1,
+    )
+    client.app.dependency_overrides[get_collector] = lambda: wrapped
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    previous_tokens = limiter.total_tokens
+    limiter.total_tokens = 3
+    stuck = asyncio.create_task(
+        client.post(FETCH_URL, json={"ticker": "HOLD"})
+    )
+    try:
+        for _ in range(100):
+            if entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert entered.is_set()
+
+        extras = [
+            asyncio.create_task(
+                client.post(FETCH_URL, json={"ticker": ticker})
+            )
+            for ticker in ("BBB", "CCC")
+        ]
+        done, pending = await asyncio.wait(extras, timeout=1)
+        assert pending == set()
+        for task in done:
+            response = task.result()
+            assert response.status_code == 502
+            assert response.json()["detail"] == "Data provider error"
+
+        started = time.monotonic()
+        companies = await client.get("/api/v1/companies/?skip=0&limit=10")
+        page = await client.get("/ui")
+        assert time.monotonic() - started < 1
+        assert companies.status_code == 200
+        assert page.status_code == 200
+    finally:
+        release.set()
+        limiter.total_tokens = previous_tokens
+        await asyncio.wait_for(stuck, timeout=2)
 
 
 def test_direct_sourced_round_trip_preserves_provenance_fields():
