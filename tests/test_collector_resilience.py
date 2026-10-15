@@ -47,6 +47,7 @@ _LIMIT_NAMES = (
     "COLLECTOR_CACHE_TTL_SECONDS",
     "COLLECTOR_RATE_LIMIT_PER_MINUTE",
     "COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS",
+    "COLLECTOR_TOTAL_DEADLINE_SECONDS",
     "COLLECTOR_MAX_RETRIES",
     "COLLECTOR_BACKOFF_BASE_SECONDS",
     "COLLECTOR_BACKOFF_MAX_SECONDS",
@@ -219,6 +220,7 @@ def test_rate_limit_blocks_until_the_oldest_call_ages_out():
         inner,
         rate_limit_per_minute=2,
         rate_limit_max_wait_seconds=60,
+        total_deadline_seconds=120,
     )
     wrapped.fetch_company_info("DEMO_PL_TECH")
     wrapped.fetch_company_info("DEMO_US_GROWTH")
@@ -237,6 +239,7 @@ def test_rate_limit_blocks_until_the_oldest_call_ages_out():
         inner,
         rate_limit_per_minute=2,
         rate_limit_max_wait_seconds=60,
+        total_deadline_seconds=120,
     )
     staggered.fetch_company_info("DEMO_PL_TECH")
     staggered_clock.now = 10
@@ -251,6 +254,7 @@ def test_cache_hits_do_not_spend_rate_limit_tokens():
         inner,
         rate_limit_per_minute=1,
         rate_limit_max_wait_seconds=60,
+        total_deadline_seconds=120,
     )
     wrapped.fetch_company_info("DEMO_PL_TECH")
     wrapped.fetch_company_info("DEMO_PL_TECH")
@@ -342,6 +346,71 @@ def test_a_second_thread_fails_fast_inside_the_rate_limit_cap():
         release.set()
         holder.join(timeout=2)
     assert not holder.is_alive()
+
+
+def test_deadline_cuts_off_retries_before_the_next_sleep():
+    """Retries and waits together stay inside the deadline.
+
+    The fake clock only moves when the wrapper sleeps. A backoff that
+    would pass the deadline is not slept, and the error is the same
+    fixed provider sentence.
+    """
+    inner = Flaky(YFRateLimitError())
+    wrapped, clock = _wrap(
+        inner,
+        max_retries=4,
+        backoff_base_seconds=0.5,
+        backoff_max_seconds=8,
+        total_deadline_seconds=1,
+    )
+    with pytest.raises(ProviderError) as caught:
+        wrapped.fetch_company_info("AAA")
+
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert caught.value.__cause__ is None
+    assert "secret-host" not in str(caught.value)
+    assert clock.slept == [0.5]
+    assert sum(clock.slept) <= 1
+    assert inner.calls == 2
+
+
+def test_a_spent_deadline_does_not_start_another_upstream_call():
+    inner = Flaky(YFRateLimitError())
+    wrapped, clock = _wrap(
+        inner,
+        max_retries=2,
+        backoff_base_seconds=1,
+        backoff_max_seconds=1,
+        total_deadline_seconds=1,
+    )
+    with pytest.raises(ProviderError) as caught:
+        wrapped.fetch_company_info("AAA")
+
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert clock.slept == [1.0]
+    assert inner.calls == 1
+
+
+def test_deadline_refuses_a_rate_limit_wait_that_would_not_fit():
+    inner = CountingFake()
+    wrapped, clock = _wrap(
+        inner,
+        rate_limit_per_minute=1,
+        rate_limit_max_wait_seconds=60,
+        total_deadline_seconds=15,
+    )
+    wrapped.fetch_company_info("DEMO_PL_TECH")
+    clock.now = 10
+    with pytest.raises(ProviderError) as caught:
+        wrapped.fetch_company_info("DEMO_US_GROWTH")
+
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert clock.slept == []
+    assert inner.calls == 1
+    clock.now = 60
+    wrapped.fetch_company_info("DEMO_US_GROWTH")
+    assert inner.calls == 2
+    assert clock.slept == []
 
 
 def test_backoff_stays_inside_the_exponential_cap():
@@ -588,6 +657,15 @@ def test_constructor_rejects_limits_outside_the_settings_bounds():
     with pytest.raises(ValueError):
         ResilientCollector(inner, rate_limit_max_wait_seconds=True)
     with pytest.raises(ValueError):
+        ResilientCollector(inner, total_deadline_seconds=0)
+    with pytest.raises(ValueError):
+        ResilientCollector(inner, total_deadline_seconds=121)
+    with pytest.raises(ValueError) as caught:
+        ResilientCollector(
+            inner, total_deadline_seconds="deadline-secret-marker"
+        )
+    assert "deadline-secret-marker" not in str(caught.value)
+    with pytest.raises(ValueError):
         ResilientCollector(inner, backoff_base_seconds=0)
     with pytest.raises(ValueError):
         ResilientCollector(inner, backoff_max_seconds=0)
@@ -637,6 +715,7 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
     assert built.COLLECTOR_CACHE_TTL_SECONDS == 300
     assert built.COLLECTOR_RATE_LIMIT_PER_MINUTE == 30
     assert built.COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS == 5
+    assert built.COLLECTOR_TOTAL_DEADLINE_SECONDS == 15
     assert built.COLLECTOR_MAX_RETRIES == 2
     assert built.COLLECTOR_BACKOFF_BASE_SECONDS == 0.5
     assert built.COLLECTOR_BACKOFF_MAX_SECONDS == 8
@@ -665,6 +744,9 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
         ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "60.1"),
         ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "nan"),
         ("COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS", "inf"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "0"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "121"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "nan"),
         ("COLLECTOR_MAX_RETRIES", "0"),
         ("COLLECTOR_MAX_RETRIES", "6"),
         ("COLLECTOR_BACKOFF_BASE_SECONDS", "0"),
@@ -689,6 +771,13 @@ def test_collector_limit_defaults_and_bounds(monkeypatch):
             COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS=marker,
         )
     assert marker not in str(caught.value)
+    deadline_marker = "deadline-secret-marker"
+    with pytest.raises(Exception) as caught:
+        _build_settings(
+            monkeypatch,
+            COLLECTOR_TOTAL_DEADLINE_SECONDS=deadline_marker,
+        )
+    assert deadline_marker not in str(caught.value)
 
 
 def test_env_example_documents_the_collector_limits():

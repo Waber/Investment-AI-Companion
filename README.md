@@ -107,6 +107,8 @@ the process: a TTL cache of successful fetches, at most
 `COLLECTOR_RATE_LIMIT_PER_MINUTE` upstream calls in any 60 seconds.
 A request waits at most `COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS`
 (default 5) for a free slot, then fails instead of blocking a worker.
+Every sleep in that call, waits and retry backoff together, stays
+inside `COLLECTOR_TOTAL_DEADLINE_SECONDS` (default 15).
 It retries with jitter (`COLLECTOR_MAX_RETRIES`,
 `COLLECTOR_BACKOFF_BASE_SECONDS`, `COLLECTOR_BACKOFF_MAX_SECONDS`).
 The fake collector is not wrapped. The ranges and defaults are in

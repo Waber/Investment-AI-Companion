@@ -38,6 +38,12 @@ COLLECTOR_RATE_LIMIT_MIN_PER_MINUTE = 1
 COLLECTOR_RATE_LIMIT_MAX_PER_MINUTE = 120
 COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS = 0
 COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS = 60
+# One fetch, including rate-limit waits and retry sleeps. 15 seconds
+# is enough for the default cap (5) plus the default backoff and
+# still returns the worker. 120 is the longest a single request may
+# sit there. The upstream call itself is not interrupted.
+COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS = 1
+COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS = 120
 COLLECTOR_MAX_RETRIES_MIN = 1
 COLLECTOR_MAX_RETRIES_MAX = 5
 COLLECTOR_BACKOFF_BASE_MAX_SECONDS = 60
@@ -321,6 +327,13 @@ class Settings(BaseSettings):
         default=5,
         ge=COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS,
         le=COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS,
+    )
+    # Budget for every sleep in one collector call (rate-limit waits
+    # and retry backoff). The upstream call itself is not cancelled.
+    COLLECTOR_TOTAL_DEADLINE_SECONDS: float = Field(
+        default=15,
+        ge=COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS,
+        le=COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS,
     )
     # Extra attempts after the first. 2 means three upstream calls.
     COLLECTOR_MAX_RETRIES: int = Field(

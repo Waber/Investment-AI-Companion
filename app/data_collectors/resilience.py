@@ -30,7 +30,11 @@ Three protections, all in this process (not on disk):
   for other requests, the same problem as blocking a servlet thread
   for a minute. If the slot is further away than the cap, the call
   raises ``ProviderError`` immediately, does not sleep, and does not
-  record a slot, because Yahoo was never called.
+  record a slot, because Yahoo was never called. A second budget,
+  ``COLLECTOR_TOTAL_DEADLINE_SECONDS`` (default 15, allowed 1 to 120),
+  covers every sleep in that one call: rate-limit waits and retry
+  backoff together. A sleep that would pass the deadline is refused.
+  The clock does not interrupt the upstream call itself.
 - Retry with exponential backoff and full jitter. A transient failure
   (rate limit, HTTP 429, timeout, connection error) is tried again.
   The wait is a random number from 0 up to ``min(max, base * 2^attempt)``
@@ -83,6 +87,8 @@ from app.core.config import (
     COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS,
     COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS,
     COLLECTOR_RATE_LIMIT_MIN_PER_MINUTE,
+    COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS,
+    COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS,
 )
 from app.data_collectors.base import (
     Fundamentals,
@@ -200,6 +206,7 @@ class ResilientCollector:
         cache_ttl_seconds: float = 300,
         rate_limit_per_minute: int = 30,
         rate_limit_max_wait_seconds: float = 5,
+        total_deadline_seconds: float = 15,
         max_retries: int = 2,
         backoff_base_seconds: float = 0.5,
         backoff_max_seconds: float = 8,
@@ -226,6 +233,12 @@ class ResilientCollector:
             rate_limit_max_wait_seconds,
             COLLECTOR_RATE_LIMIT_MAX_WAIT_MIN_SECONDS,
             COLLECTOR_RATE_LIMIT_MAX_WAIT_MAX_SECONDS,
+        )
+        self._total_deadline = _require_float(
+            "total_deadline_seconds",
+            total_deadline_seconds,
+            COLLECTOR_TOTAL_DEADLINE_MIN_SECONDS,
+            COLLECTOR_TOTAL_DEADLINE_MAX_SECONDS,
         )
         self._max_retries = _require_int(
             "max_retries",
@@ -329,8 +342,10 @@ class ResilientCollector:
     def _call_upstream(self, name: str, args: tuple, kwargs: dict) -> Any:
         attempts = self._max_retries + 1
         last: Optional[BaseException] = None
+        started = self._clock()
         for attempt in range(attempts):
-            self._take_token()
+            self._check_deadline(name, started)
+            self._take_token(name, started)
             try:
                 return getattr(self.inner, name)(*args, **kwargs)
             except Exception as exc:
@@ -345,8 +360,7 @@ class ResilientCollector:
                     _public_type(exc),
                 )
                 delay = self._delay(attempt)
-                if delay > 0:
-                    self._sleep(delay)
+                self._sleep_within_deadline(name, started, delay)
         logger.error(
             "Data provider still failing on %s after %s attempts (%s)",
             name,
@@ -369,7 +383,30 @@ class ResilientCollector:
             return 0.0
         return value
 
-    def _take_token(self) -> None:
+    def _check_deadline(self, name: str, started: float) -> None:
+        if self._clock() - started < self._total_deadline:
+            return
+        self._fail_deadline(name)
+
+    def _fail_deadline(self, name: str) -> None:
+        logger.warning(
+            "Collector call on %s exceeded the deadline; failing",
+            name,
+        )
+        raise ProviderError(TEMPORARY_FAILURE_MESSAGE) from None
+
+    def _sleep_within_deadline(
+        self, name: str, started: float, delay: float
+    ) -> None:
+        """Sleep, unless this wait would pass the call's deadline."""
+        if delay <= 0:
+            return
+        remaining = self._total_deadline - (self._clock() - started)
+        if delay > remaining:
+            self._fail_deadline(name)
+        self._sleep(delay)
+
+    def _take_token(self, name: str, started: float) -> None:
         """Wait until this call fits in the last 60 seconds, or fail.
 
         The sleep is outside the lock so a cache hit on another thread
@@ -394,4 +431,4 @@ class ResilientCollector:
                 wait = RATE_LIMIT_WINDOW_SECONDS - (now - self._attempts[0])
                 if wait > self._rate_limit_max_wait:
                     raise ProviderError(TEMPORARY_FAILURE_MESSAGE)
-            self._sleep(wait)
+            self._sleep_within_deadline(name, started, wait)
