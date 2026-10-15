@@ -60,6 +60,11 @@
   level). One fix wave closed them, and the scoped re-review said ready
   to merge. The controller's closing commit fixed one README wording
   nit from that re-review.
+- Pull request: [PR #72](https://github.com/Waber/Investment-AI-Companion/pull/72),
+  opened on 2026-10-15 with the owner's go-ahead. It closes #24 on
+  merge. PR #70 from Cursor Agent, opened the same morning, implements
+  the same part 2; the owner merges one of the two and closes the
+  other.
 - AI model: Claude Opus 5.5 (Claude Code) as controller (spec, plan,
   rulings, this entry). Implementers: Claude Haiku 4.5 (Tasks 1 and 5)
   and Claude Sonnet 5.5 (Tasks 2 to 4 and the final fix wave).
@@ -77,7 +82,8 @@
   collector guard in front of Yahoo" 11:44 and its README fix 11:47;
   "feat: store currency codes in uppercase" 11:50; the final review,
   then the fix wave 12:07 to 12:10; the controller's closing docs
-  commit after the re-review.
+  commit after the re-review. 2026-10-15: branch pushed and PR #72
+  opened at 13:13.
 
 ## 2026-10-12 - Collector interface and offline fake, part 1 (#24)
 
