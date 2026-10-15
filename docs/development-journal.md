@@ -1,5 +1,37 @@
 # Development Journal
 
+## 2026-10-15 - Security and QA review of the offline demo (#25)
+
+- Scope: review fixes on the same branch as
+  [#25](https://github.com/Waber/Investment-AI-Companion/issues/25).
+  Security N1 and the QA medium finding are the same hole: a `demo/`
+  directory that is a symlink was followed by `Path.resolve`, so a
+  reset could delete a database outside the checkout. Security N2:
+  always generate a fresh `SECRET_KEY`. QA low: check the port before
+  deleting the file. QA nit: one line in `docs/RUN_DEMO.md` pointing
+  at `python -m scripts.run_demo`.
+- Decisions: `refuse_symlink_escape` refuses a symlink at `demo/`, at
+  `investment_demo.db`, at a parent that is still inside the checkout,
+  and when the checkout path passed in is itself a symlink. Following
+  the link must also leave `demo` as a direct child of that checkout.
+  `remove_database_files` refuses again before `unlink`. The command
+  binds `127.0.0.1` and the chosen port before it builds or seeds, and
+  exits with a fixed message when that port is taken. `resolve_secret_key`
+  no longer reads the shell. The generated key is still not printed and
+  not written to disk. The absolute database path in the banner stays
+  (security N3).
+- Verification: no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1175 passed, 121 deselected, total coverage 95.41%. Scoped
+  `black`, `isort`, and `flake8` on `scripts/run_demo.py` and
+  `tests/test_run_demo.py` passed. PostgreSQL was not run locally
+  (no `TEST_POSTGRES_DSN`). GitHub Actions for this commit is recorded
+  after the run finishes.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-15, UTC): review fixes started about 08:11.
+  Full SQLite suite finished 08:21.
+- Next: #26 together with #16, after CI on this commit is green.
+
 ## 2026-10-15 - One-command offline demo (#25)
 
 - Scope: [#25](https://github.com/Waber/Investment-AI-Companion/issues/25).

@@ -1,8 +1,9 @@
 """The one-command offline demo stays on its own SQLite file.
 
-These tests do not start uvicorn and do not open a socket. The
-autouse network guard from ``tests/conftest.py`` stays on, including
-for the in-process smoke test.
+These tests do not start uvicorn and do not connect off this machine.
+The autouse network guard from ``tests/conftest.py`` stays on,
+including for the in-process smoke test. ``main`` binds ``127.0.0.1``
+only long enough to see that the port is free, then closes that socket.
 """
 
 import os
@@ -127,7 +128,7 @@ def _counts(url: str) -> tuple[int, int]:
 
 def test_demo_database_path_is_under_demo(tmp_path):
     path = run_demo.demo_database_path(tmp_path)
-    assert path == (tmp_path / "demo" / "investment_demo.db").resolve()
+    assert path == tmp_path / "demo" / "investment_demo.db"
     url = run_demo.sqlite_url_for(path)
     assert url.startswith("sqlite:///")
     assert run_demo.assert_owned_demo_database(url, path.parent) == path
@@ -152,7 +153,7 @@ def test_build_demo_settings_ignores_dotenv_and_the_shell(
     monkeypatch.setenv("DATA_COLLECTOR", "yahoo")
     monkeypatch.setenv("ALLOWED_HOSTS", "evil.example")
     monkeypatch.setenv("DEBUG", "true")
-    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("SECRET_KEY", PROVIDED_SECRET)
 
     plan = run_demo.build_demo_plan(tmp_path, port=8123)
     built = run_demo.build_demo_settings(plan)
@@ -169,6 +170,7 @@ def test_build_demo_settings_ignores_dotenv_and_the_shell(
     assert built.BACKEND_CORS_ORIGINS == ""
     assert len(built.SECRET_KEY) >= 32
     assert built.SECRET_KEY != DOTENV_SECRET
+    assert built.SECRET_KEY != PROVIDED_SECRET
     assert DOTENV_SECRET not in built.SECRET_KEY
     # The builder must not publish the key or create the database.
     assert not (tmp_path / "demo").exists()
@@ -177,28 +179,31 @@ def test_build_demo_settings_ignores_dotenv_and_the_shell(
     )
 
 
-def test_resolve_secret_key_prefers_an_explicit_value(monkeypatch):
+def test_resolve_secret_key_ignores_the_shell(monkeypatch):
+    """A key already in the environment is not the demo key."""
     monkeypatch.setenv("SECRET_KEY", PROVIDED_SECRET)
-    explicit = "explicit-secret-key-0123456789abcd"
-    assert run_demo.resolve_secret_key(explicit) == explicit
+    generated = run_demo.resolve_secret_key()
+    assert generated != PROVIDED_SECRET
+    assert len(generated) >= 32
+    assert run_demo.resolve_secret_key() != generated
 
 
-def test_blank_secret_is_replaced(monkeypatch):
-    monkeypatch.delenv("SECRET_KEY", raising=False)
-    generated = run_demo.resolve_secret_key("   ")
+def test_blank_shell_secret_is_not_reused(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "   ")
+    generated = run_demo.resolve_secret_key()
+    assert generated.strip() != ""
     assert generated != "   "
     assert len(generated) >= 32
 
 
-def test_provided_secret_is_used_and_dotenv_secret_is_not(
-    tmp_path, monkeypatch
-):
+def test_shell_secret_and_dotenv_secret_are_not_reused(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_personal_dotenv(tmp_path)
     monkeypatch.setenv("SECRET_KEY", PROVIDED_SECRET)
     plan = run_demo.build_demo_plan(tmp_path)
     built = run_demo.build_demo_settings(plan)
-    assert built.SECRET_KEY == PROVIDED_SECRET
+    assert built.SECRET_KEY == plan.secret_key
+    assert built.SECRET_KEY != PROVIDED_SECRET
     assert built.SECRET_KEY != DOTENV_SECRET
 
 
@@ -268,6 +273,90 @@ def test_guard_rejects_a_symlink_that_leaves_demo(tmp_path):
     assert outside.read_text(encoding="utf-8") == "personal"
 
 
+def test_symlink_demo_directory_is_refused_and_not_deleted(tmp_path, capsys):
+    """``demo/`` as a symlink must not reset the directory it points at.
+
+    ``Path.resolve`` follows the link. Comparing the resolved paths
+    would then treat the outside file as the demo database and delete
+    it. The command refuses before seeding.
+    """
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    personal = outside / "investment_demo.db"
+    personal.write_text("personal-data", encoding="utf-8")
+    (tmp_path / "demo").symlink_to(outside, target_is_directory=True)
+    served = []
+    code = run_demo.main(
+        ["--port", str(_free_loopback_port())],
+        root=tmp_path,
+        serve=lambda port: served.append(port),
+    )
+    captured = capsys.readouterr()
+    assert code == 1
+    assert served == []
+    assert "symlink" in captured.err.casefold()
+    assert personal.read_text(encoding="utf-8") == "personal-data"
+    assert "outside" not in captured.err
+
+
+def test_symlink_parent_inside_the_checkout_is_refused(tmp_path):
+    """A parent of ``demo`` that is still inside the checkout is refused.
+
+    Here the parent is the directory passed as the checkout. It lives
+    inside ``checkout/`` and points at a database outside it.
+    """
+    outside = tmp_path / "outside"
+    (outside / "demo").mkdir(parents=True)
+    personal = outside / "demo" / "investment_demo.db"
+    personal.write_text("personal", encoding="utf-8")
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    linked = checkout / "nested"
+    linked.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(DemoDatabaseRefused, match="symlink"):
+        run_demo.build_demo_plan(linked)
+    assert personal.read_text(encoding="utf-8") == "personal"
+
+
+def test_remove_refuses_a_symlink_before_unlink(tmp_path):
+    """The delete step itself refuses a link, not only the earlier guard."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    personal = outside / "investment_demo.db"
+    personal.write_text("personal", encoding="utf-8")
+    demo = tmp_path / "demo"
+    demo.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(DemoDatabaseRefused, match="symlink"):
+        run_demo.remove_database_files(demo / "investment_demo.db")
+    assert personal.read_text(encoding="utf-8") == "personal"
+
+    real_demo = tmp_path / "real-demo"
+    real_demo.mkdir()
+    linked_file = real_demo / "investment_demo.db"
+    linked_file.symlink_to(personal)
+    with pytest.raises(DemoDatabaseRefused, match="symlink"):
+        run_demo.remove_database_files(linked_file)
+    assert personal.read_text(encoding="utf-8") == "personal"
+    assert linked_file.is_symlink()
+
+
+def test_symlink_between_the_checkout_and_demo_is_refused(
+    tmp_path, monkeypatch
+):
+    """An intermediate directory under the checkout is refused too."""
+    outside = tmp_path / "outside"
+    (outside / "inner").mkdir(parents=True)
+    personal = outside / "inner" / "investment_demo.db"
+    personal.write_text("personal", encoding="utf-8")
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    (checkout / "demo").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(run_demo, "DEMO_DIRECTORY_NAME", "demo/inner")
+    with pytest.raises(DemoDatabaseRefused, match="symlink"):
+        run_demo.refuse_symlink_escape(checkout)
+    assert personal.read_text(encoding="utf-8") == "personal"
+
+
 def test_uvicorn_config_uses_loopback(monkeypatch):
     import uvicorn
 
@@ -293,7 +382,7 @@ def test_configure_replaces_a_personal_database_url(
     _write_personal_dotenv(tmp_path)
     monkeypatch.setenv("DATABASE_URL", SHELL_URL)
     monkeypatch.setenv("DATA_COLLECTOR", "yahoo")
-    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("SECRET_KEY", PROVIDED_SECRET)
     before = settings.DATABASE_URL
 
     plan = run_demo.build_demo_plan(tmp_path)
@@ -309,6 +398,7 @@ def test_configure_replaces_a_personal_database_url(
     assert settings.DEBUG is False
     assert settings.SECRET_KEY == plan.secret_key
     assert settings.SECRET_KEY != DOTENV_SECRET
+    assert settings.SECRET_KEY != PROVIDED_SECRET
     assert engine.url.get_backend_name() == "sqlite"
     assert Path(engine.url.database).resolve() == plan.database_path
     # Configuring the process does not create or open the file.
@@ -346,6 +436,8 @@ def test_child_process_does_not_inherit_dotenv_database(tmp_path):
         "print('debug=' + str(settings.DEBUG).lower())",
         "same = settings.SECRET_KEY == {secret!r}",
         "print('secret_is_dotenv=' + str(same).lower())",
+        "shell_same = settings.SECRET_KEY == {shell!r}",
+        "print('secret_is_shell=' + str(shell_same).lower())",
         "url = settings.DATABASE_URL",
         "print('dotenv_password=' + str('from-dotenv-secret' in url).lower())",
         "print('shell_password=' + str('from-shell-secret' in url).lower())",
@@ -353,11 +445,14 @@ def test_child_process_does_not_inherit_dotenv_database(tmp_path):
         "match = plan.secret_key == settings.SECRET_KEY",
         "print('secret_matches_plan=' + str(match).lower())",
     ]
-    script = "\n".join(child_lines).format(secret=DOTENV_SECRET)
+    script = "\n".join(child_lines).format(
+        secret=DOTENV_SECRET, shell=PROVIDED_SECRET
+    )
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(run_demo.repo_root()),
         "DATABASE_URL": SHELL_URL,
+        "SECRET_KEY": PROVIDED_SECRET,
         "DATA_COLLECTOR": "yahoo",
         "ALLOWED_HOSTS": "evil.example",
         "DEBUG": "true",
@@ -388,11 +483,13 @@ def test_child_process_does_not_inherit_dotenv_database(tmp_path):
     assert reported["hosts"] == "localhost,127.0.0.1"
     assert reported["debug"] == "false"
     assert reported["secret_is_dotenv"] == "false"
+    assert reported["secret_is_shell"] == "false"
     assert reported["dotenv_password"] == "false"
     assert reported["shell_password"] == "false"
     assert reported["middleware"] == "localhost,127.0.0.1"
     assert reported["secret_matches_plan"] == "true"
     assert DOTENV_SECRET not in completed.stdout
+    assert PROVIDED_SECRET not in completed.stdout
     assert "from-dotenv-secret" not in completed.stdout
     assert "from-shell-secret" not in completed.stdout
     assert not (run_demo.repo_root() / "demo").exists()
@@ -530,19 +627,22 @@ def test_main_refuses_a_non_demo_url_without_serving(
     assert "FAIL:" in captured.err
 
 
-def test_main_rejects_a_short_secret_without_printing_it(
+def test_main_ignores_a_short_shell_secret(
     tmp_path, monkeypatch, capsys, restore_process_settings
 ):
+    """A short SECRET_KEY in the shell is not used and is not printed."""
     monkeypatch.setenv("SECRET_KEY", "too-short")
     served = []
     code = run_demo.main(
-        [],
+        ["--port", str(_free_loopback_port())],
         root=tmp_path,
         serve=lambda port: served.append(port),
     )
     captured = capsys.readouterr()
-    assert code == 1
-    assert served == []
+    assert code == 0
+    assert served
+    assert settings.SECRET_KEY != "too-short"
+    assert len(settings.SECRET_KEY) >= 32
     assert "too-short" not in captured.out
     assert "too-short" not in captured.err
 
@@ -579,6 +679,58 @@ def test_main_reports_a_seed_failure(
     assert served == []
     assert "seed failed" in captured.err
     assert "FAIL:" in captured.err
+
+
+def test_busy_port_does_not_reset_the_database(tmp_path, capsys):
+    """A taken port fails before the live demo file is deleted."""
+    import socket
+
+    plan = run_demo.build_demo_plan(tmp_path)
+    run_demo.seed_demo_database(plan, reset=True)
+    engine = create_db_engine(plan.database_url)
+    try:
+        session = sessionmaker(bind=engine)()
+        try:
+            CompanyRepository(session).create(
+                CompanyCreate(name="Extra Demo", ticker="DEMO_EXTRA")
+            )
+        finally:
+            session.close()
+    finally:
+        engine.dispose()
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.listen(1)
+    served = []
+    try:
+        code = run_demo.main(
+            ["--port", str(port)],
+            root=tmp_path,
+            serve=lambda chosen: served.append(chosen),
+        )
+    finally:
+        probe.close()
+    captured = capsys.readouterr()
+    assert code == 1
+    assert served == []
+    assert "already in use" in captured.err
+    assert "not changed" in captured.err
+    assert "DEMO_EXTRA" in _tickers(plan.database_url)
+    assert _counts(plan.database_url) == (7, 20)
+
+
+def _free_loopback_port() -> int:
+    """A loopback port that is free at the moment this returns."""
+    import socket
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+    finally:
+        probe.close()
 
 
 def test_main_rejects_reset_and_keep_together():
@@ -668,12 +820,13 @@ def test_plain_settings_after_configure_still_ignore_dotenv(
     monkeypatch.chdir(tmp_path)
     _write_personal_dotenv(tmp_path)
     monkeypatch.setenv("DATABASE_URL", SHELL_URL)
-    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("SECRET_KEY", PROVIDED_SECRET)
     plan = run_demo.build_demo_plan(tmp_path)
     run_demo.configure_demo_process(plan)
     loaded = Settings()
     assert loaded.DATABASE_URL == plan.database_url
     assert loaded.DATA_COLLECTOR == "fake"
     assert loaded.SECRET_KEY == plan.secret_key
+    assert loaded.SECRET_KEY != PROVIDED_SECRET
     assert loaded.allowed_hosts == ["localhost", "127.0.0.1"]
     assert "from-dotenv-secret" not in loaded.DATABASE_URL

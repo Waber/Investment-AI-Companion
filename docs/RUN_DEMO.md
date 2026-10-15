@@ -1,5 +1,7 @@
 # Run the demo
 
+One command: `python -m scripts.run_demo` (it generates a fresh `SECRET_KEY` and does not reuse the shell).
+
 Short path to the local `/ui` pages. These commands were run on Linux
 with Python 3.12.3. `python` was not on `PATH` before the virtualenv
 existed, so the venv is created with `python3`. After activation,
