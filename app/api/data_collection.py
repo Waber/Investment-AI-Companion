@@ -6,6 +6,7 @@ financial data providers like Yahoo Finance.
 """
 
 import logging
+import threading
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.data_collectors.base import InstrumentLookup, ProviderError
 from app.data_collectors.fake import FakeCollector
+from app.data_collectors.resilience import ResilientCollector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.models.company import (
     DESCRIPTION_MAX_LENGTH,
@@ -34,6 +36,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/data-collection", tags=["data-collection"])
 
+# One live wrapper per process. The cache has to outlive a single
+# request, and uvicorn's thread pool can call this from two threads.
+_yahoo_lock = threading.Lock()
+_yahoo_collector: Optional[ResilientCollector] = None
+
+
+def reset_cached_collector() -> None:
+    """Drop the cached live wrapper. Tests use this between cases."""
+    global _yahoo_collector
+    with _yahoo_lock:
+        _yahoo_collector = None
+
 
 def get_collector() -> InstrumentLookup:
     """Return the collector chosen by ``DATA_COLLECTOR``.
@@ -41,10 +55,31 @@ def get_collector() -> InstrumentLookup:
     The setting is read on every call (not at import), so a test can
     change it with ``monkeypatch``. Tests that need other behavior
     replace this function through ``app.dependency_overrides``.
+
+    ``fake`` returns a new ``FakeCollector`` each time. It never calls
+    Yahoo, so the cache and the rate limit would only slow the demo
+    and hide the clock tests use for provenance.
+
+    ``yahoo`` returns one ``ResilientCollector`` for the life of the
+    process, wrapping ``YahooFinanceCollector``. The wrapper is what
+    keeps the TTL cache across requests. The lock is for uvicorn's
+    thread pool: two requests must not build two wrappers and then
+    each keep an empty cache.
     """
     if settings.DATA_COLLECTOR == "fake":
         return FakeCollector()
-    return YahooFinanceCollector()
+    global _yahoo_collector
+    with _yahoo_lock:
+        if _yahoo_collector is None:
+            _yahoo_collector = ResilientCollector(
+                YahooFinanceCollector(),
+                cache_ttl_seconds=settings.COLLECTOR_CACHE_TTL_SECONDS,
+                rate_limit_per_minute=settings.COLLECTOR_RATE_LIMIT_PER_MINUTE,
+                max_retries=settings.COLLECTOR_MAX_RETRIES,
+                backoff_base_seconds=settings.COLLECTOR_BACKOFF_BASE_SECONDS,
+                backoff_max_seconds=settings.COLLECTOR_BACKOFF_MAX_SECONDS,
+            )
+        return _yahoo_collector
 
 
 class FetchCompanyRequest(BaseModel):
