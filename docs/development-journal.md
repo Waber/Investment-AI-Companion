@@ -29,7 +29,11 @@
   -> 1170 passed, 121 deselected, total coverage 95.60%. Scoped
   `black`, `isort`, and `flake8` on `scripts/run_demo.py` and
   `tests/test_run_demo.py` passed. PostgreSQL was not run locally
-  (no `TEST_POSTGRES_DSN`); CI runs that job. A manual loopback run
+  (no `TEST_POSTGRES_DSN`). GitHub Actions
+  [run 38703046058](https://github.com/Waber/Investment-AI-Companion/actions/runs/38703046058)
+  on `8cde777` completed with conclusion success: SQLite job
+  `116315619295` success, PostgreSQL job `116315618716` success.
+  A manual loopback run
   with `DATABASE_URL` and `SECRET_KEY` unset and no `.env` printed
   the URL, seeded 6 companies and 20 metrics, and served `/`,
   `/docs`, `/ui`, and the company list on `127.0.0.1`. A second run
