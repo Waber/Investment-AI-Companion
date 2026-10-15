@@ -28,11 +28,12 @@
   -> 1175 passed, 121 deselected, total coverage 95.41%. Scoped
   black, isort, and flake8 passed on `scripts/run_demo.py` and
   `tests/test_run_demo.py`. PostgreSQL was not run locally.
-  The earlier GitHub Actions
-  [run 38703046058](https://github.com/Waber/Investment-AI-Companion/actions/runs/38703046058)
-  on `8cde777` succeeded (SQLite `116315619295`, PostgreSQL
-  `116315618716`). CI for the security and QA review fixes is
-  recorded in the journal entry for that review.
+  GitHub Actions
+  [run 38705460114](https://github.com/Waber/Investment-AI-Companion/actions/runs/38705460114)
+  on `4449053` succeeded. SQLite job `116323646312` and PostgreSQL
+  job `116323646645` both concluded success. The earlier run
+  [38703046058](https://github.com/Waber/Investment-AI-Companion/actions/runs/38703046058)
+  on `8cde777` also succeeded.
 - Active agents: none. Blockers: none.
 - Stop reason: security and QA review fixes for #25 are in the
   branch. Account usage was not available in this session.
