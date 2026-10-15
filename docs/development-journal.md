@@ -1,5 +1,93 @@
 # Development Journal
 
+## 2026-10-15 - Collector cache, rate limit, retry, and currency codes (#24, part 2)
+
+- Scope: part 2 of
+  [#24](https://github.com/Waber/Investment-AI-Companion/issues/24).
+  A wrapper around the live collector (`app/data_collectors/resilience.py`)
+  with a TTL cache, a sliding-window rate limit and retry with full
+  jitter, plus uppercase ISO 4217 currency codes that keep Yahoo's
+  minor-unit spellings. The `math.isfinite` guard and the 404-versus-502
+  split are unchanged.
+- Decisions, wrapper: `get_collector()` wraps `YahooFinanceCollector`
+  in one process-wide `ResilientCollector`. The fake collector is not
+  wrapped. It never calls Yahoo, so a rate limit would only slow the
+  offline demo, and a cache would hide the clock tests use for
+  provenance. The wrapper is the same idea as a Java class that
+  implements an interface and forwards to another object. It only
+  grows the capability methods the inner collector has, so the Yahoo
+  wrapper is not a `FundAttributes` provider.
+- Decisions, cache: successes only. `None` ("no data") and
+  `ProviderError` are not stored. A hit returns the provenance of the
+  fetch that filled the cache, so `retrieved_at` stays the original
+  time. Values are copied on the way in and out because `Sourced` is
+  only shallow-frozen. The cache holds 256 entries and drops the
+  least recently used. The default TTL is 300 seconds (1 to 86400).
+- Decisions, rate limit: a sliding window, not a token bucket. A
+  bucket that allows a burst of N can still let nearly 2N calls
+  through in one minute. The setting is "per minute", so the wrapper
+  remembers each upstream call and waits until fewer than N of them
+  fall inside the last 60 seconds. Cache hits do not count. The
+  default is 30 per minute, and the ceiling is 120.
+- Decisions, retry: full jitter. After a transient failure the wait
+  is a random number from 0 up to `min(max, base * 2^attempt)`, with
+  `attempt` starting at 0. Transient means a rate-limit error, HTTP
+  429, a timeout or a connection error. `YFRateLimitError` is
+  recognised by class name, including when Yahoo has already wrapped
+  it as the cause of `ProviderError`, so this module does not import
+  yfinance. `COLLECTOR_MAX_RETRIES` is the number of extra attempts
+  (default 2, so three calls, allowed range 1 to 5). After that the
+  wrapper raises `ProviderError` with the fixed message
+  `Data provider is temporarily unavailable` and no chained cause.
+  The log line names the exception class, not the exception text.
+  Clock, sleep and the random source are arguments. Tests move a
+  fake clock and do not call `time.sleep`.
+- Decisions, lifetime: one lock guards the cache and the call times.
+  Sleep happens outside the lock so a cache hit is not stuck behind
+  a wait. Uvicorn's thread pool can enter the wrapper from two
+  threads; the lock is what `synchronized` would be in Java. The
+  cache is per process, not shared across processes.
+- Decisions, currency: `usd` and `USD` store as `USD` on create,
+  update and fetch-company. `GBp` (London pence) and `ZAc` (South
+  African cents) stay exactly as written, because uppercasing `GBp`
+  would store `GBP` (pounds, 100 times larger). `ILA` (Israeli
+  agorot) is already three capitals, so the same rule stores it and
+  does not turn it into `ILS`. Only those exact Yahoo spellings are
+  special: `gbp` becomes `GBP`, and `zac` becomes `ZAC`, which is
+  not `ZAR` and not the cents code. The three-letter check runs
+  after that normalization. The read model does not apply it, so a
+  legacy lowercase row still returns 200. Filters compare the stored
+  text, so `USD` and a legacy `usd` stay different filter values.
+- RED, then green: `test_get_collector_returns_yahoo` failed on
+  `first is second` while each call still built a new
+  `YahooFinanceCollector`. The currency tests then failed on
+  `assert 'usd' == 'USD'` (five tests) before `normalize_currency`.
+- Verification, from the repository root, no `.env`, `DATABASE_URL`
+  unset, Python 3.12.3, packages from
+  `pip install --require-hashes -r requirements-dev.lock`:
+  `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`.
+  Wrapper commit `6e1e126`: 1165 passed, 121 deselected, exact
+  coverage 95.74%. Currency commit `bc5757b`: 1172 passed, 121
+  deselected, exact coverage 95.75%. This docs tree repeats 1172
+  passed, 121 deselected, exact coverage 95.75%. Scoped black, isort and flake8
+  were clean on the touched Python files. Two pre-existing E501
+  docstrings in `tests/test_provider_data_hygiene.py` were wrapped
+  so that file passes flake8. PostgreSQL was not run locally (no
+  `TEST_POSTGRES_DSN`). CI runs it.
+- Backlog handed to R1
+  [#54](https://github.com/Waber/Investment-AI-Companion/issues/54):
+  `debt_to_assets` from the balance sheet for equities; yfinance
+  `hide_exceptions`, which can make an HTTP failure look like "no
+  data" and therefore never reach this retry; a durable store,
+  refresh only on an explicit request, and batching (the wrapper is
+  in-process only). Fund key metrics and a fake P/E consistent with
+  P/B and ROE stay with I2 #27 and I3 #28.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session. No subagents.
+- Time tracking (2026-10-15, UTC): session start 07:10 (the task
+  message). Wrapper commit 07:31. Currency commit 07:35. This docs
+  entry is the commit immediately after that.
+
 ## 2026-10-12 - Collector interface and offline fake, part 1 (#24)
 
 - Scope: part 1 of
@@ -604,9 +692,10 @@
   whitespace-only, CR/LF, and other control characters. Control
   characters are rejected before strip, so `"AAPL\n"` is not
   turned into `AAPL`. `None` still means "field omitted" on
-  update. Currency keeps the letters it was sent with. Yahoo's
+  update. Currency kept the letters it was sent with. Yahoo's
   `GBp` means pence, and rewriting it to `GBP` would treat the
-  amount as pounds.
+  amount as pounds. Part 2 of #24 (2026-10-15) stores ordinary
+  codes in uppercase and still keeps `GBp` and `ZAc`.
 - Decision, provider errors: in `fetch_company_data`, pydantic
   `ValidationError` is caught before `ValueError` (it is a
   subclass) and returned as HTTP 502 with the fixed detail
@@ -722,9 +811,11 @@ branch was not rebased.
   single-quoted `$TMPDIR` or `~/`. There were no others. 948
   passed, exact 92.46%.
 - QA, currency, `7bb9ee0`: `GBp` is stored and read back unchanged.
-  Currency is three letters, and the case is not rewritten.
-  Yahoo's `GBp` means pence, and rewriting it to `GBP` would
-  treat the amount as pounds. 949 passed, exact 92.49%.
+  Currency is three letters. At this commit the case was not
+  rewritten. Yahoo's `GBp` means pence, and rewriting it to `GBP`
+  would treat the amount as pounds. Part 2 of #24 (2026-10-15)
+  uppercases ordinary codes and still keeps `GBp`. 949 passed,
+  exact 92.49%.
 - QA, read model, `88f3250`: ticker, length, and ASCII checks apply
   to create and update only. `GET /companies/` returns 200 when a
   row inserted past the model has a blank ticker. 950 passed,

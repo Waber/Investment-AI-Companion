@@ -1,5 +1,39 @@
 # Current Work State
 
+## Collector cache, rate limit, retry, and currency (#24, part 2): 2026-10-15
+
+- Branch `cursor/collector-resilience-currency-ed10`, based on
+  `origin/master` `107adf0` (PR #68 merged). One pull request to
+  `master`. Not merged. Refs #24. The code items from the
+  2026-10-13 reopening are in this branch. The Code Reviewer has
+  not signed off, and the Security Engineer reviews this because
+  the wrapper is what stops the live collector from hammering Yahoo.
+- Completed: `ResilientCollector` in front of Yahoo (TTL cache of
+  successes, sliding-window rate limit, full-jitter retry, injected
+  clock). The fake collector is not wrapped. One wrapper instance
+  per process, with a lock. Currency on create, update and
+  fetch-company is uppercase ISO 4217; `GBp` and `ZAc` stay; `ILA`
+  is stored by the uppercase rule and is not folded into `ILS`.
+  The read model still returns a legacy lowercase row. The
+  `math.isfinite` guard and the 404-versus-502 split are unchanged.
+  [Plan for part 1](superpowers/plans/2026-10-12-collector-interface.md).
+- Incomplete: none in this slice. Handed to R1 #54: balance-sheet
+  `debt_to_assets`, yfinance `hide_exceptions` (a swallowed HTTP
+  failure never reaches the retry), and a durable cache with
+  explicit refresh and batching. Fund metrics and a consistent
+  fake P/E stay with #27 and #28.
+- Tests: no `.env`, `DATABASE_URL` unset. The CI command on the
+  wrapper commit `6e1e126`: 1165 passed, 121 deselected, exact
+  95.74%. On the currency commit `bc5757b`: 1172 passed, 121
+  deselected, exact 95.75%. This docs tree repeats that result.
+  PostgreSQL was not run locally.
+  Scoped black, isort and flake8 were clean on the touched Python
+  files.
+- Active agents: none. Blockers: none.
+- Stop reason: part 2 is committed and waiting for CI on the pull
+  request. Account usage was not available in this session.
+- Next action: #25, the one-command offline demo.
+
 ## Collector interface, part 1 of #24: 2026-10-12
 
 - Branch `feature/collector-interface-24`, rebased on 2026-10-13 onto
@@ -26,9 +60,11 @@
 - Active agents: none. Blockers: none.
 - Stop reason: PR #68 is open and waits for the owner's review and
   merge; agents do not merge. Account usage was not available in this
-  session.
-- Next action: the owner reviews PR #68 and merges it with "Rebase and
-  merge". Then part 2 of #24, then #25.
+  session. That was the state when this section was written. PR #68
+  is merged as `107adf0`. Part 2 is the section above.
+- Next action when this section was written: the owner reviews PR #68
+  and merges it with "Rebase and merge". Then part 2 of #24, then
+  #25. The live next action is #25, in the section above.
 
 ## Pagination bounds (#19): 2026-10-12
 
