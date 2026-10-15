@@ -641,12 +641,14 @@ def test_http_429_is_retried_and_http_500_is_not():
 
     denied = Flaky(StatusError(500))
     wrapped, _clock = _wrap(denied, max_retries=4)
-    with pytest.raises(StatusError):
+    with pytest.raises(ProviderError) as caught:
         wrapped.fetch_company_info("AAA")
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert caught.value.__cause__ is None
     assert denied.calls == 1
 
 
-def test_non_transient_errors_are_not_retried():
+def test_non_transient_errors_are_not_retried(caplog):
     parse = Flaky(ProviderError("parse failed"))
     wrapped, clock = _wrap(parse, max_retries=4)
     with pytest.raises(ProviderError, match="parse failed"):
@@ -664,8 +666,14 @@ def test_non_transient_errors_are_not_retried():
 
     inner = ValueInner()
     wrapped, _clock = _wrap(inner, max_retries=4)
-    with pytest.raises(ValueError, match="bad period"):
-        wrapped.fetch_price_history("AAA", period="nope")
+    with caplog.at_level("ERROR", logger="app.data_collectors.resilience"):
+        with pytest.raises(ProviderError) as caught:
+            wrapped.fetch_price_history("AAA", period="nope")
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
+    assert caught.value.__cause__ is None
+    assert "bad period" not in str(caught.value)
+    assert "secret" not in caplog.text
+    assert "ValueError" in caplog.text
     assert inner.calls == 1
 
 
@@ -781,8 +789,9 @@ def test_an_unhashable_argument_is_not_cached():
     wrapped.fetch_company_info("AAA", extra={"secret": "x"})
     assert inner.calls == 2
 
-    with pytest.raises(TypeError):
+    with pytest.raises(ProviderError) as caught:
         wrapped.fetch_company_info()
+    assert str(caught.value) == TEMPORARY_FAILURE_MESSAGE
     assert inner.calls == 2
 
 
@@ -967,6 +976,22 @@ async def test_rate_limit_over_the_cap_is_still_502(client):
     assert second.json()["detail"] == "Data provider error"
     assert clock.slept == []
     assert "temporarily unavailable" not in second.text
+
+
+@pytest.mark.asyncio
+async def test_a_raw_value_error_from_the_collector_is_502(client):
+    """A ValueError must not become HTTP 400 with the provider text."""
+
+    class Bad:
+        def fetch_company_info(self, ticker):
+            raise ValueError("bad period secret-host")
+
+    client.app.dependency_overrides[get_collector] = lambda: _wrap(Bad())[0]
+    response = await client.post(FETCH_URL, json={"ticker": "AAPL"})
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Data provider error"
+    assert "secret-host" not in response.text
+    assert "bad period" not in response.text
 
 
 @pytest.mark.asyncio

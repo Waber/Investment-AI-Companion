@@ -381,7 +381,17 @@ class ResilientCollector:
                 return getattr(self.inner, name)(*args, **kwargs)
             except Exception as exc:
                 if not _is_transient(exc):
-                    raise
+                    # ProviderError already has a stable message. Any
+                    # other error, including ValueError, would become
+                    # HTTP 400 and would copy its text into the body.
+                    if isinstance(exc, ProviderError):
+                        raise
+                    logger.error(
+                        "Data provider failed on %s (%s)",
+                        name,
+                        _public_type(exc),
+                    )
+                    raise ProviderError(TEMPORARY_FAILURE_MESSAGE) from None
                 last = exc
                 if attempt + 1 == attempts:
                     break
