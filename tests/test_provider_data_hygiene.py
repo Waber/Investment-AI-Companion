@@ -35,7 +35,7 @@ FETCH_METRICS = "/api/v1/data-collection/fetch-financial-metrics"
 
 @pytest.mark.asyncio
 async def test_list_companies_returns_a_stored_blank_ticker(client):
-    """A legacy blank ticker must not make GET /companies/ fail for everyone."""
+    """A legacy blank ticker must not make GET /companies/ fail."""
     session = client.app.state.testing_session_local()
     session.add(CompanyDB(name="Legacy", ticker="", currency="USD"))
     session.commit()
@@ -343,7 +343,7 @@ async def test_overlong_name_is_422_on_update(client):
 
 @pytest.mark.asyncio
 async def test_pence_currency_round_trips_unchanged(client):
-    """Yahoo sends GBp for London pence. Uppercasing it would be GBP, 100x off."""
+    """Yahoo sends GBp for London pence. Uppercasing it would be GBP."""
     client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
         {"name": "Vodafone", "currency": "GBp"}
     )
@@ -358,7 +358,8 @@ async def test_pence_currency_round_trips_unchanged(client):
 
 
 @pytest.mark.asyncio
-async def test_currency_keeps_case_and_rejects_a_non_letter_code(client):
+async def test_lowercase_currency_is_stored_as_uppercase(client):
+    """Ordinary codes are uppercased. GBp is covered next to this test."""
     kept = await client.post(
         COMPANIES,
         json={"name": "Dollar", "ticker": "USDX", "currency": "usd"},
@@ -369,7 +370,7 @@ async def test_currency_keeps_case_and_rejects_a_non_letter_code(client):
     )
 
     assert kept.status_code == 201
-    assert kept.json()["currency"] == "usd"
+    assert kept.json()["currency"] == "USD"
     assert rejected.status_code == 422
 
 

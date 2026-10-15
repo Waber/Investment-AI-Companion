@@ -11,14 +11,46 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 # FX symbols (PKN.WA, BRK-B, ^GSPC, EURUSD=X). Control characters and
 # spaces are not in the class.
 TICKER_PATTERN = r"^[A-Z0-9._\-^=]{1,20}$"
-# Three letters, either case. GBp is London pence and must not become GBP.
-_CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
+# Yahoo quotes some markets in a minor unit. The letter case is the
+# distinction, so these two spellings are stored exactly:
+#   GBp  London pence (GBP is pounds, 100 times larger)
+#   ZAc  South African cents (ZAR is the rand)
+# ILA is Israeli agorot. It is already three capitals, so the uppercase
+# rule stores it and does not turn it into ILS. Only the exact Yahoo
+# spelling is special: "gbp" becomes "GBP", and "zac" becomes "ZAC"
+# (not ZAR, and not the cents code).
+MINOR_UNIT_CURRENCIES = frozenset({"GBp", "ZAc"})
+# Checked after normalization. Ordinary codes are three capitals.
+# The two minor-unit spellings are the only lowercase that remains.
+_NORMALIZED_CURRENCY_RE = re.compile(r"^(?:[A-Z]{3}|GBp|ZAc)$")
 # The description column is Text, so the database would store a
 # paste of any size. 5000 characters is about a page: enough for a
 # provider summary, and the cap lives on the write models only so a
 # longer row that is already stored can still be read.
 DESCRIPTION_MAX_LENGTH = 5000
 _TICKER_RE = re.compile(TICKER_PATTERN)
+
+
+def normalize_currency(value: object) -> object:
+    """Store an ISO currency in uppercase. Keep Yahoo's minor-unit codes.
+
+    ``usd`` and ``USD`` become one code, ``USD``. ``GBp`` and ``ZAc``
+    are returned unchanged. ``None`` is left alone so an update can
+    omit the field. A non-string is left for pydantic to reject.
+
+    The three-letter check runs on the value after that normalization,
+    not on the raw text. ``" usd "`` is therefore ``USD``.
+    """
+    if value is None or not isinstance(value, str):
+        return value
+    text = value.strip()
+    if text in MINOR_UNIT_CURRENCIES:
+        normalized = text
+    else:
+        normalized = text.upper()
+    if _NORMALIZED_CURRENCY_RE.fullmatch(normalized) is None:
+        raise ValueError("currency must be exactly three letters")
+    return normalized
 
 
 def normalize_ticker(value: object) -> object:
@@ -65,15 +97,7 @@ class _CompanyWriteChecks(BaseModel):
     @field_validator("currency", mode="before", check_fields=False)
     @classmethod
     def _normalize_currency(cls, value: object) -> object:
-        # Length and letters only. Case stays as the provider sent it:
-        # Yahoo's GBp is pence, and uppercasing it would mean pounds.
-        if value is None or not isinstance(value, str):
-            return value
-        if _CURRENCY_RE.fullmatch(value) is None:
-            raise ValueError(
-                "currency must be exactly three letters; case is unchanged"
-            )
-        return value
+        return normalize_currency(value)
 
 
 class CompanyBase(BaseModel):
