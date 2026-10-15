@@ -175,6 +175,43 @@ def test_cache_hit_keeps_the_original_retrieved_at():
     assert third.provenance.retrieved_at != first.provenance.retrieved_at
 
 
+def test_cache_key_strips_and_uppercases_the_ticker():
+    """``aapl`` and ``AAPL`` are one cache entry. The inner call is raw.
+
+    The wrapper does not rewrite the argument it forwards. Only the
+    key is normalized, so a later canonical ticker still hits.
+    """
+
+    class AnyTicker:
+        def __init__(self):
+            self.calls = 0
+            self.seen = []
+
+        def fetch_company_info(self, ticker):
+            self.calls += 1
+            self.seen.append(ticker)
+            return sourced({"ticker": ticker})
+
+        def fetch_price_history(self, ticker, period="1y", interval="1d"):
+            self.calls += 1
+            self.seen.append((ticker, period, interval))
+            return sourced([{"ticker": ticker, "period": period}])
+
+    inner = AnyTicker()
+    wrapped, _clock = _wrap(inner)
+    wrapped.fetch_company_info(" aapl ")
+    second = wrapped.fetch_company_info("AAPL")
+
+    assert inner.calls == 1
+    assert inner.seen == [" aapl "]
+    assert second.value["ticker"] == " aapl "
+
+    wrapped.fetch_price_history(" msft ", period="1mo")
+    wrapped.fetch_price_history("MSFT", "1mo", "1d")
+    assert inner.calls == 2
+    assert inner.seen[-1] == (" msft ", "1mo", "1d")
+
+
 def test_mutating_a_hit_does_not_change_the_cached_value():
     inner = CountingFake()
     wrapped, _clock = _wrap(inner)

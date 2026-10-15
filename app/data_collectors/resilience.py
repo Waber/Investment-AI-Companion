@@ -16,7 +16,9 @@ Four protections, all in this process (not on disk):
   time and is not rewritten to "now". The cached value is copied on the
   way in and on the way out. ``Sourced`` is frozen, but that freeze is
   shallow, and a caller that mutates the dict would otherwise change
-  what the next caller sees.
+  what the next caller sees. The cache key strips and uppercases a
+  ``ticker`` argument, so ``aapl`` and ``AAPL`` are one entry. The
+  value forwarded to the inner collector is not rewritten.
 - A sliding-window rate limit. At most N upstream calls in any window
   of 60 seconds. A token bucket with room for a burst of N can still
   allow nearly 2N calls in one minute (one burst, then a refilled
@@ -329,7 +331,15 @@ class ResilientCollector:
             return None
         bound.apply_defaults()
         try:
-            key = (name, tuple(bound.arguments.items()))
+            # The key uses the canonical ticker. The inner collector
+            # still receives the original argument. " aapl " and
+            # "AAPL" therefore share one entry.
+            pairs = []
+            for argument, value in bound.arguments.items():
+                if argument == "ticker" and isinstance(value, str):
+                    value = value.strip().upper()
+                pairs.append((argument, value))
+            key = (name, tuple(pairs))
             hash(key)
         except TypeError:
             return None
