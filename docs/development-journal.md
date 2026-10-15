@@ -25,8 +25,10 @@
   -> 1175 passed, 121 deselected, total coverage 95.41%. Scoped
   `black`, `isort`, and `flake8` on `scripts/run_demo.py` and
   `tests/test_run_demo.py` passed. PostgreSQL was not run locally
-  (no `TEST_POSTGRES_DSN`). GitHub Actions for this commit is recorded
-  after the run finishes.
+  (no `TEST_POSTGRES_DSN`). GitHub Actions
+  [run 38705460114](https://github.com/Waber/Investment-AI-Companion/actions/runs/38705460114)
+  on `4449053` completed with conclusion success: SQLite job
+  `116323646312` success, PostgreSQL job `116323646645` success.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (2026-10-15, UTC): review fixes started about 08:11.
   Full SQLite suite finished 08:21.
