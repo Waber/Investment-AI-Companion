@@ -1,5 +1,34 @@
 # Current Work State
 
+## One-command offline demo (#25): 2026-10-15
+
+- Branch `cursor/one-command-offline-demo-64f5`, based on
+  `origin/master` `107adf0` (PR #68 merged).
+- Completed: `python -m scripts.run_demo` creates a fresh SQLite file
+  at `demo/investment_demo.db`, seeds `demo-v1`, forces the fake
+  collector and loopback hosts, generates a `SECRET_KEY` when the
+  process does not have one, and starts uvicorn with
+  `host="127.0.0.1"`. The URL printed is `/ui`. `--keep` reuses the
+  file; `--reset` is the default. The guard refuses `postgresql://`
+  and any path that is not that demo file. A personal `DATABASE_URL`
+  in `.env` or the shell is not used. Tests cover settings, the
+  uvicorn host, the guard, and an in-process smoke of `/docs`, the
+  seeded API, and `/ui`. The network guard stayed on. Templates,
+  static files, `app/data_collectors/`, and the currency code were
+  not edited. PR #70 is in review on the live collector; this branch
+  does not conflict with those modules. Docs files can conflict
+  because both edit the top of this file and the journal.
+- Incomplete: none for #25. #26 and #16 are not started.
+- Tests: no `.env`, `DATABASE_URL` unset. The CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1170 passed, 121 deselected, total coverage 95.60%. Scoped
+  black, isort, and flake8 passed on `scripts/run_demo.py` and
+  `tests/test_run_demo.py`. PostgreSQL was not run locally.
+- Active agents: none. Blockers: none.
+- Stop reason: #25 is ready for review. Account usage was not
+  available in this session.
+- Next action: #26 together with #16.
+
 ## Collector guard, part 2 of #24: 2026-10-14
 
 - Branch `feature/collector-guard-24`, based on `origin/master`

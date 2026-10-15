@@ -1,5 +1,45 @@
 # Development Journal
 
+## 2026-10-15 - One-command offline demo (#25)
+
+- Scope: [#25](https://github.com/Waber/Investment-AI-Companion/issues/25).
+  `python -m scripts.run_demo` creates `demo/investment_demo.db`, seeds
+  `demo-v1`, selects the fake collector, and serves the app on
+  `127.0.0.1`. The printed page is `/ui` because that router is on
+  master. UI templates and static files were not edited.
+- Decisions: the database is fresh unless `--keep` is passed. `--reset`
+  is the default written out; the two flags cannot be combined. The
+  only accepted URL is the absolute SQLite file
+  `demo/investment_demo.db`. `postgresql://` and any other path are
+  refused, and the error does not repeat the URL. Settings are built
+  with explicit arguments and `_env_file=None`. Those values are
+  published in the process environment before the app is imported, and
+  copied onto the shared settings object, so a personal `DATABASE_URL`
+  in `.env` or in the shell is not the demo database. `SECRET_KEY` is
+  taken from the process environment when it is set; otherwise the
+  process generates one with `secrets.token_urlsafe(32)`. It is not
+  printed and it is not written to disk. `uvicorn.run` is called with
+  `host="127.0.0.1"`. `main.py` already binds `127.0.0.1` in its
+  `__main__` block; the demo does not call that block.
+  `app/data_collectors/` and the currency code were not edited, so this
+  branch does not wrap the fake collector. PR #70 is in review and
+  touches the live-collector wrapper plus those docs files.
+- Verification: no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1170 passed, 121 deselected, total coverage 95.60%. Scoped
+  `black`, `isort`, and `flake8` on `scripts/run_demo.py` and
+  `tests/test_run_demo.py` passed. PostgreSQL was not run locally
+  (no `TEST_POSTGRES_DSN`); CI runs that job. A manual loopback run
+  with `DATABASE_URL` and `SECRET_KEY` unset and no `.env` printed
+  the URL, seeded 6 companies and 20 metrics, and served `/`,
+  `/docs`, `/ui`, and the company list on `127.0.0.1`. A second run
+  with `--keep` reported 0 created and 6 companies already present.
+  The console text did not include a secret.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-15, UTC): session start 07:39. Full SQLite
+  suite finished 08:00.
+- Next: #26 together with #16.
+
 ## 2026-10-14 - Collector guard and currency normalization, part 2 (#24)
 
 - Scope: the two open items of
