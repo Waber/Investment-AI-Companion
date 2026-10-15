@@ -27,6 +27,22 @@ class PayloadCollector:
         return sourced(dict(self.payload))
 
 
+def test_currency_rejects_non_ascii_before_case_folding():
+    """Non-ASCII must not be stripped or case-folded into a real code.
+
+    ``\\xa0usd\\u2003`` would become ``USD`` after strip. ``uſd`` and
+    ``ﬀx`` would become ordinary letters after upper. A newline is
+    ASCII, so ``usd\\n`` is still ``USD``.
+    """
+    samples = ("\xa0usd\u2003", "u\u017fd", "\ufb00x")
+    for raw in samples:
+        with pytest.raises(ValidationError):
+            CompanyCreate(name="Ascii", ticker="ASCII", currency=raw)
+
+    stored = CompanyCreate(name="Ascii", ticker="ASCII2", currency="usd\n")
+    assert stored.currency == "USD"
+
+
 def test_create_model_uppercases_an_ordinary_code_and_keeps_minor_units():
     assert (
         CompanyCreate(name="Dollar", ticker="USDX", currency="usd").currency

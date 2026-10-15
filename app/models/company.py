@@ -39,10 +39,15 @@ def normalize_currency(value: object) -> object:
     omit the field. A non-string is left for pydantic to reject.
 
     The three-letter check runs on the value after that normalization,
-    not on the raw text. ``" usd "`` is therefore ``USD``.
+    not on the raw text. ``" usd "`` is therefore ``USD``. An ASCII
+    newline is stripped the same way. Non-ASCII is rejected first:
+    ``strip`` would hide a no-break space, and ``upper`` would turn
+    a long s or a ligature into a normal letter.
     """
     if value is None or not isinstance(value, str):
         return value
+    if not value.isascii():
+        raise ValueError("currency must be ASCII")
     text = value.strip()
     if text in MINOR_UNIT_CURRENCIES:
         normalized = text
