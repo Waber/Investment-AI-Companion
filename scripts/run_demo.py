@@ -1,0 +1,463 @@
+"""Start the offline demo with one command.
+
+    python -m scripts.run_demo
+
+What that does, in order:
+
+1. Picks a SQLite file under the repository's ``demo/`` directory
+   (``demo/investment_demo.db``). That directory is git-ignored.
+2. Refuses any other database URL. A personal PostgreSQL URL, a
+   ``:memory:`` URL, and a file outside ``demo/`` never get opened.
+3. Deletes that file unless ``--keep`` was passed, then seeds the
+   ``demo-v1`` fixture. Seeding again skips rows that are already there.
+4. Builds settings in code for that SQLite file, ``DATA_COLLECTOR=fake``,
+   and loopback hosts. A ``DATABASE_URL`` in ``.env`` or in the shell is
+   not used. When ``SECRET_KEY`` is not already in the process
+   environment, a new one is generated. It is not printed and it is not
+   written to a file.
+5. Serves ``main:app`` with ``host="127.0.0.1"``. The URL printed is
+   ``/ui`` when that page exists, otherwise ``/docs``.
+
+``Settings`` reads ``.env`` from the working directory the first time
+``app.core.config`` is imported. Environment variables win over that
+file, and values passed to ``Settings(...)`` win over both. This module
+therefore publishes the demo environment before it imports the app, and
+then builds a ``Settings`` object with those values filled in. The
+engine is created at import, so if it was already pointed somewhere
+else it is replaced before anything connects.
+
+Run it from the repository root so Python can import ``app`` and
+``scripts``. The database path does not depend on the working directory.
+"""
+
+import argparse
+import os
+import secrets
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+DEMO_DIRECTORY_NAME = "demo"
+DEMO_DATABASE_NAME = "investment_demo.db"
+DEMO_HOST = "127.0.0.1"
+DEFAULT_PORT = 8000
+
+# One message for every rejected URL. The URL itself is not included:
+# a pasted PostgreSQL URL can contain a password.
+_REFUSAL = (
+    "The demo only opens the SQLite file it creates under demo/. "
+    "Other database URLs are refused."
+)
+
+
+class DemoDatabaseRefused(ValueError):
+    """The target is not the SQLite file this command creates."""
+
+
+@dataclass(frozen=True)
+class DemoPlan:
+    """The database, secret, and URL the demo process will use.
+
+    ``secret_key`` is already chosen. Callers print ``database_path``
+    and the HTTP URL, never ``secret_key``.
+    """
+
+    root: Path
+    demo_dir: Path
+    database_path: Path
+    database_url: str
+    secret_key: str
+    host: str
+    port: int
+    open_path: str
+
+
+def repo_root() -> Path:
+    """Directory that contains ``app/`` and ``scripts/``."""
+    return Path(__file__).resolve().parents[1]
+
+
+def demo_directory(root: Path) -> Path:
+    return (root / DEMO_DIRECTORY_NAME).resolve()
+
+
+def demo_database_path(root: Path) -> Path:
+    return demo_directory(root) / DEMO_DATABASE_NAME
+
+
+def sqlite_url_for(path: Path) -> str:
+    """Absolute ``sqlite:///`` URL for ``path``.
+
+    A relative URL would follow the process working directory. An
+    absolute path already starts with ``/``, so the URL has four
+    slashes: ``sqlite:////tmp/...``.
+    """
+    return "sqlite:///" + path.resolve().as_posix()
+
+
+def assert_owned_demo_database(url: str, demo_dir: Path) -> Path:
+    """Return the demo file path, or raise without echoing ``url``.
+
+    The only accepted target is the absolute SQLite file
+    ``demo/investment_demo.db`` inside ``demo_dir``. A query string is
+    refused because SQLite's URI mode can ignore the file. A symlink
+    whose target leaves ``demo/`` is refused so a link cannot point
+    this command at another database.
+    """
+    from sqlalchemy.engine.url import make_url
+    from sqlalchemy.exc import ArgumentError
+
+    try:
+        parsed = make_url(url)
+    except ArgumentError:
+        raise DemoDatabaseRefused("Invalid database URL.") from None
+    if (
+        parsed.get_backend_name() != "sqlite"
+        or parsed.query
+        or parsed.username
+        or parsed.password
+        or parsed.host
+    ):
+        raise DemoDatabaseRefused(_REFUSAL)
+    database = parsed.database
+    if not database or database == ":memory:" or database.startswith("file:"):
+        raise DemoDatabaseRefused(_REFUSAL)
+    path = Path(database)
+    if not path.is_absolute():
+        raise DemoDatabaseRefused(_REFUSAL)
+    demo_root = demo_dir.resolve()
+    resolved = path.resolve()
+    expected = (demo_root / DEMO_DATABASE_NAME).resolve()
+    # ``expected`` follows a symlink. Requiring the parent to be the
+    # demo directory stops a link that points at a file outside demo/.
+    if resolved != expected or resolved.parent != demo_root:
+        raise DemoDatabaseRefused(_REFUSAL)
+    return expected
+
+
+def resolve_secret_key(provided: str | None = None) -> str:
+    """Use a process environment key, or generate one.
+
+    ``.env`` is not read here. A key that exists only in that file is
+    not "provided": the demo generates its own and publishes it in the
+    process environment so the later ``Settings()`` call does not fall
+    through to the file.
+    """
+    if provided is None:
+        provided = os.environ.get("SECRET_KEY", "")
+    cleaned = provided.strip()
+    if cleaned:
+        return cleaned
+    return secrets.token_urlsafe(32)
+
+
+def demo_open_path(root: Path | None = None) -> str:
+    """``/ui`` when the UI router is in this checkout, else ``/docs``."""
+    base = repo_root() if root is None else root
+    if (base / "app" / "ui" / "router.py").is_file():
+        return "/ui"
+    return "/docs"
+
+
+def build_demo_plan(root: Path, *, port: int = DEFAULT_PORT) -> DemoPlan:
+    """Choose the demo file and secret. Does not import the app."""
+    path = demo_database_path(root)
+    url = sqlite_url_for(path)
+    assert_owned_demo_database(url, path.parent)
+    return DemoPlan(
+        root=root,
+        demo_dir=path.parent,
+        database_path=path,
+        database_url=url,
+        secret_key=resolve_secret_key(),
+        host=DEMO_HOST,
+        port=port,
+        open_path=demo_open_path(root),
+    )
+
+
+def build_demo_settings(plan: DemoPlan):
+    """Settings for this plan, ignoring ``.env`` and the shell database.
+
+    Arguments passed here beat environment variables, which beat
+    ``.env``. ``_env_file=None`` also skips the file for every other
+    field, so a personal ``ALLOWED_HOSTS`` cannot widen the demo.
+    """
+    from app.core.config import Settings
+
+    return Settings(
+        _env_file=None,
+        DATABASE_URL=plan.database_url,
+        DATA_COLLECTOR="fake",
+        SECRET_KEY=plan.secret_key,
+        ALLOWED_HOSTS="localhost,127.0.0.1",
+        DEBUG=False,
+        BACKEND_CORS_ORIGINS="",
+    )
+
+
+def _copy_demo_settings(built) -> None:
+    """Write the demo values onto the shared settings object.
+
+    ``main`` and the collector dependency did ``from app.core.config
+    import settings``. They hold that object, not a copy. Replacing
+    the name on the config module would leave them with the old one,
+    so the fields are updated in place.
+    """
+    import app.core.config as config_module
+
+    current = config_module.settings
+    current.DATABASE_URL = built.DATABASE_URL
+    current.DATA_COLLECTOR = built.DATA_COLLECTOR
+    current.SECRET_KEY = built.SECRET_KEY
+    current.ALLOWED_HOSTS = built.ALLOWED_HOSTS
+    current.DEBUG = built.DEBUG
+    current.BACKEND_CORS_ORIGINS = built.BACKEND_CORS_ORIGINS
+
+
+def _ensure_demo_engine(database_url: str) -> None:
+    """Point the process engine at the demo file.
+
+    ``database.py`` creates the engine while it is imported. If that
+    happened before the demo URL was published, the engine still names
+    the personal database. Replace it before ``init_db`` or a request
+    can connect. ``init_db`` imported ``engine`` by name, so that
+    binding is updated too.
+    """
+    from sqlalchemy.engine.url import make_url
+    from sqlalchemy.orm import sessionmaker
+
+    import app.core.database as database
+    import app.core.init_db as init_db
+
+    expected = make_url(database_url)
+    current = database.engine.url
+    same = (
+        current.get_backend_name() == "sqlite"
+        and bool(expected.database)
+        and bool(current.database)
+        and Path(current.database).resolve()
+        == Path(expected.database).resolve()
+    )
+    if not same:
+        database.engine = database.create_db_engine(database_url)
+        database.SessionLocal = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=database.engine,
+        )
+    init_db.engine = database.engine
+
+
+def configure_demo_process(plan: DemoPlan):
+    """Publish the demo environment, then import settings.
+
+    The environment is set first so the object created at
+    ``import app.core.config`` already has the SQLite URL. The explicit
+    ``Settings`` object is still built and copied across, which covers
+    a process that imported settings earlier (a test, or a future
+    import at the top of this file).
+    """
+    os.environ["DATABASE_URL"] = plan.database_url
+    os.environ["DATA_COLLECTOR"] = "fake"
+    os.environ["SECRET_KEY"] = plan.secret_key
+    os.environ["ALLOWED_HOSTS"] = "localhost,127.0.0.1"
+    os.environ["DEBUG"] = "false"
+    os.environ["BACKEND_CORS_ORIGINS"] = ""
+    built = build_demo_settings(plan)
+    _copy_demo_settings(built)
+    _ensure_demo_engine(built.DATABASE_URL)
+    return built
+
+
+def _sidecar_paths(path: Path) -> list[Path]:
+    text = str(path)
+    return [
+        path,
+        Path(text + "-wal"),
+        Path(text + "-shm"),
+        Path(text + "-journal"),
+    ]
+
+
+def remove_database_files(path: Path) -> None:
+    """Delete the demo database and SQLite's sidecar files.
+
+    A directory is left alone and reported. Unlink removes a symlink
+    itself, not the file it points at; the guard has already rejected
+    a symlink that leaves ``demo/``.
+    """
+    if path.is_dir() and not path.is_symlink():
+        raise DemoDatabaseRefused("The demo database path is a directory.")
+    for candidate in _sidecar_paths(path):
+        if candidate.is_symlink() or candidate.is_file():
+            candidate.unlink()
+
+
+def seed_demo_database(plan: DemoPlan, *, reset: bool) -> dict:
+    """Create tables and seed ``demo-v1`` into this plan's file.
+
+    The guard runs again here so a caller cannot skip it. ``reset``
+    deletes the file first, which is how a second run stays free of
+    duplicate rows. ``--keep`` passes ``reset=False``; the seeder then
+    skips fixture rows that are already stored.
+    """
+    assert_owned_demo_database(plan.database_url, plan.demo_dir)
+    if reset:
+        remove_database_files(plan.database_path)
+    plan.demo_dir.mkdir(parents=True, exist_ok=True)
+    from scripts.seed_demo import seed_sqlite_database
+
+    return seed_sqlite_database(plan.database_url, apply=True)
+
+
+def demo_asgi_app(plan: DemoPlan):
+    """An in-process app whose requests use the seeded demo file.
+
+    Tests use this with ``httpx.ASGITransport``. It does not open a
+    socket and it does not call ``init_db`` on the process engine, so
+    the personal ``DATABASE_URL`` is not contacted.
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    from app.core.database import create_db_engine, get_db
+    from main import create_app
+
+    assert_owned_demo_database(plan.database_url, plan.demo_dir)
+    engine = create_db_engine(plan.database_url)
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    application = create_app(init_database_on_startup=False)
+
+    def override_get_db():
+        db = factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    application.dependency_overrides[get_db] = override_get_db
+    application.state.demo_engine = engine
+    return application
+
+
+def format_status(plan: DemoPlan, summary: dict) -> str:
+    """Text for the console. The secret is not included."""
+    companies = summary["companies"]
+    metrics = summary["metrics"]
+    lines = [
+        "Offline demo",
+        f"Database: {plan.database_path}",
+        "Collector: fake",
+        (
+            f"Seeded {companies['created']} companies and "
+            f"{metrics['created']} metrics."
+        ),
+    ]
+    if companies["skipped"] or metrics["skipped"]:
+        lines.append(
+            "Already present: "
+            f"{companies['skipped']} companies and "
+            f"{metrics['skipped']} metrics."
+        )
+    lines.append(f"Open http://{plan.host}:{plan.port}{plan.open_path}")
+    return "\n".join(lines) + "\n"
+
+
+def serve_demo(port: int) -> None:
+    """Run uvicorn on loopback only.
+
+    ``host="127.0.0.1"`` is passed here. The demo does not call
+    ``python main.py`` and does not depend on the host in that file.
+    """
+    import uvicorn
+
+    uvicorn.run(
+        "main:app",
+        host="127.0.0.1",
+        port=port,
+        reload=False,
+    )
+
+
+def _port(value: str) -> int:
+    if not value.isdigit():
+        raise argparse.ArgumentTypeError(
+            "port must be an integer from 1 to 65535"
+        )
+    port = int(value)
+    if port < 1 or port > 65535:
+        raise argparse.ArgumentTypeError(
+            "port must be an integer from 1 to 65535"
+        )
+    return port
+
+
+def _parse_args(argv: list[str] | None):
+    parser = argparse.ArgumentParser(
+        description=(
+            "Start the offline demo: a fresh SQLite file under demo/, "
+            "the demo-v1 fixture, the fake collector, and a loopback server."
+        )
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--reset",
+        action="store_true",
+        help=(
+            "Delete the demo SQLite file before seeding. "
+            "This is the default when --keep is not passed."
+        ),
+    )
+    mode.add_argument(
+        "--keep",
+        action="store_true",
+        help=(
+            "Reuse the demo SQLite file and only insert missing fixture rows."
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        type=_port,
+        default=DEFAULT_PORT,
+        help="Loopback port (default 8000). The host is always 127.0.0.1.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(
+    argv: list[str] | None = None, *, root: Path | None = None, serve=None
+) -> int:
+    """Seed the demo database and start the server. Return a status code."""
+    from pydantic import ValidationError
+
+    from scripts.seed_demo import SeedError
+
+    args = _parse_args(argv)
+    if serve is None:
+        serve = serve_demo
+    base = repo_root() if root is None else root
+    try:
+        plan = build_demo_plan(base, port=args.port)
+        configure_demo_process(plan)
+        summary = seed_demo_database(plan, reset=not args.keep)
+    except DemoDatabaseRefused as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        return 1
+    except ValidationError:
+        # The key may be inside the validation error. Print a fixed line.
+        print(
+            "FAIL: SECRET_KEY must be a random value of at least "
+            "32 characters. The demo does not print the value.",
+            file=sys.stderr,
+        )
+        return 1
+    except (SeedError, OSError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        return 1
+    print(format_status(plan, summary), end="")
+    serve(plan.port)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
