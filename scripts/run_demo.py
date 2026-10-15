@@ -7,15 +7,20 @@ What that does, in order:
 1. Picks a SQLite file under the repository's ``demo/`` directory
    (``demo/investment_demo.db``). That directory is git-ignored.
 2. Refuses any other database URL. A personal PostgreSQL URL, a
-   ``:memory:`` URL, and a file outside ``demo/`` never get opened.
-3. Deletes that file unless ``--keep`` was passed, then seeds the
+   ``:memory:`` URL, a file outside ``demo/``, and a symlink in that
+   path never get opened. ``Path.resolve`` follows links, so a
+   ``demo`` directory that is a symlink would otherwise reset a
+   database outside the checkout.
+3. Checks that ``127.0.0.1`` and the chosen port are free. A second
+   launch must not delete the live demo file and then fail to bind.
+4. Deletes that file unless ``--keep`` was passed, then seeds the
    ``demo-v1`` fixture. Seeding again skips rows that are already there.
-4. Builds settings in code for that SQLite file, ``DATA_COLLECTOR=fake``,
+5. Builds settings in code for that SQLite file, ``DATA_COLLECTOR=fake``,
    and loopback hosts. A ``DATABASE_URL`` in ``.env`` or in the shell is
-   not used. When ``SECRET_KEY`` is not already in the process
-   environment, a new one is generated. It is not printed and it is not
+   not used. A new ``SECRET_KEY`` is generated for this process even
+   when the shell already has one. It is not printed and it is not
    written to a file.
-5. Serves ``main:app`` with ``host="127.0.0.1"``. The URL printed is
+6. Serves ``main:app`` with ``host="127.0.0.1"``. The URL printed is
    ``/ui`` when that page exists, otherwise ``/docs``.
 
 ``Settings`` reads ``.env`` from the working directory the first time
@@ -54,6 +59,18 @@ class DemoDatabaseRefused(ValueError):
     """The target is not the SQLite file this command creates."""
 
 
+class DemoPortBusy(RuntimeError):
+    """The loopback port is taken, so the database was left untouched."""
+
+
+# Shown when a symlink would let reset leave the checkout. The target
+# path is not included.
+_SYMLINK_REFUSAL = (
+    "The demo directory must be a real directory inside the checkout. "
+    "A symlink in that path is refused."
+)
+
+
 @dataclass(frozen=True)
 class DemoPlan:
     """The database, secret, and URL the demo process will use.
@@ -77,8 +94,46 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _absolute(path: Path) -> Path:
+    """Absolute path that does not follow a symlink.
+
+    ``Path.resolve`` would turn ``demo`` into the directory it points
+    at. Later comparisons would then treat that outside directory as
+    the demo.
+    """
+    return Path(os.path.abspath(path))
+
+
+def refuse_symlink_escape(root: Path) -> Path:
+    """Return ``root/demo`` only when reset cannot leave the checkout.
+
+    A symlink at ``demo``, at the database file, or at a parent that
+    is still inside the checkout is refused. That includes a ``root``
+    argument that is itself a symlink: it is the parent of ``demo``.
+    Following the link must also leave ``demo`` as a direct child of
+    ``root``. The command's own checkout comes from ``__file__`` after
+    ``resolve``, so a linked clone still works when the script is
+    started as a module.
+    """
+    if Path(root).is_symlink():
+        raise DemoDatabaseRefused(_SYMLINK_REFUSAL)
+    root_abs = _absolute(root)
+    demo = root_abs / DEMO_DIRECTORY_NAME
+    current = demo / DEMO_DATABASE_NAME
+    while current != root_abs:
+        if current.is_symlink():
+            raise DemoDatabaseRefused(_SYMLINK_REFUSAL)
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    if demo.resolve().parent != root_abs.resolve():
+        raise DemoDatabaseRefused(_SYMLINK_REFUSAL)
+    return demo
+
+
 def demo_directory(root: Path) -> Path:
-    return (root / DEMO_DIRECTORY_NAME).resolve()
+    return refuse_symlink_escape(root)
 
 
 def demo_database_path(root: Path) -> Path:
@@ -90,9 +145,10 @@ def sqlite_url_for(path: Path) -> str:
 
     A relative URL would follow the process working directory. An
     absolute path already starts with ``/``, so the URL has four
-    slashes: ``sqlite:////tmp/...``.
+    slashes: ``sqlite:////tmp/...``. The path is not ``resolve``d,
+    so a symlink stays visible to the guard.
     """
-    return "sqlite:///" + path.resolve().as_posix()
+    return "sqlite:///" + _absolute(path).as_posix()
 
 
 def assert_owned_demo_database(url: str, demo_dir: Path) -> Path:
@@ -100,9 +156,9 @@ def assert_owned_demo_database(url: str, demo_dir: Path) -> Path:
 
     The only accepted target is the absolute SQLite file
     ``demo/investment_demo.db`` inside ``demo_dir``. A query string is
-    refused because SQLite's URI mode can ignore the file. A symlink
-    whose target leaves ``demo/`` is refused so a link cannot point
-    this command at another database.
+    refused because SQLite's URI mode can ignore the file. Symlinks are
+    refused here as well: ``resolve`` would hide a ``demo`` directory
+    that points outside the checkout, and reset would delete that file.
     """
     from sqlalchemy.engine.url import make_url
     from sqlalchemy.exc import ArgumentError
@@ -125,29 +181,24 @@ def assert_owned_demo_database(url: str, demo_dir: Path) -> Path:
     path = Path(database)
     if not path.is_absolute():
         raise DemoDatabaseRefused(_REFUSAL)
-    demo_root = demo_dir.resolve()
-    resolved = path.resolve()
-    expected = (demo_root / DEMO_DATABASE_NAME).resolve()
-    # ``expected`` follows a symlink. Requiring the parent to be the
-    # demo directory stops a link that points at a file outside demo/.
-    if resolved != expected or resolved.parent != demo_root:
+    demo_root = _absolute(demo_dir)
+    file_path = _absolute(path)
+    expected = _absolute(demo_root / DEMO_DATABASE_NAME)
+    if file_path != expected or file_path.parent != demo_root:
         raise DemoDatabaseRefused(_REFUSAL)
+    # ``demo_root`` is ``<checkout>/demo``. Its parent is the checkout.
+    refuse_symlink_escape(demo_root.parent)
     return expected
 
 
-def resolve_secret_key(provided: str | None = None) -> str:
-    """Use a process environment key, or generate one.
+def resolve_secret_key() -> str:
+    """Generate a key for this demo process.
 
-    ``.env`` is not read here. A key that exists only in that file is
-    not "provided": the demo generates its own and publishes it in the
-    process environment so the later ``Settings()`` call does not fall
-    through to the file.
+    A ``SECRET_KEY`` already in the shell or in ``.env`` is not reused.
+    The demo publishes this new value so a later ``Settings()`` call
+    does not fall through to the shell or the file. The value is not
+    printed and it is not written to disk.
     """
-    if provided is None:
-        provided = os.environ.get("SECRET_KEY", "")
-    cleaned = provided.strip()
-    if cleaned:
-        return cleaned
     return secrets.token_urlsafe(32)
 
 
@@ -280,14 +331,38 @@ def _sidecar_paths(path: Path) -> list[Path]:
     ]
 
 
+def ensure_port_is_free(port: int) -> None:
+    """Raise when ``127.0.0.1:port`` is already taken.
+
+    Call this before deleting the demo file. A second launch used to
+    reset the database and then fail inside uvicorn, which destroyed
+    the file the first process was serving.
+    """
+    import socket
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((DEMO_HOST, port))
+    except OSError:
+        raise DemoPortBusy(
+            f"127.0.0.1:{port} is already in use. "
+            "The demo database was not changed. "
+            "Stop the other process or choose another --port."
+        ) from None
+    finally:
+        probe.close()
+
+
 def remove_database_files(path: Path) -> None:
     """Delete the demo database and SQLite's sidecar files.
 
-    A directory is left alone and reported. Unlink removes a symlink
-    itself, not the file it points at; the guard has already rejected
-    a symlink that leaves ``demo/``.
+    A directory is left alone and reported. A symlink at the file or
+    at ``demo/`` is refused before unlink, so this cannot delete a
+    database outside the checkout.
     """
-    if path.is_dir() and not path.is_symlink():
+    if path.is_symlink() or path.parent.is_symlink():
+        raise DemoDatabaseRefused(_SYMLINK_REFUSAL)
+    if path.is_dir():
         raise DemoDatabaseRefused("The demo database path is a directory.")
     for candidate in _sidecar_paths(path):
         if candidate.is_symlink() or candidate.is_file():
@@ -302,6 +377,7 @@ def seed_demo_database(plan: DemoPlan, *, reset: bool) -> dict:
     duplicate rows. ``--keep`` passes ``reset=False``; the seeder then
     skips fixture rows that are already stored.
     """
+    refuse_symlink_escape(plan.root)
     assert_owned_demo_database(plan.database_url, plan.demo_dir)
     if reset:
         remove_database_files(plan.database_path)
@@ -437,10 +513,12 @@ def main(
         serve = serve_demo
     base = repo_root() if root is None else root
     try:
+        # Before any reset. A busy port must leave the live file alone.
+        ensure_port_is_free(args.port)
         plan = build_demo_plan(base, port=args.port)
         configure_demo_process(plan)
         summary = seed_demo_database(plan, reset=not args.keep)
-    except DemoDatabaseRefused as error:
+    except (DemoDatabaseRefused, DemoPortBusy) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
     except ValidationError:
