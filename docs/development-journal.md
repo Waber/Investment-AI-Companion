@@ -1,5 +1,73 @@
 # Development Journal
 
+## 2026-10-15 - QA round 1 and Security round 1 on the collector wrapper (#24, part 2)
+
+- Scope: follow-ups on
+  [PR #70](https://github.com/Waber/Investment-AI-Companion/pull/70),
+  same branch, on top of `ddaac93`. QA's two Low items and nits, plus
+  the Security Engineer's blocker and the non-blocking notes. Refs #24.
+  The give-up and the new fail-fast paths stay HTTP 502
+  (`Data provider error`). A 503 was not adopted: every provider
+  failure already uses 502, and changing one of them would split the
+  contract.
+- Decisions, rate limit: `COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS`
+  (default 5, allowed 0 to 60). A wait longer than the cap raises
+  `ProviderError` with `Data provider is temporarily unavailable`,
+  does not sleep, and does not take a slot. `0` refuses any positive
+  wait.
+- Decisions, deadline: `COLLECTOR_TOTAL_DEADLINE_SECONDS` (default 15,
+  allowed 1 to 120) covers every sleep in one call, rate-limit waits
+  and retry backoff together. A sleep that would pass it is refused.
+  The upstream call itself is not interrupted. That is what drops the
+  old worst case of several minutes of stacked waits.
+- Decisions, inflight: `COLLECTOR_MAX_INFLIGHT` (default 4, allowed 1
+  to 16) is a semaphore around cache misses, the same idea as
+  `Semaphore.tryAcquire`. A further call fails immediately so it does
+  not park another worker. Cache hits do not take a permit. With the
+  thread pool cut to three workers, a stuck fetch plus two extra
+  fetches still leaves `GET /api/v1/companies/` and `/ui` answering
+  inside a second.
+- Decisions, tests: an autouse fixture in the root `conftest.py`
+  calls `reset_cached_collector()` before and after every test. The
+  near-empty ticker test passes alone and after the cache test.
+- Decisions, cache key: a `ticker` argument is stripped and uppercased
+  in the key only. The inner collector still sees the original text.
+- Decisions, currency: `isascii()` runs before `strip` and `upper`.
+  `\xa0usd\u2003`, `uſd`, and `ﬀx` are rejected. `usd\n` is ASCII and
+  still becomes `USD`. Legacy rows are not migrated (Alembic is #8).
+  Until that cleanup, a stored `usd` and a new `USD` can both appear
+  as separate `/ui` filter options. Templates and `app/ui/` were not
+  edited.
+- Decisions, errors: a non-transient error other than `ProviderError`
+  is wrapped in `ProviderError` with no chained cause. The log names
+  the class only, so a `ValueError` is HTTP 502 and its text stays
+  out of the body. `__context__` is walked as well as `__cause__`, so
+  a rate-limit error left beside a different cause is retried.
+  `COLLECTOR_MAX_RETRIES=0` is one attempt.
+- Skipped: de-duplicating concurrent cache misses (security N2).
+  Handed to R1
+  [#54](https://github.com/Waber/Investment-AI-Companion/issues/54),
+  with the earlier hand-offs (balance-sheet `debt_to_assets`,
+  yfinance `hide_exceptions`, a durable cache).
+- Verification: the CI command, no `.env`, `DATABASE_URL` unset,
+  Python 3.12.3, packages from `requirements-dev.lock` with
+  `--require-hashes`. Counts are the full SQLite run at that commit.
+  `d8c9daa` 1177 passed, exact 95.77%. `571d7df` 1180 passed, exact
+  95.81%. `a52ff2f` 1182 passed, exact 95.83%. `63e6497` 1182 passed,
+  exact 95.83%. `f18912f` 1183 passed, exact 95.84%. `faef250` 1184
+  passed, exact 95.85%. `cd369d8` 1185 passed, exact 95.86%.
+  `8c211ff` 1186 passed, exact 95.86%. `d47e8be` 1187 passed, exact
+  95.86%. 121 deselected on each run. PostgreSQL was not run locally.
+  Scoped black, isort and flake8 were clean on the touched Python
+  files.
+- AI model: Grok 4.7 (Cursor cloud agent). Account usage was not
+  available in this session. No subagents.
+- Time tracking (2026-10-15, UTC): QA follow-up message 07:44,
+  security review message 07:51. Commits `d8c9daa` 07:54, `571d7df`
+  07:57, `a52ff2f` 07:59, `63e6497` 08:01, `f18912f` 08:10,
+  `faef250` 08:11, `cd369d8` 08:13, `8c211ff` 08:14, `d47e8be` 08:15.
+  This docs entry is the commit after `d47e8be`.
+
 ## 2026-10-15 - Collector cache, rate limit, retry, and currency codes (#24, part 2)
 
 - Scope: part 2 of

@@ -73,7 +73,12 @@ rewriting it to `GBP` would treat the amount as pounds. `ZAc` is South
 African cents and is not rewritten to `ZAR`. `ILA` (Israeli agorot) is
 already uppercase, so the same rule stores it and does not turn it into
 `ILS`. A row that was stored in another case before this rule still reads
-back unchanged.
+back unchanged. There is no data migration in this change (Alembic is
+#8). Until that cleanup migration, a legacy `usd` and a new `USD` can
+both be stored, and the `/ui` currency filter lists them as separate
+options because it compares the stored text. Non-ASCII is rejected
+before strip and upper, so a no-break space or a look-alike letter
+cannot fold into a real code. An ASCII newline still strips.
 
 ```bash
 METRICS_JSON=$(curl -q --noproxy '*' -fsS -X POST "$BASE_URL/api/v1/financial-metrics/" \

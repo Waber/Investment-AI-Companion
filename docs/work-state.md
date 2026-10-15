@@ -4,34 +4,37 @@
 
 - Branch `cursor/collector-resilience-currency-ed10`, based on
   `origin/master` `107adf0` (PR #68 merged). One pull request to
-  `master`. Not merged. Refs #24. The code items from the
-  2026-10-13 reopening are in this branch. The Code Reviewer has
-  not signed off, and the Security Engineer reviews this because
-  the wrapper is what stops the live collector from hammering Yahoo.
-- Completed: `ResilientCollector` in front of Yahoo (TTL cache of
-  successes, sliding-window rate limit, full-jitter retry, injected
-  clock). The fake collector is not wrapped. One wrapper instance
-  per process, with a lock. Currency on create, update and
-  fetch-company is uppercase ISO 4217; `GBp` and `ZAc` stay; `ILA`
-  is stored by the uppercase rule and is not folded into `ILS`.
-  The read model still returns a legacy lowercase row. The
-  `math.isfinite` guard and the 404-versus-502 split are unchanged.
+  `master`, [PR #70](https://github.com/Waber/Investment-AI-Companion/pull/70).
+  Not merged. Refs #24. QA round 1 and Security round 1 are on this
+  branch, on top of `ddaac93`. The HTTP status for a provider failure
+  stays 502. Concurrent-miss de-duplication (security N2) is handed
+  to R1 #54.
+- Completed: `ResilientCollector` in front of Yahoo, plus the QA
+  and security follow-ups. The wait for a rate-limit slot is capped,
+  sleeps in one call share a deadline, and only a few cache misses
+  may run at once. The cache key uppercases the ticker. Currency
+  rejects non-ASCII before strip and upper. Unexpected collector
+  errors become `ProviderError`. `__context__` is retried when it
+  is transient. `COLLECTOR_MAX_RETRIES` may be 0. The live wrapper
+  is reset around every test. The fake collector is not wrapped.
+  The `math.isfinite` guard and the 404-versus-502 split are
+  unchanged.
   [Plan for part 1](superpowers/plans/2026-10-12-collector-interface.md).
 - Incomplete: none in this slice. Handed to R1 #54: balance-sheet
-  `debt_to_assets`, yfinance `hide_exceptions` (a swallowed HTTP
-  failure never reaches the retry), and a durable cache with
-  explicit refresh and batching. Fund metrics and a consistent
-  fake P/E stay with #27 and #28.
+  `debt_to_assets`, yfinance `hide_exceptions`, a durable cache
+  with explicit refresh and batching, and de-duplicating concurrent
+  cache misses (security N2). Fund metrics and a consistent fake
+  P/E stay with #27 and #28. Legacy currency case stays until the
+  #8 migration.
 - Tests: no `.env`, `DATABASE_URL` unset. The CI command on the
-  wrapper commit `6e1e126`: 1165 passed, 121 deselected, exact
-  95.74%. On the currency commit `bc5757b`: 1172 passed, 121
-  deselected, exact 95.75%. This docs tree repeats that result.
-  PostgreSQL was not run locally.
-  Scoped black, isort and flake8 were clean on the touched Python
-  files.
+  follow-up head (after `d47e8be`, before this docs commit): 1187
+  passed, 121 deselected, exact 95.86%. PostgreSQL was not run
+  locally. Scoped black, isort and flake8 were clean on the touched
+  Python files.
 - Active agents: none. Blockers: none.
-- Stop reason: part 2 is committed and waiting for CI on the pull
-  request. Account usage was not available in this session.
+- Stop reason: QA round 1 and Security round 1 are committed and
+  waiting for CI on PR #70. Account usage was not available in this
+  session.
 - Next action: #25, the one-command offline demo.
 
 ## Collector interface, part 1 of #24: 2026-10-12
