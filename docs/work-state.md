@@ -2,8 +2,10 @@
 
 ## One-command offline demo (#25): 2026-10-15
 
-- Branch `cursor/one-command-offline-demo-64f5`, based on
-  `origin/master` `107adf0` (PR #68 merged).
+- Branch `cursor/one-command-offline-demo-64f5`, rebased on
+  2026-10-19 onto `origin/master` `922bdfe` (PR #72 merged).
+  [PR #71](https://github.com/Waber/Investment-AI-Companion/pull/71)
+  (Closes #25), not merged.
 - Completed: `python -m scripts.run_demo` creates a fresh SQLite file
   at `demo/investment_demo.db`, seeds `demo-v1`, forces the fake
   collector and loopback hosts, always generates a fresh in-process
@@ -19,9 +21,8 @@
   port, and an in-process smoke of `/docs`, the seeded API, and
   `/ui`. The network guard stayed on. Templates, static files,
   `app/data_collectors/`, and the currency code were not edited.
-  PR #70 is in review on the live collector; this branch does not
-  conflict with those modules. Docs files can conflict because both
-  edit the top of this file and the journal.
+  The rebase onto PR #72 conflicted only at the top of this file
+  and of the journal; both entries were kept, newest first.
 - Incomplete: none for #25. #26 and #16 are not started.
 - Tests: no `.env`, `DATABASE_URL` unset. The CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
@@ -34,17 +35,24 @@
   job `116323646645` both concluded success. The earlier run
   [38703046058](https://github.com/Waber/Investment-AI-Companion/actions/runs/38703046058)
   on `8cde777` also succeeded.
+  After the rebase (2026-10-19, fresh Python 3.12.15 venv from
+  `requirements-dev.lock`, no `.env`, `DATABASE_URL` unset): the CI
+  command gives 1300 passed, 121 deselected, coverage 95.80%;
+  `-m integration` gives 105 passed, 16 skipped (no PostgreSQL).
 - Active agents: none. Blockers: none.
-- Stop reason: security and QA review fixes for #25 are in the
-  branch. Account usage was not available in this session.
-- Next action: #26 together with #16.
+- Stop reason: PR #71 is rebased and waits for the owner's review and
+  merge; agents do not merge. Account usage was not available in this
+  session.
+- Next action: the owner reviews PR #71 and merges it with "Rebase
+  and merge". Then #26 together with #16.
 
 ## Collector guard, part 2 of #24: 2026-10-14
 
 - Branch `feature/collector-guard-24`, based on `origin/master`
   `107adf0`. Pushed on 2026-10-15 as
   [PR #72](https://github.com/Waber/Investment-AI-Companion/pull/72),
-  which closes #24 on merge. Not merged.
+  merged on 2026-10-19 with "Rebase and merge" (head `922bdfe`).
+  #24 is closed.
   [Spec](superpowers/specs/2026-10-13-collector-guard-design.md),
   [plan](superpowers/plans/2026-10-13-collector-guard.md).
 - Completed: the guard (cache, rate limit, retries) in front of Yahoo,
@@ -58,18 +66,12 @@
   #54); storing `retrieved_at`; mypy typing of the guarded class; then
   #25. With this branch, every item of #24 is done (part 1 in PR #68).
 - Overlapping pull requests:
-  - PR #70 (Cursor Agent, opened on 2026-10-15) implements the same
-    part 2 of #24. It and PR #72 are alternatives; only one should be
-    merged.
-  - PR #69 (docs) updates the part 1 section below. Whichever merges
-    second rebases onto `origin/master` and keeps both entries.
-  - PR #71 (Cursor Agent) is open for #25.
+  - PR #70 (Cursor Agent) implements the same part 2 of #24. PR #72
+    was chosen, so PR #70 is to be closed without merging.
+  - PR #69 (docs) updates the part 1 section below. It needs a rebase
+    onto `origin/master` that keeps both entries.
 - Active agents: none. Blockers: none.
-- Stop reason: PR #72 is open and waits for the owner's review and
-  merge; agents do not merge. Account usage was not available in this
-  session.
-- Next action: the owner picks PR #72 or PR #70, merges it with
-  "Rebase and merge", and closes the other. Then #25 (see PR #71).
+- Next action: none for #24. The owner closes PR #70.
 
 ## Collector interface, part 1 of #24: 2026-10-12
 

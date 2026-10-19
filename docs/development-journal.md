@@ -1,5 +1,30 @@
 # Development Journal
 
+## 2026-10-19 - Rebase of the offline demo (#25) onto PR #72
+
+- Scope: the owner merged
+  [PR #72](https://github.com/Waber/Investment-AI-Companion/pull/72)
+  (#24 part 2), which left
+  [PR #71](https://github.com/Waber/Investment-AI-Companion/pull/71)
+  in conflict. Rebased `cursor/one-command-offline-demo-64f5` onto
+  `origin/master` `922bdfe`. No code change.
+- Decisions: the only conflicts were the stacked top entries of
+  `docs/work-state.md` and this journal. Both entries were kept, the
+  newer #25 entry first. The pre-rebase head is kept locally as
+  `backup/demo-25-before-rebase-72`.
+- Verification: fresh Python 3.12.15 venv installed from
+  `requirements-dev.lock`, no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-fail-under=80`
+  -> 1300 passed, 121 deselected, coverage 95.80% (1259 from master
+  plus the demo tests). `pytest -m integration` -> 105 passed, 16
+  skipped (no `TEST_POSTGRES_DSN`; CI runs PostgreSQL).
+- AI model: Claude Opus 5.5 (Claude Code). Account usage was not
+  available in this session.
+- Time tracking (+0200, 2026-10-19): PR #72 merged 14:10; rebase,
+  tests and this entry 14:20 to 15:00.
+- Next: the owner reviews and merges PR #71 and closes PR #70. Then
+  #26 together with #16.
+
 ## 2026-10-15 - Security and QA review of the offline demo (#25)
 
 - Scope: review fixes on the same branch as
