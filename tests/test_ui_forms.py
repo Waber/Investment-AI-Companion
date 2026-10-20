@@ -214,10 +214,11 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         )
     assert normalized_company_name("  Kept\n") == "Kept"
     assert normalized_company_name("\u00a0Kept\u3000") == "Kept"
-    assert normalized_company_name("\u200bKept\u200b") == "\u200bKept\u200b"
-    # A format character, then a space, then text. strip() leaves the
-    # format character, and the space is not surrounding whitespace.
-    assert normalized_company_name("\u200b Kept") == "\u200b Kept"
+    assert normalized_company_name("\u200bKept\u200b") == "Kept"
+    assert normalized_company_name("\u200b Kept") == "Kept"
+    assert normalized_company_name("\x00Kept\x7f") == "Kept"
+    assert normalized_company_name("A\u200bB") == "A\u200bB"
+    assert normalized_company_name("e\u0301") == "e\u0301"
     assert normalized_company_name(None) is None
     for invisible in (
         "",
@@ -231,6 +232,11 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         "\u200b \u3000",
         "\x00",
         "\x00 \x01",
+        "\u0301",
+        "\u0301\u0308",
+        "\u200b\u0301\u200b",
+        "Ke\x00pt",
+        "Na\nme",
     ):
         assert normalized_company_name(invisible) is None
         for update in (False, True):
@@ -240,7 +246,7 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
             assert rejected is None
             assert field_errors["name"] == "error.required"
     kept = company_payload({"name": " \u200bKept\u200b "})
-    assert kept["name"] == "\u200bKept\u200b"
+    assert kept["name"] == "Kept"
 
 
 @pytest.mark.asyncio
@@ -627,9 +633,14 @@ async def test_blank_company_name_is_422_in_both_languages(client, name):
 
 @pytest.mark.asyncio
 async def test_surrounding_space_is_stripped_from_the_stored_name(client):
-    """The form strips the name. The write model does not."""
+    """The form strips the name. The write model does not.
+
+    Ends may also be a zero-width mark (Cf) or a control such as NUL.
+    Those are removed before the name is stored. A NUL between two
+    letters is a 422 instead, covered below.
+    """
     company_id, _data = await _create(
-        client, name="  Kept Name  ", ticker="KEPTNM"
+        client, name="\ufeff\x00  Kept Name  \u200b\n", ticker="KEPTNM"
     )
     session = client.app.state.testing_session_local()
     try:
@@ -651,6 +662,36 @@ async def test_surrounding_space_is_stripped_from_the_stored_name(client):
     finally:
         session.close()
     assert stored == "Edited Name"
+
+
+@pytest.mark.asyncio
+async def test_interior_control_or_only_combining_marks_is_422(client):
+    """A control inside the name, or only combining marks, is 422.
+
+    Create and edit share ``normalized_company_name``. The row is
+    not written. The message is the localized required-field sentence.
+    """
+    for name in ("Ke\x00pt", "Na\nme", "\u0301", "\u0301\u0308"):
+        response = await _post(
+            client,
+            "/ui/companies",
+            {"name": name, "ticker": "BADNM", "currency": "USD"},
+        )
+        assert response.status_code == 422, repr(name)
+        assert "To pole jest wymagane." in response.text
+        assert _counts(client) == (0, 0)
+    company_id, _data = await _create(client, name="Named Co", ticker="NAMED2")
+    client.cookies.set("ui_lang", "en")
+    edited = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "Na\x01me", "ticker": "NAMED2"},
+    )
+    assert edited.status_code == 422
+    assert "This field is required." in edited.text
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert "Named Co" in detail.text
+    assert "Na" not in detail.text or "Named Co" in detail.text
 
 
 @pytest.mark.asyncio

@@ -4,8 +4,9 @@ The browser posts strings. Empty optional company fields become
 ``None`` (a blank website is "no website", not the empty string).
 Empty metric numbers become ``None``, which is "no data" on the
 detail page. ``normalized_company_name`` is the one name rule for
-create and for edit: surrounding whitespace is removed on save, and
-a name with no visible character is rejected before the write model.
+create and for edit. It strips invisible characters from both ends
+and rejects a name that is blank, only combining marks, or that
+still contains a control character.
 The text the user typed is kept for the
 other fields and handed to ``CompanyCreate``, ``CompanyUpdate``,
 ``FinancialMetricsCreate``, or ``FinancialMetricsUpdate``. Those
@@ -150,37 +151,60 @@ def metrics_values(row):
     return values
 
 
+def _name_edge(char):
+    """True for a character removed from either end of a name.
+
+    Whitespace includes a newline, NBSP (U+00A0), and the ideographic
+    space (U+3000). Cf is a format character such as U+200B. Cc is a
+    control, including NUL. A combining mark is not removed here: a
+    mark with no base letter is rejected later, and a mark on a
+    letter is part of the name.
+    """
+    if char.isspace():
+        return True
+    category = unicodedata.category(char)
+    return category == "Cf" or category == "Cc"
+
+
 def normalized_company_name(value):
-    """Return the name to save, or None when nothing visible remains.
+    """Return the name to save, or None when the form must answer 422.
 
-    Create and edit both call this. It is the form-layer rule.
-    ``CompanyCreate`` and ``CompanyUpdate`` are not changed, and
-    ``CompanyCreate`` still accepts ``""``.
+    Create and edit both call this. It is the only name rule in the
+    form layer. ``CompanyCreate`` and ``CompanyUpdate`` are not
+    changed, and ``CompanyCreate`` still accepts ``""``.
 
-    Surrounding whitespace is removed with ``str.strip``. That
-    includes a normal space, a newline, NBSP (U+00A0), and the
-    ideographic space (U+3000). ``strip`` does not remove a
-    zero-width character.
+    Whitespace, format characters (Cf), and controls (Cc) are removed
+    from both ends. A control that remains anywhere, including NUL
+    between two letters, is rejected. The name is also rejected when
+    nothing visible remains: empty, only whitespace, only category C,
+    or only combining marks (Mn, such as U+0301). A letter with an
+    accent is kept. A zero-width mark between two letters is kept,
+    because only the ends are stripped.
 
-    The stripped text is blank when it is empty, or when every
-    remaining character is whitespace or Unicode category C.
-    Category Cf (format) is the zero-width case: U+200B, U+200C,
-    U+200D, and U+FEFF. The other C categories (control, surrogate,
-    private use, unassigned) are not visible either, so they are
-    blank for the same reason. A visible character keeps the
-    stripped text, including a zero-width mark beside it.
+    PR #75 adds ``normalize_name`` on the write model (commit
+    2c64565). After that pull request merges, align this helper with
+    that function. Until then the form layer owns the 422.
     """
     if not isinstance(value, str):
         value = "" if value is None else str(value)
-    stripped = value.strip()
+    start = 0
+    end = len(value)
+    while start < end and _name_edge(value[start]):
+        start += 1
+    while end > start and _name_edge(value[end - 1]):
+        end -= 1
+    stripped = value[start:end]
+    visible = False
     for char in stripped:
-        if char.isspace():
+        category = unicodedata.category(char)
+        if category == "Cc":
+            return None
+        if char.isspace() or category.startswith("C") or category == "Mn":
             continue
-        # C covers control, format, surrogate, private use, unassigned.
-        if unicodedata.category(char).startswith("C"):
-            continue
-        return stripped
-    return None
+        visible = True
+    if not visible:
+        return None
+    return stripped
 
 
 def company_payload(values):
