@@ -3,7 +3,9 @@
 ## UI forms follow-up (#80, part): 2026-10-20
 
 - Branch `cursor/ui-issue-80-forms-origin-5105`, based on
-  `origin/master` `9d26948`. Pull request says Refs #80. Not merged.
+  `origin/master` `9d26948`.
+  [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81)
+  says Refs #80. Not merged.
 - Completed: one form-layer helper, `normalized_company_name`, used
   by company create and edit. Empty, whitespace-only (space,
   newline, NBSP, U+3000), and Cf/zero-width-only names are a
