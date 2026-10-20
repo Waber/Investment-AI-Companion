@@ -53,7 +53,9 @@ yfinance>=1.7
 # skeleton. 3.1.6 is the current release. The hashed lock records
 # the exact build.
 jinja2>=3.1.6
-# Form posts under /ui. Starlette reads application/x-www-form-urlencoded
-# through this package. 0.0.18 fixes CVE-2024-53981 (ReDoS on a
-# malformed multipart body). The lock pins the exact build.
-python-multipart>=0.0.18
+# Form posts under /ui. Starlette reads
+# application/x-www-form-urlencoded through this package.
+# 0.0.18 fixes CVE-2024-53981 (ReDoS on a malformed multipart
+# body). 0.0.30 fixes GHSA-5rvq-cxj2-64vf / CVE-2026-53539
+# (quadratic urlencoded parse). The lock pins 0.0.32.
+python-multipart>=0.0.32
