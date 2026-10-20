@@ -13,6 +13,7 @@ def _serialize_optional_url(value):
 
 
 DUPLICATE_ISIN_DETAIL = "A company with this ISIN already exists"
+DUPLICATE_TICKER_DETAIL = "A company with this ticker already exists"
 
 
 def _instrument_type_value(value):
@@ -50,8 +51,13 @@ class CompanyRepository:
             CompanyDB: The created company with database-generated fields (id, timestamps)
 
         Raises:
-            IntegrityError: If company name or ticker already exists
+            ValueError: If this ticker or ISIN is already stored
+            IntegrityError: If some other constraint fails
         """
+        # Look up before insert. The unique index is a backstop for
+        # two creates that pass this check at the same time.
+        if self.get_by_ticker(company.ticker) is not None:
+            raise ValueError(DUPLICATE_TICKER_DETAIL)
         if (
             company.isin is not None
             and self.get_by_isin(company.isin) is not None
@@ -82,12 +88,20 @@ class CompanyRepository:
             # Refresh the object to get database-generated values (id, timestamps)
             self.db.refresh(db_company)
             return db_company
-        except IntegrityError as e:
-            # Rollback on error
+        except IntegrityError:
+            # The driver text names whatever index fired. SQLite and
+            # PostgreSQL use different names, and neither is safe to
+            # copy into an HTTP response. After rollback, a row that
+            # is already stored is a client error. Anything else is
+            # still an unexpected database error.
             self.db.rollback()
-            # Re-raise with more specific error message
-            if "uq_company_name_ticker" in str(e):
-                raise ValueError("Company name or ticker already exists")
+            if self.get_by_ticker(company.ticker) is not None:
+                raise ValueError(DUPLICATE_TICKER_DETAIL) from None
+            if (
+                company.isin is not None
+                and self.get_by_isin(company.isin) is not None
+            ):
+                raise ValueError(DUPLICATE_ISIN_DETAIL) from None
             raise
 
     def get_by_id(self, company_id: int) -> Optional[CompanyDB]:

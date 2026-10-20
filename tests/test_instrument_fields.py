@@ -6,12 +6,14 @@ They are not holdings and they are not a suggestion to buy or sell.
 """
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.api.data_collection import get_collector
 from app.models.company import InstrumentType, normalize_instrument_type
 from app.models.database_models import CompanyDB
 from app.repositories.company_repository import (
     DUPLICATE_ISIN_DETAIL,
+    CompanyRepository,
     _instrument_type_value,
 )
 from tests.collector_stubs import sourced
@@ -108,6 +110,55 @@ async def test_rejected_type_or_isin_writes_no_row(client, payload):
         assert db.query(CompanyDB).count() == 0
     finally:
         db.close()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_ticker_is_400_and_the_session_recovers(client):
+    first = await client.post(COMPANIES, json={"name": "A", "ticker": "DUP"})
+    assert first.status_code == 201
+
+    duplicate = await client.post(
+        COMPANIES, json={"name": "B", "ticker": "dup"}
+    )
+
+    assert duplicate.status_code == 400
+    assert (
+        duplicate.json()["detail"]
+        == "A company with this ticker already exists"
+    )
+    lowered = duplicate.text.lower()
+    assert "integrityerror" not in lowered
+    assert "unique" not in lowered
+    assert "duplicate key" not in lowered
+
+    other = await client.post(COMPANIES, json={"name": "C", "ticker": "OTHER"})
+    assert other.status_code == 201
+    db = client.app.state.testing_session_local()
+    try:
+        assert db.query(CompanyDB).count() == 2
+    finally:
+        db.close()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_integrity_error_stays_a_generic_500(
+    client, monkeypatch
+):
+    def fail(self, company):
+        raise IntegrityError(
+            "INSERT", {}, Exception("password=hunter2 unique violation")
+        )
+
+    monkeypatch.setattr(CompanyRepository, "create", fail)
+    response = await client.post(
+        COMPANIES, json={"name": "Boom", "ticker": "BOOM"}
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}
+    assert "hunter2" not in response.text
+    assert "IntegrityError" not in response.text
+    assert "unique violation" not in response.text
 
 
 @pytest.mark.asyncio
