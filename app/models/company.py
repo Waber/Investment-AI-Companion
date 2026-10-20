@@ -36,6 +36,18 @@ DESCRIPTION_MAX_LENGTH = 5000
 _TICKER_RE = re.compile(TICKER_PATTERN)
 
 
+def normalize_name(value: object) -> object:
+    """Strip a company name. A name that is only spaces is blank.
+
+    ``None`` and non-strings are left for the field type. Create and
+    update then require at least one character. The read model does
+    not use this, so a blank name already stored can still be listed.
+    """
+    if value is None or not isinstance(value, str):
+        return value
+    return value.strip()
+
+
 def normalize_ticker(value: object) -> object:
     """Strip and uppercase a ticker. Reject blanks and control characters.
 
@@ -225,6 +237,11 @@ class _CompanyWriteChecks(BaseModel):
     no fields of its own; the subclasses do.
     """
 
+    @field_validator("name", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_name(cls, value: object) -> object:
+        return normalize_name(value)
+
     @field_validator("ticker", mode="before", check_fields=False)
     @classmethod
     def _normalize_ticker(cls, value: object) -> object:
@@ -290,7 +307,12 @@ class CompanyBase(BaseModel):
 class CompanyCreate(_CompanyWriteChecks):
     """Input for creating a company. Lengths match the table columns."""
 
-    name: str = Field(..., max_length=255, description="Company name")
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Company name",
+    )
     ticker: str = Field(
         ...,
         max_length=TICKER_MAX_LENGTH,
@@ -348,7 +370,7 @@ class CompanyUpdate(_CompanyWriteChecks):
     ``CompanyCreate``, so the constraints have to be written again.
     """
 
-    name: Optional[str] = Field(None, max_length=255)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
     ticker: Optional[str] = Field(
         None, max_length=TICKER_MAX_LENGTH, pattern=TICKER_PATTERN
     )

@@ -1,6 +1,57 @@
 import pytest
+from pydantic import ValidationError
 
+from app.models.company import CompanyCreate, CompanyUpdate
 from app.models.database_models import CompanyDB
+
+
+def test_name_is_stripped_and_a_blank_name_is_rejected():
+    created = CompanyCreate(name="  Acme  ", ticker="AAA")
+    updated = CompanyUpdate(name="  New  ")
+
+    assert created.name == "Acme"
+    assert updated.name == "New"
+    assert "name" not in CompanyUpdate().model_dump(exclude_unset=True)
+    with pytest.raises(ValidationError):
+        CompanyCreate(name="   ", ticker="AAA")
+    with pytest.raises(ValidationError):
+        CompanyUpdate(name=" ")
+
+
+@pytest.mark.asyncio
+async def test_blank_name_is_422_on_create_and_update(client):
+    created = await client.post(
+        "/api/v1/companies/", json={"name": "  Kept  ", "ticker": "KEEP"}
+    )
+    assert created.status_code == 201
+    assert created.json()["name"] == "Kept"
+    company_id = created.json()["id"]
+
+    blank_create = await client.post(
+        "/api/v1/companies/", json={"name": "   ", "ticker": "BLANK"}
+    )
+    assert blank_create.status_code == 422
+    assert "name" in blank_create.text
+
+    blank_update = await client.put(
+        f"/api/v1/companies/{company_id}", json={"name": " "}
+    )
+    assert blank_update.status_code == 422
+    fetched = await client.get(f"/api/v1/companies/{company_id}")
+    assert fetched.json()["name"] == "Kept"
+
+    renamed = await client.put(
+        f"/api/v1/companies/{company_id}", json={"name": "  Renamed  "}
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Renamed"
+
+    db = client.app.state.testing_session_local()
+    try:
+        assert db.query(CompanyDB).count() == 1
+        assert db.get(CompanyDB, company_id).name == "Renamed"
+    finally:
+        db.close()
 
 
 @pytest.mark.asyncio
