@@ -43,8 +43,10 @@
   isort, and flake8 passed. PostgreSQL was not run locally.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-20 about 19:25 to 19:45.
-- Next: the owner reviews the pull request. It says Refs #80 and
-  stays unmerged. After #75 lands, rebase and map `error.code`.
+- Pull request: [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81)
+  (Refs #80), opened on 2026-10-20. Not merged.
+- Next: the owner reviews the pull request. After #75 lands, rebase
+  and map `error.code`.
 
 ## 2026-10-21 - Rebase instrument type onto master after PR #78
 
