@@ -7,12 +7,13 @@
   [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81)
   says Refs #80. Not merged.
 - Completed: one form-layer helper, `normalized_company_name`, used
-  by company create and edit. Empty, whitespace-only (space,
-  newline, NBSP, U+3000), and Cf/zero-width-only names are a
-  localized 422. Surrounding whitespace is stripped on save.
-  Category C is treated as invisible, so a control-only name is
-  blank too. The stale comments at the old `company_payload` and
-  `_name_is_blank` docstrings now describe that helper.
+  by company create and edit. It strips whitespace, Cf, and Cc from
+  both ends. Empty, whitespace-only, Cf-only, Mn-only, and other
+  invisible names are a localized 422. A NUL or other control
+  anywhere inside the name is 422. A letter with an accent is kept.
+  QA on PR #81: `safe_next` rejects `/ui/language` and
+  `/ui/language/...` and returns `/ui`, so the 403 page's PL/EN
+  link cannot set the chosen language and then flip it back.
   `GET /ui/language/{code}` uses `origin_allowed`. A missing
   `Origin` with a same-origin `Referer` passes (a normal link
   click). Cross-site `Origin` or `Referer` is HTML 403 and does
@@ -25,25 +26,29 @@
 - Incomplete: map `duplicate_ticker` and `duplicate_isin` from
   `error.code`. #75 is not merged. The form still decides a
   duplicate by a row lookup. TODO in
-  `app/ui/forms.py` `_company_save_failed`.
+  `app/ui/forms.py` `_company_save_failed`. After #75 merges,
+  align `normalized_company_name` with `normalize_name` from that
+  pull request (commit `2c64565`). That model helper strips
+  whitespace and rejects a Cf-only name. It keeps a format
+  character beside a letter.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1364 passed, 121 deselected, coverage 95.90%. Scoped black,
-  isort, and flake8 passed. PostgreSQL was not run locally (no
-  `TEST_POSTGRES_DSN`). GitHub Actions
-  [run 39485588275](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485588275)
-  on `ed0fe02` succeeded. SQLite job `118845515082` and PostgreSQL
-  job `118845515315` both concluded success. The earlier run
-  [39485504563](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485504563)
-  on `a067d61` was cancelled when the docs commit moved the head.
+  -> 1366 passed, 121 deselected, coverage 95.94%. The language
+  commit before the name helper was 1365 passed, coverage 95.91%.
+  Scoped black, isort, and flake8 passed. PostgreSQL was not run
+  locally (no `TEST_POSTGRES_DSN`). GitHub Actions on the earlier
+  head `1eccbf5` succeeded
+  ([run 39486131321](https://github.com/Waber/Investment-AI-Companion/actions/runs/39486131321)).
+  The QA commits are not in that run.
 - Active agents: none. Blockers: #75 is not on master, so the
   `error.code` mapping is not in this branch. Account usage was
   not available in this session.
 - Next action: the owner reviews the pull request and merges it
-  with "Rebase and merge". After #75 lands, rebase this branch
-  and switch the duplicate check to the exception class or
-  `.code`. Agents do not merge.
+  with "Rebase and merge". After #75 lands, rebase this branch,
+  align the name helper with `normalize_name`, and switch the
+  duplicate check to the exception class or `.code`. Agents do
+  not merge.
 
 ## Rebase onto master after PR #78: 2026-10-21
 

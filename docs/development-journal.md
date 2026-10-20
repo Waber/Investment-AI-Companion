@@ -1,5 +1,42 @@
 # Development Journal
 
+## 2026-10-20 - QA on the language switch and the name helper (PR #81)
+
+- Scope: one medium and one low finding on
+  [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81).
+  Models, the schema, migrations, repositories, and the API were
+  not changed.
+- Decisions: `safe_next` rejects every path under `/ui/language`,
+  including `/ui/language` itself, and returns `/ui`. The 403 for a
+  direct visit is rendered at the switch URL, so the PL/EN links
+  put that URL in `next`. Chrome then follows the 303 with a
+  same-origin `Referer`. Returning to `/ui/language/pl` set `pl`
+  after the click had set `en`. The test loads the 403 page, follows
+  the EN link, and checks the final cookie is `en`.
+  `normalized_company_name` is still the one form helper. It now
+  strips whitespace, Cf (zero-width), and Cc (NUL and other
+  controls) from both ends. A control that remains anywhere is
+  422. A name that is only combining marks (Mn) or only invisible
+  characters is 422. A letter with an accent is kept. A zero-width
+  mark between two letters is kept. #75 at `2c64565` adds
+  `normalize_name` on the write model: it strips whitespace and
+  rejects a Cf-only name, and it keeps a format character beside a
+  letter. This form rule is stricter until that pull request
+  merges. Then this helper should be aligned with `normalize_name`.
+  The duplicate `error.code` mapping still waits for #75.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1366 passed, 121 deselected, coverage 95.94%, after the name
+  helper. The language-switch commit before it was 1365 passed,
+  coverage 95.91%. Scoped black, isort, and flake8 passed.
+  PostgreSQL was not run locally.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 19:52 to 20:10.
+- Next: the owner reviews PR #81 again. It still says Refs #80 and
+  stays unmerged. After #75 lands, align the name helper with
+  `normalize_name` and map `error.code`.
+
 ## 2026-10-20 - UI forms follow-up, the part that does not need #75 (#80)
 
 - Scope: the frontend part of
