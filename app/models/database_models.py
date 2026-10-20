@@ -4,6 +4,7 @@ from sqlalchemy import (
     Column,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -86,7 +87,9 @@ class CompanyDB(Base):
     __table_args__ = (
         # name + ticker together must be unique.
         UniqueConstraint("name", "ticker", name="uq_company_name_ticker"),
-        UniqueConstraint("isin", name="uq_companies_isin"),
+        # Same unique index revision 0001 creates. Several null ISINs
+        # are allowed; a present ISIN is stored once.
+        Index("uq_companies_isin", "isin", unique=True),
         CheckConstraint(
             "instrument_type IN ('STOCK', 'ETF', 'ETC')",
             name="ck_companies_instrument_type",
