@@ -16,9 +16,12 @@
 - Tests: in `.venv`, no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command: 1300 passed, 121 deselected, coverage 95.80%.
   `-m integration`: 105 passed, 16 skipped (no PostgreSQL).
-- Known local issue: `~/.local/bin/python3.12` is a broken link to a
-  deleted session directory and comes first on `PATH`; the owner
-  decides whether to remove it.
+- Local fix: `~/.local/bin/python3.12` was a link into an old session
+  scratchpad whose standard library had been cleaned up (`No module
+  named 'encodings'`), and it came first on `PATH`. Removed on
+  2026-10-20 at the owner's request; `python3.12` now resolves to
+  `/opt/homebrew/bin/python3.12` (3.12.15). The link was outside the
+  repository, so no repository file changed for it.
 - Active agents: none. Blockers: none. Account usage was not available
   in this session.
 - Next action: the owner reviews the pull request and merges it with
