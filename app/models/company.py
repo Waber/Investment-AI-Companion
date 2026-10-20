@@ -1,6 +1,7 @@
 import enum
 import logging
 import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -37,15 +38,23 @@ _TICKER_RE = re.compile(TICKER_PATTERN)
 
 
 def normalize_name(value: object) -> object:
-    """Strip a company name. A name that is only spaces is blank.
+    """Strip a company name. Reject one with no visible character.
 
-    ``None`` and non-strings are left for the field type. Create and
-    update then require at least one character. The read model does
-    not use this, so a blank name already stored can still be listed.
+    ``None`` and non-strings are left for the field type. Spaces are
+    removed first. A name that is then empty, or made only of format
+    characters (Unicode category ``Cf``, such as U+200B, U+FEFF,
+    U+200C, and U+200D), is rejected. A real letter with a format
+    character beside it is kept. The read model does not use this,
+    so a blank name already stored can still be listed.
     """
     if value is None or not isinstance(value, str):
         return value
-    return value.strip()
+    stripped = value.strip()
+    if stripped and any(
+        unicodedata.category(char) != "Cf" for char in stripped
+    ):
+        return stripped
+    raise ValueError("name must contain a visible character")
 
 
 def normalize_ticker(value: object) -> object:
@@ -77,7 +86,10 @@ def normalize_ticker(value: object) -> object:
     return normalized
 
 
-# ISO 6166: two letters, nine letters or digits, one check digit.
+# ISO 6166 shape: two letters, nine letters or digits, one check
+# digit. Those first two letters are not checked against the
+# ISO 3166 country list on purpose. Prefixes such as XS (a clearing
+# code) and EU are real ISINs and must stay accepted.
 _ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
 
 
