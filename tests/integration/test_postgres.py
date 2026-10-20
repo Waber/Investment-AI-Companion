@@ -379,7 +379,10 @@ async def _create_company(postgres_client, ticker: str, name: str):
 
 def _assert_duplicate_ticker_is_400(response):
     assert response.status_code == 400, response.text
-    assert response.json()["detail"] == _DUPLICATE_TICKER_DETAIL
+    assert response.json() == {
+        "detail": _DUPLICATE_TICKER_DETAIL,
+        "code": "duplicate_ticker",
+    }
     lowered = response.text.lower()
     assert "integrityerror" not in lowered
     assert "unique" not in lowered

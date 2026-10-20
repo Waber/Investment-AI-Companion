@@ -19,8 +19,11 @@ from app.models.company import (
     normalize_instrument_type,
 )
 from app.models.database_models import CompanyDB
-from app.repositories.company_repository import (
+from app.repositories.company_errors import (
     DUPLICATE_ISIN_DETAIL,
+    DUPLICATE_TICKER_DETAIL,
+)
+from app.repositories.company_repository import (
     CompanyRepository,
     _instrument_type_value,
 )
@@ -200,10 +203,10 @@ async def test_duplicate_ticker_is_400_and_the_session_recovers(client):
     )
 
     assert duplicate.status_code == 400
-    assert (
-        duplicate.json()["detail"]
-        == "A company with this ticker already exists"
-    )
+    assert duplicate.json() == {
+        "detail": DUPLICATE_TICKER_DETAIL,
+        "code": "duplicate_ticker",
+    }
     lowered = duplicate.text.lower()
     assert "integrityerror" not in lowered
     assert "unique" not in lowered
@@ -263,7 +266,10 @@ async def test_duplicate_isin_is_400_and_keeps_one_row(client):
     )
 
     assert duplicate.status_code == 400
-    assert duplicate.json()["detail"] == DUPLICATE_ISIN_DETAIL
+    assert duplicate.json() == {
+        "detail": DUPLICATE_ISIN_DETAIL,
+        "code": "duplicate_isin",
+    }
     assert "IntegrityError" not in duplicate.text
     assert "UNIQUE" not in duplicate.text
     db = client.app.state.testing_session_local()
@@ -338,7 +344,10 @@ async def test_update_rejects_an_isin_owned_by_another_company(client):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == DUPLICATE_ISIN_DETAIL
+    assert response.json() == {
+        "detail": DUPLICATE_ISIN_DETAIL,
+        "code": "duplicate_isin",
+    }
     fetched = await client.get(f"{COMPANIES}{second.json()['id']}")
     assert fetched.json()["isin"] == ETF_ISIN
 

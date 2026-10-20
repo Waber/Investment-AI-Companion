@@ -6,14 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.models.company import CompanyCreate, CompanyUpdate, InstrumentType
 from app.models.database_models import CompanyDB
+from app.repositories.company_errors import (
+    DuplicateIsinError,
+    DuplicateTickerError,
+)
 
 
 def _serialize_optional_url(value):
     return str(value) if value is not None else None
-
-
-DUPLICATE_ISIN_DETAIL = "A company with this ISIN already exists"
-DUPLICATE_TICKER_DETAIL = "A company with this ticker already exists"
 
 
 def _instrument_type_value(value):
@@ -25,21 +25,23 @@ def _instrument_type_value(value):
     return value
 
 
-def _duplicate_detail(repository, ticker, isin, exclude_id=None):
-    """Return the client sentence when this ticker or ISIN is already stored.
+def _duplicate_error(repository, ticker, isin, exclude_id=None):
+    """Return the duplicate error when this ticker or ISIN is already stored.
 
     Create passes no ``exclude_id``, so any stored row is a duplicate.
     Update passes the row being changed, and that row is not a
     duplicate of itself. A missing ISIN is not looked up: a comparison
-    with None would match every company that has no ISIN.
+    with None would match every company that has no ISIN. The same
+    exception class is used on create and on update, so the sentence
+    and ``code`` stay the same.
     """
     taken = repository.get_by_ticker(ticker)
     if taken is not None and taken.id != exclude_id:
-        return DUPLICATE_TICKER_DETAIL
+        return DuplicateTickerError()
     if isin is not None:
         taken = repository.get_by_isin(isin)
         if taken is not None and taken.id != exclude_id:
-            return DUPLICATE_ISIN_DETAIL
+            return DuplicateIsinError()
     return None
 
 
@@ -74,9 +76,9 @@ class CompanyRepository:
         """
         # Look up before insert. The unique index is a backstop for
         # two creates that pass this check at the same time.
-        detail = _duplicate_detail(self, company.ticker, company.isin)
-        if detail is not None:
-            raise ValueError(detail)
+        duplicate = _duplicate_error(self, company.ticker, company.isin)
+        if duplicate is not None:
+            raise duplicate
 
         # Create new CompanyDB instance
         db_company = CompanyDB(
@@ -109,9 +111,9 @@ class CompanyRepository:
             # is already stored is a client error. Anything else is
             # still an unexpected database error.
             self.db.rollback()
-            detail = _duplicate_detail(self, company.ticker, company.isin)
-            if detail is not None:
-                raise ValueError(detail) from None
+            duplicate = _duplicate_error(self, company.ticker, company.isin)
+            if duplicate is not None:
+                raise duplicate from None
             raise
 
     def get_by_id(self, company_id: int) -> Optional[CompanyDB]:
@@ -196,15 +198,18 @@ class CompanyRepository:
         if "name" in update_data or "ticker" in update_data:
             new_name = update_data.get("name", db_company.name)
             new_ticker = update_data.get("ticker", db_company.ticker)
-            if self._another_company_has_name_or_ticker(
+            other = self._other_company_with_name_or_ticker(
                 company_id, new_name, new_ticker
-            ):
+            )
+            if other is not None:
+                if other.ticker == new_ticker:
+                    raise DuplicateTickerError()
                 raise ValueError("Company name or ticker already exists")
 
         if update_data.get("isin") is not None:
             taken = self.get_by_isin(update_data["isin"])
             if taken is not None and taken.id != company_id:
-                raise ValueError(DUPLICATE_ISIN_DETAIL)
+                raise DuplicateIsinError()
 
         # Update fields
         for field, value in update_data.items():
@@ -224,7 +229,7 @@ class CompanyRepository:
             # else keeps the generic sentence, including a NOT NULL
             # failure, so it is not reported as a duplicate ticker.
             self.db.rollback()
-            detail = _duplicate_detail(
+            duplicate = _duplicate_error(
                 self,
                 update_data.get("ticker", db_company.ticker),
                 (
@@ -234,12 +239,12 @@ class CompanyRepository:
                 ),
                 exclude_id=company_id,
             )
-            if detail is not None:
-                raise ValueError(detail) from None
+            if duplicate is not None:
+                raise duplicate from None
             raise ValueError("Update failed due to constraint violation")
 
-    def _another_company_has_name_or_ticker(self, company_id, name, ticker):
-        """True when a different row already uses this name or ticker."""
+    def _other_company_with_name_or_ticker(self, company_id, name, ticker):
+        """Another row that already uses this name or this ticker."""
         return (
             self.db.query(CompanyDB)
             .filter(
@@ -247,7 +252,6 @@ class CompanyRepository:
                 (CompanyDB.name == name) | (CompanyDB.ticker == ticker),
             )
             .first()
-            is not None
         )
 
     def delete(self, company_id: int) -> bool:
