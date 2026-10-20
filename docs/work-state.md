@@ -3,7 +3,8 @@
 ## Local venv and IDE interpreter setup: 2026-10-20
 
 - Branch `chore/local-venv-setup`, based on `origin/master` `ba15c33`.
-  Not pushed yet; the pull request is the next step.
+  [PR #74](https://github.com/Waber/Investment-AI-Companion/pull/74)
+  (Refs #73), not merged.
 - Completed: `.gitignore` excludes `.venv/` (README asked for `.venv`,
   but only `venv/` was ignored). README step 1 creates the venv with
   `python3.12`. `docs/ide-startup.md` explains the per-machine venv and
