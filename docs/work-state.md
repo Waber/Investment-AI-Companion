@@ -41,14 +41,13 @@
   coverage 95.96%. The dot-segment commit was 1366 passed,
   coverage 95.96%. Scoped black, isort, and flake8 passed.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  GitHub Actions for this review head is not recorded yet. The
-  earlier QA head `95a3c8b` succeeded
-  ([run 39487988990](https://github.com/Waber/Investment-AI-Companion/actions/runs/39487988990)).
+  GitHub Actions on `d5f5d2b` succeeded
+  ([run 39492311897](https://github.com/Waber/Investment-AI-Companion/actions/runs/39492311897)):
+  PostgreSQL job 118868382717 and SQLite job 118868383103.
 - Active agents: none. Blockers: #75 is not on master, so the
   `error.code` mapping is not in this branch. Account usage was
   not available in this session.
-- Next action: wait for GitHub Actions on this review head, then
-  record the run. The owner reviews the pull request and merges it
+- Next action: the owner reviews the pull request and merges it
   with "Rebase and merge". After #75 lands, rebase this branch,
   align the name helper with `normalize_name`, and switch the
   duplicate check to the exception class or `.code`. Agents do
