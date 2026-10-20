@@ -18,7 +18,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.core import database as database_module
+from app.models.company import CompanyCreate
 from app.models.database_models import CompanyDB, FinancialMetricsDB
+from app.repositories.company_errors import DuplicateTickerError
+from app.repositories.company_repository import CompanyRepository
 
 pytestmark = pytest.mark.integration
 
@@ -410,6 +413,56 @@ async def test_duplicate_ticker_is_a_client_error(
 
     with postgres_session_factory() as db:
         assert db.query(CompanyDB).count() == 2
+
+
+@pytest.mark.asyncio
+async def test_second_create_of_a_dotted_ticker_is_400(
+    postgres_client, postgres_session_factory
+):
+    """The same name and ``BRK.B`` is 400 on PostgreSQL too.
+
+    The pre-insert lookup returns DuplicateTickerError. Hiding that
+    lookup once lets the unique index fire; the re-query maps the
+    stored row to the same error. The driver text, which may name
+    ``uq_company_name_ticker`` here and does not on SQLite, is not
+    part of the response.
+    """
+    body = {"name": "Berkshire Hathaway", "ticker": "BRK.B"}
+    first = await postgres_client.post(COMPANIES, json=body)
+    assert first.status_code == 201, first.text
+    assert first.json()["ticker"] == "BRK.B"
+
+    duplicate = await postgres_client.post(COMPANIES, json=body)
+    _assert_duplicate_ticker_is_400(duplicate)
+    assert "uq_company_name_ticker" not in duplicate.text
+
+    with postgres_session_factory() as db:
+        repo = CompanyRepository(db)
+        with pytest.raises(DuplicateTickerError) as pre_insert:
+            repo.create(
+                CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B")
+            )
+        assert pre_insert.value.code == "duplicate_ticker"
+        assert pre_insert.value.__cause__ is None
+
+        original = repo.get_by_ticker
+        calls = {"count": 0}
+
+        def hide_the_first_lookup(ticker):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return None
+            return original(ticker)
+
+        repo.get_by_ticker = hide_the_first_lookup
+        with pytest.raises(DuplicateTickerError) as raced:
+            repo.create(
+                CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B")
+            )
+        assert raced.value.code == "duplicate_ticker"
+        assert raced.value.__cause__ is None
+        assert "uq_company_name_ticker" not in str(raced.value)
+        assert db.query(CompanyDB).count() == 1
 
 
 @pytest.mark.asyncio
