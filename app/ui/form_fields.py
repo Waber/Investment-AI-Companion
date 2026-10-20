@@ -151,14 +151,24 @@ def metrics_values(row):
     return values
 
 
+# Bidi overrides (U+202A–U+202E) and isolates (U+2066–U+2069) can
+# reorder the letters around them. They are format characters, so
+# the edge strip would otherwise peel one off the end and keep the
+# rest. They are rejected anywhere in the original name instead.
+_BIDI_CONTROLS = frozenset(
+    chr(codepoint)
+    for codepoint in (*range(0x202A, 0x202F), *range(0x2066, 0x206A))
+)
+
+
 def _name_edge(char):
     """True for a character removed from either end of a name.
 
     Whitespace includes a newline, NBSP (U+00A0), and the ideographic
     space (U+3000). Cf is a format character such as U+200B. Cc is a
-    control, including NUL. A combining mark is not removed here: a
-    mark with no base letter is rejected later, and a mark on a
-    letter is part of the name.
+    control, including NUL. A mark is not removed here: a mark with
+    no base letter is rejected later, and a mark on a letter is part
+    of the name. Bidi controls are rejected before this strip.
     """
     if char.isspace():
         return True
@@ -173,13 +183,16 @@ def normalized_company_name(value):
     form layer. ``CompanyCreate`` and ``CompanyUpdate`` are not
     changed, and ``CompanyCreate`` still accepts ``""``.
 
-    Whitespace, format characters (Cf), and controls (Cc) are removed
-    from both ends. A control that remains anywhere, including NUL
-    between two letters, is rejected. The name is also rejected when
-    nothing visible remains: empty, only whitespace, only category C,
-    or only combining marks (Mn, such as U+0301). A letter with an
-    accent is kept. A zero-width mark between two letters is kept,
-    because only the ends are stripped.
+    A bidi override or isolate anywhere in the original name is
+    rejected before the ends are stripped. Whitespace, format
+    characters (Cf), and controls (Cc) are then removed from both
+    ends. A control that remains anywhere, including NUL between two
+    letters, is rejected. The name is also rejected when nothing
+    visible remains: empty, only whitespace, only category C, or only
+    marks. Every M* category counts as invisible for that check: Mn
+    (U+0301), Mc (U+093E), and Me (U+20DD). A letter with one of
+    those marks is kept. A zero-width mark between two letters is
+    kept, because only the ends are stripped.
 
     PR #75 adds ``normalize_name`` on the write model (commit
     2c64565). After that pull request merges, align this helper with
@@ -187,6 +200,8 @@ def normalized_company_name(value):
     """
     if not isinstance(value, str):
         value = "" if value is None else str(value)
+    if any(char in _BIDI_CONTROLS for char in value):
+        return None
     start = 0
     end = len(value)
     while start < end and _name_edge(value[start]):
@@ -199,7 +214,13 @@ def normalized_company_name(value):
         category = unicodedata.category(char)
         if category == "Cc":
             return None
-        if char.isspace() or category.startswith("C") or category == "Mn":
+        # M* covers Mn, Mc, and Me. A mark with no base letter is
+        # invisible. A mark after a letter is kept with that letter.
+        if (
+            char.isspace()
+            or category.startswith("C")
+            or category.startswith("M")
+        ):
             continue
         visible = True
     if not visible:

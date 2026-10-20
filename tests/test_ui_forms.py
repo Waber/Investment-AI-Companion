@@ -6,6 +6,7 @@ market-data provider.
 """
 
 import re
+import unicodedata
 from html.parser import HTMLParser
 
 import pytest
@@ -228,6 +229,11 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     assert normalized_company_name("\x00Kept\x7f") == "Kept"
     assert normalized_company_name("A\u200bB") == "A\u200bB"
     assert normalized_company_name("e\u0301") == "e\u0301"
+    assert unicodedata.category("\u0301") == "Mn"
+    assert unicodedata.category("\u093e") == "Mc"
+    assert unicodedata.category("\u20dd") == "Me"
+    assert normalized_company_name("A\u093e") == "A\u093e"
+    assert normalized_company_name("A\u20dd") == "A\u20dd"
     assert normalized_company_name(None) is None
     for invisible in (
         "",
@@ -243,7 +249,15 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         "\x00 \x01",
         "\u0301",
         "\u0301\u0308",
+        "\u093e",
+        "\u20dd",
+        "\u093e\u20dd",
         "\u200b\u0301\u200b",
+        "\u202a",
+        "\u202eKept",
+        "Ke\u202ept",
+        "\u2066A\u2069",
+        "A\u2067B",
         "Ke\x00pt",
         "Na\nme",
     ):
@@ -675,12 +689,25 @@ async def test_surrounding_space_is_stripped_from_the_stored_name(client):
 
 @pytest.mark.asyncio
 async def test_interior_control_or_only_combining_marks_is_422(client):
-    """A control inside the name, or only combining marks, is 422.
+    """A control, a bidi mark, or only marks, is 422.
 
     Create and edit share ``normalized_company_name``. The row is
     not written. The message is the localized required-field sentence.
+    A bidi override at the end is not stripped down to the letters.
+    Mn, Mc, and Me with no base letter are rejected. A letter with
+    one of those marks is stored.
     """
-    for name in ("Ke\x00pt", "Na\nme", "\u0301", "\u0301\u0308"):
+    for name in (
+        "Ke\x00pt",
+        "Na\nme",
+        "\u0301",
+        "\u0301\u0308",
+        "\u093e",
+        "\u20dd",
+        "\u202eKept",
+        "Ke\u202ept",
+        "\u2066Name",
+    ):
         response = await _post(
             client,
             "/ui/companies",
@@ -689,18 +716,25 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
         assert response.status_code == 422, repr(name)
         assert "To pole jest wymagane." in response.text
         assert _counts(client) == (0, 0)
-    company_id, _data = await _create(client, name="Named Co", ticker="NAMED2")
+    company_id, _data = await _create(
+        client, name="A\u093e\u20dd", ticker="MARKA"
+    )
+    session = client.app.state.testing_session_local()
+    try:
+        stored = session.get(CompanyDB, company_id).name
+    finally:
+        session.close()
+    assert stored == "A\u093e\u20dd"
     client.cookies.set("ui_lang", "en")
     edited = await _post(
         client,
         f"/ui/companies/{company_id}/edit",
-        {"name": "Na\x01me", "ticker": "NAMED2"},
+        {"name": "Na\x01me", "ticker": "MARKA"},
     )
     assert edited.status_code == 422
     assert "This field is required." in edited.text
     detail = await client.get(f"/ui/instruments/{company_id}")
-    assert "Named Co" in detail.text
-    assert "Na" not in detail.text or "Named Co" in detail.text
+    assert "A\u093e\u20dd" in detail.text
 
 
 @pytest.mark.asyncio
