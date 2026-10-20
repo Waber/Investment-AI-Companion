@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="{{ cancel_href }}">{{ t['action.cancel'] }}</a></p>
+<h1>{{ t[title_key] }}</h1>
+<p class="instrument-name">
+  {% if company_name %}{{ company_name }}{% else %}{{ t['missing'] }}{% endif %}
+  {% if period_end %}
+  {{ format_date(period_end, language) }}
+  {{ period_type }}
+  {% endif %}
+</p>
+<p class="warning">{{ t[warning_key] }}</p>
+<p>{{ t[question_key] }}</p>
+<form method="post" action="{{ action }}" class="stacked-form">
+  <div class="form-actions">
+    <button type="submit">{{ t['action.confirm_delete'] }}</button>
+    <a href="{{ cancel_href }}">{{ t['action.cancel'] }}</a>
+  </div>
+</form>
+{% endblock %}

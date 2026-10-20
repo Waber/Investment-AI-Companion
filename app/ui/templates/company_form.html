@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="{{ cancel_href }}">{{ t['action.cancel'] }}</a></p>
+<h1>{{ t[title_key] }}</h1>
+{% if updated_at %}
+<p>{{ t['field.updated_at'] }} {{ format_date(updated_at, language) }}</p>
+{% endif %}
+{% include "partials/error_summary.html" %}
+<form method="post" action="{{ action }}" class="stacked-form">
+  {% for field in company_fields %}
+  <div class="form-field">
+    <label for="field-{{ field }}">{{ t[field_label_key(field)] }}</label>
+    {% if field == 'description' %}
+    <textarea id="field-{{ field }}" name="{{ field }}" rows="6"{% if described_by[field] %} aria-describedby="{{ described_by[field] }}"{% endif %}{% if field in invalid_fields %} aria-invalid="true"{% endif %}>{{ values[field] }}</textarea>
+    {% else %}
+    <input id="field-{{ field }}" name="{{ field }}" type="text" value="{{ values[field] }}"{% if described_by[field] %} aria-describedby="{{ described_by[field] }}"{% endif %}{% if field in invalid_fields %} aria-invalid="true"{% endif %}>
+    {% endif %}
+    {% if field in errors %}
+    <p id="field-{{ field }}-error" class="field-error">{{ t[errors[field]] }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit">{{ t['action.save'] }}</button>
+    <a href="{{ cancel_href }}">{{ t['action.cancel'] }}</a>
+  </div>
+</form>
+{% endblock %}

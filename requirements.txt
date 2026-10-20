@@ -51,6 +51,9 @@ yfinance>=1.7
 # Server-rendered pages under /ui. Jinja2 was left out of the
 # security/deps lock on purpose: nothing imported it until the UI
 # skeleton. 3.1.6 is the current release. The hashed lock records
-# the exact build. python-multipart stays out until the forms slice
-# needs it.
+# the exact build.
 jinja2>=3.1.6
+# Form posts under /ui. Starlette reads application/x-www-form-urlencoded
+# through this package. 0.0.18 fixes CVE-2024-53981 (ReDoS on a
+# malformed multipart body). The lock pins the exact build.
+python-multipart>=0.0.18

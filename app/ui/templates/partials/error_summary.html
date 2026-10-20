@@ -1,0 +1,16 @@
+{% if errors or form_error %}
+<div class="error-summary" id="form-error" role="alert" tabindex="-1" autofocus>
+  <p>{{ t['form.error_summary'] }}</p>
+  {% if form_error %}
+  <p>{{ t[form_error] }}</p>
+  {% endif %}
+  <ul>
+    {% for field in invalid_fields %}
+    <li>
+      <a href="#field-{{ field }}">{{ t[field_label_key(field)] }}</a>
+      {% if field in errors %}{{ t[errors[field]] }}{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

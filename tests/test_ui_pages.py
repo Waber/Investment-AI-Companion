@@ -195,7 +195,7 @@ def _assert_ui_headers(response):
     assert "https://" not in policy
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["x-content-type-options"] == "nosniff"
-    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["referrer-policy"] == "same-origin"
     assert response.headers["vary"] == "HX-Request"
     assert response.headers["cache-control"] == "no-store"
 
