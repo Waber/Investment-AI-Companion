@@ -1,5 +1,41 @@
 # Current Work State
 
+## Company and financial-metrics forms (#34, part): 2026-10-20
+
+- Branch `cursor/d5-company-metric-forms-cfb0`, based on
+  `origin/master` `1f1678f`. Pull request says Refs #34, not Closes.
+  Not merged.
+- Completed: create, edit, and delete forms for a company, and the
+  same three actions for that company's financial metrics, under
+  `/ui`. New files: `app/ui/forms.py`, `app/ui/form_fields.py`,
+  `app/ui/origin.py`, and the form templates. Small edits to the
+  list and detail templates, `view_models.py` (`metrics_id`), the
+  catalogs, `router.py`, `main.py`, and `static/ui.css`.
+  `queries.py` was not edited. Models, schema, migrations, services,
+  collectors, scoring, and the API were not edited.
+- CSRF: no token. Unsafe `/ui` methods accept `Origin` (or `Referer`
+  when `Origin` is missing) only when scheme, host, and port match
+  this request. Otherwise HTML 403. `Referrer-Policy` is
+  `same-origin` so Chrome sends a real `Origin` on a form POST.
+  CSP `form-action 'self'` and `SameSite=lax` stay.
+- Deferred: instrument type and ISIN (#26), ETF/ETC attribute forms
+  (#28), `source=manual` and a synthetic-marker column (backend ask;
+  none exists), cascades past financial metrics. Edit time uses the
+  existing `updated_at`.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1349 passed, 121 deselected, coverage 95.71%. Scoped black,
+  isort, and flake8 passed. `pip-audit` on both locks: no known
+  vulnerabilities. `python-multipart` 0.0.32 with hashes.
+  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`). CI run
+  URL is filled in after the pull request opens.
+- Browser: create, inline validation, metrics create, edit, and
+  delete confirmation exercised on `127.0.0.1:8000` in PL and EN.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews the pull request and merges it with
+  "Rebase and merge". Agents do not merge.
+
 ## Local venv and IDE interpreter setup: 2026-10-20
 
 - Branch `chore/local-venv-setup`, based on `origin/master` `ba15c33`.

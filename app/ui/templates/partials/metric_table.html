@@ -2,9 +2,17 @@
 <table data-period-type="{{ period_type }}">
   <thead>
     <tr>
-      <th>{{ t['column.metric'] }}</th>
+      <th scope="col">{{ t['column.metric'] }}</th>
       {% for period in periods %}
-      <th>{{ format_date(period.period_end, language) }}</th>
+      <th scope="col">
+        {{ format_date(period.period_end, language) }}
+        {% if period.metrics_id %}
+        <span class="period-actions">
+          <a href="/ui/companies/{{ instrument.id }}/metrics/{{ period.metrics_id }}/edit">{{ t['action.edit_metrics'] }}</a>
+          <a href="/ui/companies/{{ instrument.id }}/metrics/{{ period.metrics_id }}/delete">{{ t['action.delete_metrics'] }}</a>
+        </span>
+        {% endif %}
+      </th>
       {% endfor %}
     </tr>
   </thead>

@@ -68,11 +68,18 @@ class WebsiteView:
 
 @dataclass(frozen=True)
 class PeriodView:
-    """One reporting period. ``values`` is keyed by ``METRIC_FIELDS``."""
+    """One reporting period. ``values`` is keyed by ``METRIC_FIELDS``.
+
+    ``metrics_id`` is the financial-metrics row id when the row has
+    one. The detail page uses it for the edit and delete links. A
+    stand-in row with no id leaves it empty, and the template then
+    shows the numbers without those links.
+    """
 
     period_end: datetime
     period_key: str
     values: dict
+    metrics_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -185,6 +192,7 @@ def _period_view(row):
         period_end=instant,
         period_key=instant.date().isoformat(),
         values=values,
+        metrics_id=getattr(row, "id", None),
     )
 
 

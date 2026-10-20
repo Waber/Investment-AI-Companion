@@ -91,6 +91,7 @@ def test_company_row_becomes_an_instrument_view():
         industry="  ",
         financial_metrics=[
             Row(
+                id=11,
                 period_end=datetime(2023, 12, 31, tzinfo=timezone.utc),
                 period_type="annual",
                 revenue=0,
@@ -123,6 +124,8 @@ def test_company_row_becomes_an_instrument_view():
     assert view.industry is None
     assert view.as_of == datetime(2026, 3, 31, tzinfo=timezone.utc)
     assert [item.period_key for item in view.annual] == ["2023-12-31"]
+    assert view.annual[0].metrics_id == 11
+    assert view.quarterly[0].metrics_id is None
     assert view.annual[0].values["revenue"] == 0
     assert view.annual[0].values["net_income"] is None
     assert view.annual[0].values["pe_ratio"] is None

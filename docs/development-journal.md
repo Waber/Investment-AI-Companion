@@ -1,5 +1,68 @@
 # Development Journal
 
+## 2026-10-20 - Company and financial-metrics forms under /ui (#34, part)
+
+- Scope: the part of
+  [#34](https://github.com/Waber/Investment-AI-Companion/issues/34)
+  that fits today's `Company` and `FinancialMetrics` models. Create,
+  edit, and delete for a company, and the same three actions for one
+  company's metrics, from the detail page. Validation reuses
+  `CompanyCreate` / `CompanyUpdate` and `FinancialMetricsCreate` /
+  `FinancialMetricsUpdate`, plus the existing repositories. Models,
+  schema, migrations, services, collectors, scoring, and the API were
+  not changed. `Company` was not renamed.
+- Decisions: forms are ordinary POST forms. A validation error is a
+  422 (or 400 for a duplicate) full page with the posted text, so it
+  works with JavaScript off. HTMX still filters the list. The pinned
+  `htmx-config` meta does not swap 4xx responses, and that meta stays
+  as it is. Empty optional company fields become `None` before
+  Pydantic, so a blank website is not an invalid URL and a blank
+  currency keeps the repository default of USD. Number and period
+  fields are `type="text"` so `NaN`, `inf`, and a bad date reach
+  Pydantic instead of being blocked by the browser. `period_type` is
+  a free string of at most 20 characters, matching
+  `FinancialMetricsCreate`. The edit form shows it and does not submit
+  it, because `FinancialMetricsUpdate` has no such field. A time with
+  no zone is stored as UTC. Delete is a GET confirmation plus a POST
+  button. The company warning says the financial metrics go with it
+  (`CompanyDB` cascade). There is no CSRF token: there is no session
+  to bind one to. Every unsafe `/ui` method requires `Origin`
+  (or `Referer` when `Origin` is absent) to match this request's
+  scheme, host, and port. Otherwise the response is an HTML 403.
+  `Referrer-Policy` is `same-origin`. `no-referrer` makes Chrome send
+  `Origin: null` on a normal form POST and omit `Referer`, which
+  rejected every save in the browser. `same-origin` still withholds
+  the address from a company website. CSP `form-action 'self'` and
+  the language cookie `SameSite=lax` stay. `python-multipart` 0.0.32
+  is pinned with hashes (floor 0.0.18, CVE-2024-53981).
+- Deferred until #26 / #28: instrument type, ISIN, ETF/ETC attribute
+  forms, a `source=manual` column, a real synthetic-marker column
+  (the badge is a `[IAC-DEMO-V1]` prefix on the description, so
+  editing that description can drop it), and cascades beyond
+  financial metrics. Edit time shows the existing `updated_at`. No
+  column was added.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1349 passed, 121 deselected, coverage 95.71%. Scoped
+  black, isort, and flake8 passed. `pip-audit` on both locks:
+  "No known vulnerabilities found". PostgreSQL was not run locally.
+  Browser (Chrome, `127.0.0.1:8000`, fake collector, SQLite file in
+  `/tmp`): empty company form showed the Polish ticker error with
+  focus on the summary; a `<script>` name and description were stored
+  as text; ticker `tst` became `TST` and currency `pln` became `PLN`;
+  metrics `NaN` and an empty period stayed on the form; a valid row
+  showed `1 000 PLN` and `0 PLN`; the edit form kept period type
+  read-only and showed the existing update time; English delete
+  confirmation warned that the company's metrics go with it, and the
+  POST left the list empty. The list filter still applied.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 16:35 to 17:15. Reading the
+  issue and the current models, then forms, tests, the browser check,
+  and this entry.
+- Next: the owner reviews the pull request and merges it with
+  "Rebase and merge". This pull request says Refs #34, not Closes.
+
 ## 2026-10-20 - Local venv, IDE interpreter guide and the Python 3.14 probe
 
 - Scope: a persistent `.venv` for local tests, the missing `.venv/`

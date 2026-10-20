@@ -160,3 +160,72 @@ h2 {
   font-size: 1.25rem;
   margin-top: 0;
 }
+
+/* Create and edit forms stack. The filter form on the list stays a row. */
+form.stacked-form {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 40rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+textarea {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hint {
+  margin: 0;
+  color: #4e4944;
+  font-size: 0.85rem;
+}
+
+.field-error {
+  margin: 0;
+  color: #8a1f11;
+}
+
+.error-summary {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #8a1f11;
+  background: #fff;
+  max-width: 40rem;
+}
+
+.error-summary a {
+  color: #8a1f11;
+}
+
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border: 2px solid #8a1f11;
+}
+
+.warning {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #8a4b08;
+  background: #fff4d6;
+  max-width: 40rem;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+}
+
+.period-actions {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85rem;
+}

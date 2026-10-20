@@ -86,6 +86,73 @@ _POLISH = {
     "metric.pe_ratio": "Cena/zysk (P/E)",
     "metric.pb_ratio": "Cena/wartość księgowa (P/B)",
     "metric.ev_ebitda": "EV/EBITDA",
+    "action.create_company": "Dodaj instrument",
+    "action.edit_company": "Edytuj instrument",
+    "action.delete_company": "Usuń instrument",
+    "action.add_metrics": "Dodaj wskaźniki",
+    "action.edit_metrics": "Edytuj wskaźniki",
+    "action.delete_metrics": "Usuń wskaźniki",
+    "action.save": "Zapisz",
+    "action.confirm_delete": "Usuń",
+    "action.cancel": "Anuluj",
+    "page.create_company": "Nowy instrument",
+    "page.edit_company": "Edycja instrumentu",
+    "page.delete_company": "Usuwanie instrumentu",
+    "page.create_metrics": "Nowe wskaźniki",
+    "page.edit_metrics": "Edycja wskaźników",
+    "page.delete_metrics": "Usuwanie wskaźników",
+    "form.error_summary": "Popraw zaznaczone pola.",
+    "field.period_end": "Koniec okresu",
+    "field.period_type": "Typ okresu",
+    "field.updated_at": "Ostatnia zmiana",
+    "delete.company_warning": (
+        "Usunięcie tej spółki usuwa także jej wskaźniki finansowe."
+    ),
+    "delete.company_question": "Usunąć tę spółkę?",
+    "delete.metrics_warning": ("Usunięcie tych wskaźników nie usuwa spółki."),
+    "delete.metrics_question": "Usunąć te wskaźniki?",
+    "hint.period_end": (
+        "Czas bez strefy jest zapisywany jako UTC. "
+        "Przykład: 2024-12-31T00:00:00."
+    ),
+    "hint.period_type": (
+        "Do 20 znaków. Strona szczegółów grupuje annual i quarterly. "
+        "Inna wartość trafia do innych okresów."
+    ),
+    "hint.period_type_locked": (
+        "Typ okresu zostaje taki, jak przy utworzeniu wskaźników."
+    ),
+    "hint.numbers": (
+        "Puste pole oznacza brak danych. "
+        "NaN i nieskończoność nie są liczbami."
+    ),
+    "error.required": "To pole jest wymagane.",
+    "error.too_long": "Za długa wartość.",
+    "error.too_short": "Za krótka wartość.",
+    "error.ticker": (
+        "Ticker musi mieć od 1 do 20 znaków ASCII: "
+        "litery, cyfry albo . _ - ^ =."
+    ),
+    "error.currency": "Waluta musi mieć dokładnie trzy litery.",
+    "error.website": (
+        "Podaj adres http:// lub https:// albo zostaw pole puste."
+    ),
+    "error.number": "Podaj skończoną liczbę albo zostaw pole puste.",
+    "error.datetime": ("Podaj datę i czas, na przykład 2024-12-31T00:00:00."),
+    "error.invalid": "Ta wartość jest nieprawidłowa.",
+    "error.duplicate_company": (
+        "Istnieje już spółka o tej nazwie lub tym tickerze."
+    ),
+    "error.duplicate_metrics": (
+        "Wskaźniki dla tej spółki, końca okresu i typu okresu już istnieją."
+    ),
+    "error.constraint": (
+        "Nie można zapisać tych danych, bo naruszają regułę unikalności."
+    ),
+    "error.forbidden_title": "Żądanie zostało odrzucone",
+    "error.forbidden_body": (
+        "Zmiana danych jest możliwa tylko z tej samej strony."
+    ),
 }
 
 _ENGLISH = {
@@ -158,6 +225,74 @@ _ENGLISH = {
     "metric.pe_ratio": "Price to earnings (P/E)",
     "metric.pb_ratio": "Price to book (P/B)",
     "metric.ev_ebitda": "EV/EBITDA",
+    "action.create_company": "Add instrument",
+    "action.edit_company": "Edit instrument",
+    "action.delete_company": "Delete instrument",
+    "action.add_metrics": "Add metrics",
+    "action.edit_metrics": "Edit metrics",
+    "action.delete_metrics": "Delete metrics",
+    "action.save": "Save",
+    "action.confirm_delete": "Delete",
+    "action.cancel": "Cancel",
+    "page.create_company": "New instrument",
+    "page.edit_company": "Edit instrument",
+    "page.delete_company": "Delete instrument",
+    "page.create_metrics": "New metrics",
+    "page.edit_metrics": "Edit metrics",
+    "page.delete_metrics": "Delete metrics",
+    "form.error_summary": "Correct the highlighted fields.",
+    "field.period_end": "Period end",
+    "field.period_type": "Period type",
+    "field.updated_at": "Last edit",
+    "delete.company_warning": (
+        "Deleting this company also deletes its financial metrics."
+    ),
+    "delete.company_question": "Delete this company?",
+    "delete.metrics_warning": (
+        "Deleting these metrics does not delete the company."
+    ),
+    "delete.metrics_question": "Delete these metrics?",
+    "hint.period_end": (
+        "A time with no zone is stored as UTC. "
+        "Example: 2024-12-31T00:00:00."
+    ),
+    "hint.period_type": (
+        "Up to 20 characters. The detail page groups annual and "
+        "quarterly. Any other value is listed under other periods."
+    ),
+    "hint.period_type_locked": (
+        "The period type stays as it was when these metrics were created."
+    ),
+    "hint.numbers": (
+        "Leave a field empty when the number is missing. "
+        "NaN and infinity are not numbers."
+    ),
+    "error.required": "This field is required.",
+    "error.too_long": "This value is too long.",
+    "error.too_short": "This value is too short.",
+    "error.ticker": (
+        "Ticker must be 1 to 20 ASCII characters: "
+        "letters, digits, or . _ - ^ =."
+    ),
+    "error.currency": "Currency must be exactly three letters.",
+    "error.website": (
+        "Enter an http:// or https:// address, or leave the field empty."
+    ),
+    "error.number": "Enter a finite number, or leave the field empty.",
+    "error.datetime": ("Enter a date and time, such as 2024-12-31T00:00:00."),
+    "error.invalid": "This value is not valid.",
+    "error.duplicate_company": (
+        "A company with this name or ticker already exists."
+    ),
+    "error.duplicate_metrics": (
+        "Metrics for this company, period end, and period type "
+        "already exist."
+    ),
+    "error.constraint": (
+        "These values cannot be saved because they are not unique."
+    ),
+    "error.forbidden_title": "Request rejected",
+    "error.forbidden_body": "Changes are only accepted from this site.",
 }
 
 CATALOGS = {"pl": _POLISH, "en": _ENGLISH}

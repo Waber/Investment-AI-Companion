@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="{{ cancel_href }}">{{ t['action.cancel'] }}</a></p>
+<h1>{{ t[title_key] }}</h1>
+{% if updated_at %}
+<p>{{ t['field.updated_at'] }} {{ format_date(updated_at, language) }}</p>
+{% endif %}
+{% include "partials/error_summary.html" %}
+<form method="post" action="{{ action }}" class="stacked-form">
+  <div class="form-field">
+    <label for="field-period_end">{{ t['field.period_end'] }}</label>
+    <input id="field-period_end" name="period_end" type="text" value="{{ values['period_end'] }}"{% if described_by['period_end'] %} aria-describedby="{{ described_by['period_end'] }}"{% endif %}{% if 'period_end' in invalid_fields %} aria-invalid="true"{% endif %}>
+    <p id="hint-period_end" class="hint">{{ t['hint.period_end'] }}</p>
+    {% if 'period_end' in errors %}
+    <p id="field-period_end-error" class="field-error">{{ t[errors['period_end']] }}</p>
+    {% endif %}
+  </div>
+  <div class="form-field">
+    {% if period_type_locked %}
+    <p id="field-period_type">{{ t['field.period_type'] }} {{ values['period_type'] }}</p>
+    <p id="hint-period_type" class="hint">{{ t['hint.period_type_locked'] }}</p>
+    {% else %}
+    <label for="field-period_type">{{ t['field.period_type'] }}</label>
+    <input id="field-period_type" name="period_type" type="text" value="{{ values['period_type'] }}"{% if described_by['period_type'] %} aria-describedby="{{ described_by['period_type'] }}"{% endif %}{% if 'period_type' in invalid_fields %} aria-invalid="true"{% endif %}>
+    <p id="hint-period_type" class="hint">{{ t['hint.period_type'] }}</p>
+    {% if 'period_type' in errors %}
+    <p id="field-period_type-error" class="field-error">{{ t[errors['period_type']] }}</p>
+    {% endif %}
+    {% endif %}
+  </div>
+  <p id="hint-numbers" class="hint">{{ t['hint.numbers'] }}</p>
+  {% for field in metric_fields %}
+  <div class="form-field">
+    <label for="field-{{ field }}">{{ t[field_label_key(field)] }}</label>
+    <input id="field-{{ field }}" name="{{ field }}" type="text" value="{{ values[field] }}"{% if described_by[field] %} aria-describedby="{{ described_by[field] }}"{% endif %}{% if field in invalid_fields %} aria-invalid="true"{% endif %}>
+    {% if field in errors %}
+    <p id="field-{{ field }}-error" class="field-error">{{ t[errors[field]] }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit">{{ t['action.save'] }}</button>
+    <a href="{{ cancel_href }}">{{ t['action.cancel'] }}</a>
+  </div>
+</form>
+{% endblock %}

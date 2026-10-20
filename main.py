@@ -15,6 +15,8 @@ from app.api.financial_metrics import router as financial_metrics_router
 from app.core.config import settings
 from app.core.init_db import init_db
 from app.core.validation import request_validation_exception_handler
+from app.ui.forms import router as ui_forms_router
+from app.ui.origin import OriginRejected, forbidden_page
 from app.ui.router import router as ui_router
 
 # HTMX and CSS live in the repository. The pages link to this directory
@@ -37,6 +39,8 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     application.add_exception_handler(
         RequestValidationError, request_validation_exception_handler
     )
+    # A cross-origin form post under /ui. The API routes do not use it.
+    application.add_exception_handler(OriginRejected, forbidden_page)
 
     # Set up CORS middleware
     if settings.cors_origins:
@@ -116,6 +120,7 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
         data_collection_router, prefix=settings.API_V1_STR
     )
     application.include_router(ui_router)
+    application.include_router(ui_forms_router)
     application.mount(
         "/static",
         StaticFiles(directory=str(STATIC_DIR)),

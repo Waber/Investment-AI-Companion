@@ -12,19 +12,28 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.ui.catalog import LANGUAGE_COOKIE, SUPPORTED_LANGUAGES
+from app.ui.origin import require_same_origin
 from app.ui.queries import ListFilters, get_instrument, list_instruments
 from app.ui.templating import render
 from app.ui.view_models import METRIC_FIELDS, MONETARY_FIELDS
 
-router = APIRouter(prefix="/ui", tags=["ui"])
+router = APIRouter(
+    prefix="/ui",
+    tags=["ui"],
+    # POST, PUT, PATCH, and DELETE must come from this host. GET is
+    # unchanged. The forms router uses the same dependency.
+    dependencies=[Depends(require_same_origin)],
+)
 
 _COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 # SQLite stores an INTEGER in a signed 64-bit value. A larger Python
 # int reaches the driver and the query fails with 500.
 _MAX_INSTRUMENT_ID = 2**63 - 1
 # The pages load CSS and HTMX from this origin only. frame-ancestors
-# and X-Frame-Options both refuse to be embedded. Referrer-Policy
-# keeps the local address off links to a company website.
+# and X-Frame-Options both refuse to be embedded. same-origin still
+# keeps the local address off a company website. no-referrer would
+# make Chrome send Origin: null on a form POST, and the same-origin
+# check would then reject every save.
 _CSP = (
     "default-src 'self'; "
     "base-uri 'self'; "
@@ -38,7 +47,7 @@ def _with_ui_headers(response):
     response.headers["Content-Security-Policy"] = _CSP
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"
     # A fragment and a full page share the URL. Caches must not mix them.
     response.headers["Vary"] = "HX-Request"
     response.headers["Cache-Control"] = "no-store"
