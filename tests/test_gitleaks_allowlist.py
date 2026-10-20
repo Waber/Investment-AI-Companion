@@ -2,7 +2,9 @@
 
 ``tests/conftest.py`` line 7 sets a fixed key so the suite can start
 without a developer environment file. It is not a credential. The
-allowlist names that file and that exact string.
+allowlist matches only when both the file path and that exact string
+match (``condition = "AND"``). An OR of the path alone would hide
+every secret in the file.
 """
 
 from pathlib import Path
@@ -21,4 +23,5 @@ def test_conftest_placeholder_is_on_line_7_and_allowlisted():
     assert "setdefault" in line_7
     assert PLACEHOLDER in config
     assert "tests/conftest" in config
+    assert 'condition = "AND"' in config
     assert "useDefault = true" in config

@@ -710,6 +710,39 @@ def test_retry_backoff_past_the_deadline_is_refused():
     assert clock.sleeps == []
 
 
+def test_retry_does_not_get_a_fresh_rate_limit_wait_budget():
+    """The deadline clock starts once, before the retry loop.
+
+    After a 10 s backoff the window is still full and the next slot is
+    20 s away. 15 s of the 25 s deadline are left, so that wait is
+    refused. A clock that restarted on the retry would still allow it
+    (20 s is under both 25 s and the 30 s rate-limit cap).
+    """
+    clock = FakeClock()
+    inner = ScriptedLookup(
+        TransientProviderError("busy"), sourced({"name": "Acme"})
+    )
+    guarded = make(
+        inner,
+        clock,
+        rand=lambda: 1.0,
+        backoff_base=10,
+        backoff_max=10,
+        rate_limit_calls=1,
+        rate_limit_period=30,
+        rate_limit_max_wait=30,
+        total_deadline=25,
+        max_retries=2,
+    )
+
+    with pytest.raises(ProviderError, match="deadline") as caught:
+        guarded.fetch_company_info("ACME")
+
+    assert type(caught.value) is ProviderError
+    assert inner.calls == 1
+    assert clock.sleeps == [10]
+
+
 def test_transient_error_on_context_is_retried():
     """``raise ProviderError from ValueError`` keeps the transient error.
 
@@ -736,6 +769,37 @@ def test_transient_error_on_context_is_retried():
     guarded = make(inner, FakeClock(), rand=lambda: 0.0)
     assert guarded.fetch_company_info("ACME").value["name"] == "Acme"
     assert inner.calls == 2
+
+
+def test_key_error_on_context_is_not_retried():
+    """A KeyError on the same ``__context__`` link is one call.
+
+    ``raise KeyError(...) from None`` inside
+    ``except TransientProviderError`` still stores the transient error
+    on ``__context__`` and sets ``__suppress_context__``. That error is
+    not a ``ProviderError`` wrapper, so it is not retried.
+    """
+
+    class Buried:
+        def __init__(self):
+            self.calls = 0
+
+        def fetch_company_info(self, ticker):
+            self.calls += 1
+            try:
+                raise TransientProviderError("provider secret text")
+            except TransientProviderError:
+                raise KeyError("secret-key-text") from None
+
+    inner = Buried()
+    guarded = make(inner, FakeClock(), rand=lambda: 0.0, max_retries=2)
+
+    with pytest.raises(ProviderError, match="Data provider error") as caught:
+        guarded.fetch_company_info("ACME")
+
+    assert inner.calls == 1
+    assert type(caught.value) is ProviderError
+    assert caught.value.__cause__ is None
 
 
 def test_cache_key_normalizes_ticker_and_upstream_gets_the_raw_one():

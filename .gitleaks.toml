@@ -11,5 +11,8 @@ useDefault = true
 
 [allowlist]
 description = "Pytest placeholder SECRET_KEY in tests/conftest.py. Not a real secret."
+# Default condition is OR: a path match alone would hide every secret
+# in tests/conftest.py. AND requires the path and the placeholder.
+condition = "AND"
 paths = ['''tests/conftest\.py''']
 regexes = ['''test-secret-key-for-pytest-0123456789''']

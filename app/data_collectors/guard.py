@@ -146,13 +146,39 @@ def _cache_key(
     return key
 
 
-def _has_transient(exc: BaseException) -> bool:
-    """True when ``exc`` or a linked error is ``TransientProviderError``.
+def _context_counts(exc: BaseException) -> bool:
+    """Whether ``exc.__context__`` may still be a reason to retry.
 
-    ``raise New() from Other()`` sets ``__cause__``. Doing that inside
-    ``except Old`` also leaves ``Old`` on ``__context__``. A transient
-    error on either link is worth retrying. The walk does not read the
-    exception text, which can contain a URL or a response body.
+    ``__context__`` is the error being handled when ``raise`` ran inside
+    ``except``. Follow it only for a ``ProviderError`` wrapper.
+
+    ``raise New() from Old()`` sets ``__suppress_context__`` even when
+    ``Old`` is not ``None``. The traceback then prints ``Old`` and hides
+    ``__context__``, but the attribute is still there. The wrapper test
+    does ``raise ProviderError from ValueError`` inside
+    ``except TransientProviderError``, so the transient error is only
+    on ``__context__`` and suppress is already true. That wrapper is
+    still retried, because it has an explicit cause.
+
+    ``raise KeyError(...) from None`` leaves the same transient error
+    on ``__context__``. A ``KeyError`` is not a provider wrapper, so
+    the link is ignored. ``raise ProviderError(...) from None`` has no
+    cause and suppress is true, so its context is ignored too.
+    """
+    if not isinstance(exc, ProviderError):
+        return False
+    if not exc.__suppress_context__:
+        return True
+    return exc.__cause__ is not None
+
+
+def _has_transient(exc: BaseException) -> bool:
+    """True when ``exc`` or an allowed linked error is transient.
+
+    ``__cause__`` (``raise New() from Old()``) is always followed.
+    ``__context__`` is followed only when :func:`_context_counts` says
+    so. The walk does not read the exception text, which can contain a
+    URL or a response body.
     """
     seen = set()
     stack = [exc]
@@ -164,7 +190,8 @@ def _has_transient(exc: BaseException) -> bool:
         if isinstance(current, TransientProviderError):
             return True
         stack.append(current.__cause__)
-        stack.append(current.__context__)
+        if _context_counts(current):
+            stack.append(current.__context__)
     return False
 
 
@@ -414,10 +441,10 @@ class _GuardedBase:
     ) -> bool:
         """True when a transient error is still allowed another try.
 
-        ``TransientProviderError`` counts when it is the error itself,
-        its ``__cause__`` (``raise New from Old``), or its
-        ``__context__`` (the error being handled when ``raise`` ran).
-        The walk does not read the exception text.
+        ``TransientProviderError`` counts when it is the error itself
+        or its ``__cause__`` (``raise New from Old``). ``__context__``
+        counts only for a ``ProviderError`` wrapper; see
+        :func:`_context_counts`. The walk does not read the text.
         """
         if attempt > retries:
             return False

@@ -1,5 +1,41 @@
 # Development Journal
 
+## 2026-10-20 - QA round 1 on collector hardening (#76)
+
+- Scope: review findings on the open pull request for the collector
+  hardening branch. Same branch. Templates, static files, and
+  `app/ui/` were not edited. Tests do not call a live provider.
+- Decisions:
+  - `__context__` is followed only for a `ProviderError` wrapper.
+    `__cause__` is always followed. A `KeyError` raised inside
+    `except TransientProviderError`, including `from None`, is not
+    retried: the call fails once and becomes the fixed provider error.
+  - Python sets `__suppress_context__` for every `raise New from Old`,
+    not only for `from None`. The kept wrapper test uses
+    `raise ProviderError from ValueError`, so the transient error is
+    only on `__context__` while suppress is already true. That wrapper
+    is still retried because it has an explicit cause. `from None` has
+    no cause, so a `ProviderError` raised that way does not follow
+    context either.
+  - One fake-clock test pins that a retry does not restart the
+    deadline. After a 10 s backoff, a 20 s rate-limit wait no longer
+    fits in the 25 s deadline. The 30 s rate-limit cap would still
+    allow it, so only the shared clock refuses the sleep.
+  - The gitleaks allowlist uses `condition = "AND"`. The default OR
+    would hide every secret in `tests/conftest.py` because the path
+    alone matched.
+- Verification: no `.env`, `DATABASE_URL` unset, Python 3.12.3 venv
+  from `requirements-dev.lock`. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1331 passed, 121 deselected, coverage 95.17%. Scoped black,
+  isort, and flake8 passed on the touched Python files. PostgreSQL
+  was not run locally (no `TEST_POSTGRES_DSN`). GitHub Actions runs
+  both jobs.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-20, UTC): QA notes read about 17:59.
+- Next: both CI jobs, then the pull request is marked ready for
+  review. Agents do not merge.
+
 ## 2026-10-20 - Collector hardening (#76)
 
 - Scope: port the unmerged collector hardening from
