@@ -31,6 +31,14 @@ def isolated_startup(monkeypatch):
     monkeypatch.setattr(
         database_initializer.Base.metadata, "create_all", create_all
     )
+    # The stand-in engine is not a SQLAlchemy engine. The column
+    # check is asserted separately; this fixture only controls
+    # whether startup reaches the database.
+    monkeypatch.setattr(
+        database_initializer,
+        "require_company_instrument_columns",
+        Mock(),
+    )
     return create_all, engine
 
 
@@ -41,6 +49,8 @@ async def test_startup_initializes_database_before_serving(isolated_startup):
 
     async with lifespan_client(application) as client:
         create_all.assert_called_once_with(bind=engine)
+        checked = database_initializer.require_company_instrument_columns
+        checked.assert_called_once_with(engine)
         assert (await client.get("/")).status_code == 200
 
     create_all.assert_called_once_with(bind=engine)

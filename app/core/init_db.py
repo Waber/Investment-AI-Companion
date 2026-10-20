@@ -1,7 +1,44 @@
-from sqlalchemy.orm import Session
-from app.core.database import engine, Base
-from app.models.database_models import CompanyDB, FinancialMetricsDB
 from datetime import datetime, timezone
+
+from sqlalchemy import inspect
+from sqlalchemy.orm import Session
+
+from app.core.database import Base, engine
+from app.models.database_models import CompanyDB, FinancialMetricsDB
+
+# create_all adds a missing table. It does not add columns to one
+# that is already there. These two arrived in revision 0001.
+_COMPANY_COLUMNS = ("instrument_type", "isin")
+
+
+class CompanySchemaError(RuntimeError):
+    """``companies`` exists and is missing columns this process needs."""
+
+
+def require_company_instrument_columns(db_engine) -> None:
+    """Stop startup when an older ``companies`` table is still in use.
+
+    A missing table is left for ``create_all``. A table that is
+    present without ``instrument_type`` or ``isin`` would otherwise
+    start and fail on the first query. The message tells the
+    operator which Alembic command matches the database they have.
+    """
+    inspector = inspect(db_engine)
+    if "companies" not in inspector.get_table_names():
+        return
+    present = {column["name"] for column in inspector.get_columns("companies")}
+    missing = [name for name in _COMPANY_COLUMNS if name not in present]
+    if not missing:
+        return
+    raise CompanySchemaError(
+        "companies is missing "
+        + " and ".join(missing)
+        + ". An Alembic-managed database runs `alembic upgrade head`. "
+        "A database created by an older startup create_all needs that "
+        "upgrade, or the columns added. "
+        "A fresh create_all database already has the columns: "
+        "run `alembic stamp head`, not `alembic upgrade head`."
+    )
 
 
 def init_db():
@@ -12,6 +49,7 @@ def init_db():
     # Create all tables defined in our models
     # This will create the 'companies' and 'financial_metrics' tables
     Base.metadata.create_all(bind=engine)
+    require_company_instrument_columns(engine)
     print("Database tables created successfully!")  # logs instead of print?
 
 

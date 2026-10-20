@@ -1,7 +1,7 @@
 """init_db and seed_sample_data against a private in-memory SQLite engine."""
 
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -40,6 +40,59 @@ def test_init_db_creates_tables_on_configured_engine(
     tables = set(inspect(memory_engine).get_table_names())
     assert {"companies", "financial_metrics"} <= tables
     assert "Database tables created successfully!" in capsys.readouterr().out
+
+
+def test_missing_company_table_is_left_for_create_all(memory_engine):
+    database_initializer.require_company_instrument_columns(memory_engine)
+
+
+def test_init_db_rejects_a_companies_table_without_the_new_columns(
+    monkeypatch, memory_engine
+):
+    """An older create_all database has the table and not the columns.
+
+    Startup must stop before it serves. The message names both
+    columns and the two Alembic commands.
+    """
+    with memory_engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, "
+                "name VARCHAR(255) NOT NULL, "
+                "ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+    monkeypatch.setattr(database_initializer, "engine", memory_engine)
+
+    with pytest.raises(database_initializer.CompanySchemaError) as error:
+        database_initializer.init_db()
+
+    message = str(error.value)
+    assert "instrument_type" in message
+    assert "isin" in message
+    assert "alembic upgrade head" in message
+    assert "alembic stamp head" in message
+    assert "not `alembic upgrade head`" in message
+
+
+@pytest.mark.parametrize("present", ["instrument_type", "isin"])
+def test_one_missing_company_column_is_named(memory_engine, present):
+    missing = "isin" if present == "instrument_type" else "instrument_type"
+    with memory_engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, " + present + " VARCHAR(12))"
+            )
+        )
+
+    with pytest.raises(database_initializer.CompanySchemaError) as error:
+        database_initializer.require_company_instrument_columns(memory_engine)
+
+    message = str(error.value)
+    assert missing in message
+    assert present not in message.split(". An Alembic-managed", 1)[0]
 
 
 def test_init_db_is_safe_to_repeat(monkeypatch, memory_engine):

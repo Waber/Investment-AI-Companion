@@ -150,6 +150,20 @@ of http(s) origins. A JSON list works too. The code default for
 `DATABASE_URL` is
 `postgresql://investment_ai@localhost:5432/investment_ai`.
 
+Startup creates missing tables with `create_all`. It does not add
+columns to a `companies` table that is already there. `instrument_type`
+and `isin` are revision `0001`. If those columns are absent, the
+process stops before it serves and names the missing columns.
+
+- An Alembic-managed database runs `alembic upgrade head`.
+- A database created by an older startup `create_all` has `companies`
+  and not those columns. Run that same upgrade, or add the columns,
+  before starting this version.
+- A database that this version's `create_all` just built already has
+  the columns. Record that with `alembic stamp head`. Do not run
+  `alembic upgrade head` on it: the upgrade alters a table that
+  already has the columns and fails.
+
 4. Start the API on loopback:
 
 ```bash
