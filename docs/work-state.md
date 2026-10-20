@@ -6,6 +6,11 @@
   `origin/master`. Refs #76. Not merged. PR #70 stays closed.
   The old head `30b6f11` was not rebased; the behavior was ported
   onto the guard from PR #72.
+- QA round 1: `__context__` is followed only for a `ProviderError`
+  wrapper (a `KeyError` on that link fails after one call). `raise X
+  from Y` sets `__suppress_context__` even when Y is not `None`, so
+  the kept wrapper test still retries. A retry shares the original
+  deadline. The gitleaks allowlist is `condition = "AND"`.
 - Completed: one deadline for waits and retries, an in-flight
   semaphore around the provider call only (default 4), a normalized
   cache key with the raw ticker still sent upstream, one shared
@@ -25,15 +30,16 @@
   are not done. The optional demo port race was not part of this
   change.
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3,
-  `requirements-dev.lock`. CI command -> 1329 passed, 121
-  deselected, coverage 95.15%. PostgreSQL was not run locally.
+  `requirements-dev.lock`. CI command -> 1331 passed, 121
+  deselected, coverage 95.17%. PostgreSQL was not run locally.
   GitHub Actions is the PostgreSQL run.
 - Active agents: none. Blockers: none.
-- Stop reason: the branch is ready for review. Account usage was
-  not available in this session.
-- Next action: the owner reviews this pull request and merges it
-  with "Rebase and merge" if they accept it. Agents do not merge.
-  After that, #26 together with #16.
+- Stop reason: QA round 1 is implemented locally. Account usage was
+  not available in this session. The pull request stays a draft until
+  both CI jobs pass, then it is marked ready for review.
+- Next action: wait for both GitHub Actions jobs on this commit, mark
+  the pull request ready, and record the run id. Agents do not merge.
+  After the owner rebases and merges, #26 together with #16.
 
 ## Company and financial-metrics forms (#34, part): 2026-10-20
 
