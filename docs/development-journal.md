@@ -60,8 +60,14 @@
 - Time tracking (UTC): 2026-10-20 about 16:35 to 17:15. Reading the
   issue and the current models, then forms, tests, the browser check,
   and this entry.
+- Pull request: [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77)
+  (Refs #34), opened on 2026-10-20. GitHub Actions
+  [run 39462413658](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462413658)
+  on `76367fc` succeeded. SQLite job `118765004831` and PostgreSQL
+  job `118765005870` both concluded success.
 - Next: the owner reviews the pull request and merges it with
-  "Rebase and merge". This pull request says Refs #34, not Closes.
+  "Rebase and merge". This pull request says Refs #34 and leaves
+  the issue open.
 
 ## 2026-10-20 - Local venv, IDE interpreter guide and the Python 3.14 probe
 
