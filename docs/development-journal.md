@@ -35,6 +35,10 @@
   13:02 to 13:20 venv, probe, issue, docs and this entry.
 - Pull request: [PR #74](https://github.com/Waber/Investment-AI-Companion/pull/74)
   (Refs #73), opened on 2026-10-20.
+- Local fix: at the owner's request, removed the broken
+  `~/.local/bin/python3.12` link (it pointed into an old session
+  scratchpad and shadowed Homebrew on `PATH`). `which -a python3.12`
+  now lists only `/opt/homebrew/bin/python3.12`.
 - Next: the owner reviews PR #74, then #26 together with #16.
 
 ## 2026-10-19 - Rebase of the offline demo (#25) onto PR #72
