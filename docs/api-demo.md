@@ -72,6 +72,30 @@ minor-unit codes `GBp` (pence) and `ZAc` (South African cents) are kept
 exactly as sent: rewriting `GBp` to `GBP` would treat the amount as
 pounds.
 
+`instrument_type` is `STOCK`, `ETF`, or `ETC`. Omitting it on create
+stores `STOCK`. On update, omit it to keep the stored type. JSON
+`null` is 422. A value already stored outside those three is returned
+as `null` on read, so one bad row does not fail `GET /companies/`.
+`isin` is an uppercase ISO 6166 identifier, or `null`. Sending
+`null` on update clears it. A name that is empty after stripping
+spaces is 422. Surrounding spaces are removed before the name is
+stored.
+
+A duplicate ticker or ISIN is 400. `detail` stays a plain string.
+`code` is an extra field for form mapping (`duplicate_ticker` or
+`duplicate_isin`). Create and update use the same sentence. The
+repository raises `app.repositories.company_errors.DuplicateTickerError`
+or `DuplicateIsinError`. Both subclass `DuplicateCompanyError`, which
+subclasses `ValueError`, and each class has a `code` attribute.
+
+```json
+{"detail": "A company with this ticker already exists", "code": "duplicate_ticker"}
+```
+
+```json
+{"detail": "A company with this ISIN already exists", "code": "duplicate_isin"}
+```
+
 ```bash
 METRICS_JSON=$(curl -q --noproxy '*' -fsS -X POST "$BASE_URL/api/v1/financial-metrics/" \
   -H 'Content-Type: application/json' \

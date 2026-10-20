@@ -1,5 +1,42 @@
 # Development Journal
 
+## 2026-10-20 - QA round 1 on instrument type and ISIN
+
+- Scope: QA findings on
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75),
+  on the same branch as security round 1. The explicit
+  `instrument_type: null` update was already 422 from that round.
+- Decisions: the company read model maps a stored type outside
+  `STOCK`, `ETF`, and `ETC` to null and logs the value's class
+  name, so one bad row does not fail the list. Create and update
+  share one sentence per duplicate. The repository raises
+  `app.repositories.company_errors.DuplicateTickerError` or
+  `DuplicateIsinError`. Both subclass `DuplicateCompanyError`
+  (`ValueError`) and carry `code` (`duplicate_ticker` or
+  `duplicate_isin`). The 400 body keeps `detail` as a string and
+  adds `code`. A company name is stripped, and a blank name is
+  422 on create and on update when the field is sent.
+  `docs/api-demo.md` now describes `instrument_type`, `isin`, and
+  the error body. #16 is closed by the pull request. #26 stays a
+  reference because the wider instruments model is still open.
+- Verification: each commit was green locally on SQLite and
+  PostgreSQL, then on both GitHub Actions jobs.
+  `77d54f8` run
+  [39467269111](https://github.com/Waber/Investment-AI-Companion/actions/runs/39467269111)
+  (SQLite `118781804311`, PostgreSQL `118781803573`).
+  `61300c9` run
+  [39467492356](https://github.com/Waber/Investment-AI-Companion/actions/runs/39467492356)
+  (SQLite `118782583815`, PostgreSQL `118782583650`).
+  `79b6bc6` run
+  [39467716661](https://github.com/Waber/Investment-AI-Companion/actions/runs/39467716661)
+  (SQLite `118783362013`: 1346 passed, 122 deselected, coverage
+  96.12%; PostgreSQL `118783361167`: 122 passed, 1346 deselected).
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-20): QA round after security round 1,
+  from about 17:24.
+- Next: the owner reviews PR #75. Agents do not merge.
+
 ## 2026-10-20 - Security round 1 on instrument type and ISIN
 
 - Scope: three low findings on

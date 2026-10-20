@@ -1,5 +1,38 @@
 # Current Work State
 
+## QA round 1 on #75: 2026-10-20
+
+- Branch `cursor/instrument-type-isin-1db6`, still based on
+  `origin/master` `1f1678f`.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is a draft. The body says Closes #16 and Refs #26. Not merged.
+- Completed: a stored `instrument_type` outside `STOCK`/`ETF`/`ETC`
+  is null on read, with the value's class name in the log. Create
+  and update share one duplicate sentence. The 400 body is
+  `{"detail": "<sentence>", "code": "duplicate_ticker"}` or
+  `"duplicate_isin"`. The exceptions are
+  `app.repositories.company_errors.DuplicateTickerError` and
+  `DuplicateIsinError`, subclasses of `DuplicateCompanyError`
+  (`ValueError`), each with a `code` attribute. A blank name after
+  strip is 422. `docs/api-demo.md` mentions `instrument_type` and
+  `isin`. Explicit `instrument_type: null` on update was already
+  422 from security round 1.
+- Tests: SQLite CI command on `79b6bc6`: 1346 passed, 122
+  deselected, coverage 96.12%. PostgreSQL `-m integration`: 122
+  passed, 1346 deselected. GitHub Actions, both jobs success:
+  `77d54f8` run
+  [39467269111](https://github.com/Waber/Investment-AI-Companion/actions/runs/39467269111),
+  `61300c9` run
+  [39467492356](https://github.com/Waber/Investment-AI-Companion/actions/runs/39467492356),
+  `79b6bc6` run
+  [39467716661](https://github.com/Waber/Investment-AI-Companion/actions/runs/39467716661)
+  (SQLite job `118783362013`, PostgreSQL job `118783361167`).
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews PR #75 and merges with
+  "Rebase and merge". Agents do not merge. A named unique
+  constraint on ticker alone remains a follow-up.
+
 ## Security round 1 on #75: 2026-10-20
 
 - Branch `cursor/instrument-type-isin-1db6`, still based on
