@@ -23,6 +23,7 @@ from app.api.data_collection import get_collector
 from app.data_collectors import yahoo_finance
 from app.data_collectors.base import ProviderError
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
+from app.models.database_models import CompanyDB
 from tests.collector_stubs import sourced
 
 COMPANIES = "/api/v1/companies/"
@@ -44,6 +45,36 @@ class FakeCollector:
         if self.error:
             raise self.error
         return sourced({"name": f"Fetched {ticker}", "currency": "USD"})
+
+
+@pytest.mark.asyncio
+async def test_duplicate_ticker_create_returns_400(client):
+    """Issue #16. A second ticker is 400 and the first row stays.
+
+    The strict xfail of this name lived on ``qa/known-defects-xfail``
+    (``tests/test_known_defects.py``) and is not in this repository.
+    That marker is not put back: the duplicate now passes as 400.
+    """
+    first = await client.post(COMPANIES, json={"name": "A", "ticker": "DUP"})
+    assert first.status_code == 201
+
+    duplicate = await client.post(
+        COMPANIES, json={"name": "B", "ticker": "DUP"}
+    )
+
+    assert duplicate.status_code == 400
+    body = duplicate.json()
+    assert body["detail"] == "A company with this ticker already exists"
+    assert body["code"] == "duplicate_ticker"
+    assert "IntegrityError" not in duplicate.text
+    assert "unique" not in duplicate.text.lower()
+    db = client.app.state.testing_session_local()
+    try:
+        assert (
+            db.query(CompanyDB).filter(CompanyDB.ticker == "DUP").count() == 1
+        )
+    finally:
+        db.close()
 
 
 @pytest.mark.asyncio
