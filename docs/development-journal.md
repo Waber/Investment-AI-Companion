@@ -1,5 +1,51 @@
 # Development Journal
 
+## 2026-10-20 - Instrument type, ISIN, and duplicate ticker 400
+
+- Scope: add `instrument_type` and `isin` on the existing company
+  API (issue #26, narrowed), and return HTTP 400 when a create
+  repeats a ticker (issue #16) or an ISIN. `Company` is not
+  renamed. `app/ui/`, `templates/`, and `static/` were not edited.
+- Decisions: `instrument_type` is a Python `enum.Enum` that also
+  subclasses `str`, stored as `String(8)` with a CHECK for
+  `STOCK`, `ETF`, and `ETC`. A PostgreSQL ENUM would not match
+  SQLite. Omitted creates and existing rows are `STOCK`.
+  `EQUITY` is rejected and is not copied from a provider
+  `quoteType`. `isin` is checked at the write boundary: ASCII
+  only, then strip and uppercase, then ISO 6166 pattern and
+  Luhn. Letters expand to two digits (A=10 … Z=35) because Luhn
+  only adds 0–9. Revision `0001` uses `ALTER TABLE ADD COLUMN`,
+  not Alembic batch mode, because batch rebuilds drop
+  `companies` and the `financial_metrics` foreign key is on.
+  Duplicate ticker and ISIN are detected by looking the row up
+  after rollback. The driver message is not parsed: SQLite and
+  PostgreSQL name the unique index differently, and that text
+  must not reach the client. Unknown integrity errors stay a
+  generic 500. Ticker stays unique on its own. Unique
+  `(ticker, exchange)`, `/api/v1/instruments/`, list filters,
+  and "metrics only for stocks" stay deferred. Startup still
+  uses `create_all`. This is not the #8 baseline.
+- Verification: `.venv` Python 3.12, no `.env`, `DATABASE_URL`
+  unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1337 passed, 121 deselected, coverage 96.01%. PostgreSQL
+  (`TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  `pytest -m integration`) -> 121 passed, 1337 deselected, 0
+  xfailed. The earlier GitHub Actions run on `07f7983` only
+  covered the checksum helper. The run on this head is recorded
+  in `docs/work-state.md` after it finishes.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-20): implementation continued from
+  about 16:33 and this entry was written after the local suites
+  passed.
+- Pull request:
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  (Refs #26, Refs #16). Branch
+  `cursor/instrument-type-isin-1db6`, based on `origin/master`
+  `1f1678f`.
+- Next: the owner reviews the pull request and merges it with
+  "Rebase and merge". Agents do not merge.
 ## 2026-10-20 - Code review round 1 on collector hardening (#76)
 
 - Scope: code review on the open pull request, after rebasing onto
@@ -172,7 +218,6 @@
 - Time tracking (2026-10-20, UTC): read the issue and the old branch
   from about 16:58. Local suite finished 17:24.
 - Next: the owner reviews the pull request. Agents do not merge.
-
 ## 2026-10-20 - Drop the new disclaimer asserts (PR #77)
 
 - Scope: the PM decision on
