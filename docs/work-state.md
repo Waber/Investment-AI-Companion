@@ -1,5 +1,33 @@
 # Current Work State
 
+## Dotted ticker duplicate on #75: 2026-10-20
+
+- Branch `cursor/instrument-type-isin-1db6`, rebased onto
+  `origin/master` `9d26948`.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is a draft. The body says Closes #16 and Refs #26. Not merged.
+  Head `0188f53` is pushed.
+- Completed: a second create of the same name and `BRK.B` is
+  `DuplicateTickerError` and HTTP 400
+  `{"detail": "A company with this ticker already exists", "code": "duplicate_ticker"}`
+  on SQLite and PostgreSQL. The pre-insert lookup and the
+  lookup after rollback both do that. The driver text is not
+  read. `name` keeps `min_length=1`. PR #78's ticker
+  `max_length` is not on this branch.
+- Tests: SQLite CI command: 1411 passed, 123 deselected,
+  coverage 96.15%. PostgreSQL `-m integration`: 123 passed,
+  1411 deselected. GitHub Actions
+  [run 39478793637](https://github.com/Waber/Investment-AI-Companion/actions/runs/39478793637)
+  on `0188f53` succeeded. SQLite job `118821628878` and
+  PostgreSQL job `118821628158` both concluded success.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews PR #75 and merges with
+  "Rebase and merge". Agents do not merge. A named unique
+  constraint on ticker alone remains a follow-up. The next
+  rebase against PR #78 keeps `name` `min_length=1` and ticker
+  `max_length`.
+
 ## QA round 1 on #75: 2026-10-20
 
 - Branch `cursor/instrument-type-isin-1db6`, still based on
