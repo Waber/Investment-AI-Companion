@@ -20,8 +20,11 @@ from app.data_collectors.base import (
     PriceBar,
     PriceHistory,
     ProviderError,
+    TransientProviderError,
 )
+from app.data_collectors.guard import GuardPolicy, guard_collector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
+from tests.collector_stubs import FakeClock
 
 STATEMENT_ATTRIBUTES = {
     "income_statement": "financials",
@@ -643,3 +646,95 @@ def test_session_calls_use_the_capped_timeout():
     assert all(isinstance(timeout, float) for timeout in seen)
     assert all(0 < timeout <= 4 for timeout in seen)
     assert 30 not in seen
+
+
+def test_a_replaced_session_is_capped_on_the_next_install():
+    """The cap marker lives on the session, not only on ``YfData``.
+
+    A later ``_session`` is a different object, so the next
+    ``_install_http_cap`` wraps that one too. No socket is opened.
+    """
+    from app.data_collectors.call_budget import pop_budget, push_budget
+    from app.data_collectors.yahoo_finance import _install_http_cap
+
+    seen = []
+
+    class _Session:
+        def get(self, url=None, **kwargs):
+            seen.append(kwargs.get("timeout"))
+            return {}
+
+        def post(self, url=None, **kwargs):
+            seen.append(kwargs.get("timeout"))
+            return {}
+
+    class _Data:
+        def __init__(self):
+            self._session = _Session()
+
+        def get(self, url, params=None, timeout=30):
+            return {}
+
+        def post(self, url, body=None, params=None, timeout=30, data=None):
+            return {}
+
+    class _Stock:
+        def __init__(self):
+            self._data = _Data()
+
+    stock = _Stock()
+    _install_http_cap(stock)
+    replacement = _Session()
+    stock._data._session = replacement
+    _install_http_cap(stock)
+    token = push_budget(time.monotonic() + 4, time.monotonic)
+    try:
+        replacement.get(url="https://fc.yahoo.com", timeout=30)
+        replacement.post(url="https://consent.yahoo.com", timeout=30)
+    finally:
+        pop_budget(token)
+
+    assert len(seen) == 2
+    assert all(0 < timeout <= 4 for timeout in seen)
+
+
+def test_spent_deadline_empty_result_is_not_cached(monkeypatch):
+    """A swallowed timeout must not become a cached 404.
+
+    The fake clock jumps past the deadline while Yahoo is reading
+    ``info``. An empty payload is then a transient error, and the
+    guard calls Yahoo again on the next request. A real name is kept.
+    """
+    clock = FakeClock()
+    built = []
+
+    class Spending:
+        def __init__(self, symbol):
+            built.append(symbol)
+            self.symbol = symbol
+
+        @property
+        def info(self):
+            clock.advance(100)
+            if self.symbol == "REAL":
+                return {"longName": "Acme", "currency": "USD"}
+            return {}
+
+    monkeypatch.setattr(yahoo_finance.yf, "Ticker", Spending)
+    guarded = guard_collector(
+        YahooFinanceCollector(),
+        GuardPolicy(max_retries=0, total_deadline=15),
+        clock=clock,
+        sleep=clock.sleep,
+        rand=lambda: 0.0,
+    )
+
+    with pytest.raises(TransientProviderError, match="deadline"):
+        guarded.fetch_company_info("ACME")
+    with pytest.raises(TransientProviderError, match="deadline"):
+        guarded.fetch_company_info("ACME")
+
+    assert built == ["ACME", "ACME"]
+    kept = guarded.fetch_company_info("REAL")
+    assert kept.value["name"] == "Acme"
+    assert built[-1] == "REAL"

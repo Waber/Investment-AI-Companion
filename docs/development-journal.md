@@ -1,5 +1,41 @@
 # Development Journal
 
+## 2026-10-20 - Code review round 1 on collector hardening (#76)
+
+- Scope: code review on the open pull request, after rebasing onto
+  `origin/master` `9d26948` (PR #77 is merged). Conflicts were only
+  in this journal and `docs/work-state.md`. Issue #75 is still open,
+  so ISIN, instrument type, and `normalize_name` were not added.
+  Templates, static files, and `app/ui/` were not edited. Tests do
+  not call a live provider.
+- Decisions:
+  - A spent deadline still gives yfinance a 0.001 s timeout, because
+    raising inside the library is swallowed. If `remaining()` is 0
+    after the call and the result is `None` or empty, Yahoo raises
+    `TransientProviderError`. That is HTTP 502 and the guard does
+    not cache it. A real payload is kept. A fake clock that jumps
+    past the deadline covers both.
+  - The "cannot be cached" comment sits on the path that has no
+    cache key. `GuardPolicy` says a TTL of 0 or an unhashable
+    argument disables de-dup.
+  - The HTTP-cap marker is on the session object. The next
+    `_install_http_cap` wraps a session yfinance replaced.
+    `history` is where `PriceHistory` passes `timeout`.
+  - A failed leader removes its key, so the next same-ticker call
+    can lead and succeed. A cache hit found inside `_coalesced` is
+    returned without another provider call.
+- Verification: no `.env`, `DATABASE_URL` unset, Python 3.12.3 venv
+  from `requirements-dev.lock` (includes `python-multipart==0.0.32`
+  from master). CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1405 passed, 121 deselected, coverage 95.62%. Scoped black,
+  isort, and flake8 passed on the touched Python files. PostgreSQL
+  was not run locally. GitHub Actions runs both jobs.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-20, UTC): review notes read about 18:49.
+- Next: both CI jobs, then the code-review table on the pull request.
+  Agents do not merge.
+
 ## 2026-10-20 - Security round 1 on collector hardening (#76)
 
 - Scope: security re-review of the open pull request. Same branch.
