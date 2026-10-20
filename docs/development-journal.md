@@ -30,7 +30,9 @@
   PL stayed on the Nope query. A blank ticker on the company form
   then EN opened `/ui/companies/new` in English with an empty
   name, not a 405. PostgreSQL was not run locally. GitHub Actions
-  for this head is not recorded yet.
+  on `6533438` succeeded
+  ([run 39495703430](https://github.com/Waber/Investment-AI-Companion/actions/runs/39495703430)):
+  PostgreSQL job 118880080085 and SQLite job 118880080581.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-20 about 20:42 to 20:52.
 - Next: the owner reviews PR #81 again. It still says Refs #80 and

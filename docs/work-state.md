@@ -45,14 +45,13 @@
   POST-form return path. The HTMX filter commit before it was
   1368 passed, coverage 95.97%. Scoped black, isort, and flake8
   passed. PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  GitHub Actions for this QA head is not recorded yet. The review
-  head `d5f5d2b` succeeded
-  ([run 39492311897](https://github.com/Waber/Investment-AI-Companion/actions/runs/39492311897)).
+  GitHub Actions on `6533438` succeeded
+  ([run 39495703430](https://github.com/Waber/Investment-AI-Companion/actions/runs/39495703430)):
+  PostgreSQL job 118880080085 and SQLite job 118880080581.
 - Active agents: none. Blockers: #75 is not on master, so the
   `error.code` mapping is not in this branch. Account usage was
   not available in this session.
-- Next action: wait for GitHub Actions on this QA head, then
-  record the run. The owner reviews the pull request and merges it
+- Next action: the owner reviews the pull request and merges it
   with "Rebase and merge". After #75 lands, rebase this branch,
   align the name helper with `normalize_name`, and switch the
   duplicate check to the exception class or `.code`. Agents do
