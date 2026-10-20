@@ -28,6 +28,15 @@ def test_safe_next_rejects_a_parent_segment():
     assert safe_next("/ui/%2e%2e/api/v1/companies/") == "/ui"
     assert safe_next("/ui/%5cevil") == "/ui"
     assert safe_next("/ui/instruments/1") == "/ui/instruments/1"
+    # The language route sets the cookie. Returning there would set
+    # it a second time. The list and a filtered list stay allowed.
+    assert safe_next("/ui/language/pl") == "/ui"
+    assert safe_next("/ui/language/en") == "/ui"
+    assert safe_next("/ui/language/en?next=/ui") == "/ui"
+    assert safe_next("/ui/language/pl?next=/ui/instruments/1") == "/ui"
+    assert safe_next("/ui/language") == "/ui"
+    assert safe_next("/ui/language/") == "/ui"
+    assert safe_next("/ui?exchange=DEMO-WSE") == "/ui?exchange=DEMO-WSE"
 
 
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
@@ -405,6 +414,41 @@ async def test_language_switch_requires_same_origin(client):
         "/ui", headers={"origin": "http://evil.example"}
     )
     assert listing.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_language_switch_does_not_return_to_itself(client):
+    """The 403 page's EN link must not bounce back and reset the cookie.
+
+    A direct visit to ``/ui/language/pl`` is the HTML 403, rendered
+    at that URL. The header link is ``/ui/language/en?next=`` plus
+    the current path, so ``next`` names ``/ui/language/pl``. Chrome
+    follows the 303 with a same-origin Referer. If that target is
+    the language route again, the second request sets ``pl`` and
+    the click on EN is lost.
+    """
+    blocked = await client.get("/ui/language/pl")
+    assert blocked.status_code == 403
+    match = re.search(r'href="(/ui/language/en\?next=[^"]*)"', blocked.text)
+    assert match is not None
+    href = match.group(1).replace("&amp;", "&")
+    chosen = await client.get(
+        href, headers={"referer": "http://127.0.0.1/ui/language/pl"}
+    )
+    assert chosen.status_code == 303
+    assert "ui_lang=en" in chosen.headers["set-cookie"].casefold()
+    landed = _location(chosen)
+    assert "/language/" not in landed
+    assert landed.split("?", 1)[0] == "/ui"
+    # The browser sends the switch URL as Referer on the next hop.
+    followed = await client.get(
+        landed, headers={"referer": "http://127.0.0.1" + href}
+    )
+    assert followed.status_code == 200
+    assert "set-cookie" not in followed.headers
+    assert 'lang="en"' in followed.text
+    page = await client.get("/ui")
+    assert 'lang="en"' in page.text
 
 
 @pytest.mark.asyncio
