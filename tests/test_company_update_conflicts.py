@@ -1,6 +1,5 @@
 import pytest
 import pytest_asyncio
-from sqlalchemy.exc import IntegrityError
 
 from app.models.company import CompanyUpdate
 from app.models.database_models import CompanyDB
@@ -98,10 +97,11 @@ async def test_not_null_rollback_reuses_same_session(client, companies):
                 CompanyUpdate(name=None, description="Must not be saved"),
             )
 
-        # The repository wraps the real database error after rolling back.
-        cause = error.value.__context__
-        assert isinstance(cause, IntegrityError)
-        assert "NOT NULL constraint failed: companies.name" in str(cause.orig)
+        # ``from None`` drops the driver exception, so the SQL text
+        # is not chained onto the generic sentence.
+        assert error.value.__context__ is None
+        assert error.value.__cause__ is None
+        assert "NOT NULL" not in str(error.value)
         assert db.is_active
         assert [snapshot(original), snapshot(other)] == before
 

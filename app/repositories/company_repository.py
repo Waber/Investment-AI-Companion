@@ -241,7 +241,13 @@ class CompanyRepository:
             )
             if duplicate is not None:
                 raise duplicate from None
-            raise ValueError("Update failed due to constraint violation")
+            # Fall out of this handler before the generic raise.
+            # ``raise ValueError(...) from None`` written here would
+            # still store the driver error on ``__context__``, and
+            # that object includes the SQL text. Raising on the next
+            # line, after the handler has ended, leaves both
+            # ``__context__`` and ``__cause__`` empty.
+        raise ValueError("Update failed due to constraint violation") from None
 
     def _other_company_with_name_or_ticker(self, company_id, name, ticker):
         """Another row that already uses this name or this ticker."""
