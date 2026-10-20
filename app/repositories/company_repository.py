@@ -25,6 +25,24 @@ def _instrument_type_value(value):
     return value
 
 
+def _duplicate_detail(repository, ticker, isin, exclude_id=None):
+    """Return the client sentence when this ticker or ISIN is already stored.
+
+    Create passes no ``exclude_id``, so any stored row is a duplicate.
+    Update passes the row being changed, and that row is not a
+    duplicate of itself. A missing ISIN is not looked up: a comparison
+    with None would match every company that has no ISIN.
+    """
+    taken = repository.get_by_ticker(ticker)
+    if taken is not None and taken.id != exclude_id:
+        return DUPLICATE_TICKER_DETAIL
+    if isin is not None:
+        taken = repository.get_by_isin(isin)
+        if taken is not None and taken.id != exclude_id:
+            return DUPLICATE_ISIN_DETAIL
+    return None
+
+
 class CompanyRepository:
     """
     Repository class for company-related database operations.
@@ -56,13 +74,9 @@ class CompanyRepository:
         """
         # Look up before insert. The unique index is a backstop for
         # two creates that pass this check at the same time.
-        if self.get_by_ticker(company.ticker) is not None:
-            raise ValueError(DUPLICATE_TICKER_DETAIL)
-        if (
-            company.isin is not None
-            and self.get_by_isin(company.isin) is not None
-        ):
-            raise ValueError(DUPLICATE_ISIN_DETAIL)
+        detail = _duplicate_detail(self, company.ticker, company.isin)
+        if detail is not None:
+            raise ValueError(detail)
 
         # Create new CompanyDB instance
         db_company = CompanyDB(
@@ -95,13 +109,9 @@ class CompanyRepository:
             # is already stored is a client error. Anything else is
             # still an unexpected database error.
             self.db.rollback()
-            if self.get_by_ticker(company.ticker) is not None:
-                raise ValueError(DUPLICATE_TICKER_DETAIL) from None
-            if (
-                company.isin is not None
-                and self.get_by_isin(company.isin) is not None
-            ):
-                raise ValueError(DUPLICATE_ISIN_DETAIL) from None
+            detail = _duplicate_detail(self, company.ticker, company.isin)
+            if detail is not None:
+                raise ValueError(detail) from None
             raise
 
     def get_by_id(self, company_id: int) -> Optional[CompanyDB]:
@@ -163,7 +173,8 @@ class CompanyRepository:
             CompanyDB or None: The updated company if found, None otherwise
 
         Raises:
-            IntegrityError: If update would violate unique constraints
+            ValueError: If this ticker or ISIN is already stored, or
+                another constraint fails
         """
         # Get existing company
         db_company = self.get_by_id(company_id)
@@ -185,19 +196,9 @@ class CompanyRepository:
         if "name" in update_data or "ticker" in update_data:
             new_name = update_data.get("name", db_company.name)
             new_ticker = update_data.get("ticker", db_company.ticker)
-
-            # Check if another company has the same name or ticker
-            existing = (
-                self.db.query(CompanyDB)
-                .filter(
-                    CompanyDB.id != company_id,
-                    (CompanyDB.name == new_name)
-                    | (CompanyDB.ticker == new_ticker),
-                )
-                .first()
-            )
-
-            if existing:
+            if self._another_company_has_name_or_ticker(
+                company_id, new_name, new_ticker
+            ):
                 raise ValueError("Company name or ticker already exists")
 
         if update_data.get("isin") is not None:
@@ -216,9 +217,38 @@ class CompanyRepository:
             self.db.commit()
             self.db.refresh(db_company)
             return db_company
-        except IntegrityError as e:
+        except IntegrityError:
+            # Same lookup as create. The driver text is not read:
+            # SQLite and PostgreSQL name the index differently.
+            # A stored ticker or ISIN is a client error. Anything
+            # else keeps the generic sentence, including a NOT NULL
+            # failure, so it is not reported as a duplicate ticker.
             self.db.rollback()
+            detail = _duplicate_detail(
+                self,
+                update_data.get("ticker", db_company.ticker),
+                (
+                    update_data["isin"]
+                    if "isin" in update_data
+                    else db_company.isin
+                ),
+                exclude_id=company_id,
+            )
+            if detail is not None:
+                raise ValueError(detail) from None
             raise ValueError("Update failed due to constraint violation")
+
+    def _another_company_has_name_or_ticker(self, company_id, name, ticker):
+        """True when a different row already uses this name or ticker."""
+        return (
+            self.db.query(CompanyDB)
+            .filter(
+                CompanyDB.id != company_id,
+                (CompanyDB.name == name) | (CompanyDB.ticker == ticker),
+            )
+            .first()
+            is not None
+        )
 
     def delete(self, company_id: int) -> bool:
         """
