@@ -31,9 +31,13 @@
   -> 1337 passed, 121 deselected, coverage 96.01%. PostgreSQL
   (`TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
   `pytest -m integration`) -> 121 passed, 1337 deselected, 0
-  xfailed. The earlier GitHub Actions run on `07f7983` only
-  covered the checksum helper. The run on this head is recorded
-  in `docs/work-state.md` after it finishes.
+  xfailed. GitHub Actions
+  [run 39462037357](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462037357)
+  on `04aaeeb` succeeded. SQLite job `118763701814`: 1337 passed,
+  121 deselected, coverage 96.01%. PostgreSQL job `118763702685`:
+  121 passed, 1337 deselected. The earlier run
+  [39460651955](https://github.com/Waber/Investment-AI-Companion/actions/runs/39460651955)
+  covered only the checksum helper (`07f7983`).
 - AI model: Grok 4.7. Account usage was not available in this
   session.
 - Time tracking (UTC, 2026-10-20): implementation continued from

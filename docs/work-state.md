@@ -28,16 +28,18 @@
   -> 1337 passed, 121 deselected, coverage 96.01%.
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
   and `pytest -m integration` -> 121 passed, 1337 deselected,
-  0 xfailed. GitHub Actions on this head is not recorded yet.
-  The earlier run
+  0 xfailed. GitHub Actions
+  [run 39462037357](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462037357)
+  on `04aaeeb` succeeded. SQLite job `118763701814` and PostgreSQL
+  job `118763702685` both concluded success (1337 passed / 96.01%
+  coverage, and 121 passed). The earlier run
   [39460651955](https://github.com/Waber/Investment-AI-Companion/actions/runs/39460651955)
   succeeded on `07f7983` only (checksum helper).
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: push this head (already based on `1f1678f`; rebase
-  only if `origin/master` moves), wait for both Actions jobs, then
-  the owner reviews PR #75 and merges with "Rebase and merge".
-  Agents do not merge.
+- Next action: the owner reviews PR #75 and merges with
+  "Rebase and merge". Agents do not merge.
+
 ## Collector hardening (#76): 2026-10-20
 
 - Branch `cursor/collector-hardening-76-fe8d`, rebased onto
@@ -92,6 +94,7 @@
 - Next action: wait for both GitHub Actions jobs on this commit, add
   the code-review table to the pull request, and record the run id.
   After the owner rebases and merges, #26 together with #16.
+
 ## Company and financial-metrics forms (#34, part): 2026-10-20
 
 - Branch `cursor/d5-company-metric-forms-cfb0`, based on
