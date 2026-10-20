@@ -22,6 +22,7 @@ from app.data_collectors.base import (
     Provenance,
     ProviderError,
     Sourced,
+    TransientProviderError,
 )
 from app.data_collectors.call_budget import (
     has_budget,
@@ -120,8 +121,9 @@ def _capped_timeout(requested: Any) -> float:
     Never longer than ``YFINANCE_HTTP_TIMEOUT_SECONDS``, and never
     longer than the time left on the call's deadline. A spent deadline
     becomes a tiny timeout. Raising here would be swallowed by
-    yfinance when it hides exceptions, and the call would look like
-    "no data" after a hang.
+    yfinance when it hides exceptions. The caller then checks the
+    result: empty data after a spent deadline is a transient error,
+    not a cached "no data".
     """
     try:
         numeric = float(requested)
@@ -136,8 +138,38 @@ def _capped_timeout(requested: Any) -> float:
 
 
 def _http_timeout() -> float:
-    """Timeout argument for ``Ticker.history``."""
+    """Timeout argument for ``PriceHistory`` ``history``.
+
+    yfinance 1.7 accepts ``timeout`` on ``history``. ``Ticker`` itself
+    does not, and the cookie helpers call ``session.get`` directly.
+    """
     return _capped_timeout(YFINANCE_HTTP_TIMEOUT_SECONDS)
+
+
+def _result_is_empty(result: Any) -> bool:
+    """True for None, an empty collection, or an empty data frame."""
+    if result is None:
+        return True
+    if isinstance(result, (str, dict, list, tuple)) and len(result) == 0:
+        return True
+    return getattr(result, "empty", None) is True
+
+
+def _raise_if_deadline_hid_the_result(result: Any) -> Any:
+    """Return ``result`` unless a spent deadline came back empty.
+
+    A 0.001 s timeout is swallowed by yfinance and looks like "no
+    data". The guard would cache that for the no-data TTL, and
+    fetch-company would answer HTTP 404 for a timeout. Nothing to
+    show after the deadline is a transient provider error instead:
+    HTTP 502, and the guard does not cache it. A real payload is
+    returned even when the deadline is already spent.
+    """
+    # ``remaining`` returns its default when no budget was pushed, so
+    # 1.0 here means "a budget exists and it is already spent".
+    if remaining(1.0) != 0 or not _result_is_empty(result):
+        return result
+    raise TransientProviderError("Collector deadline reached")
 
 
 def _with_capped_timeout(original: Any) -> Any:
@@ -160,30 +192,31 @@ def _with_capped_timeout(original: Any) -> Any:
 def _install_http_cap(stock: Any) -> None:
     """Force yfinance HTTP calls to use our timeout.
 
-    ``Ticker`` in yfinance 1.7 has no timeout argument. ``YfData.get``
-    and ``post`` are wrapped, and so are ``session.get`` and
-    ``session.post``. The cookie and crumb helpers call the session
-    directly with ``timeout=30``, so wrapping only ``YfData`` would
-    leave those calls at 30 seconds. The session is one shared object,
-    so the wrapper is installed once and reads the current deadline
-    on every request.
+    ``history`` takes a timeout (``PriceHistory`` passes it). ``Ticker``
+    does not, and the cookie helpers call ``session.get`` with
+    ``timeout=30``. ``YfData.get`` and ``post`` are wrapped, and so are
+    ``session.get`` and ``session.post``. The marker sits on the session
+    object. ``_open_ticker`` calls this again, so a session yfinance
+    replaces is capped too. The wrapper reads the current deadline on
+    every request.
     """
     data = getattr(stock, "_data", None)
     if data is None or not callable(getattr(data, "get", None)):
         return
     with _http_cap_lock:
-        if getattr(data, "_iac_http_cap", False):
-            return
-        data.get = _with_capped_timeout(data.get)
-        if callable(getattr(data, "post", None)):
-            data.post = _with_capped_timeout(data.post)
+        if not getattr(data, "_iac_http_cap", False):
+            data.get = _with_capped_timeout(data.get)
+            if callable(getattr(data, "post", None)):
+                data.post = _with_capped_timeout(data.post)
+            data._iac_http_cap = True
         session = getattr(data, "_session", None)
-        if session is not None:
-            if callable(getattr(session, "get", None)):
-                session.get = _with_capped_timeout(session.get)
-            if callable(getattr(session, "post", None)):
-                session.post = _with_capped_timeout(session.post)
-        data._iac_http_cap = True
+        if session is None or getattr(session, "_iac_http_cap", False):
+            return
+        if callable(getattr(session, "get", None)):
+            session.get = _with_capped_timeout(session.get)
+        if callable(getattr(session, "post", None)):
+            session.post = _with_capped_timeout(session.post)
+        session._iac_http_cap = True
 
 
 def _open_ticker(symbol: str) -> Any:
@@ -364,26 +397,24 @@ class YahooFinanceCollector:
 
             if _has_no_data(info):
                 logger.warning("No company info found for %r", symbol)
-                return None
-
-            # Extract relevant information
-            company_info = {
-                "name": info.get("longName") or info.get("shortName"),
-                "ticker": symbol,
-                "sector": info.get("sector"),
-                "industry": info.get("industry"),
-                "description": info.get("longBusinessSummary"),
-                "website": info.get("website"),
-                "country": info.get("country"),
-                "exchange": info.get("exchange"),
-                "currency": info.get("currency", "USD"),
-                "market_cap": info.get("marketCap"),
-                "employees": info.get("fullTimeEmployees"),
-                "founded": info.get("founded"),
-                "logo_url": info.get("logo_url"),
-            }
-
-            logger.info("Successfully fetched company info for %r", symbol)
+                company_info = None
+            else:
+                company_info = {
+                    "name": info.get("longName") or info.get("shortName"),
+                    "ticker": symbol,
+                    "sector": info.get("sector"),
+                    "industry": info.get("industry"),
+                    "description": info.get("longBusinessSummary"),
+                    "website": info.get("website"),
+                    "country": info.get("country"),
+                    "exchange": info.get("exchange"),
+                    "currency": info.get("currency", "USD"),
+                    "market_cap": info.get("marketCap"),
+                    "employees": info.get("fullTimeEmployees"),
+                    "founded": info.get("founded"),
+                    "logo_url": info.get("logo_url"),
+                }
+                logger.info("Successfully fetched company info for %r", symbol)
 
         except Exception as e:
             logger.error(
@@ -392,6 +423,9 @@ class YahooFinanceCollector:
                 type(e).__name__,
             )
             raise ProviderError("Yahoo Finance company info failed") from e
+        if company_info is None:
+            _raise_if_deadline_hid_the_result(None)
+            return None
         # Outside the try: a bad clock is a programming error (ValueError),
         # not a provider failure.
         return Sourced(company_info, self._provenance())
@@ -438,12 +472,11 @@ class YahooFinanceCollector:
 
             if hist.empty:
                 logger.warning("No historical data found for %r", symbol)
-                return None
-
-            logger.info(
-                "Successfully fetched %s records for %r", len(hist), symbol
-            )
-            return hist
+                hist = None
+            else:
+                logger.info(
+                    "Successfully fetched %s records for %r", len(hist), symbol
+                )
 
         except Exception as e:
             logger.error(
@@ -452,6 +485,10 @@ class YahooFinanceCollector:
                 type(e).__name__,
             )
             raise ProviderError("Yahoo Finance historical data failed") from e
+        if hist is None:
+            _raise_if_deadline_hid_the_result(None)
+            return None
+        return hist
 
     def fetch_price_history(
         self, ticker: str, period: str = "1y", interval: str = "1d"
@@ -586,53 +623,52 @@ class YahooFinanceCollector:
 
             if _has_no_data(info):
                 logger.warning("No key metrics found for %r", symbol)
-                return None
+                metrics = None
+            else:
+                metrics = {
+                    # Valuation metrics
+                    "pe_ratio": info.get("trailingPE"),
+                    "forward_pe": info.get("forwardPE"),
+                    "pb_ratio": info.get("priceToBook"),
+                    "ps_ratio": info.get("priceToSalesTrailing12Months"),
+                    "ev_ebitda": info.get("enterpriseToEbitda"),
+                    "ev_revenue": info.get("enterpriseToRevenue"),
+                    # Profitability metrics
+                    "roe": info.get("returnOnEquity"),
+                    "roa": info.get("returnOnAssets"),
+                    "profit_margin": info.get("profitMargins"),
+                    "operating_margin": info.get("operatingMargins"),
+                    "gross_margin": info.get("grossMargins"),
+                    # Growth metrics
+                    "revenue_growth": info.get("revenueGrowth"),
+                    "earnings_growth": info.get("earningsGrowth"),
+                    "earnings_quarterly_growth": info.get(
+                        "earningsQuarterlyGrowth"
+                    ),
+                    # Liquidity metrics
+                    "current_ratio": info.get("currentRatio"),
+                    "quick_ratio": info.get("quickRatio"),
+                    # Debt metrics. debt_to_assets is a ratio from totals
+                    # already on info, never totalDebtPerShare.
+                    "debt_to_equity": info.get("debtToEquity"),
+                    "debt_to_assets": (
+                        None
+                        if info.get("quoteType") in FUND_QUOTE_TYPES
+                        else _debt_to_assets(info)
+                    ),
+                    # Dividend metrics
+                    "dividend_yield": info.get("dividendYield"),
+                    "payout_ratio": info.get("payoutRatio"),
+                    "dividend_rate": info.get("dividendRate"),
+                    # Other metrics
+                    "beta": info.get("beta"),
+                    "52_week_high": info.get("fiftyTwoWeekHigh"),
+                    "52_week_low": info.get("fiftyTwoWeekLow"),
+                    "avg_volume": info.get("averageVolume"),
+                    "market_cap": info.get("marketCap"),
+                }
 
-            # Extract key metrics
-            metrics = {
-                # Valuation metrics
-                "pe_ratio": info.get("trailingPE"),
-                "forward_pe": info.get("forwardPE"),
-                "pb_ratio": info.get("priceToBook"),
-                "ps_ratio": info.get("priceToSalesTrailing12Months"),
-                "ev_ebitda": info.get("enterpriseToEbitda"),
-                "ev_revenue": info.get("enterpriseToRevenue"),
-                # Profitability metrics
-                "roe": info.get("returnOnEquity"),
-                "roa": info.get("returnOnAssets"),
-                "profit_margin": info.get("profitMargins"),
-                "operating_margin": info.get("operatingMargins"),
-                "gross_margin": info.get("grossMargins"),
-                # Growth metrics
-                "revenue_growth": info.get("revenueGrowth"),
-                "earnings_growth": info.get("earningsGrowth"),
-                "earnings_quarterly_growth": info.get(
-                    "earningsQuarterlyGrowth"
-                ),
-                # Liquidity metrics
-                "current_ratio": info.get("currentRatio"),
-                "quick_ratio": info.get("quickRatio"),
-                # Debt metrics. debt_to_assets is a ratio from totals
-                # already on info, never totalDebtPerShare.
-                "debt_to_equity": info.get("debtToEquity"),
-                "debt_to_assets": (
-                    None
-                    if info.get("quoteType") in FUND_QUOTE_TYPES
-                    else _debt_to_assets(info)
-                ),
-                # Dividend metrics
-                "dividend_yield": info.get("dividendYield"),
-                "payout_ratio": info.get("payoutRatio"),
-                "dividend_rate": info.get("dividendRate"),
-                # Other metrics
-                "beta": info.get("beta"),
-                "52_week_high": info.get("fiftyTwoWeekHigh"),
-                "52_week_low": info.get("fiftyTwoWeekLow"),
-                "avg_volume": info.get("averageVolume"),
-                "market_cap": info.get("marketCap"),
-            }
-
-            logger.info("Successfully fetched key metrics for %r", symbol)
+                logger.info("Successfully fetched key metrics for %r", symbol)
 
         except Exception as e:
             logger.error(
@@ -641,6 +677,9 @@ class YahooFinanceCollector:
                 type(e).__name__,
             )
             raise ProviderError("Yahoo Finance key metrics failed") from e
+        if metrics is None:
+            _raise_if_deadline_hid_the_result(None)
+            return None
         # Outside the try: a bad clock is a programming error (ValueError),
         # not a provider failure.
         return Sourced(metrics, self._provenance())
@@ -677,13 +716,13 @@ class YahooFinanceCollector:
                 len(limited_news),
                 symbol,
             )
-            return limited_news
 
         except Exception as e:
             logger.error(
                 "Error fetching news for %r: %s", symbol, type(e).__name__
             )
             raise ProviderError("Yahoo Finance news failed") from e
+        return _raise_if_deadline_hid_the_result(limited_news)
 
     def fetch_recommendations(self, ticker: str) -> Optional[Any]:
         """
@@ -712,10 +751,9 @@ class YahooFinanceCollector:
                 logger.info(
                     "Successfully fetched recommendations for %r", symbol
                 )
-                return recommendations
             else:
                 logger.warning("No recommendations found for %r", symbol)
-                return None
+                recommendations = None
 
         except Exception as e:
             logger.error(
@@ -724,3 +762,7 @@ class YahooFinanceCollector:
                 type(e).__name__,
             )
             raise ProviderError("Yahoo Finance recommendations failed") from e
+        if recommendations is None:
+            _raise_if_deadline_hid_the_result(None)
+            return None
+        return recommendations

@@ -97,6 +97,10 @@ class GuardPolicy:
     checks it), so a test can write ``GuardPolicy(rate_limit_calls=1)``
     and keep every other value realistic. The settings validate the
     ranges; this class trusts what it is given.
+
+    A TTL of 0 skips the cache for that capability. An argument that
+    cannot be hashed skips it too. Either one also disables the
+    one-leader de-dup, because there is no cache key to share.
     """
 
     ttl_company_info: int = 86400
@@ -283,9 +287,11 @@ class _GuardedBase:
             if hit:
                 logger.debug("Cache hit for %s %r", method_name, ticker)
                 return value
-            # A key that cannot be cached cannot be shared. A second
-            # miss while the leader is still fetching fails at once.
+            # A second miss while this key is already being fetched
+            # fails at once. It does not wait on the leader.
             return self._coalesced(key, method_name, method, bound, ttl)
+        # No cache key: the TTL is 0, or an argument cannot be hashed.
+        # There is nothing to share, so this calls the provider directly.
         return self._call_provider(method_name, method, bound)
 
     def _coalesced(

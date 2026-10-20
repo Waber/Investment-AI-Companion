@@ -2,10 +2,12 @@
 
 ## Collector hardening (#76): 2026-10-20
 
-- Branch `cursor/collector-hardening-76-fe8d`, based on current
-  `origin/master`. Refs #76. Not merged. PR #70 stays closed.
-  The old head `30b6f11` was not rebased; the behavior was ported
-  onto the guard from PR #72.
+- Branch `cursor/collector-hardening-76-fe8d`, rebased onto
+  `origin/master` `9d26948` (PR #77 is merged). Refs #76. Not
+  merged. PR #70 stays closed. The old head `30b6f11` was not
+  rebased; the behavior was ported onto the guard from PR #72.
+  Issue #75 is still open, so ISIN, instrument type, and
+  `normalize_name` were not added.
 - QA round 1: `__context__` is followed only for a `ProviderError`
   wrapper (a `KeyError` on that link fails after one call). `raise X
   from Y` sets `__suppress_context__` even when Y is not `None`, so
@@ -17,6 +19,10 @@
   fails at once instead of waiting. Yahoo `session.get` and
   `session.post` use the capped timeout. A ticker made only of dots
   is rejected.
+- Code review round 1: an empty Yahoo result after a spent deadline
+  is `TransientProviderError` (HTTP 502, not cached). The session
+  cap marker follows a replaced session. A failed leader frees its
+  key. De-dup is off when the TTL is 0 or the key cannot be hashed.
 - Completed: one deadline for waits and retries, an in-flight
   semaphore taken before the rate-limit wait (default 4), a
   normalized cache key with the raw ticker still sent upstream,
@@ -37,15 +43,16 @@
   are not done. The optional demo port race was not part of this
   change.
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3,
-  `requirements-dev.lock`. CI command -> 1338 passed, 121
-  deselected, coverage 95.38%. PostgreSQL was not run locally.
+  `requirements-dev.lock`. CI command -> 1405 passed, 121
+  deselected, coverage 95.62%. PostgreSQL was not run locally.
   GitHub Actions is the PostgreSQL run.
 - Active agents: none. Blockers: none.
-- Stop reason: security round 1 is implemented locally. Account usage
-  was not available in this session. The pull request stays ready for
-  review. Agents do not merge.
+- Stop reason: code review round 1 is implemented locally, on top of
+  the rebase onto `9d26948`. Account usage was not available in this
+  session. The pull request stays ready for review. Agents do not
+  merge.
 - Next action: wait for both GitHub Actions jobs on this commit, add
-  the security table to the pull request, and record the run id.
+  the code-review table to the pull request, and record the run id.
   After the owner rebases and merges, #26 together with #16.
 
 ## Company and financial-metrics forms (#34, part): 2026-10-20
@@ -53,7 +60,7 @@
 - Branch `cursor/d5-company-metric-forms-cfb0`, based on
   `origin/master` `1f1678f`.
   [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77)
-  says Refs #34 and leaves the issue open. Not merged.
+  says Refs #34 and leaves the issue open. Merged as `9d26948`.
 - Completed: create, edit, and delete forms for a company, and the
   same three actions for that company's financial metrics, under
   `/ui`. New files: `app/ui/forms.py`, `app/ui/form_fields.py`,

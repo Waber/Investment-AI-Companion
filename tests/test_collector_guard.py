@@ -3,6 +3,7 @@
 Tests the capabilities, the cache, the rate limit, retries and threads.
 """
 
+import inspect
 import logging
 import threading
 import time
@@ -18,7 +19,7 @@ from app.data_collectors.base import (
     ProviderError,
     TransientProviderError,
 )
-from app.data_collectors.guard import GuardPolicy, guard_collector
+from app.data_collectors.guard import GuardPolicy, _cache_key, guard_collector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from tests.collector_stubs import (
     STUB_RETRIEVED_AT,
@@ -800,6 +801,40 @@ def test_key_error_on_context_is_not_retried():
     assert inner.calls == 1
     assert type(caught.value) is ProviderError
     assert caught.value.__cause__ is None
+
+
+def test_a_failed_leader_frees_the_key_for_the_next_call():
+    """After the leader fails, the same ticker can lead the next call."""
+    inner = ScriptedLookup(ProviderError("bad"), sourced({"name": "Acme"}))
+    guarded = make(inner, FakeClock(), max_retries=0)
+
+    with pytest.raises(ProviderError):
+        guarded.fetch_company_info("ACME")
+
+    assert guarded._flights == set()
+    assert guarded.fetch_company_info("ACME").value["name"] == "Acme"
+    assert inner.calls == 2
+
+
+def test_coalesced_returns_a_cache_hit_without_another_call():
+    """A value stored before the leader lock is returned as a hit.
+
+    ``_guarded`` checks the cache, then ``_coalesced`` checks again.
+    This calls the second check directly, with the entry already there.
+    """
+    inner = ScriptedLookup(sourced({"name": "Acme"}))
+    guarded = make(inner, FakeClock())
+    first = guarded.fetch_company_info("ACME")
+    method = inner.fetch_company_info
+    bound = inspect.signature(method).bind("ACME")
+    bound.apply_defaults()
+    key = _cache_key("fetch_company_info", dict(bound.arguments))
+
+    again = guarded._coalesced(key, "fetch_company_info", method, bound, 86400)
+
+    assert again == first
+    assert inner.calls == 1
+    assert guarded._flights == set()
 
 
 def test_cache_key_normalizes_ticker_and_upstream_gets_the_raw_one():
