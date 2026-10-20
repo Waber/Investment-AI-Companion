@@ -38,7 +38,9 @@
   121 deselected, coverage 95.97%. Scoped black, isort, and flake8
   passed. The language buttons were also clicked in a browser, with
   the keyboard, and on a narrow viewport. PostgreSQL was not run
-  locally. GitHub Actions for this head is not recorded yet.
+  locally. GitHub Actions on `d5f5d2b` succeeded
+  ([run 39492311897](https://github.com/Waber/Investment-AI-Companion/actions/runs/39492311897)):
+  PostgreSQL job 118868382717 and SQLite job 118868383103.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-20 about 20:12 to 20:28.
 - Next: the owner reviews PR #81 again. It still says Refs #80 and
