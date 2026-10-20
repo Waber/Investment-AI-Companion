@@ -36,10 +36,12 @@
   isort, and flake8 passed. `pip-audit` on both locks: no known
   vulnerabilities. `python-multipart` 0.0.32 with hashes.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  The earlier run
+  GitHub Actions
+  [run 39466655138](https://github.com/Waber/Investment-AI-Companion/actions/runs/39466655138)
+  on `5602504` succeeded. SQLite job `118779699006` and PostgreSQL
+  job `118779699318` both concluded success. The earlier run
   [39462413658](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462413658)
-  on `76367fc` succeeded (SQLite job `118765004831`, PostgreSQL job
-  `118765005870`). The QA commit's run is recorded after it finishes.
+  on `76367fc` also succeeded.
 - Browser: create, inline validation, metrics create, edit, and
   delete confirmation exercised on `127.0.0.1:8000` in PL and EN
   before these QA notes. The notes are covered by pytest.
