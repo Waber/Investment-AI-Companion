@@ -17,11 +17,11 @@
       <span class="language-switch">
         <span>{{ t['language.label'] }}</span>
         <form method="post" action="/ui/language/pl">
-          <input type="hidden" name="next" value="{{ next_path }}">
+          <input type="hidden" name="next" value="{{ next_path }}" id="language-next-pl">
           <button type="submit"{% if language == "pl" %} aria-current="true"{% endif %}>{{ t['language.pl'] }}</button>
         </form>
         <form method="post" action="/ui/language/en">
-          <input type="hidden" name="next" value="{{ next_path }}">
+          <input type="hidden" name="next" value="{{ next_path }}" id="language-next-en">
           <button type="submit"{% if language == "en" %} aria-current="true"{% endif %}>{{ t['language.en'] }}</button>
         </form>
       </span>

@@ -107,7 +107,7 @@ def _language_next(html, code):
     """Return the hidden ``next`` value on the PL or EN form."""
     match = re.search(
         rf'<form method="post" action="/ui/language/{code}">\s*'
-        rf'<input type="hidden" name="next" value="([^"]*)">',
+        rf'<input type="hidden" name="next" value="([^"]*)"',
         html,
     )
     assert match is not None
@@ -313,7 +313,13 @@ async def test_history_restore_returns_the_full_page(seeded):
     assert 'action="/ui/language/en"' in restored.text
     assert 'method="post"' in restored.text
     assert "hx-post" not in restored.text
-    assert "/ui/language/" not in fragment.text
+    assert 'hx-swap-oob="outerHTML"' not in restored.text
+    # The fragment carries the return path out of band. It still has
+    # no language form, header, or disclaimer.
+    assert 'action="/ui/language/' not in fragment.text
+    assert 'hx-swap-oob="outerHTML"' in fragment.text
+    assert 'id="language-next-pl"' in fragment.text
+    assert 'value="/ui"' in fragment.text
     _assert_ui_headers(fragment)
 
 
@@ -429,7 +435,8 @@ async def test_language_switch_requires_same_origin(client):
     assert 'action="/ui/language/en"' in page.text
     assert (
         'action="/ui/language/en">\n'
-        '          <input type="hidden" name="next" value="/ui">\n'
+        '          <input type="hidden" name="next" value="/ui" '
+        'id="language-next-en">\n'
         '          <button type="submit" aria-current="true">'
     ) in page.text
     client.cookies.clear()
@@ -619,6 +626,48 @@ async def test_filters_limit_the_list_and_htmx_returns_a_fragment(seeded):
     assert "Brak instrumentów" in mismatch.text
     assert "DEMO_PL_TECH" not in mismatch.text
     assert "DEMO_US_GROWTH" not in mismatch.text
+
+
+def _oob_language_next(html, code):
+    """Return the out-of-band ``next`` value for one language button."""
+    match = re.search(
+        rf'<input type="hidden" name="next" value="([^"]*)" '
+        rf'id="language-next-{code}" hx-swap-oob="outerHTML">',
+        html,
+    )
+    assert match is not None
+    return match.group(1).replace("&amp;", "&")
+
+
+@pytest.mark.asyncio
+async def test_htmx_filter_updates_the_language_return_path(seeded):
+    """A pushed filter URL must replace the hidden language next.
+
+    The list starts at ``q=Lodz``. HTMX then swaps the results for
+    ``q=Nope`` and pushes that URL. The header forms are outside the
+    swap, so the fragment sends the new ``next`` out of band.
+    """
+    first = await seeded.get("/ui", params={"q": "Lodz"})
+    assert _language_next(first.text, "pl") == "/ui?q=Lodz"
+    assert "hx-swap-oob" not in first.text
+
+    fragment = await seeded.get(
+        "/ui", params={"q": "Nope"}, headers={"HX-Request": "true"}
+    )
+    assert fragment.status_code == 200
+    assert "<html" not in fragment.text.casefold()
+    assert _oob_language_next(fragment.text, "pl") == "/ui?q=Nope"
+    assert _oob_language_next(fragment.text, "en") == "/ui?q=Nope"
+    assert "q=Lodz" not in fragment.text
+
+    both = await seeded.get(
+        "/ui",
+        params={"q": "Nope", "exchange": "DEMO-WSE"},
+        headers={"HX-Request": "true"},
+    )
+    assert (
+        _oob_language_next(both.text, "en") == "/ui?q=Nope&exchange=DEMO-WSE"
+    )
 
 
 @pytest.mark.asyncio
