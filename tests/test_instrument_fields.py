@@ -224,6 +224,24 @@ async def test_update_changes_type_and_can_clear_isin(client):
 
 
 @pytest.mark.asyncio
+async def test_explicit_null_instrument_type_on_update_is_422(client):
+    created = await client.post(
+        COMPANIES,
+        json={"name": "Keep", "ticker": "KEEP", "instrument_type": "ETF"},
+    )
+    assert created.status_code == 201
+    url = f"{COMPANIES}{created.json()['id']}"
+
+    rejected = await client.put(url, json={"instrument_type": None})
+
+    assert rejected.status_code == 422
+    assert "instrument_type" in rejected.text
+    fetched = await client.get(url)
+    assert fetched.status_code == 200
+    assert fetched.json()["instrument_type"] == "ETF"
+
+
+@pytest.mark.asyncio
 async def test_update_rejects_an_isin_owned_by_another_company(client):
     first = await client.post(
         COMPANIES,
