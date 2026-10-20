@@ -16,6 +16,13 @@ def test_name_is_stripped_and_a_blank_name_is_rejected():
         CompanyCreate(name="   ", ticker="AAA")
     with pytest.raises(ValidationError):
         CompanyUpdate(name=" ")
+    for invisible in ("\u200b", "\ufeff", "\u200c\u200d", "  \u200b  "):
+        with pytest.raises(ValidationError):
+            CompanyCreate(name=invisible, ticker="AAA")
+        with pytest.raises(ValidationError):
+            CompanyUpdate(name=invisible)
+    kept = CompanyCreate(name="Acme\u200b", ticker="AAA")
+    assert kept.name == "Acme\u200b"
 
 
 @pytest.mark.asyncio
