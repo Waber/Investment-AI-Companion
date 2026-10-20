@@ -3,8 +3,9 @@
 ## Company and financial-metrics forms (#34, part): 2026-10-20
 
 - Branch `cursor/d5-company-metric-forms-cfb0`, based on
-  `origin/master` `1f1678f`. Pull request says Refs #34, not Closes.
-  Not merged.
+  `origin/master` `1f1678f`.
+  [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77)
+  says Refs #34 and leaves the issue open. Not merged.
 - Completed: create, edit, and delete forms for a company, and the
   same three actions for that company's financial metrics, under
   `/ui`. New files: `app/ui/forms.py`, `app/ui/form_fields.py`,
@@ -27,8 +28,11 @@
   -> 1349 passed, 121 deselected, coverage 95.71%. Scoped black,
   isort, and flake8 passed. `pip-audit` on both locks: no known
   vulnerabilities. `python-multipart` 0.0.32 with hashes.
-  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`). CI run
-  URL is filled in after the pull request opens.
+  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
+  GitHub Actions
+  [run 39462413658](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462413658)
+  on `76367fc` succeeded. SQLite job `118765004831` and PostgreSQL
+  job `118765005870` both concluded success.
 - Browser: create, inline validation, metrics create, edit, and
   delete confirmation exercised on `127.0.0.1:8000` in PL and EN.
 - Active agents: none. Blockers: none. Account usage was not
