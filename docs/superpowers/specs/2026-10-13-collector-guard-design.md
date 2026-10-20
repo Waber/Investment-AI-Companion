@@ -26,8 +26,9 @@ collector now, not only built as a hook.
 - Mapping yfinance errors (`YFRateLimitError`, HTTP 429, timeouts) to
   the retryable error. R1 (#54) does that. Until then the retry path is
   exercised only by tests.
-- Request coalescing was out of scope for #24. #76 shares one
-  upstream call across simultaneous misses of the same cache key.
+- Request coalescing was out of scope for #24. #76 keeps one leader
+  per key. A second request for that key fails at once instead of
+  waiting, so it does not hold a worker. The leader's result is cached.
 - A shared or persistent cache (Redis, disk). The cache is per process.
 - Rewriting currency values already stored. There are no Alembic
   migration files; the schema is built with `create_all`.

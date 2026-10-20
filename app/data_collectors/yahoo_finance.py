@@ -99,8 +99,9 @@ _install_yfinance_log_filter()
 def _accepted_symbol(ticker: str) -> str:
     """The ticker Yahoo may see, or a provider error when it is refused.
 
-    ``normalize_ticker`` strips, uppercases, and rejects ``.``, ``..``,
-    non-ASCII, and control characters. The refusal is logged without
+    ``normalize_ticker`` strips, uppercases, and rejects a ticker that
+    is only dots, plus non-ASCII and control characters. The refusal is
+    logged without
     the ticker, so a newline in it cannot forge a log line.
     """
     try:
@@ -139,12 +140,33 @@ def _http_timeout() -> float:
     return _capped_timeout(YFINANCE_HTTP_TIMEOUT_SECONDS)
 
 
-def _install_http_cap(stock: Any) -> None:
-    """Force yfinance's HTTP ``get`` and ``post`` to use our timeout.
+def _with_capped_timeout(original: Any) -> Any:
+    """Return ``original`` with its ``timeout`` keyword replaced.
 
-    ``Ticker`` in yfinance 1.7 has no timeout argument. The session is
-    one shared object, so the wrapper is installed once and reads the
-    current deadline on every request.
+    yfinance 1.7 passes ``timeout=30`` into ``YfData.get`` and also
+    straight into ``session.get`` from ``_get_cookie_and_crumb``. Both
+    have to go through this wrapper. A missing timeout is capped too:
+    the requests default of ``None`` would wait with no limit.
+    """
+
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        supplied = kwargs.get("timeout", YFINANCE_HTTP_TIMEOUT_SECONDS)
+        kwargs["timeout"] = _capped_timeout(supplied)
+        return original(*args, **kwargs)
+
+    return wrapped
+
+
+def _install_http_cap(stock: Any) -> None:
+    """Force yfinance HTTP calls to use our timeout.
+
+    ``Ticker`` in yfinance 1.7 has no timeout argument. ``YfData.get``
+    and ``post`` are wrapped, and so are ``session.get`` and
+    ``session.post``. The cookie and crumb helpers call the session
+    directly with ``timeout=30``, so wrapping only ``YfData`` would
+    leave those calls at 30 seconds. The session is one shared object,
+    so the wrapper is installed once and reads the current deadline
+    on every request.
     """
     data = getattr(stock, "_data", None)
     if data is None or not callable(getattr(data, "get", None)):
@@ -152,38 +174,15 @@ def _install_http_cap(stock: Any) -> None:
     with _http_cap_lock:
         if getattr(data, "_iac_http_cap", False):
             return
-        original_get = data.get
-        original_post = getattr(data, "post", None)
-
-        def get(url, params=None, timeout=30, **kwargs):
-            return original_get(
-                url,
-                params=params,
-                timeout=_capped_timeout(timeout),
-                **kwargs,
-            )
-
-        data.get = get
-        if callable(original_post):
-
-            def post(
-                url,
-                body=None,
-                params=None,
-                timeout=30,
-                data=None,
-                **kwargs,
-            ):
-                return original_post(
-                    url,
-                    body=body,
-                    params=params,
-                    timeout=_capped_timeout(timeout),
-                    data=data,
-                    **kwargs,
-                )
-
-            data.post = post
+        data.get = _with_capped_timeout(data.get)
+        if callable(getattr(data, "post", None)):
+            data.post = _with_capped_timeout(data.post)
+        session = getattr(data, "_session", None)
+        if session is not None:
+            if callable(getattr(session, "get", None)):
+                session.get = _with_capped_timeout(session.get)
+            if callable(getattr(session, "post", None)):
+                session.post = _with_capped_timeout(session.post)
         data._iac_http_cap = True
 
 

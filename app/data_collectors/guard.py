@@ -4,8 +4,10 @@ Cache, rate limit and retry in front of a real market-data collector.
 ``guard_collector(inner, policy)`` returns an object that has the same
 capability methods as ``inner``, and only those. A call first looks in
 a TTL cache, so a repeat call within the TTL does not reach the
-provider. A cache miss takes a slot in a sliding-window rate limit and
-calls the provider. A ``TransientProviderError`` is retried after an
+provider. A cache miss takes an in-flight permit first. Only then does
+it take a slot in the sliding-window rate limit and call the provider.
+A second caller for a key that is already being fetched fails at once
+instead of waiting. A ``TransientProviderError`` is retried after an
 exponential backoff with full jitter; after the last retry it reaches
 the caller. Rate-limit waits and retry sleeps share one deadline
 (``total_deadline``), so they cannot stack into minutes. The deadline
@@ -33,7 +35,17 @@ import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Callable, Deque, Dict, Hashable, List, Optional, Tuple
+from typing import (
+    Any,
+    Callable,
+    Deque,
+    Dict,
+    Hashable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 
 from app.data_collectors.base import (
     Fundamentals,
@@ -200,19 +212,6 @@ def _has_transient(exc: BaseException) -> bool:
 _MISS = object()
 
 
-class _Flight:
-    """One provider call that other threads for the same key wait on.
-
-    The leader fills ``result`` or ``error``, then sets ``done``.
-    Waiters block on ``done`` instead of calling the provider again.
-    """
-
-    def __init__(self) -> None:
-        self.done = threading.Event()
-        self.result: Any = _MISS
-        self.error: Optional[BaseException] = None
-
-
 class _GuardedBase:
     """The guarded call path shared by every guarded collector.
 
@@ -249,11 +248,14 @@ class _GuardedBase:
         self._calls: Deque[float] = deque()
         # How many provider calls may run at once. ``acquire(blocking=
         # False)`` is Java's ``Semaphore.tryAcquire``: it fails at once
-        # instead of parking another worker. Cache hits do not take one.
+        # instead of parking another worker. The permit is taken before
+        # the rate-limit wait, so a rejected call does not sleep and
+        # does not record a token. Cache hits do not take one.
         self._inflight = threading.BoundedSemaphore(policy.max_inflight)
-        # Cache key -> the call already fetching it. A second miss waits
-        # for that result instead of calling the provider again.
-        self._flights: Dict[Hashable, "_Flight"] = {}
+        # Keys whose leader is inside the provider call. A second miss
+        # for one of these fails at once. It does not wait: waiting
+        # would hold a server worker with no permit.
+        self._flights: Set[Hashable] = set()
 
     @property
     def inner(self) -> Any:
@@ -281,8 +283,8 @@ class _GuardedBase:
             if hit:
                 logger.debug("Cache hit for %s %r", method_name, ticker)
                 return value
-            # Two requests for the same key at the same time share one
-            # provider call. A key that cannot be cached cannot be shared.
+            # A key that cannot be cached cannot be shared. A second
+            # miss while the leader is still fetching fails at once.
             return self._coalesced(key, method_name, method, bound, ttl)
         return self._call_provider(method_name, method, bound)
 
@@ -294,71 +296,46 @@ class _GuardedBase:
         bound: inspect.BoundArguments,
         ttl: int,
     ) -> Any:
-        """One upstream call per key while that call is in progress.
+        """One leader per key. A second caller does not wait.
 
-        The leader calls the provider. Other threads wait on an
-        ``Event`` (Java's ``CountDownLatch`` of one) and then take the
-        same result or the same error. They do not take a rate-limit
-        slot and they do not take an in-flight permit.
+        Waiting held a worker for up to the whole deadline and did not
+        take an in-flight permit, so a burst of one ticker could fill
+        the server's thread pool. The follower raises ``ProviderError``
+        at once (HTTP 502). It takes no permit and no rate-limit token.
+        The leader still makes one upstream call. Its result is cached,
+        so a later request for that key does not call the provider.
         """
-        started = self._clock()
+        ticker = bound.arguments.get("ticker")
         with self._lock:
             cached = self._lookup_locked(key)
             if cached is not _MISS:
-                value = cached
-                flight = None
                 leader = False
+                busy = False
+            elif key in self._flights:
+                cached = None
+                leader = False
+                busy = True
             else:
-                value = None
-                flight = self._flights.get(key)
-                if flight is None:
-                    flight = _Flight()
-                    self._flights[key] = flight
-                    leader = True
-                else:
-                    leader = False
-        if flight is None:
-            return copy.deepcopy(value)
-        if not leader:
-            return self._wait_for_flight(flight, started, method_name, bound)
+                self._flights.add(key)
+                cached = None
+                leader = True
+                busy = False
+        if not leader and not busy:
+            return copy.deepcopy(cached)
+        if busy:
+            logger.warning(
+                "Duplicate in-flight fetch for %s %r", method_name, ticker
+            )
+            raise ProviderError(
+                "A collector call for this ticker is already in flight"
+            )
         try:
             result = self._call_provider(method_name, method, bound)
             self._remember(key, result, ttl)
-            flight.result = result
             return result
-        except Exception as exc:
-            flight.error = exc
-            raise
         finally:
-            if flight.error is None and flight.result is _MISS:
-                flight.error = ProviderError("Data provider error")
             with self._lock:
-                current = self._flights.get(key)
-                if current is flight:
-                    del self._flights[key]
-            flight.done.set()
-
-    def _wait_for_flight(
-        self,
-        flight: "_Flight",
-        started: float,
-        method_name: str,
-        bound: inspect.BoundArguments,
-    ) -> Any:
-        """Wait for the leader, but not past this call's deadline."""
-        ticker = bound.arguments.get("ticker")
-        remaining_s = self._policy.total_deadline - (self._clock() - started)
-        if remaining_s <= 0 or not flight.done.wait(timeout=remaining_s):
-            logger.warning(
-                "Deadline reached for %s %r after %.2f s",
-                method_name,
-                ticker,
-                self._clock() - started,
-            )
-            raise ProviderError("Collector deadline reached")
-        if flight.error is not None:
-            raise flight.error
-        return copy.deepcopy(flight.result)
+                self._flights.discard(key)
 
     def _remember(self, key: Hashable, result: Any, ttl: int) -> None:
         """Store ``result`` for ``ttl`` seconds, or skip a short no-data.
@@ -382,9 +359,12 @@ class _GuardedBase:
     ) -> Any:
         """Call the provider under the rate limit, retrying if transient.
 
-        Only ``TransientProviderError`` is retried, after a backoff
-        delay. Every attempt takes its own rate-limit slot. Any other
-        exception, and the last transient one, reaches the caller.
+        The in-flight permit is taken first, with ``acquire(blocking=
+        False)``. A full pool raises before any rate-limit sleep and
+        before a token is recorded. The permit stays held through the
+        rate-limit wait and the provider call, then ``finally`` releases
+        it before a retry sleep. Only ``TransientProviderError`` is
+        retried. Every attempt takes its own rate-limit slot.
         """
         ticker = bound.arguments.get("ticker")
         retries = self._policy.max_retries
@@ -395,44 +375,57 @@ class _GuardedBase:
         token = push_budget(started + self._policy.total_deadline, self._clock)
         try:
             while True:
-                self._acquire_slot(method_name, ticker, started)
-                try:
-                    return self._call_upstream(
-                        method, bound, method_name, ticker
+                if not self._inflight.acquire(blocking=False):
+                    logger.warning(
+                        "In-flight limit reached for %s %r",
+                        method_name,
+                        ticker,
                     )
-                except Exception as exc:
-                    if not self._should_retry(exc, attempt, retries):
-                        if isinstance(exc, ProviderError):
-                            raise
-                        # A raw ValueError used to become HTTP 400 and
-                        # copy its text into the body. The fixed message
-                        # has no provider text, and ``from None`` drops
-                        # the chain so the text is not attached.
+                    raise ProviderError(
+                        "Too many collector calls are in flight"
+                    )
+                try:
+                    self._acquire_slot(method_name, ticker, started)
+                    try:
+                        return method(*bound.args, **bound.kwargs)
+                    except Exception as exc:
+                        if not self._should_retry(exc, attempt, retries):
+                            if isinstance(exc, ProviderError):
+                                raise
+                            # A raw ValueError used to become HTTP 400
+                            # and copy its text into the body. The fixed
+                            # message has no provider text, and
+                            # ``from None`` drops the chain so the text
+                            # is not attached.
+                            logger.warning(
+                                "Unexpected %s in %s for %r",
+                                type(exc).__name__,
+                                method_name,
+                                ticker,
+                            )
+                            raise ProviderError(
+                                "Data provider error"
+                            ) from None
+                        delay = self._backoff_delay(attempt)
+                        # The inner collector logged the provider text.
+                        # This line names the class, the method and the
+                        # ticker.
                         logger.warning(
-                            "Unexpected %s in %s for %r",
+                            "Transient %s in %s for %r; "
+                            "retry %d of %d in %.2f s",
                             type(exc).__name__,
                             method_name,
                             ticker,
+                            attempt,
+                            retries,
+                            delay,
                         )
-                        raise ProviderError("Data provider error") from None
-                    delay = self._backoff_delay(attempt)
-                    # The inner collector logged the provider's own text.
-                    # This line names only the class, the method and the
-                    # ticker.
-                    logger.warning(
-                        "Transient %s in %s for %r; "
-                        "retry %d of %d in %.2f s",
-                        type(exc).__name__,
-                        method_name,
-                        ticker,
-                        attempt,
-                        retries,
-                        delay,
-                    )
-                    self._sleep_within_deadline(
-                        started, delay, method_name, ticker
-                    )
-                    attempt += 1
+                finally:
+                    self._inflight.release()
+                self._sleep_within_deadline(
+                    started, delay, method_name, ticker
+                )
+                attempt += 1
         finally:
             pop_budget(token)
 
@@ -450,40 +443,20 @@ class _GuardedBase:
             return False
         return _has_transient(exc)
 
-    def _call_upstream(
-        self,
-        method: Callable[..., Any],
-        bound: inspect.BoundArguments,
-        method_name: str,
-        ticker: Any,
-    ) -> Any:
-        """Run one provider call if a permit is free.
-
-        The permit covers only this call. It is released before the
-        retry sleep, so a backoff does not hold a worker slot. Failing
-        to get a permit is immediate: this method does not wait.
-        """
-        if not self._inflight.acquire(blocking=False):
-            logger.warning(
-                "In-flight limit reached for %s %r", method_name, ticker
-            )
-            raise ProviderError("Too many collector calls are in flight")
-        try:
-            return method(*bound.args, **bound.kwargs)
-        finally:
-            self._inflight.release()
-
     def _acquire_slot(
         self, method_name: str, ticker: Any, started: float
     ) -> None:
         """Wait for a free slot in the sliding window, or fail.
 
-        At most ``rate_limit_calls`` provider calls may start within any
-        ``rate_limit_period``. When the window is full, wait until the
-        oldest call leaves it, as long as the total wait stays within
-        ``rate_limit_max_wait``. Otherwise raise a plain
-        ``ProviderError`` without calling the provider. It is not
-        transient, because a retry would only wait again.
+        The caller already holds an in-flight permit. This method
+        records a timestamp only when that permit is held and a slot
+        is free, so a call rejected for the in-flight limit never
+        burns a token. At most ``rate_limit_calls`` provider calls may
+        start within any ``rate_limit_period``. When the window is
+        full, wait until the oldest call leaves it, as long as the
+        total wait stays within ``rate_limit_max_wait``. Otherwise
+        raise a plain ``ProviderError`` without calling the provider.
+        It is not transient, because a retry would only wait again.
         """
         period = self._policy.rate_limit_period
         waited = 0.0

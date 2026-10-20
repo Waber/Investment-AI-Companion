@@ -10,15 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 # dots, dashes, carets, and equals signs in GPW, EU, US, index, and
 # FX symbols (PKN.WA, BRK-B, ^GSPC, EURUSD=X). Control characters and
 # spaces are not in the class.
-# ``.`` and ``..`` are not symbols. They would be path segments if a
-# ticker were ever joined onto a directory. ``PKN.WA`` still matches.
-# Pydantic's regex engine has no lookahead, so the shape is two
-# alternatives: a symbol that does not start with ``.``, or one that
-# starts with ``.`` and is longer than ``.`` and ``..``.
-TICKER_PATTERN = (
-    r"^(?:[A-Z0-9_\-^=][A-Z0-9._\-^=]{0,19}"
-    r"|\.(?:[A-Z0-9_\-^=]|[A-Z0-9._\-^=]{2})[A-Z0-9._\-^=]{0,17})$"
-)
+# ``.``, ``..``, and any ticker made only of dots are not symbols.
+# They would be path segments if a ticker were ever joined onto a
+# directory. ``PKN.WA``, ``.A``, and ``..A`` still match. Pydantic's
+# regex engine has no lookahead, so "not only dots" is written as
+# "there is one character that is not a dot". The ``{0,19}`` on both
+# sides can add up to more than 20 characters; ``normalize_ticker``
+# and ``max_length=20`` reject that.
+TICKER_PATTERN = r"^[A-Z0-9._\-^=]{0,19}[A-Z0-9_\-^=][A-Z0-9._\-^=]{0,19}$"
+TICKER_MAX_LENGTH = 20
 # Three ASCII letters, either case, before normalization.
 _CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
 # Yahoo's minor-unit codes, where the letter case is the meaning:
@@ -52,7 +52,10 @@ def normalize_ticker(value: object) -> object:
     if any(ord(char) < 32 or ord(char) == 127 for char in value):
         raise ValueError("ticker must not contain control characters")
     normalized = value.strip().upper()
-    if _TICKER_RE.fullmatch(normalized) is None:
+    if (
+        len(normalized) > TICKER_MAX_LENGTH
+        or _TICKER_RE.fullmatch(normalized) is None
+    ):
         raise ValueError(
             "ticker must match " + TICKER_PATTERN + " after trim and uppercase"
         )
@@ -140,6 +143,7 @@ class CompanyCreate(_CompanyWriteChecks):
     name: str = Field(..., max_length=255, description="Company name")
     ticker: str = Field(
         ...,
+        max_length=TICKER_MAX_LENGTH,
         pattern=TICKER_PATTERN,
         description="Stock ticker symbol",
     )
@@ -181,7 +185,9 @@ class CompanyUpdate(_CompanyWriteChecks):
     """
 
     name: Optional[str] = Field(None, max_length=255)
-    ticker: Optional[str] = Field(None, pattern=TICKER_PATTERN)
+    ticker: Optional[str] = Field(
+        None, max_length=TICKER_MAX_LENGTH, pattern=TICKER_PATTERN
+    )
     sector: Optional[str] = Field(None, max_length=100)
     industry: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=DESCRIPTION_MAX_LENGTH)

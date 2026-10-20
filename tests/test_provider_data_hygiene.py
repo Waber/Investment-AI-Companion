@@ -94,7 +94,7 @@ VALID_TICKERS = (
 
 # Control characters stay in the value. strip() would hide a trailing
 # newline, and the rule is to reject the character, not delete it.
-DOT_TICKERS = (".", "..")
+DOT_TICKERS = (".", "..", "...", "." * 20)
 
 CONTROL_TICKERS = (
     "AAPL\nINFO forged",
@@ -200,10 +200,13 @@ async def test_non_ascii_ticker_is_rejected_on_create(client, ticker):
 
 @pytest.mark.parametrize("ticker", DOT_TICKERS)
 def test_dot_and_dotdot_tickers_are_rejected(ticker):
-    """``.`` and ``..`` are not symbols. ``PKN.WA`` still is."""
+    """A ticker made only of dots is not a symbol. ``PKN.WA`` still is."""
     with pytest.raises(ValueError, match="ticker must match"):
         normalize_ticker(ticker)
     assert normalize_ticker("PKN.WA") == "PKN.WA"
+    assert normalize_ticker(".A") == ".A"
+    assert normalize_ticker("..A") == "..A"
+    assert normalize_ticker("...A") == "...A"
 
 
 @pytest.mark.asyncio

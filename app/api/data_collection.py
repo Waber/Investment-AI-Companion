@@ -27,6 +27,7 @@ from app.data_collectors.guard import GuardPolicy, guard_collector
 from app.data_collectors.yahoo_finance import YahooFinanceCollector
 from app.models.company import (
     DESCRIPTION_MAX_LENGTH,
+    TICKER_MAX_LENGTH,
     TICKER_PATTERN,
     normalize_ticker,
 )
@@ -89,7 +90,9 @@ def reset_collector() -> None:
 class FetchCompanyRequest(BaseModel):
     """Request model for fetching company data."""
 
-    ticker: str = Field(..., pattern=TICKER_PATTERN)
+    ticker: str = Field(
+        ..., max_length=TICKER_MAX_LENGTH, pattern=TICKER_PATTERN
+    )
 
     model_config = ConfigDict(
         json_schema_extra={"example": {"ticker": "AAPL"}}

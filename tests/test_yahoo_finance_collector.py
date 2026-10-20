@@ -581,3 +581,65 @@ def test_http_get_and_post_share_the_deadline(monkeypatch):
     assert seen
     assert all(timeout <= 4 for timeout in seen)
     assert all(timeout > 0 for timeout in seen)
+
+
+def test_session_calls_use_the_capped_timeout():
+    """Cookie and crumb calls hit ``session.get``, not ``YfData.get``.
+
+    yfinance 1.7 passes ``timeout=30`` straight into the session. No
+    socket is opened: the session here only records the timeout.
+    """
+    from app.data_collectors.call_budget import pop_budget, push_budget
+    from app.data_collectors.yahoo_finance import _install_http_cap
+
+    seen = []
+
+    class _Session:
+        def get(self, url=None, **kwargs):
+            seen.append(kwargs.get("timeout"))
+            return {}
+
+        def post(self, url=None, **kwargs):
+            seen.append(kwargs.get("timeout"))
+            return {}
+
+    class _Data:
+        def __init__(self):
+            self._session = _Session()
+
+        def get(self, url, params=None, timeout=30):
+            seen.append(timeout)
+            return {}
+
+        def post(self, url, body=None, params=None, timeout=30, data=None):
+            seen.append(timeout)
+            return {}
+
+    class _Stock:
+        def __init__(self):
+            self._data = _Data()
+
+    stock = _Stock()
+    _install_http_cap(stock)
+    token = push_budget(time.monotonic() + 4, time.monotonic)
+    try:
+        stock._data.get("https://example.test/quote", timeout=30)
+        stock._data.post("https://example.test/quote", timeout=30)
+        stock._data._session.get(url="https://fc.yahoo.com", timeout=30)
+        stock._data._session.post(
+            url="https://consent.yahoo.com", timeout=30, data={}
+        )
+        stock._data._session.get(
+            **{
+                "url": "https://query1.finance.yahoo.com/v1/test/getcrumb",
+                "timeout": 30,
+            }
+        )
+        stock._data._session.get(url="https://fc.yahoo.com")
+    finally:
+        pop_budget(token)
+
+    assert len(seen) == 6
+    assert all(isinstance(timeout, float) for timeout in seen)
+    assert all(0 < timeout <= 4 for timeout in seen)
+    assert 30 not in seen
