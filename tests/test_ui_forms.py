@@ -171,7 +171,7 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
             "description": "",
         }
     )
-    assert payload["name"] == "  Kept  "
+    assert payload["name"] == "Kept"
     assert payload["ticker"] == " abc "
     assert payload["exchange"] is None
     assert payload["currency"] is None
@@ -216,6 +216,14 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     )
     assert blank is None
     assert errors["name"] == "error.required"
+    for invisible in ("\u00a0", "\u3000", "\u200b", "\u200b\u00a0"):
+        rejected, field_errors, _key = validate_company(
+            {"name": invisible, "ticker": "ABC"}, update=False
+        )
+        assert rejected is None
+        assert field_errors["name"] == "error.required"
+    kept = company_payload({"name": " \u200bKept\u200b "})
+    assert kept["name"] == "\u200bKept\u200b"
 
 
 @pytest.mark.asyncio
@@ -505,6 +513,36 @@ async def test_duplicate_ticker_follows_the_stored_row_not_the_message(
 
 
 @pytest.mark.asyncio
+async def test_company_create_integrity_error_is_an_inline_duplicate(
+    client, monkeypatch
+):
+    """IntegrityError from create is the ticker page when the row exists.
+
+    The repository re-raises the ticker unique failure. The form does
+    not read that message. It looks up the stored ticker.
+    """
+    await _create(client, name="First Co", ticker="FIRST")
+
+    def reject(self, company):
+        raise IntegrityError(
+            "INSERT INTO companies",
+            {"ticker": company.ticker},
+            Exception("UNIQUE constraint failed: companies.ticker"),
+        )
+
+    monkeypatch.setattr(CompanyRepository, "create", reject)
+    response = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Other Co", "ticker": "FIRST"},
+    )
+    assert response.status_code == 400
+    assert "Istnieje już spółka o tym tickerze." in response.text
+    assert 'aria-invalid="true"' in response.text
+    assert _counts(client) == (1, 0)
+
+
+@pytest.mark.asyncio
 async def test_same_message_without_a_stored_ticker_is_not_a_duplicate(
     client, monkeypatch
 ):
@@ -526,7 +564,19 @@ async def test_same_message_without_a_stored_ticker_is_not_a_duplicate(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("name", ["", "   ", "\n\t"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        "   ",
+        "\n\t",
+        "\u00a0",
+        "\u3000",
+        "\u200b",
+        "\u200c\u200d\ufeff",
+        "\u00a0\u200b\u3000",
+    ],
+)
 async def test_blank_company_name_is_422_in_both_languages(client, name):
     polish = await _post(
         client,
@@ -559,6 +609,22 @@ async def test_blank_company_name_is_422_in_both_languages(client, name):
     assert "To pole jest wymagane." in cleared.text
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert "Named Co" in detail.text
+
+
+@pytest.mark.asyncio
+async def test_surrounding_space_is_stripped_from_the_stored_name(client):
+    """The form strips the name. The write model does not."""
+    company_id, _data = await _create(
+        client, name="  Kept Name  ", ticker="KEPTNM"
+    )
+    session = client.app.state.testing_session_local()
+    try:
+        stored = session.get(CompanyDB, company_id).name
+    finally:
+        session.close()
+    assert stored == "Kept Name"
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert "Kept Name" in detail.text
 
 
 @pytest.mark.asyncio

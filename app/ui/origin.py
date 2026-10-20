@@ -9,7 +9,9 @@ The browser sets ``Origin`` and the page cannot. When ``Origin`` is
 missing, the ``Referer`` URL is used the same way. The scheme, host,
 and port must match this request. ``TrustedHostMiddleware`` already
 rejects a ``Host`` outside ``ALLOWED_HOSTS``, so a match is one of
-those hosts and not an open redirect.
+those hosts and not an open redirect. The check relies on
+``TrustedHostMiddleware``, so ``ALLOWED_HOSTS`` must stay
+loopback-only (DNS rebinding).
 
 The pages send ``Referrer-Policy: same-origin``. ``no-referrer`` makes
 Chrome put ``Origin: null`` on an ordinary form POST and omit

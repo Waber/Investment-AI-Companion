@@ -1,5 +1,35 @@
 # Development Journal
 
+## 2026-10-20 - Review notes on the company forms (PR #77)
+
+- Scope: the code review on
+  [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77).
+  Models and the repository were not changed. The disclaimer-banner
+  asserts stay. The score disclaimer is a product rule, so that
+  request is declined.
+- Decisions: `python-multipart` floor is `>=0.0.32`. The comment
+  cites GHSA-5rvq-cxj2-64vf / CVE-2026-53539 (quadratic urlencoded
+  parse, fixed in 0.0.30) and the older CVE-2024-53981 note.
+  `pip-compile` on both lock files left `python-multipart==0.0.32`
+  and its hashes unchanged. A company name is stripped of
+  surrounding whitespace in `company_payload` only. A name with no
+  visible character is 422, including nbsp, ideographic space, and
+  a name made only of format characters such as U+200B. The origin
+  check still compares scheme, host, and port. The docstring says
+  it relies on `TrustedHostMiddleware`, so `ALLOWED_HOSTS` must
+  stay loopback-only (DNS rebinding). `localhost` is not
+  `127.0.0.1`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1363 passed, 121 deselected, coverage 95.83%. Scoped black,
+  isort, and flake8 passed. `pip-audit` on both locks: no known
+  vulnerabilities. PostgreSQL was not run locally.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 17:50 to 18:15.
+- Next: the owner reviews PR #77 again. It still says Refs #34 and
+  stays unmerged.
+
 ## 2026-10-20 - QA notes on the company forms (PR #77)
 
 - Scope: four notes from QA on
