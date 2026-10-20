@@ -1,5 +1,66 @@
 # Development Journal
 
+## 2026-10-20 - Collector hardening (#76)
+
+- Scope: port the unmerged collector hardening from
+  `cursor/collector-resilience-currency-ed10` (`30b6f11`) onto current
+  master, and cover the Security Engineer findings on #76. PR #70 was
+  closed without merging. PR #72 is already on master, so this branch
+  starts from `origin/master` and does not replay #72's guard.
+  Templates, static files, and `app/ui/` were not edited. Tests do not
+  call a live market-data provider.
+- Already on master from #72, so not ported again: the 5 s rate-limit
+  wait cap (`d8c9daa`), the autouse `reset_collector` fixture
+  (`63e6497`), and `COLLECTOR_RETRY_MAX_RETRIES` of 0 (`d47e8be`).
+- Decisions:
+  - One deadline (`COLLECTOR_TOTAL_DEADLINE_SECONDS`, default 15 s,
+    allowed 1 to 120) covers the rate-limit sleeps and the retry
+    backoff of a single call. A sleep that would pass it is refused.
+    The provider call is not killed by that clock.
+  - `COLLECTOR_MAX_INFLIGHT` (default 4, allowed 1 to 16) is a
+    semaphore around the provider call only. `acquire(blocking=False)`
+    fails at once when every permit is taken. The permit is released
+    in `finally`, including before a retry sleep. Cache hits do not
+    take one.
+  - The cache key strips and uppercases `ticker`. The string forwarded
+    to the inner collector stays as the caller sent it. Yahoo calls
+    `normalize_ticker` again before `yf.Ticker`.
+  - Two misses for the same key share one provider call. The others
+    wait on an `Event`.
+  - A `TransientProviderError` on `__cause__` or `__context__` is
+    retried. Any other unexpected error becomes `ProviderError` with
+    a fixed message and `from None`, so the provider text is not
+    chained. fetch-company maps that to HTTP 502 and logs the class
+    name only.
+  - Yahoo logs `type(e).__name__`. A filter on the `yfinance` logger
+    replaces library log text. `NullHandler.handle` does not run
+    filters, so the filter sits on a normal handler.
+  - Each Yahoo HTTP request is capped at 10 s
+    (`YFINANCE_HTTP_TIMEOUT_SECONDS`), and at the time left on the
+    deadline when that is shorter. yfinance 1.7 has no timeout argument
+    on `Ticker`; `history` does, and `get`/`post` are wrapped.
+  - `.` and `..` are not tickers. Pydantic's regex engine has no
+    lookahead, so the pattern is two alternatives instead of
+    `(?!\.\.?$)`.
+  - Currency checks `isascii()` before the three-letter check, so a
+    long s or a ligature cannot fold into an ISO code. #72 already
+    rejects a non-ASCII code with `[A-Za-z]`; the check is now explicit
+    and runs first. Whitespace is still rejected, not stripped.
+  - `.gitleaks.toml` allowlists the pytest placeholder on
+    `tests/conftest.py` line 7 and keeps the default rules.
+- Verification: no `.env`, `DATABASE_URL` unset, Python 3.12.3 venv
+  from `requirements-dev.lock`. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1329 passed, 121 deselected, coverage 95.15%. Scoped black,
+  isort, and flake8 passed on the touched Python files. The two
+  pre-existing E501 lines in `tests/test_provider_data_hygiene.py`
+  are unchanged. PostgreSQL was not run locally (no
+  `TEST_POSTGRES_DSN`). GitHub Actions runs both jobs.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-20, UTC): read the issue and the old branch
+  from about 16:58. Local suite finished 17:24.
+- Next: the owner reviews the pull request. Agents do not merge.
+
 ## 2026-10-20 - Drop the new disclaimer asserts (PR #77)
 
 - Scope: the PM decision on

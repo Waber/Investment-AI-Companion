@@ -1,5 +1,40 @@
 # Current Work State
 
+## Collector hardening (#76): 2026-10-20
+
+- Branch `cursor/collector-hardening-76-fe8d`, based on current
+  `origin/master`. Refs #76. Not merged. PR #70 stays closed.
+  The old head `30b6f11` was not rebased; the behavior was ported
+  onto the guard from PR #72.
+- Completed: one deadline for waits and retries, an in-flight
+  semaphore around the provider call only (default 4), a normalized
+  cache key with the raw ticker still sent upstream, one shared
+  call for simultaneous misses of the same key, retry when a
+  transient error is on `__context__`, unexpected collector errors
+  as HTTP 502 with the class name only, Yahoo ticker normalization
+  before `yf.Ticker`, rejection of `.` and `..`, an explicit 10 s
+  HTTP timeout that shrinks to the time left on the deadline,
+  redaction of `yfinance` logs, `isascii()` before the currency
+  check, and a gitleaks allowlist for the pytest placeholder on
+  `tests/conftest.py` line 7. The 5 s wait cap, the autouse
+  collector reset, and zero retries were already on master and
+  were not duplicated. Templates, static files, and `app/ui/`
+  were not edited.
+- Incomplete: mapping yfinance errors to `TransientProviderError`
+  stays in R1 #54. QA, Security, and Code Review of this branch
+  are not done. The optional demo port race was not part of this
+  change.
+- Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3,
+  `requirements-dev.lock`. CI command -> 1329 passed, 121
+  deselected, coverage 95.15%. PostgreSQL was not run locally.
+  GitHub Actions is the PostgreSQL run.
+- Active agents: none. Blockers: none.
+- Stop reason: the branch is ready for review. Account usage was
+  not available in this session.
+- Next action: the owner reviews this pull request and merges it
+  with "Rebase and merge" if they accept it. Agents do not merge.
+  After that, #26 together with #16.
+
 ## Company and financial-metrics forms (#34, part): 2026-10-20
 
 - Branch `cursor/d5-company-metric-forms-cfb0`, based on

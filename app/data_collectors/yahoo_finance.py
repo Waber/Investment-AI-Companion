@@ -8,6 +8,9 @@ Yahoo Finance using the yfinance library.
 import logging
 import math
 import numbers
+import threading
+import time
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -20,10 +23,197 @@ from app.data_collectors.base import (
     ProviderError,
     Sourced,
 )
+from app.data_collectors.call_budget import (
+    has_budget,
+    pop_budget,
+    push_budget,
+    remaining,
+)
+from app.models.company import normalize_ticker
 
 logger = logging.getLogger(__name__)
 
 SOURCE = "yahoo_finance"
+
+# yfinance 1.7 hardcodes 10 s on some calls and 30 s on others. Every
+# request this process makes is capped at 10 s, and at whatever the
+# collector deadline has left when that is shorter.
+YFINANCE_HTTP_TIMEOUT_SECONDS = 10.0
+# Same number as COLLECTOR_TOTAL_DEADLINE_SECONDS. A direct call, with
+# no guard around it, still shares one budget across its HTTP requests.
+_DIRECT_CALL_DEADLINE_SECONDS = 15.0
+
+_http_cap_lock = threading.Lock()
+
+
+class _RedactYFinance(logging.Filter):
+    """Replace a yfinance log line so a URL or body cannot be written.
+
+    The library logs the exception text. This filter runs on the
+    ``yfinance`` logger, and on a handler, so a record from a child
+    logger is cleaned before it reaches the root logger. Child records
+    do not pass the parent's own filters. ``NullHandler`` cannot do
+    this: its ``handle`` method skips filters.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = "yfinance log redacted"
+        record.args = ()
+        record.exc_info = None
+        record.exc_text = None
+        record.stack_info = None
+        return True
+
+
+class _RedactHandler(logging.Handler):
+    """A handler whose only job is to run ``_RedactYFinance``.
+
+    ``logging.NullHandler.handle`` does not call filters, so a filter
+    attached to it never sees a record from a child logger. A normal
+    handler does. ``emit`` stays empty: the redacted record then
+    propagates to the root logger.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        return None
+
+
+def _install_yfinance_log_filter() -> None:
+    """Install the redaction filter once on the ``yfinance`` logger."""
+    yf_logger = logging.getLogger("yfinance")
+    filters = yf_logger.filters
+    if not any(isinstance(item, _RedactYFinance) for item in filters):
+        yf_logger.addFilter(_RedactYFinance())
+    already = any(
+        isinstance(handler, _RedactHandler) for handler in yf_logger.handlers
+    )
+    if not already:
+        handler = _RedactHandler()
+        handler.addFilter(_RedactYFinance())
+        yf_logger.addHandler(handler)
+
+
+_install_yfinance_log_filter()
+
+
+def _accepted_symbol(ticker: str) -> str:
+    """The ticker Yahoo may see, or a provider error when it is refused.
+
+    ``normalize_ticker`` strips, uppercases, and rejects ``.``, ``..``,
+    non-ASCII, and control characters. The refusal is logged without
+    the ticker, so a newline in it cannot forge a log line.
+    """
+    try:
+        normalized = normalize_ticker(ticker)
+    except ValueError:
+        logger.error("Rejected ticker before Yahoo Finance was called")
+        raise ProviderError("Yahoo Finance ticker was rejected") from None
+    if not isinstance(normalized, str):
+        raise ProviderError("Yahoo Finance ticker was rejected")
+    return normalized
+
+
+def _capped_timeout(requested: Any) -> float:
+    """The timeout to give one HTTP request, in seconds.
+
+    Never longer than ``YFINANCE_HTTP_TIMEOUT_SECONDS``, and never
+    longer than the time left on the call's deadline. A spent deadline
+    becomes a tiny timeout. Raising here would be swallowed by
+    yfinance when it hides exceptions, and the call would look like
+    "no data" after a hang.
+    """
+    try:
+        numeric = float(requested)
+    except (TypeError, ValueError):
+        numeric = YFINANCE_HTTP_TIMEOUT_SECONDS
+    budget = remaining(YFINANCE_HTTP_TIMEOUT_SECONDS)
+    if numeric > 0 and numeric < budget:
+        budget = numeric
+    if budget <= 0:
+        return 0.001
+    return budget
+
+
+def _http_timeout() -> float:
+    """Timeout argument for ``Ticker.history``."""
+    return _capped_timeout(YFINANCE_HTTP_TIMEOUT_SECONDS)
+
+
+def _install_http_cap(stock: Any) -> None:
+    """Force yfinance's HTTP ``get`` and ``post`` to use our timeout.
+
+    ``Ticker`` in yfinance 1.7 has no timeout argument. The session is
+    one shared object, so the wrapper is installed once and reads the
+    current deadline on every request.
+    """
+    data = getattr(stock, "_data", None)
+    if data is None or not callable(getattr(data, "get", None)):
+        return
+    with _http_cap_lock:
+        if getattr(data, "_iac_http_cap", False):
+            return
+        original_get = data.get
+        original_post = getattr(data, "post", None)
+
+        def get(url, params=None, timeout=30, **kwargs):
+            return original_get(
+                url,
+                params=params,
+                timeout=_capped_timeout(timeout),
+                **kwargs,
+            )
+
+        data.get = get
+        if callable(original_post):
+
+            def post(
+                url,
+                body=None,
+                params=None,
+                timeout=30,
+                data=None,
+                **kwargs,
+            ):
+                return original_post(
+                    url,
+                    body=body,
+                    params=params,
+                    timeout=_capped_timeout(timeout),
+                    data=data,
+                    **kwargs,
+                )
+
+            data.post = post
+        data._iac_http_cap = True
+
+
+def _open_ticker(symbol: str) -> Any:
+    """A ``yf.Ticker`` for an already accepted symbol."""
+    stock = yf.Ticker(symbol)
+    _install_http_cap(stock)
+    return stock
+
+
+@contextmanager
+def _deadline_scope():
+    """One deadline for the ``with`` block, unless the guard set one.
+
+    Several HTTP requests inside the block share the time that is left.
+    A budget the guard already pushed is left alone, so retries share
+    that outer deadline too.
+    """
+    if has_budget():
+        yield
+        return
+    token = push_budget(
+        time.monotonic() + _DIRECT_CALL_DEADLINE_SECONDS,
+        time.monotonic,
+    )
+    try:
+        yield
+    finally:
+        pop_budget(token)
+
 
 # yfinance quoteType values for which ``totalAssets`` is assets under
 # management, not a balance-sheet total.
@@ -163,19 +353,24 @@ class YahooFinanceCollector:
             >>> print(result.value['name'])
             Apple Inc.
         """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_company_info(symbol)
+
+    def _load_company_info(self, symbol: str):
         try:
-            logger.info("Fetching company info for ticker: %r", ticker)
-            stock = yf.Ticker(ticker)
+            logger.info("Fetching company info for ticker: %r", symbol)
+            stock = _open_ticker(symbol)
             info = stock.info
 
             if _has_no_data(info):
-                logger.warning("No company info found for %r", ticker)
+                logger.warning("No company info found for %r", symbol)
                 return None
 
             # Extract relevant information
             company_info = {
                 "name": info.get("longName") or info.get("shortName"),
-                "ticker": ticker.upper(),
+                "ticker": symbol,
                 "sector": info.get("sector"),
                 "industry": info.get("industry"),
                 "description": info.get("longBusinessSummary"),
@@ -189,10 +384,14 @@ class YahooFinanceCollector:
                 "logo_url": info.get("logo_url"),
             }
 
-            logger.info("Successfully fetched company info for %r", ticker)
+            logger.info("Successfully fetched company info for %r", symbol)
 
         except Exception as e:
-            logger.error("Error fetching company info for %r: %r", ticker, e)
+            logger.error(
+                "Error fetching company info for %r: %s",
+                symbol,
+                type(e).__name__,
+            )
             raise ProviderError("Yahoo Finance company info failed") from e
         # Outside the try: a bad clock is a programming error (ValueError),
         # not a provider failure.
@@ -221,28 +420,37 @@ class YahooFinanceCollector:
             >>> collector = YahooFinanceCollector()
             >>> data = collector.fetch_historical_data('AAPL', period='1y')
         """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_historical_data(symbol, period, interval)
+
+    def _load_historical_data(self, symbol: str, period: str, interval: str):
         try:
             logger.info(
                 "Fetching historical data for %r, period=%r, interval=%r",
-                ticker,
+                symbol,
                 period,
                 interval,
             )
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period=period, interval=interval)
+            stock = _open_ticker(symbol)
+            hist = stock.history(
+                period=period, interval=interval, timeout=_http_timeout()
+            )
 
             if hist.empty:
-                logger.warning("No historical data found for %r", ticker)
+                logger.warning("No historical data found for %r", symbol)
                 return None
 
             logger.info(
-                "Successfully fetched %s records for %r", len(hist), ticker
+                "Successfully fetched %s records for %r", len(hist), symbol
             )
             return hist
 
         except Exception as e:
             logger.error(
-                "Error fetching historical data for %r: %r", ticker, e
+                "Error fetching historical data for %r: %s",
+                symbol,
+                type(e).__name__,
             )
             raise ProviderError("Yahoo Finance historical data failed") from e
 
@@ -256,9 +464,14 @@ class YahooFinanceCollector:
         None when Yahoo has no history; raises ``ProviderError`` when
         yfinance fails or the frame cannot be read.
         """
-        hist = self.fetch_historical_data(ticker, period, interval)
-        if hist is None:
-            return None
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            hist = self.fetch_historical_data(symbol, period, interval)
+            if hist is None:
+                return None
+            return self._bars_from_frame(symbol, hist)
+
+    def _bars_from_frame(self, symbol: str, hist: Any):
         try:
             bars = [
                 PriceBar(
@@ -272,7 +485,11 @@ class YahooFinanceCollector:
                 for index, row in hist.iterrows()
             ]
         except Exception as e:
-            logger.error("Error reading price history for %r: %r", ticker, e)
+            logger.error(
+                "Error reading price history for %r: %s",
+                symbol,
+                type(e).__name__,
+            )
             raise ProviderError("Yahoo Finance price history failed") from e
         bars.sort(key=lambda bar: bar.day)
         return Sourced(bars, self._provenance(as_of=bars[-1].day))
@@ -297,9 +514,14 @@ class YahooFinanceCollector:
             >>> statements = collector.fetch_financial_statements('AAPL')
             >>> income_stmt = statements['income_statement']
         """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_financial_statements(symbol)
+
+    def _load_financial_statements(self, symbol: str):
         try:
-            logger.info("Fetching financial statements for %r", ticker)
-            stock = yf.Ticker(ticker)
+            logger.info("Fetching financial statements for %r", symbol)
+            stock = _open_ticker(symbol)
 
             # Fetch different financial statements
             financials = {
@@ -312,15 +534,15 @@ class YahooFinanceCollector:
             }
 
             logger.info(
-                "Successfully fetched financial statements for %r", ticker
+                "Successfully fetched financial statements for %r", symbol
             )
             return financials
 
         except Exception as e:
             logger.error(
-                "Error fetching financial statements for %r: %r",
-                ticker,
-                e,
+                "Error fetching financial statements for %r: %s",
+                symbol,
+                type(e).__name__,
             )
             raise ProviderError(
                 "Yahoo Finance financial statements failed"
@@ -353,13 +575,18 @@ class YahooFinanceCollector:
             >>> metrics = collector.fetch_key_metrics('AAPL')
             >>> print(metrics.value['pe_ratio'])
         """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_key_metrics(symbol)
+
+    def _load_key_metrics(self, symbol: str):
         try:
-            logger.info("Fetching key metrics for %r", ticker)
-            stock = yf.Ticker(ticker)
+            logger.info("Fetching key metrics for %r", symbol)
+            stock = _open_ticker(symbol)
             info = stock.info
 
             if _has_no_data(info):
-                logger.warning("No key metrics found for %r", ticker)
+                logger.warning("No key metrics found for %r", symbol)
                 return None
 
             # Extract key metrics
@@ -406,10 +633,14 @@ class YahooFinanceCollector:
                 "market_cap": info.get("marketCap"),
             }
 
-            logger.info("Successfully fetched key metrics for %r", ticker)
+            logger.info("Successfully fetched key metrics for %r", symbol)
 
         except Exception as e:
-            logger.error("Error fetching key metrics for %r: %r", ticker, e)
+            logger.error(
+                "Error fetching key metrics for %r: %s",
+                symbol,
+                type(e).__name__,
+            )
             raise ProviderError("Yahoo Finance key metrics failed") from e
         # Outside the try: a bad clock is a programming error (ValueError),
         # not a provider failure.
@@ -429,9 +660,14 @@ class YahooFinanceCollector:
         Raises:
             ProviderError: when yfinance fails.
         """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_news(symbol, limit)
+
+    def _load_news(self, symbol: str, limit: int):
         try:
-            logger.info("Fetching news for %r", ticker)
-            stock = yf.Ticker(ticker)
+            logger.info("Fetching news for %r", symbol)
+            stock = _open_ticker(symbol)
             news_list = stock.news
 
             # Limit the number of results
@@ -440,12 +676,14 @@ class YahooFinanceCollector:
             logger.info(
                 "Successfully fetched %s news articles for %r",
                 len(limited_news),
-                ticker,
+                symbol,
             )
             return limited_news
 
         except Exception as e:
-            logger.error("Error fetching news for %r: %r", ticker, e)
+            logger.error(
+                "Error fetching news for %r: %s", symbol, type(e).__name__
+            )
             raise ProviderError("Yahoo Finance news failed") from e
 
     def fetch_recommendations(self, ticker: str) -> Optional[Any]:
@@ -461,22 +699,29 @@ class YahooFinanceCollector:
         Raises:
             ProviderError: when yfinance fails.
         """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_recommendations(symbol)
+
+    def _load_recommendations(self, symbol: str):
         try:
-            logger.info("Fetching recommendations for %r", ticker)
-            stock = yf.Ticker(ticker)
+            logger.info("Fetching recommendations for %r", symbol)
+            stock = _open_ticker(symbol)
             recommendations = stock.recommendations
 
             if recommendations is not None and not recommendations.empty:
                 logger.info(
-                    "Successfully fetched recommendations for %r", ticker
+                    "Successfully fetched recommendations for %r", symbol
                 )
                 return recommendations
             else:
-                logger.warning("No recommendations found for %r", ticker)
+                logger.warning("No recommendations found for %r", symbol)
                 return None
 
         except Exception as e:
             logger.error(
-                "Error fetching recommendations for %r: %r", ticker, e
+                "Error fetching recommendations for %r: %s",
+                symbol,
+                type(e).__name__,
             )
             raise ProviderError("Yahoo Finance recommendations failed") from e

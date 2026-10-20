@@ -4,8 +4,9 @@ The period_end case (#20) treats the same instant with another UTC
 offset as a duplicate. The PostgreSQL run of that case is
 ``tests/integration/test_postgres.py`` (issue #9).
 
-The fetch-company 500 (#18) returns a fixed detail and logs the
-exception with the ticker. ``debt_to_assets`` (#21) is total debt
+An unexpected fetch-company error (#18, hardened by #76) is HTTP 502
+with a fixed detail. The log names the exception class and the ticker,
+not the exception text. ``debt_to_assets`` (#21) is total debt
 divided by total assets when both numbers are already on the provider
 info, and None otherwise. It is never a per-share amount. Issue #19
 is not covered here.
@@ -71,7 +72,8 @@ async def test_fetch_company_500_does_not_leak_exception_text(client):
 
     response = await client.post(FETCH, json={"ticker": "FAIL"})
 
-    assert response.status_code == 500
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Data provider error"
     assert "hunter2" not in response.text
 
 
@@ -107,11 +109,14 @@ def test_debt_to_assets_is_not_debt_per_share(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
-    """The 500 is logged with the ticker, and the body stays generic.
+async def test_fetch_company_unexpected_error_is_502_without_the_text(
+    client, caplog
+):
+    """An unexpected collector error is 502, and its text is not logged.
 
-    ``logger.exception`` attaches the traceback, so the secret stays in
-    the server log and is not copied into the HTTP detail.
+    The log keeps the exception class. The body is the fixed provider
+    sentence. ``logger.exception`` would have attached the traceback,
+    and that traceback can contain provider text.
     """
     client.app.dependency_overrides[get_collector] = lambda: FakeCollector(
         RuntimeError("password=hunter2")
@@ -120,13 +125,12 @@ async def test_fetch_company_500_logs_exception_with_ticker(client, caplog):
     with caplog.at_level(logging.ERROR, logger="app.api.data_collection"):
         response = await client.post(FETCH, json={"ticker": "fail"})
 
-    assert response.status_code == 500
+    assert response.status_code == 502
     assert "FAIL" in caplog.text
-    assert any(
-        record.exc_info is not None and record.exc_info[0] is RuntimeError
-        for record in caplog.records
-    )
-    assert response.json()["detail"] == "Error fetching company data"
+    assert "RuntimeError" in caplog.text
+    assert "hunter2" not in caplog.text
+    assert not any(record.exc_info for record in caplog.records)
+    assert response.json()["detail"] == "Data provider error"
     assert "hunter2" not in response.text
 
 

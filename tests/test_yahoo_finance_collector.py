@@ -4,6 +4,7 @@ No network: every test replaces yfinance.Ticker for the module under test.
 """
 
 import logging
+import time
 from datetime import date, datetime, timezone
 
 import pandas as pd
@@ -38,12 +39,14 @@ class FakeTicker:
     def __init__(self, symbol, **attributes):
         self.symbol = symbol
         self.history_calls = []
+        self.timeouts = []
         self._history = attributes.pop("history_frame", pd.DataFrame())
         for name, value in attributes.items():
             setattr(self, name, value)
 
-    def history(self, period, interval):
+    def history(self, period, interval, timeout=None, **_ignored):
         self.history_calls.append((period, interval))
+        self.timeouts.append(timeout)
         return self._history
 
 
@@ -132,7 +135,8 @@ def test_company_info_maps_provider_fields(install_ticker, collector):
     result = collector.fetch_company_info("aapl")
     info = result.value
 
-    assert created[0].symbol == "aapl"
+    # normalize_ticker runs before yf.Ticker, so Yahoo sees AAPL.
+    assert created[0].symbol == "AAPL"
     assert info["name"] == "Apple Inc."
     assert info["ticker"] == "AAPL"
     assert info["sector"] == "Technology"
@@ -192,6 +196,7 @@ def test_historical_data_passes_period_and_interval(install_ticker, collector):
 
     assert result is frame
     assert created[0].history_calls == [("5d", "1h")]
+    assert created[0].timeouts == [yahoo_finance.YFINANCE_HTTP_TIMEOUT_SECONDS]
 
 
 def test_historical_data_uses_one_year_daily_by_default(
@@ -509,3 +514,70 @@ def test_key_metrics_are_none_when_yfinance_returns_near_empty_info(
     install_ticker(info={"trailingPegRatio": None})
 
     assert collector.fetch_key_metrics("NOPE") is None
+
+
+def test_yfinance_logs_do_not_keep_provider_text(caplog):
+    """The yfinance logger is filtered. Its own lines can contain a URL."""
+    caplog.set_level(logging.DEBUG)
+    logging.getLogger("yfinance").error("token=%s", "hunter2")
+    logging.getLogger("yfinance.scrapers").error(
+        "url=%s", "https://secret.example/path"
+    )
+
+    assert "hunter2" not in caplog.text
+    assert "secret.example" not in caplog.text
+    assert "yfinance log redacted" in caplog.text
+
+
+def test_history_timeout_uses_the_time_left_on_the_deadline(
+    install_ticker, collector
+):
+    """A budget shorter than 10 s shrinks the history timeout."""
+    from app.data_collectors.call_budget import pop_budget, push_budget
+
+    created = install_ticker(history_frame=pd.DataFrame({"Close": [1.0]}))
+    token = push_budget(time.monotonic() + 3, time.monotonic)
+    try:
+        collector.fetch_historical_data("MSFT")
+    finally:
+        pop_budget(token)
+
+    assert created[0].timeouts[0] <= 3
+    assert created[0].timeouts[0] > 0
+
+
+def test_http_get_and_post_share_the_deadline(monkeypatch):
+    """Chained HTTP calls inside one method use the time that is left."""
+    from app.data_collectors.call_budget import pop_budget, push_budget
+    from app.data_collectors.yahoo_finance import _install_http_cap
+
+    seen = []
+
+    class _Data:
+        def get(self, url, params=None, timeout=30):
+            seen.append(timeout)
+            return {}
+
+        def post(self, url, body=None, params=None, timeout=30, data=None):
+            seen.append(timeout)
+            return {}
+
+    class _Stock:
+        def __init__(self, symbol):
+            self._data = _Data()
+            self.info = {"longName": "Acme", "currency": "USD"}
+
+    monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Stock)
+    token = push_budget(time.monotonic() + 4, time.monotonic)
+    try:
+        YahooFinanceCollector().fetch_company_info("ACME")
+        stock = yahoo_finance.yf.Ticker("ACME")
+        _install_http_cap(stock)
+        stock._data.get("https://secret.example/quote", timeout=30)
+        stock._data.post("https://secret.example/quote", timeout=30)
+    finally:
+        pop_budget(token)
+
+    assert seen
+    assert all(timeout <= 4 for timeout in seen)
+    assert all(timeout > 0 for timeout in seen)

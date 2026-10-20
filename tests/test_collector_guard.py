@@ -236,13 +236,23 @@ def test_provider_errors_are_not_cached(error):
     assert inner.calls == 2
 
 
-def test_unexpected_exception_reaches_the_caller_and_is_not_cached():
+def test_unexpected_exception_becomes_a_provider_error_and_is_not_cached(
+    caplog,
+):
+    """A KeyError is not a 400 and its text is not kept."""
     value = sourced({"name": "Acme"})
-    inner = ScriptedLookup(KeyError("bug"), value)
+    inner = ScriptedLookup(KeyError("provider secret text"), value)
     guarded = make(inner, FakeClock())
 
-    with pytest.raises(KeyError):
-        guarded.fetch_company_info("ACME")
+    with caplog.at_level(logging.WARNING, logger="app.data_collectors.guard"):
+        with pytest.raises(
+            ProviderError, match="Data provider error"
+        ) as caught:
+            guarded.fetch_company_info("ACME")
+
+    assert caught.value.__cause__ is None
+    assert "provider secret text" not in caplog.text
+    assert "KeyError" in caplog.text
     assert inner.calls == 1
     assert guarded.fetch_company_info("ACME") == value
     assert inner.calls == 2
@@ -351,6 +361,9 @@ def test_call_over_the_limit_waits_for_the_oldest_slot():
         rate_limit_calls=2,
         rate_limit_period=60,
         rate_limit_max_wait=60,
+        # The 50 s wait is the rate-limit window. The deadline would
+        # refuse it at the default of 15 s, which is a different test.
+        total_deadline=120,
     )
     guarded.fetch_company_info("A")
     clock.advance(10)
@@ -488,6 +501,9 @@ def test_each_retry_takes_a_rate_limit_slot():
         rate_limit_calls=2,
         rate_limit_period=60,
         rate_limit_max_wait=60,
+        # The third attempt waits out the 60 s window. That is longer
+        # than the default deadline, which is tested on its own.
+        total_deadline=120,
     )
 
     assert guarded.fetch_company_info("ACME") == value
@@ -590,6 +606,7 @@ def test_threads_never_exceed_the_rate_limit():
     for thread in threads:
         thread.join(timeout=10)
 
+    assert not any(thread.is_alive() for thread in threads)
     assert outcomes.count("ok") == 3
     assert outcomes.count("limited") == 7
     assert inner.calls == 3
@@ -648,3 +665,209 @@ def test_lock_is_not_held_during_the_provider_call():
     guarded.fetch_company_info("ACME")
 
     assert seen == [False]
+
+
+def test_a_sleep_past_the_deadline_is_refused():
+    """A 10 s rate-limit wait does not run when the deadline is 6 s."""
+    clock = FakeClock()
+    inner = CountingLookup()
+    guarded = make(
+        inner,
+        clock,
+        rate_limit_calls=1,
+        rate_limit_period=10,
+        rate_limit_max_wait=30,
+        total_deadline=6,
+    )
+    guarded._calls.append(clock())
+
+    with pytest.raises(ProviderError, match="deadline") as caught:
+        guarded.fetch_company_info("ACME")
+
+    assert type(caught.value) is ProviderError
+    assert clock.sleeps == []
+    assert inner.calls == 0
+
+
+def test_retry_backoff_past_the_deadline_is_refused():
+    clock = FakeClock()
+    inner = ScriptedLookup(
+        TransientProviderError("busy"), sourced({"name": "Acme"})
+    )
+    guarded = make(
+        inner,
+        clock,
+        rand=lambda: 1.0,
+        backoff_base=10,
+        backoff_max=10,
+        total_deadline=5,
+    )
+
+    with pytest.raises(ProviderError, match="deadline"):
+        guarded.fetch_company_info("ACME")
+
+    assert inner.calls == 1
+    assert clock.sleeps == []
+
+
+def test_transient_error_on_context_is_retried():
+    """``raise ProviderError from ValueError`` keeps the transient error.
+
+    Inside ``except TransientProviderError``, that ``raise ... from``
+    puts the transient error on ``__context__`` and the ValueError on
+    ``__cause__``. The wrapper still retries. The secret stays out of
+    the log and out of the final message.
+    """
+
+    class Buried:
+        def __init__(self):
+            self.calls = 0
+
+        def fetch_company_info(self, ticker):
+            self.calls += 1
+            if self.calls == 1:
+                try:
+                    raise TransientProviderError("provider secret text")
+                except TransientProviderError:
+                    raise ProviderError("fixed") from ValueError("other")
+            return sourced({"name": "Acme"})
+
+    inner = Buried()
+    guarded = make(inner, FakeClock(), rand=lambda: 0.0)
+    assert guarded.fetch_company_info("ACME").value["name"] == "Acme"
+    assert inner.calls == 2
+
+
+def test_cache_key_normalizes_ticker_and_upstream_gets_the_raw_one():
+    inner = ScriptedLookup(sourced({"name": "Acme"}))
+    guarded = make(inner, FakeClock())
+
+    first = guarded.fetch_company_info(" aapl ")
+    second = guarded.fetch_company_info("AAPL")
+
+    assert second == first
+    assert inner.calls == 1
+    assert inner.tickers == [" aapl "]
+
+
+def test_in_flight_limit_fails_immediately_and_releases():
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Blocking:
+        def __init__(self):
+            self.calls = 0
+
+        def fetch_company_info(self, ticker):
+            self.calls += 1
+            entered.set()
+            assert release.wait(timeout=5)
+            return sourced({"name": ticker})
+
+    inner = Blocking()
+    guarded = make(inner, FakeClock(), max_inflight=1)
+    holder = threading.Thread(target=lambda: guarded.fetch_company_info("ONE"))
+    holder.start()
+    assert entered.wait(timeout=5)
+
+    with pytest.raises(ProviderError, match="in flight"):
+        guarded.fetch_company_info("TWO")
+
+    release.set()
+    holder.join(timeout=5)
+
+    assert not holder.is_alive()
+    assert inner.calls == 1
+    assert guarded.fetch_company_info("THREE").value["name"] == "THREE"
+    assert inner.calls == 2
+
+
+def test_cache_hit_does_not_need_an_in_flight_permit():
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Blocking:
+        def fetch_company_info(self, ticker):
+            if ticker == "HOLD":
+                entered.set()
+                assert release.wait(timeout=5)
+            return sourced({"name": ticker})
+
+    guarded = make(Blocking(), FakeClock(), max_inflight=1)
+    assert guarded.fetch_company_info("CACHED").value["name"] == "CACHED"
+    holder = threading.Thread(
+        target=lambda: guarded.fetch_company_info("HOLD")
+    )
+    holder.start()
+    assert entered.wait(timeout=5)
+
+    assert guarded.fetch_company_info("CACHED").value["name"] == "CACHED"
+
+    release.set()
+    holder.join(timeout=5)
+    assert not holder.is_alive()
+
+
+def test_simultaneous_misses_for_one_key_share_one_call():
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Once:
+        def __init__(self):
+            self.calls = 0
+            self.tickers = []
+            self._lock = threading.Lock()
+
+        def fetch_company_info(self, ticker):
+            with self._lock:
+                self.calls += 1
+                self.tickers.append(ticker)
+            entered.set()
+            assert release.wait(timeout=5)
+            return sourced({"name": "Acme"})
+
+    inner = Once()
+    guarded = make(inner, FakeClock(), max_inflight=4)
+    waited = []
+    real_wait = guarded._wait_for_flight
+
+    def spy_wait(flight, started, method_name, bound):
+        waited.append(bound.arguments.get("ticker"))
+        return real_wait(flight, started, method_name, bound)
+
+    guarded._wait_for_flight = spy_wait
+    results = []
+    errors = []
+
+    def worker(ticker):
+        try:
+            results.append(guarded.fetch_company_info(ticker))
+        except Exception as exc:  # pragma: no cover - the assertions below
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=worker, args=("aapl",)),
+        threading.Thread(target=worker, args=("AAPL",)),
+    ]
+    for thread in threads:
+        thread.start()
+    assert entered.wait(timeout=5)
+    deadline = time.monotonic() + 2
+    while not waited and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert waited, "the second caller did not wait for the first"
+    assert inner.calls == 1
+    release.set()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert not any(thread.is_alive() for thread in threads)
+    assert errors == []
+    assert inner.calls == 1
+    assert inner.tickers == ["aapl"] or inner.tickers == ["AAPL"]
+    assert len(results) == 2
+    assert results[0] == results[1]
+    assert results[0].value["name"] == "Acme"
+    # The waiter saw the raw ticker it was given, not the cache key.
+    assert waited[0] in ("aapl", "AAPL")
+    assert waited[0] != inner.tickers[0]
