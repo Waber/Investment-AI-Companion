@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Float,
     ForeignKey,
@@ -49,6 +50,19 @@ class CompanyDB(Base):
     currency = Column(
         String(3), default="USD"
     )  # 3-letter currency codes like USD, EUR
+    # STOCK, ETF, or ETC. A short string plus a CHECK, not a PostgreSQL
+    # ENUM: SQLite has no ENUM type, and one column type has to work
+    # on both databases. Existing rows and omitted inserts are STOCK
+    # because every company stored before this column was a share.
+    instrument_type = Column(
+        String(8),
+        nullable=False,
+        default="STOCK",
+        server_default="STOCK",
+    )
+    # ISO 6166, already validated by the API. Null when unknown.
+    # More than one null is allowed; a present ISIN is unique.
+    isin = Column(String(12), nullable=True)
 
     # Metadata fields
     created_at = Column(
@@ -72,6 +86,11 @@ class CompanyDB(Base):
     __table_args__ = (
         # name + ticker together must be unique.
         UniqueConstraint("name", "ticker", name="uq_company_name_ticker"),
+        UniqueConstraint("isin", name="uq_companies_isin"),
+        CheckConstraint(
+            "instrument_type IN ('STOCK', 'ETF', 'ETC')",
+            name="ck_companies_instrument_type",
+        ),
     )
 
 

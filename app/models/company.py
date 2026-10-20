@@ -1,3 +1,4 @@
+import enum
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -132,6 +133,42 @@ def normalize_isin(value: object) -> object:
     return normalized
 
 
+class InstrumentType(str, enum.Enum):
+    """Type stored by this application, not by a market-data provider.
+
+    ``EQUITY`` is intentionally absent. Some providers use that word
+    for a share and also for an ETC, so it cannot choose the type.
+    """
+
+    STOCK = "STOCK"
+    ETF = "ETF"
+    ETC = "ETC"
+
+
+_INSTRUMENT_TYPES = frozenset(item.value for item in InstrumentType)
+
+
+def normalize_instrument_type(value: object) -> object:
+    """Accept STOCK, ETF, or ETC in any letter case.
+
+    ``None`` and non-strings are left for the field type to reject.
+    Non-ASCII and control characters are rejected before ``strip``
+    and ``upper``. A provider value such as ``EQUITY`` is not a type.
+    """
+    if isinstance(value, InstrumentType):
+        return value
+    if value is None or not isinstance(value, str):
+        return value
+    if not value.isascii():
+        raise ValueError("instrument_type must be ASCII")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError("instrument_type must not contain control characters")
+    normalized = value.strip().upper()
+    if normalized not in _INSTRUMENT_TYPES:
+        raise ValueError("instrument_type must be STOCK, ETF, or ETC")
+    return normalized
+
+
 def normalize_currency(value: object) -> object:
     """Uppercase a three-letter currency code, except Yahoo minor units.
 
@@ -176,6 +213,16 @@ class _CompanyWriteChecks(BaseModel):
     def _normalize_currency(cls, value: object) -> object:
         return normalize_currency(value)
 
+    @field_validator("instrument_type", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_instrument_type(cls, value: object) -> object:
+        return normalize_instrument_type(value)
+
+    @field_validator("isin", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_isin(cls, value: object) -> object:
+        return normalize_isin(value)
+
 
 class CompanyBase(BaseModel):
     """Fields of a stored company, without write-time limits.
@@ -204,6 +251,17 @@ class CompanyBase(BaseModel):
     )
     currency: Optional[str] = Field(
         "USD", description="Currency for financial data"
+    )
+    instrument_type: InstrumentType = Field(
+        InstrumentType.STOCK,
+        description=(
+            "STOCK, ETF, or ETC. Stored by this application, "
+            "not copied from a data provider."
+        ),
+    )
+    isin: Optional[str] = Field(
+        None,
+        description="ISO 6166 ISIN, or null when the identifier is unknown",
     )
 
 
@@ -245,6 +303,20 @@ class CompanyCreate(_CompanyWriteChecks):
         max_length=3,
         description="Currency for financial data",
     )
+    instrument_type: InstrumentType = Field(
+        InstrumentType.STOCK,
+        description=(
+            "STOCK, ETF, or ETC. Stored by this application, "
+            "not copied from a data provider."
+        ),
+    )
+    isin: Optional[str] = Field(
+        None,
+        description=(
+            "ISO 6166 ISIN. Uppercased when stored. "
+            "Null when the identifier is unknown."
+        ),
+    )
 
 
 class CompanyUpdate(_CompanyWriteChecks):
@@ -265,6 +337,14 @@ class CompanyUpdate(_CompanyWriteChecks):
     country: Optional[str] = Field(None, max_length=100)
     exchange: Optional[str] = Field(None, max_length=50)
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    instrument_type: Optional[InstrumentType] = Field(
+        None,
+        description="STOCK, ETF, or ETC. Omit to leave the stored type.",
+    )
+    isin: Optional[str] = Field(
+        None,
+        description="ISO 6166 ISIN. Send null to clear the stored value.",
+    )
 
 
 class Company(CompanyBase):

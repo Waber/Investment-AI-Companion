@@ -13,9 +13,10 @@ with no ``.env`` file. The imports below then reuse that already
 built ``Settings``. The default SQLite command does not select the
 marker, so it never takes that path.
 
-Tables are created with ``Base.metadata.create_all``. Alembic is not
-used: the baseline revision is issue #8, and ``alembic.ini`` still has
-a ``version_num_format`` value that crashes Alembic commands.
+Tables are created with ``Base.metadata.create_all``. This harness
+does not migrate the public schema. Revision 0001 is applied only by
+its own test, in a separate schema. The Alembic baseline that creates
+every table is still issue #8.
 """
 
 import os
