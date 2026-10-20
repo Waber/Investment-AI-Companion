@@ -57,10 +57,11 @@ _NUMBER_KINDS = frozenset(
         "decimal_type",
     }
 )
-# Repository messages. The form shows a catalog sentence instead of
-# this English text. A new message falls back to error.constraint.
+# Metric repository messages. A company duplicate is not decided
+# here: the form looks up the stored ticker instead, so a changed
+# sentence still shows the same page. An unknown message is
+# error.constraint.
 _VALUE_ERROR_KEYS = {
-    "Company name or ticker already exists": "error.duplicate_company",
     (
         "Financial metrics for this company, period end, "
         "and period type must be unique"
@@ -250,23 +251,47 @@ def errors_from_validation(exc, field_order):
 
 
 def catalog_key_for_repository_error(exc):
-    """Map a repository ``ValueError`` to a catalog key."""
+    """Map a metrics repository ``ValueError`` to a catalog key.
+
+    Company duplicates are not in this table. The form asks the
+    database whether the ticker is already stored.
+    """
     return _VALUE_ERROR_KEYS.get(str(exc), "error.constraint")
+
+
+def _name_is_blank(values):
+    """True when the posted name has no visible characters.
+
+    ``CompanyCreate`` accepts ``""``. The form does not: a blank name
+    is the same as a missing one. The check lives here so the model
+    stays unchanged.
+    """
+    name = values.get("name", "")
+    if not isinstance(name, str):
+        name = "" if name is None else str(name)
+    return name.strip() == ""
 
 
 def validate_company(values, *, update):
     """Return ``(model, field_errors, form_error_key)``.
 
     ``model`` is None when validation failed. The raw ``values`` stay
-    with the caller for the inputs.
+    with the caller for the inputs. A whitespace-only name is
+    ``error.required`` even when the write model would accept it.
     """
     model_type = CompanyUpdate if update else CompanyCreate
     try:
         model = model_type.model_validate(company_payload(values))
     except ValidationError as exc:
         errors, form_key = errors_from_validation(exc, COMPANY_FIELDS)
-        return None, errors, form_key
-    return model, {}, None
+        model = None
+    else:
+        errors, form_key = {}, None
+    if _name_is_blank(values):
+        rest = {key: value for key, value in errors.items() if key != "name"}
+        errors = {"name": "error.required", **rest}
+        model = None
+    return model, errors, form_key
 
 
 def validate_metrics(values, company_id, *, update):

@@ -4,9 +4,11 @@ from typing import Dict
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.companies import router as companies_router
@@ -24,6 +26,31 @@ from app.ui.router import router as ui_router
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
+async def http_exception_page(request, exc):
+    """HTML 405 for /ui. Every other HTTP error stays the API JSON.
+
+    A POST to the instrument list matches the GET route and is 405
+    before the endpoint runs. The page uses the same security headers
+    as the other /ui responses. API routes keep the JSON handler.
+    """
+    path = request.url.path
+    under_ui = path == "/ui" or path.startswith("/ui/")
+    if exc.status_code == 405 and under_ui:
+        # Imported here. This module loads the UI routers, and those
+        # routers load the header helper.
+        from app.ui.router import _with_ui_headers
+        from app.ui.templating import render
+
+        response = _with_ui_headers(
+            render(request, "method_not_allowed.html", status_code=405)
+        )
+        allowed = (exc.headers or {}).get("Allow")
+        if allowed:
+            response.headers["Allow"] = allowed
+        return response
+    return await http_exception_handler(request, exc)
+
+
 def create_app(init_database_on_startup: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI):
@@ -38,6 +65,9 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     )
     application.add_exception_handler(
         RequestValidationError, request_validation_exception_handler
+    )
+    application.add_exception_handler(
+        StarletteHTTPException, http_exception_page
     )
     # A cross-origin form post under /ui. The API routes do not use it.
     application.add_exception_handler(OriginRejected, forbidden_page)

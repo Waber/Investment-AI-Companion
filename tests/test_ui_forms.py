@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models.database_models import CompanyDB, FinancialMetricsDB
+from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
 )
@@ -21,6 +22,7 @@ from app.ui.form_fields import (
     catalog_key_for_repository_error,
     company_payload,
     metrics_payload,
+    validate_company,
 )
 from app.ui.origin import OriginRejected
 from tests.ui_html import parse_page, plain
@@ -199,6 +201,21 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         catalog_key_for_repository_error(ValueError("no such rule"))
         == "error.constraint"
     )
+    # The company sentences are not a lookup table. Both the current
+    # repository text and the #75 text fall through to the generic key.
+    for message in (
+        "Company name or ticker already exists",
+        "A company with this ticker already exists",
+    ):
+        assert (
+            catalog_key_for_repository_error(ValueError(message))
+            == "error.constraint"
+        )
+    blank, errors, _form_key = validate_company(
+        {"name": "   ", "ticker": "ABC"}, update=False
+    )
+    assert blank is None
+    assert errors["name"] == "error.required"
 
 
 @pytest.mark.asyncio
@@ -404,9 +421,7 @@ async def test_duplicate_name_or_ticker_is_an_inline_400(client):
         {"name": "Other Co", "ticker": "FIRST"},
     )
     assert same_ticker.status_code == 400
-    assert "Istnieje już spółka o tej nazwie lub tym tickerze." in (
-        same_ticker.text
-    )
+    assert "Istnieje już spółka o tym tickerze." in same_ticker.text
     assert 'value="Other Co"' in same_ticker.text
     assert 'aria-invalid="true"' in same_ticker.text
     _assert_labeled(same_ticker.text)
@@ -434,7 +449,149 @@ async def test_duplicate_name_or_ticker_is_an_inline_400(client):
         {"name": "Second Co", "ticker": "first"},
     )
     assert ticker_conflict.status_code == 400
+    assert "Istnieje już spółka o tym tickerze." in ticker_conflict.text
     assert _counts(client) == (2, 0)
+
+
+_DUPLICATE_MESSAGES = (
+    "Company name or ticker already exists",
+    "A company with this ticker already exists",
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("message", _DUPLICATE_MESSAGES)
+async def test_duplicate_ticker_follows_the_stored_row_not_the_message(
+    client, monkeypatch, message
+):
+    """Create and update ignore the repository sentence.
+
+    #75 raises a different ValueError for the same ticker collision.
+    The page looks for another row with that ticker, compared with
+    ``==`` after the write model uppercases it.
+    """
+    await _create(client, name="First Co", ticker="FIRST")
+
+    def reject_create(self, company):
+        raise ValueError(message)
+
+    monkeypatch.setattr(CompanyRepository, "create", reject_create)
+    created = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Other Co", "ticker": " first "},
+    )
+    assert created.status_code == 400
+    assert "Istnieje już spółka o tym tickerze." in created.text
+    assert message not in created.text
+    assert _counts(client) == (1, 0)
+
+    monkeypatch.undo()
+    second_id, _data = await _create(client, name="Second Co", ticker="SECOND")
+
+    def reject_update(self, company_id, company_update):
+        raise ValueError(message)
+
+    monkeypatch.setattr(CompanyRepository, "update", reject_update)
+    updated = await _post(
+        client,
+        f"/ui/companies/{second_id}/edit",
+        {"name": "Second Co", "ticker": "first"},
+    )
+    assert updated.status_code == 400
+    assert "Istnieje już spółka o tym tickerze." in updated.text
+    assert message not in updated.text
+    assert _counts(client) == (2, 0)
+
+
+@pytest.mark.asyncio
+async def test_same_message_without_a_stored_ticker_is_not_a_duplicate(
+    client, monkeypatch
+):
+    """The #75 sentence alone does not select the ticker error."""
+
+    def reject_create(self, company):
+        raise ValueError("A company with this ticker already exists")
+
+    monkeypatch.setattr(CompanyRepository, "create", reject_create)
+    response = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Lonely Co", "ticker": "LONE"},
+    )
+    assert response.status_code == 400
+    assert "Istnieje już spółka o tym tickerze." not in response.text
+    assert "naruszają regułę unikalności" in response.text
+    assert _counts(client) == (0, 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["", "   ", "\n\t"])
+async def test_blank_company_name_is_422_in_both_languages(client, name):
+    polish = await _post(
+        client,
+        "/ui/companies",
+        {"name": name, "ticker": "BLANK", "currency": "USD"},
+    )
+    assert polish.status_code == 422
+    assert "To pole jest wymagane." in polish.text
+    assert 'id="field-name"' in polish.text
+    assert 'aria-invalid="true"' in polish.text
+    assert 'href="#field-name"' in polish.text
+    assert 'value="BLANK"' in polish.text
+    assert _counts(client) == (0, 0)
+    client.cookies.set("ui_lang", "en")
+    english = await _post(
+        client,
+        "/ui/companies",
+        {"name": name, "ticker": "BLANK", "currency": "USD"},
+    )
+    assert english.status_code == 422
+    assert "This field is required." in english.text
+    client.cookies.clear()
+    company_id, _data = await _create(client, name="Named Co", ticker="NAMED")
+    cleared = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "  ", "ticker": "NAMED"},
+    )
+    assert cleared.status_code == 422
+    assert "To pole jest wymagane." in cleared.text
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert "Named Co" in detail.text
+
+
+@pytest.mark.asyncio
+async def test_editing_the_description_drops_the_demo_badge(client):
+    """The synthetic badge is the [IAC-DEMO-V1] prefix, not a column.
+
+    Saving a description that does not start with that prefix removes
+    the badge. That is today's read model.
+    """
+    company_id, _data = await _create(
+        client,
+        name="Demo Co",
+        ticker="DEMOCO",
+        description="[IAC-DEMO-V1] seeded text",
+    )
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert detail.status_code == 200
+    assert "dane syntetyczne" in detail.text
+    assert "[IAC-DEMO-V1]" in detail.text
+    updated = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Demo Co",
+            "ticker": "DEMOCO",
+            "description": "seeded text",
+        },
+    )
+    assert updated.status_code == 303
+    after = await client.get(f"/ui/instruments/{company_id}")
+    assert "dane syntetyczne" not in after.text
+    assert "[IAC-DEMO-V1]" not in after.text
+    assert "seeded text" in after.text
 
 
 @pytest.mark.asyncio
@@ -853,7 +1010,24 @@ async def test_get_never_changes_rows_and_json_body_is_not_500(client):
         headers={"origin": _ORIGIN},
     )
     assert unused.status_code == 405
+    assert "text/html" in unused.headers["content-type"]
+    assert "Metoda niedozwolona" in unused.text
+    assert "form-action 'self'" in unused.headers["content-security-policy"]
+    assert unused.headers["referrer-policy"] == "same-origin"
+    assert unused.headers["x-frame-options"] == "DENY"
+    assert "GET" in unused.headers["allow"]
     assert _counts(client) == before
+    client.cookies.set("ui_lang", "en")
+    english = await client.put(
+        "/ui/companies/new", headers={"origin": _ORIGIN}
+    )
+    assert english.status_code == 405
+    assert "Method not allowed" in english.text
+    assert "text/html" in english.headers["content-type"]
+    client.cookies.clear()
+    api = await client.put("/api/v1/companies/")
+    assert api.status_code == 405
+    assert api.headers["content-type"].startswith("application/json")
     foreign = await client.post(
         "/ui/companies",
         json={"name": "Json Co", "ticker": "JSONCO"},
