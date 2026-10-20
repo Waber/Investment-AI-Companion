@@ -1,9 +1,10 @@
 import pytest
 import pytest_asyncio
+from sqlalchemy.exc import IntegrityError
+
 from app.models.company import CompanyUpdate
 from app.models.database_models import CompanyDB
 from app.repositories.company_repository import CompanyRepository
-from sqlalchemy.exc import IntegrityError
 
 
 def snapshot(company):
@@ -49,7 +50,15 @@ async def test_duplicate_update_preserves_records(client, companies, field):
         json={field: second[field], "description": "Must not be saved"},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Company name or ticker already exists"
+    if field == "ticker":
+        assert response.json() == {
+            "detail": "A company with this ticker already exists",
+            "code": "duplicate_ticker",
+        }
+    else:
+        assert response.json() == {
+            "detail": "Company name or ticker already exists"
+        }
     for item in companies:
         fetched = await client.get(f"/api/v1/companies/{item['id']}")
         assert fetched.status_code == 200

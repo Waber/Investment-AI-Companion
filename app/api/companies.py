@@ -2,13 +2,29 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
 from app.core.database import get_db
 from app.models.company import Company, CompanyCreate, CompanyUpdate
 from app.models.database_models import CompanyDB
+from app.repositories.company_errors import DuplicateCompanyError
 from app.repositories.company_repository import CompanyRepository
+
+
+def duplicate_company_response(error: DuplicateCompanyError) -> JSONResponse:
+    """400 body: a string ``detail`` plus a stable ``code``.
+
+    Older clients read ``detail``. Forms that need to branch read
+    ``code`` (``duplicate_ticker`` or ``duplicate_isin``). The code
+    is the class attribute on the repository exception.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(error), "code": error.code},
+    )
+
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -116,6 +132,8 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
         # Create company using repository
         db_company = repo.create(company)
         return db_to_company_model(db_company)
+    except DuplicateCompanyError as error:
+        return duplicate_company_response(error)
     except ValueError as e:
         # Handle business logic errors (e.g., duplicate name/ticker)
         raise HTTPException(status_code=400, detail=str(e))
@@ -154,6 +172,8 @@ def update_company(
         return db_to_company_model(db_company)
     except HTTPException:
         raise
+    except DuplicateCompanyError as error:
+        return duplicate_company_response(error)
     except ValueError as e:
         # Handle business logic errors
         raise HTTPException(status_code=400, detail=str(e))

@@ -12,6 +12,10 @@ from app.core.database import Base
 from app.models.company import CompanyCreate, CompanyUpdate
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from app.models.financial_metrics import FinancialMetricsUpdate
+from app.repositories.company_errors import (
+    DuplicateIsinError,
+    DuplicateTickerError,
+)
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
@@ -103,10 +107,13 @@ def test_duplicate_ticker_from_integrity_error_hides_the_driver_text(
     monkeypatch.setattr(repo, "get_by_ticker", hide_the_first_lookup)
 
     with pytest.raises(
-        ValueError, match="^A company with this ticker already exists$"
+        DuplicateTickerError,
+        match="^A company with this ticker already exists$",
     ) as error:
         repo.create(CompanyCreate(name="B", ticker="DUP"))
 
+    assert isinstance(error.value, ValueError)
+    assert error.value.code == "duplicate_ticker"
     assert error.value.__cause__ is None
     assert "UNIQUE" not in str(error.value)
     assert (
@@ -130,10 +137,11 @@ def test_duplicate_isin_from_integrity_error_uses_the_fixed_sentence(
 
     monkeypatch.setattr(repo, "get_by_isin", hide_the_first_lookup)
 
-    with pytest.raises(
-        ValueError, match="^A company with this ISIN already exists$"
-    ):
+    with pytest.raises(DuplicateIsinError) as error:
         repo.create(CompanyCreate(name="B", ticker="BBB", isin="US0378331005"))
+
+    assert error.value.code == "duplicate_isin"
+    assert str(error.value) == "A company with this ISIN already exists"
 
     assert session.query(CompanyDB).count() == 1
 
@@ -151,15 +159,17 @@ def test_update_duplicate_ticker_from_integrity_error_uses_the_fixed_sentence(
     repo.create(CompanyCreate(name="B", ticker="BBB"))
     monkeypatch.setattr(
         repo,
-        "_another_company_has_name_or_ticker",
-        lambda company_id, name, ticker: False,
+        "_other_company_with_name_or_ticker",
+        lambda company_id, name, ticker: None,
     )
 
     with pytest.raises(
-        ValueError, match="^A company with this ticker already exists$"
+        DuplicateTickerError,
+        match="^A company with this ticker already exists$",
     ) as error:
         repo.update(first.id, CompanyUpdate(ticker="BBB"))
 
+    assert error.value.code == "duplicate_ticker"
     assert error.value.__cause__ is None
     assert "UNIQUE" not in str(error.value)
     stored = session.get(CompanyDB, first.id)
@@ -184,11 +194,10 @@ def test_update_duplicate_isin_from_integrity_error_uses_the_fixed_sentence(
 
     monkeypatch.setattr(repo, "get_by_isin", hide_the_first_lookup)
 
-    with pytest.raises(
-        ValueError, match="^A company with this ISIN already exists$"
-    ) as error:
+    with pytest.raises(DuplicateIsinError) as error:
         repo.update(second.id, CompanyUpdate(isin="US0378331005"))
 
+    assert error.value.code == "duplicate_isin"
     assert error.value.__cause__ is None
     assert "UNIQUE" not in str(error.value)
     stored = session.get(CompanyDB, second.id)
