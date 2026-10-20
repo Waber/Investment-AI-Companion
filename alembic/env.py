@@ -1,6 +1,7 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+
+from sqlalchemy import engine_from_config, pool
+
 from alembic import context
 from app.core.config import settings
 from app.models.database_models import Base
@@ -11,7 +12,13 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.config_file_name is not None:
+# A test passes its own connection and must not replace the logging
+# setup pytest already installed. fileConfig would drop captured logs
+# for every test that runs after the migration.
+if (
+    config.config_file_name is not None
+    and config.attributes.get("connection") is None
+):
     fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
@@ -62,7 +69,20 @@ def run_migrations_online() -> None:
     In this scenario we need to create an Engine
     and associate a connection with the context.
 
+    Tests pass an open connection on ``config.attributes["connection"]``
+    so a revision can be applied to a temporary database. That path
+    does not read ``settings.DATABASE_URL`` and does not open the
+    application engine.
     """
+    connection = config.attributes.get("connection")
+    if connection is not None:
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
     # Override the sqlalchemy.url in alembic.ini with our dynamic URL
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = get_url()

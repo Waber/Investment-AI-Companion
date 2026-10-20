@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from datetime import datetime, timezone
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
+from app.core.database import get_db
 from app.models.company import Company, CompanyCreate, CompanyUpdate
 from app.models.database_models import CompanyDB
 from app.repositories.company_repository import CompanyRepository
-from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
-from app.core.database import get_db
-from datetime import datetime, timezone
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -33,6 +35,8 @@ def db_to_company_model(db_company: CompanyDB) -> Company:
         country=db_company.country,
         exchange=db_company.exchange,
         currency=db_company.currency,
+        instrument_type=db_company.instrument_type,
+        isin=db_company.isin,
         created_at=db_company.created_at,
         updated_at=db_company.updated_at,
         is_active=db_company.is_active,

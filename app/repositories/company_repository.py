@@ -1,13 +1,27 @@
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from typing import List, Optional
-from app.models.database_models import CompanyDB
-from app.models.company import CompanyCreate, CompanyUpdate
 from datetime import datetime, timezone
+from typing import List, Optional
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.models.company import CompanyCreate, CompanyUpdate, InstrumentType
+from app.models.database_models import CompanyDB
 
 
 def _serialize_optional_url(value):
     return str(value) if value is not None else None
+
+
+DUPLICATE_ISIN_DETAIL = "A company with this ISIN already exists"
+
+
+def _instrument_type_value(value):
+    """Store the enum as the three-letter string the column expects."""
+    if isinstance(value, InstrumentType):
+        return value.value
+    if value is None:
+        return InstrumentType.STOCK.value
+    return value
 
 
 class CompanyRepository:
@@ -38,6 +52,12 @@ class CompanyRepository:
         Raises:
             IntegrityError: If company name or ticker already exists
         """
+        if (
+            company.isin is not None
+            and self.get_by_isin(company.isin) is not None
+        ):
+            raise ValueError(DUPLICATE_ISIN_DETAIL)
+
         # Create new CompanyDB instance
         db_company = CompanyDB(
             name=company.name,
@@ -49,6 +69,8 @@ class CompanyRepository:
             country=company.country,
             exchange=company.exchange,
             currency=company.currency or "USD",
+            instrument_type=_instrument_type_value(company.instrument_type),
+            isin=company.isin,
         )
 
         # Add to database session
@@ -96,6 +118,10 @@ class CompanyRepository:
             self.db.query(CompanyDB).filter(CompanyDB.ticker == ticker).first()
         )
 
+    def get_by_isin(self, isin: str) -> Optional[CompanyDB]:
+        """Return the company that already stores this ISIN, if any."""
+        return self.db.query(CompanyDB).filter(CompanyDB.isin == isin).first()
+
     def get_all(self, skip: int = 0, limit: int = 100) -> List[CompanyDB]:
         """
         Retrieve all companies with pagination support.
@@ -136,6 +162,10 @@ class CompanyRepository:
             update_data["website"] = _serialize_optional_url(
                 update_data["website"]
             )
+        if "instrument_type" in update_data:
+            update_data["instrument_type"] = _instrument_type_value(
+                update_data["instrument_type"]
+            )
 
         # Handle special case for name and ticker uniqueness
         if "name" in update_data or "ticker" in update_data:
@@ -155,6 +185,11 @@ class CompanyRepository:
 
             if existing:
                 raise ValueError("Company name or ticker already exists")
+
+        if update_data.get("isin") is not None:
+            taken = self.get_by_isin(update_data["isin"])
+            if taken is not None and taken.id != company_id:
+                raise ValueError(DUPLICATE_ISIN_DETAIL)
 
         # Update fields
         for field, value in update_data.items():
