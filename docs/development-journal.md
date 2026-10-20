@@ -1,5 +1,36 @@
 # Development Journal
 
+## 2026-10-20 - Dotted ticker duplicate is 400
+
+- Scope: extra QA finding on
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75).
+  A second create of an existing name and ticker such as `BRK.B`
+  returned HTTP 500 on master. The branch was rebased onto
+  `origin/master` `9d26948`.
+- Decisions: create still looks the ticker up before insert, and
+  again after rollback when the unique index fires. Both paths
+  raise `DuplicateTickerError`. The driver text is not read.
+  SQLite's `IntegrityError` names the columns and does not
+  contain `uq_company_name_ticker`. `CompanyCreate.name` and
+  `CompanyUpdate.name` keep `min_length=1`. `max_length` on
+  `CompanyUpdate.ticker` stays with PR #78. The next rebase of
+  either pull request keeps both.
+- Verification: no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1411 passed, 123 deselected, coverage 96.15%. PostgreSQL
+  (`TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  `REQUIRE_POSTGRES=1`, `pytest -m integration`) -> 123 passed,
+  1411 deselected. GitHub Actions
+  [run 39478793637](https://github.com/Waber/Investment-AI-Companion/actions/runs/39478793637)
+  on `0188f53` succeeded. SQLite job `118821628878`: 1411
+  passed, 123 deselected, coverage 96.15%. PostgreSQL job
+  `118821628158`: 123 passed, 1411 deselected.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-20): extra QA finding from about
+  18:45, after the rebase onto `9d26948`.
+- Next: the owner reviews PR #75. Agents do not merge.
+
 ## 2026-10-20 - QA round 1 on instrument type and ISIN
 
 - Scope: QA findings on
