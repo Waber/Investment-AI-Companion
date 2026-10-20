@@ -9,9 +9,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from tests.company_migration import (
+    EXPECTED_ISIN_UNIQUENESS,
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_base,
+    isin_uniqueness,
     upgrade_head,
 )
 
@@ -128,4 +130,30 @@ def test_upgrade_sets_stock_on_postgresql(postgres_engine):
             connection.rollback()
             connection.execute(text("SET search_path TO public"))
             connection.execute(text(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE"))
+            connection.commit()
+
+
+def test_model_and_migration_use_the_same_isin_uniqueness(postgres_engine):
+    """The public create_all schema and revision 0001 agree on isin."""
+    schema = "company_migration_match"
+    with postgres_engine.connect() as public:
+        public.execute(text("SET search_path TO public"))
+        from_model = isin_uniqueness(public)
+
+    with postgres_engine.connect() as connection:
+        connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+        connection.execute(text(f"CREATE SCHEMA {schema}"))
+        connection.execute(text(f"SET search_path TO {schema}"))
+        connection.commit()
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.commit()
+            upgrade_head(connection)
+            from_migration = isin_uniqueness(connection)
+            assert from_model == from_migration == EXPECTED_ISIN_UNIQUENESS
+        finally:
+            connection.rollback()
+            connection.execute(text("SET search_path TO public"))
+            connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
             connection.commit()

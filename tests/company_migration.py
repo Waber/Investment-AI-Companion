@@ -7,6 +7,8 @@ points at a scratch schema.
 
 from pathlib import Path
 
+from sqlalchemy import inspect
+
 from alembic import command
 from alembic.config import Config
 
@@ -43,3 +45,40 @@ def upgrade_head(connection):
 
 def downgrade_base(connection):
     command.downgrade(_config(connection), "base")
+
+
+# create_all and revision 0001 both report one unique index named
+# uq_companies_isin on (isin), and no unique constraint on isin.
+EXPECTED_ISIN_UNIQUENESS = (
+    (("uq_companies_isin", True, ("isin",)),),
+    (),
+)
+
+
+def isin_uniqueness(connection):
+    """How the live companies table keeps isin unique.
+
+    Indexes are the first tuple. Unique constraints are the second.
+    Callers compare a create_all database with a database that
+    revision 0001 upgraded.
+    """
+    inspector = inspect(connection)
+    indexes = tuple(
+        sorted(
+            (
+                index["name"],
+                bool(index["unique"]),
+                tuple(index["column_names"]),
+            )
+            for index in inspector.get_indexes("companies")
+            if index["column_names"] == ["isin"]
+        )
+    )
+    constraints = tuple(
+        sorted(
+            (item["name"], tuple(item["column_names"] or []))
+            for item in inspector.get_unique_constraints("companies")
+            if item.get("column_names") == ["isin"]
+        )
+    )
+    return indexes, constraints
