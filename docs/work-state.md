@@ -22,7 +22,12 @@
   `require_same_origin`. `GET /ui/language/{code}` does not set
   the cookie: a known code redirects to `safe_next`, so an old
   bookmark is not a 403, and an unknown code stays HTML 404.
-  Other GETs are still not checked. `Secure` on the language
+  An HTMX filter sends the new list URL out of band into the
+  hidden `next` inputs. A page rendered from a POST names the
+  GET form (`/ui/companies/new`, `.../metrics/new`, or the same
+  edit/delete path). Switching language loads that GET, so
+  unsaved form input is dropped. Other GETs are still not
+  checked. `Secure` on the language
   cookie is deferred until HTTPS (#56). Models, schema,
   migrations, repositories, and the API were not changed.
 - Incomplete: map `duplicate_ticker` and `duplicate_isin` from
@@ -36,18 +41,18 @@
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1367 passed, 121 deselected, coverage 95.97% after the bidi
-  and mark-only commit. The POST switch before it was 1367 passed,
-  coverage 95.96%. The dot-segment commit was 1366 passed,
-  coverage 95.96%. Scoped black, isort, and flake8 passed.
-  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  GitHub Actions on `d5f5d2b` succeeded
-  ([run 39492311897](https://github.com/Waber/Investment-AI-Companion/actions/runs/39492311897)):
-  PostgreSQL job 118868382717 and SQLite job 118868383103.
+  -> 1370 passed, 121 deselected, coverage 96.01% after the
+  POST-form return path. The HTMX filter commit before it was
+  1368 passed, coverage 95.97%. Scoped black, isort, and flake8
+  passed. PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
+  GitHub Actions for this QA head is not recorded yet. The review
+  head `d5f5d2b` succeeded
+  ([run 39492311897](https://github.com/Waber/Investment-AI-Companion/actions/runs/39492311897)).
 - Active agents: none. Blockers: #75 is not on master, so the
   `error.code` mapping is not in this branch. Account usage was
   not available in this session.
-- Next action: the owner reviews the pull request and merges it
+- Next action: wait for GitHub Actions on this QA head, then
+  record the run. The owner reviews the pull request and merges it
   with "Rebase and merge". After #75 lands, rebase this branch,
   align the name helper with `normalize_name`, and switch the
   duplicate check to the exception class or `.code`. Agents do

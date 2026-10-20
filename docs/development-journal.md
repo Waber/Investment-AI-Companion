@@ -1,5 +1,42 @@
 # Development Journal
 
+## 2026-10-20 - QA on the language return path (PR #81)
+
+- Scope: two medium UX findings on
+  [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81)
+  at `d5f5d2b`. The filter left `next` on the old query, and a
+  POST error page sent the language switch to a POST-only URL.
+  Models, the schema, migrations, repositories, and the API were
+  not changed.
+- Decisions: the list fragment includes two hidden inputs with
+  `hx-swap-oob="outerHTML"`. They replace `#language-next-pl` and
+  `#language-next-en` with the URL HTMX just pushed. There is no
+  inline script, because the page CSP is `'self'`. A full page
+  does not include those inputs. `language_next_path` uses the
+  request URL only for GET. `POST /ui/companies` returns to
+  `GET /ui/companies/new`. `POST /ui/companies/{id}/metrics`
+  returns to `GET .../metrics/new`. Edit and delete already have
+  a GET at the same path. Any other POST falls back to `/ui`.
+  Switching language loads that GET page, so unsaved form input
+  is dropped. The 422 page still shows what was typed; the page
+  after PL/EN does not.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  after the filter commit: 1368 passed, 121 deselected, coverage
+  95.97%. After the POST mapping: 1370 passed, 121 deselected,
+  coverage 96.01%. Scoped black, isort, and flake8 passed.
+  In the browser, filtering from `q=Lodz` to `q=Nope` and clicking
+  PL stayed on the Nope query. A blank ticker on the company form
+  then EN opened `/ui/companies/new` in English with an empty
+  name, not a 405. PostgreSQL was not run locally. GitHub Actions
+  for this head is not recorded yet.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 20:42 to 20:52.
+- Next: the owner reviews PR #81 again. It still says Refs #80 and
+  stays unmerged. After #75 lands, align the name helper with
+  `normalize_name` and map `error.code`.
+
 ## 2026-10-20 - Code review on the language switch and the name helper (PR #81)
 
 - Scope: the review on
