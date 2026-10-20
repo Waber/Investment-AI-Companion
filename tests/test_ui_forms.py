@@ -231,7 +231,6 @@ async def test_create_edit_and_delete_company_round_trip(client):
     page = await client.get("/ui/companies/new")
     assert page.status_code == 200
     assert "Nowy instrument" in page.text
-    assert "Nie jest poradą inwestycyjną" in page.text
     assert 'method="post"' in page.text
     assert 'action="/ui/companies"' in page.text
     assert "hx-post" not in page.text
@@ -290,7 +289,6 @@ async def test_create_edit_and_delete_company_round_trip(client):
     assert confirm.status_code == 200
     assert "usuwa także jej wskaźniki finansowe" in confirm.text
     assert "Renamed Trip" in confirm.text
-    assert "Nie jest poradą inwestycyjną" in confirm.text
     assert _counts(client) == (1, 0)
     _assert_ui_headers(confirm)
 
@@ -361,7 +359,6 @@ async def test_validation_errors_rerender_in_both_languages(client):
     assert "Ticker must be 1 to 20 ASCII characters" in english.text
     assert "Enter an http:// or https:// address" in english.text
     assert "Currency must be exactly three letters." in english.text
-    assert "not financial advice" in english.text.casefold()
     assert "javascript:alert(1)" in english.text
     assert 'value="BAD TICKER"' in english.text
     _assert_labeled(english.text)
@@ -930,7 +927,6 @@ async def test_bad_company_ids_are_the_html_404(client, path):
     assert page.status_code == 404
     assert "text/html" in page.headers["content-type"]
     assert "Nie znaleziono instrumentu" in page.text
-    assert "Nie jest poradą inwestycyjną" in page.text
     assert not page.text.lstrip().startswith("{")
     _assert_ui_headers(page)
 
@@ -985,7 +981,6 @@ async def test_origin_check_blocks_cross_site_posts(client):
     assert cross.status_code == 403
     assert "text/html" in cross.headers["content-type"]
     assert "Żądanie zostało odrzucone" in cross.text
-    assert "Nie jest poradą inwestycyjną" in cross.text
     assert not cross.text.lstrip().startswith("{")
     _assert_ui_headers(cross)
     assert _counts(client) == before
@@ -995,7 +990,6 @@ async def test_origin_check_blocks_cross_site_posts(client):
     assert missing.status_code == 403
     assert "Request rejected" in missing.text
     assert "Changes are only accepted from this site." in missing.text
-    assert "not financial advice" in missing.text.casefold()
     assert _counts(client) == before
 
     referer_evil = await _post(

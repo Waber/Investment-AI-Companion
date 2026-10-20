@@ -37,10 +37,13 @@
   rejects a name with no visible character (nbsp, ideographic
   space, zero-width-only). The origin docstring says the check
   relies on `TrustedHostMiddleware`, so `ALLOWED_HOSTS` must stay
-  loopback-only. The disclaimer-banner asserts stay.
+  loopback-only. Disclaimer-banner asserts added on this branch
+  were removed. The shipped banner and the tests that predate
+  this pull request stay.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1363 passed, 121 deselected, coverage 95.83%. Scoped black,
+  -> 1363 passed, 121 deselected, coverage 95.83% after
+  removing the banner asserts this branch added. Scoped black,
   isort, and flake8 passed. `pip-audit` on both locks: no known
   vulnerabilities. `python-multipart` 0.0.32 with hashes.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).

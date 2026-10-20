@@ -1,12 +1,30 @@
 # Development Journal
 
+## 2026-10-20 - Drop the new disclaimer asserts (PR #77)
+
+- Scope: the PM decision on
+  [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77).
+  AGENTS.md and product requirements section 12 record Raul's
+  decision of 2026-10-10: the disclaimer banner is not a product
+  requirement. The six banner asserts added in
+  `tests/test_ui_forms.py` are removed. No new disclaimer copy.
+  The shipped banner and the tests that predate this pull request
+  are unchanged.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1363 passed, 121 deselected, coverage 95.83%. Scoped black
+  and flake8 passed on the test file.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 18:05 to 18:15.
+- Next: the owner reviews PR #77. It still says Refs #34 and stays
+  unmerged.
+
 ## 2026-10-20 - Review notes on the company forms (PR #77)
 
 - Scope: the code review on
   [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77).
-  Models and the repository were not changed. The disclaimer-banner
-  asserts stay. The score disclaimer is a product rule, so that
-  request is declined.
+  Models and the repository were not changed.
 - Decisions: `python-multipart` floor is `>=0.0.32`. The comment
   cites GHSA-5rvq-cxj2-64vf / CVE-2026-53539 (quadratic urlencoded
   parse, fixed in 0.0.30) and the older CVE-2024-53981 note.
