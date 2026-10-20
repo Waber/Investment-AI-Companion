@@ -872,7 +872,13 @@ def test_cache_hit_does_not_need_an_in_flight_permit():
     assert not holder.is_alive()
 
 
-def test_simultaneous_misses_for_one_key_share_one_call():
+def test_same_key_follower_fails_fast_while_the_leader_runs():
+    """A second miss does not wait out the deadline.
+
+    The follower fails at once, takes no permit and no rate-limit
+    token, and leaves the leader as the only provider call. After the
+    leader finishes, the cache answers the next request.
+    """
     entered = threading.Event()
     release = threading.Event()
 
@@ -891,47 +897,72 @@ def test_simultaneous_misses_for_one_key_share_one_call():
             return sourced({"name": "Acme"})
 
     inner = Once()
-    guarded = make(inner, FakeClock(), max_inflight=4)
-    waited = []
-    real_wait = guarded._wait_for_flight
-
-    def spy_wait(flight, started, method_name, bound):
-        waited.append(bound.arguments.get("ticker"))
-        return real_wait(flight, started, method_name, bound)
-
-    guarded._wait_for_flight = spy_wait
-    results = []
+    clock = FakeClock()
+    guarded = make(inner, clock, max_inflight=4)
     errors = []
 
-    def worker(ticker):
+    def follower():
         try:
-            results.append(guarded.fetch_company_info(ticker))
-        except Exception as exc:  # pragma: no cover - the assertions below
+            guarded.fetch_company_info("AAPL")
+        except ProviderError as exc:
             errors.append(exc)
 
-    threads = [
-        threading.Thread(target=worker, args=("aapl",)),
-        threading.Thread(target=worker, args=("AAPL",)),
-    ]
-    for thread in threads:
-        thread.start()
+    leader = threading.Thread(
+        target=lambda: guarded.fetch_company_info("aapl")
+    )
+    leader.start()
     assert entered.wait(timeout=5)
-    deadline = time.monotonic() + 2
-    while not waited and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert waited, "the second caller did not wait for the first"
-    assert inner.calls == 1
-    release.set()
-    for thread in threads:
-        thread.join(timeout=5)
+    started = time.monotonic()
+    follower_thread = threading.Thread(target=follower)
+    follower_thread.start()
+    follower_thread.join(timeout=1)
+    elapsed = time.monotonic() - started
 
-    assert not any(thread.is_alive() for thread in threads)
-    assert errors == []
+    assert not follower_thread.is_alive()
+    assert elapsed < 1
+    assert len(errors) == 1
+    assert "already in flight" in str(errors[0])
     assert inner.calls == 1
-    assert inner.tickers == ["aapl"] or inner.tickers == ["AAPL"]
-    assert len(results) == 2
-    assert results[0] == results[1]
-    assert results[0].value["name"] == "Acme"
-    # The waiter saw the raw ticker it was given, not the cache key.
-    assert waited[0] in ("aapl", "AAPL")
-    assert waited[0] != inner.tickers[0]
+    assert len(guarded._calls) == 1
+    assert clock.sleeps == []
+
+    release.set()
+    leader.join(timeout=5)
+    assert not leader.is_alive()
+    assert guarded.fetch_company_info("AAPL").value["name"] == "Acme"
+    assert inner.calls == 1
+    assert inner.tickers == ["aapl"]
+
+
+def test_rejected_in_flight_call_does_not_take_a_rate_limit_token():
+    """The semaphore is checked before a token is recorded or a sleep."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Blocking:
+        def fetch_company_info(self, ticker):
+            entered.set()
+            assert release.wait(timeout=5)
+            return sourced({"name": ticker})
+
+    clock = FakeClock()
+    guarded = make(
+        Blocking(),
+        clock,
+        max_inflight=1,
+        rate_limit_calls=2,
+        rate_limit_period=1,
+        rate_limit_max_wait=5,
+    )
+    holder = threading.Thread(target=lambda: guarded.fetch_company_info("ONE"))
+    holder.start()
+    assert entered.wait(timeout=5)
+
+    with pytest.raises(ProviderError, match="Too many collector calls"):
+        guarded.fetch_company_info("TWO")
+
+    assert len(guarded._calls) == 1
+    assert clock.sleeps == []
+    release.set()
+    holder.join(timeout=5)
+    assert not holder.is_alive()

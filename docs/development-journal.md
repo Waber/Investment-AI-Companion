@@ -1,5 +1,45 @@
 # Development Journal
 
+## 2026-10-20 - Security round 1 on collector hardening (#76)
+
+- Scope: security re-review of the open pull request. Same branch.
+  The QA round 1 retry rule stays. Templates, static files, and
+  `app/ui/` were not edited. Tests do not call a live provider.
+- Decisions:
+  - The in-flight permit is taken with `acquire(blocking=False)`
+    before the rate-limit wait. A rejected call raises
+    `ProviderError` and does not sleep or record a token. The
+    timestamp is recorded only while the permit is held. `finally`
+    releases the permit before a retry sleep, so a backoff does not
+    keep the slot. At most `max_inflight` threads can be inside the
+    rate-limit wait.
+  - A second request for a key that already has a leader fails at
+    once (`ProviderError`, HTTP 502). It does not wait up to the
+    deadline. Waiting, even for one second, would still hold a
+    worker without a permit. The leader's result is cached for a
+    later request.
+  - `YfData.get` and `post` are not the only HTTP entry points.
+    yfinance 1.7 calls `session.get` with `timeout=30` from the
+    cookie and crumb helpers. Those methods are wrapped with the
+    same cap. A missing timeout is capped too, because the requests
+    default `None` waits with no limit. The tests record the
+    timeout and open no socket.
+  - A ticker made only of dots is rejected. Pydantic's regex engine
+    has no lookahead, so the pattern requires one non-dot character.
+    Length stays capped at 20 in `normalize_ticker` and on the fields.
+- Verification: no `.env`, `DATABASE_URL` unset, Python 3.12.3 venv
+  from `requirements-dev.lock`. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1338 passed, 121 deselected, coverage 95.38%. Scoped black,
+  isort, and flake8 passed on the touched Python files. PostgreSQL
+  was not run locally (no `TEST_POSTGRES_DSN`). GitHub Actions runs
+  both jobs.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (2026-10-20, UTC): security notes read about 18:13.
+  Local suite finished after that.
+- Next: both CI jobs, then the security table on the pull request.
+  Agents do not merge.
+
 ## 2026-10-20 - QA round 1 on collector hardening (#76)
 
 - Scope: review findings on the open pull request for the collector

@@ -11,11 +11,18 @@
   from Y` sets `__suppress_context__` even when Y is not `None`, so
   the kept wrapper test still retries. A retry shares the original
   deadline. The gitleaks allowlist is `condition = "AND"`.
+- Security round 1: the in-flight permit is taken before the
+  rate-limit wait, so a rejected call does not sleep or record a
+  token. A second request for a key that is already being fetched
+  fails at once instead of waiting. Yahoo `session.get` and
+  `session.post` use the capped timeout. A ticker made only of dots
+  is rejected.
 - Completed: one deadline for waits and retries, an in-flight
-  semaphore around the provider call only (default 4), a normalized
-  cache key with the raw ticker still sent upstream, one shared
-  call for simultaneous misses of the same key, retry when a
-  transient error is on `__context__`, unexpected collector errors
+  semaphore taken before the rate-limit wait (default 4), a
+  normalized cache key with the raw ticker still sent upstream,
+  fail-fast for a duplicate in-flight key, retry when a
+  transient error is on `__context__` only for a `ProviderError`
+  wrapper, unexpected collector errors
   as HTTP 502 with the class name only, Yahoo ticker normalization
   before `yf.Ticker`, rejection of `.` and `..`, an explicit 10 s
   HTTP timeout that shrinks to the time left on the deadline,
@@ -30,15 +37,15 @@
   are not done. The optional demo port race was not part of this
   change.
 - Tests: no `.env`, `DATABASE_URL` unset, Python 3.12.3,
-  `requirements-dev.lock`. CI command -> 1331 passed, 121
-  deselected, coverage 95.17%. PostgreSQL was not run locally.
+  `requirements-dev.lock`. CI command -> 1338 passed, 121
+  deselected, coverage 95.38%. PostgreSQL was not run locally.
   GitHub Actions is the PostgreSQL run.
 - Active agents: none. Blockers: none.
-- Stop reason: QA round 1 is implemented locally. Account usage was
-  not available in this session. The pull request stays a draft until
-  both CI jobs pass, then it is marked ready for review.
-- Next action: wait for both GitHub Actions jobs on this commit, mark
-  the pull request ready, and record the run id. Agents do not merge.
+- Stop reason: security round 1 is implemented locally. Account usage
+  was not available in this session. The pull request stays ready for
+  review. Agents do not merge.
+- Next action: wait for both GitHub Actions jobs on this commit, add
+  the security table to the pull request, and record the run id.
   After the owner rebases and merges, #26 together with #16.
 
 ## Company and financial-metrics forms (#34, part): 2026-10-20
