@@ -33,8 +33,9 @@
 - Time tracking (+0200): 2026-10-19 about 15:10, discussion of the
   environment; 2026-10-20 13:02 Python 3.12 installed by the owner,
   13:02 to 13:20 venv, probe, issue, docs and this entry.
-- Next: pull request for `chore/local-venv-setup`, then #26 together
-  with #16.
+- Pull request: [PR #74](https://github.com/Waber/Investment-AI-Companion/pull/74)
+  (Refs #73), opened on 2026-10-20.
+- Next: the owner reviews PR #74, then #26 together with #16.
 
 ## 2026-10-19 - Rebase of the offline demo (#25) onto PR #72
 
