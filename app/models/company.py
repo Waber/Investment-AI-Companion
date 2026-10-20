@@ -1,4 +1,5 @@
 import enum
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -26,6 +27,7 @@ _CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
 # GBp is London pence (GBP / 100) and ZAc is South African cents. They
 # are kept exactly as sent. Every other code is uppercased.
 MINOR_UNIT_CURRENCIES = frozenset({"GBp", "ZAc"})
+logger = logging.getLogger(__name__)
 # The description column is Text, so the database would store a
 # paste of any size. 5000 characters is about a page: enough for a
 # provider summary, and the cap lives on the write models only so a
@@ -167,6 +169,26 @@ def normalize_instrument_type(value: object) -> object:
     if normalized not in _INSTRUMENT_TYPES:
         raise ValueError("instrument_type must be STOCK, ETF, or ETC")
     return normalized
+
+
+def coerce_stored_instrument_type(value: object) -> object:
+    """Keep one bad stored type from failing a whole company list.
+
+    Writes still reject anything other than STOCK, ETF, or ETC. A
+    value already on a row is returned as null, and the log records
+    the value's class name rather than the stored text.
+    """
+    if value is None or isinstance(value, InstrumentType):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().upper()
+        if normalized in _INSTRUMENT_TYPES:
+            return normalized
+    logger.warning(
+        "Stored instrument_type is outside the enum (%s)",
+        type(value).__name__,
+    )
+    return None
 
 
 def normalize_currency(value: object) -> object:
@@ -360,6 +382,19 @@ class CompanyUpdate(_CompanyWriteChecks):
 
 class Company(CompanyBase):
     """Full company model with additional fields."""
+
+    instrument_type: Optional[InstrumentType] = Field(
+        None,
+        description=(
+            "STOCK, ETF, or ETC. A stored value outside those three "
+            "is null so one bad row does not break the list."
+        ),
+    )
+
+    @field_validator("instrument_type", mode="before")
+    @classmethod
+    def _coerce_stored_instrument_type(cls, value: object) -> object:
+        return coerce_stored_instrument_type(value)
 
     id: int = Field(..., description="Unique company identifier")
     created_at: datetime = Field(

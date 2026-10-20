@@ -5,11 +5,19 @@ The ISIN examples are published identifiers used to pin the checksum.
 They are not holdings and they are not a suggestion to buy or sell.
 """
 
+import logging
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.api.data_collection import get_collector
-from app.models.company import InstrumentType, normalize_instrument_type
+from app.models.company import (
+    Company,
+    InstrumentType,
+    coerce_stored_instrument_type,
+    normalize_instrument_type,
+)
 from app.models.database_models import CompanyDB
 from app.repositories.company_repository import (
     DUPLICATE_ISIN_DETAIL,
@@ -22,6 +30,43 @@ COMPANIES = "/api/v1/companies/"
 FETCH = "/api/v1/data-collection/fetch-company"
 APPLE_ISIN = "US0378331005"
 ETF_ISIN = "IE00B4L5Y983"
+
+
+def _company(**overrides):
+    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    fields = {
+        "id": 1,
+        "name": "A",
+        "ticker": "AAA",
+        "created_at": moment,
+        "updated_at": moment,
+    }
+    fields.update(overrides)
+    return Company(**fields)
+
+
+def test_read_model_turns_an_unknown_stored_type_into_null(caplog):
+    with caplog.at_level(logging.WARNING, logger="app.models.company"):
+        company = _company(instrument_type="BOND")
+        number = coerce_stored_instrument_type(1)
+
+    assert company.instrument_type is None
+    assert number is None
+    assert "str" in caplog.text
+    assert "int" in caplog.text
+    assert "BOND" not in caplog.text
+
+
+def test_read_model_keeps_a_known_type_without_logging(caplog):
+    with caplog.at_level(logging.WARNING, logger="app.models.company"):
+        company = _company(instrument_type=" etf ")
+        same = coerce_stored_instrument_type(InstrumentType.ETF)
+        missing = coerce_stored_instrument_type(None)
+
+    assert company.instrument_type == InstrumentType.ETF
+    assert same is InstrumentType.ETF
+    assert missing is None
+    assert caplog.records == []
 
 
 def test_stored_type_is_the_enum_value_or_stock_when_missing():
@@ -110,6 +155,39 @@ async def test_rejected_type_or_isin_writes_no_row(client, payload):
         assert db.query(CompanyDB).count() == 0
     finally:
         db.close()
+
+
+@pytest.mark.asyncio
+async def test_one_bad_stored_type_does_not_break_the_company_list(
+    client, monkeypatch, caplog
+):
+    good = await client.post(
+        COMPANIES, json={"name": "Good", "ticker": "GOOD"}
+    )
+    bad = await client.post(COMPANIES, json={"name": "Bad", "ticker": "BAD"})
+    assert good.status_code == 201
+    assert bad.status_code == 201
+    original = CompanyRepository.get_all
+
+    def get_all(self, skip=0, limit=100):
+        rows = original(self, skip=skip, limit=limit)
+        for row in rows:
+            if row.ticker == "BAD":
+                row.instrument_type = "BOND"
+        return rows
+
+    monkeypatch.setattr(CompanyRepository, "get_all", get_all)
+    with caplog.at_level(logging.WARNING, logger="app.models.company"):
+        listed = await client.get(COMPANIES)
+
+    assert listed.status_code == 200
+    by_ticker = {
+        item["ticker"]: item["instrument_type"] for item in listed.json()
+    }
+    assert by_ticker["GOOD"] == "STOCK"
+    assert by_ticker["BAD"] is None
+    assert "str" in caplog.text
+    assert "BOND" not in caplog.text
 
 
 @pytest.mark.asyncio
