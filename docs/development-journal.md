@@ -1,5 +1,51 @@
 # Development Journal
 
+## 2026-10-20 - UI forms follow-up, the part that does not need #75 (#80)
+
+- Scope: the frontend part of
+  [#80](https://github.com/Waber/Investment-AI-Companion/issues/80).
+  Models, the schema, migrations, repositories, and the API were
+  not changed. The `error.code` mapping waits for #75.
+- Decisions: create and edit share `normalized_company_name` in
+  `app/ui/form_fields.py`. It strips surrounding whitespace with
+  `str.strip` (space, newline, NBSP U+00A0, ideographic space
+  U+3000) and returns None when nothing visible remains. Empty,
+  whitespace-only, and Cf/zero-width-only names are
+  `error.required` and HTTP 422, in Polish or English. Category C
+  as a whole is blank, not only Cf: a control character is not a
+  visible name either. A zero-width mark beside a real letter is
+  kept, because `strip` does not remove it. The old comments at
+  `company_payload` and `_name_is_blank` said `strip` removed NBSP
+  and U+3000 and that a Cf-only name was blank "too". The check
+  never called `strip` for that, and it skipped every category C.
+  Those comments are replaced by the helper's docstring.
+  `GET /ui/language/{code}` calls `origin_allowed` before it sets
+  the cookie. Other GETs stay unchecked. A same-origin link click
+  usually has no `Origin`. `Referrer-Policy: same-origin` still
+  sends `Referer`, and a missing `Origin` with that `Referer`
+  passes. A cross-site `Origin` or `Referer` is the HTML 403 and
+  the cookie is not set. A bad `Origin` is not rescued by a good
+  `Referer`. The address bar and a bookmark send neither header.
+  That is the same 403, with a link back to `/ui`, so a cross-site
+  GET that strips `Referer` cannot change the language. An unknown
+  code such as `de` does not set a cookie, so it stays the HTML
+  404 and skips the check. `Secure` on the language cookie waits
+  for HTTPS (#56). On this HTTP demo a `Secure` cookie would not
+  be stored. Duplicate ticker and ISIN still use the stored-row
+  lookup. A TODO in `_company_save_failed` names
+  `DuplicateTickerError.code` (`duplicate_ticker`) and
+  `DuplicateIsinError.code` (`duplicate_isin`) for the rebase
+  after #75.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1364 passed, 121 deselected, coverage 95.90%. Scoped black,
+  isort, and flake8 passed. PostgreSQL was not run locally.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 19:25 to 19:45.
+- Next: the owner reviews the pull request. It says Refs #80 and
+  stays unmerged. After #75 lands, rebase and map `error.code`.
+
 ## 2026-10-21 - Rebase instrument type onto master after PR #78
 
 - Scope: rebase `cursor/instrument-type-isin-1db6` onto

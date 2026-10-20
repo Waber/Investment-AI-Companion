@@ -1,5 +1,43 @@
 # Current Work State
 
+## UI forms follow-up (#80, part): 2026-10-20
+
+- Branch `cursor/ui-issue-80-forms-origin-5105`, based on
+  `origin/master` `9d26948`. Pull request says Refs #80. Not merged.
+- Completed: one form-layer helper, `normalized_company_name`, used
+  by company create and edit. Empty, whitespace-only (space,
+  newline, NBSP, U+3000), and Cf/zero-width-only names are a
+  localized 422. Surrounding whitespace is stripped on save.
+  Category C is treated as invisible, so a control-only name is
+  blank too. The stale comments at the old `company_payload` and
+  `_name_is_blank` docstrings now describe that helper.
+  `GET /ui/language/{code}` uses `origin_allowed`. A missing
+  `Origin` with a same-origin `Referer` passes (a normal link
+  click). Cross-site `Origin` or `Referer` is HTML 403 and does
+  not set the cookie. Neither header (address bar or bookmark) is
+  the same 403, with a link back to `/ui`. An unknown language
+  code stays HTML 404 and does not set a cookie. Other GETs are
+  still not checked. `Secure` on the language cookie is deferred
+  until HTTPS (#56). Models, schema, migrations, repositories, and
+  the API were not changed.
+- Incomplete: map `duplicate_ticker` and `duplicate_isin` from
+  `error.code`. #75 is not merged. The form still decides a
+  duplicate by a row lookup. TODO in
+  `app/ui/forms.py` `_company_save_failed`.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
+  command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1364 passed, 121 deselected, coverage 95.90%. Scoped black,
+  isort, and flake8 passed. PostgreSQL was not run locally (no
+  `TEST_POSTGRES_DSN`).
+- Active agents: none. Blockers: #75 is not on master, so the
+  `error.code` mapping is not in this branch. Account usage was
+  not available in this session.
+- Next action: the owner reviews the pull request and merges it
+  with "Rebase and merge". After #75 lands, rebase this branch
+  and switch the duplicate check to the exception class or
+  `.code`. Agents do not merge.
+
 ## Rebase onto master after PR #78: 2026-10-21
 
 - Branch `cursor/instrument-type-isin-1db6`, rebased onto
