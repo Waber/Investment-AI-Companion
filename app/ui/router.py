@@ -7,13 +7,13 @@ OpenAPI document so /docs remains the API reference.
 import posixpath
 from urllib.parse import unquote, urlsplit
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.ui.catalog import LANGUAGE_COOKIE, SUPPORTED_LANGUAGES
-from app.ui.origin import OriginRejected, origin_allowed, require_same_origin
+from app.ui.origin import require_same_origin
 from app.ui.queries import ListFilters, get_instrument, list_instruments
 from app.ui.templating import render
 from app.ui.view_models import METRIC_FIELDS, MONETARY_FIELDS
@@ -22,9 +22,10 @@ router = APIRouter(
     prefix="/ui",
     tags=["ui"],
     # POST, PUT, PATCH, and DELETE must come from this host. GET is
-    # not checked here. The language switch is the GET that sets a
-    # cookie, and that route calls origin_allowed itself. The forms
-    # router uses the same dependency.
+    # not checked here. The language cookie is set by
+    # POST /ui/language/{code}, so that request is covered here.
+    # GET of the same path only redirects. The forms router uses
+    # the same dependency.
     dependencies=[Depends(require_same_origin)],
 )
 
@@ -118,7 +119,8 @@ def _is_language_switch(candidate):
     The comparison uses the fully decoded path after
     ``posixpath.normpath``, so ``/ui/./language/pl`` and
     ``/ui/%2e/language/pl`` are the same route as ``/ui/language/pl``.
-    Returning there would set the cookie a second time.
+    The POST that sets the cookie must not send the browser back
+    there.
     """
     path = _fully_unquoted_path(candidate)
     if path is None:
@@ -132,11 +134,11 @@ def _is_language_switch(candidate):
 def safe_next(value):
     """Allow a return path under /ui, and nothing else.
 
-    The language switch puts the current path in the query string.
-    A value that points at another site, or at a scheme, is ignored.
-    A path under ``/ui/language/`` is also ignored: that route sets
-    the language cookie, so returning there would replace the
-    language the user just chose. The fallback is ``/ui``.
+    The language switch puts the current path in a hidden form
+    field. A value that points at another site, or at a scheme, is
+    ignored. A path under ``/ui/language/`` is also ignored, including
+    one hidden by a ``.`` or ``..`` segment. The POST must not send
+    the browser back to the language route. The fallback is ``/ui``.
     """
     if not value:
         return "/ui"
@@ -255,21 +257,39 @@ def instrument_detail(
 
 
 @router.get("/language/{language_code}", include_in_schema=False)
-def switch_language(request: Request, language_code: str, next: str = ""):
-    """Store the language in a cookie and redirect back to /ui.
+def language_bookmark(request: Request, language_code: str, next: str = ""):
+    """Redirect an old language URL without changing the cookie.
 
-    Unknown codes are the HTML 404 and do not set a cookie. A known
-    code must pass ``origin_allowed`` (see that module). A same-origin
-    link click has no ``Origin`` and a same-origin ``Referer``, and
-    that passes. Neither header (the address bar or a bookmark) is
-    the HTML 403, and the cookie is left as it was.
+    The switch itself is the POST below. A bookmark or a typed URL
+    is still this GET. It used to set the cookie, or answer 403 when
+    the request had no ``Origin`` and no ``Referer``. It now does
+    neither: a known code redirects to ``safe_next`` and leaves the
+    cookie as it was, so an old bookmark stays useful. An unknown
+    code is the HTML 404 and does not set a cookie.
     """
     if language_code not in SUPPORTED_LANGUAGES:
         return _with_ui_headers(
             render(request, "not_found.html", status_code=404)
         )
-    if not origin_allowed(request):
-        raise OriginRejected()
+    return _with_ui_headers(RedirectResponse(safe_next(next), status_code=303))
+
+
+@router.post("/language/{language_code}", include_in_schema=False)
+def switch_language(
+    request: Request, language_code: str, next: str = Form("")
+):
+    """Store the language in a cookie and redirect back to /ui.
+
+    ``require_same_origin`` on this router already refused a
+    cross-site POST, so this function does not call it again. An
+    unknown code is the HTML 404 and does not set a cookie. That
+    runs after the origin check, so a cross-site POST of an unknown
+    code is 403.
+    """
+    if language_code not in SUPPORTED_LANGUAGES:
+        return _with_ui_headers(
+            render(request, "not_found.html", status_code=404)
+        )
     response = RedirectResponse(safe_next(next), status_code=303)
     # Secure waits for HTTPS (#56). On this HTTP demo a Secure cookie
     # would not be stored, so the language switch would not stick.

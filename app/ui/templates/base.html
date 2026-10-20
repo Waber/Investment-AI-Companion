@@ -16,8 +16,14 @@
       <a href="/ui">{{ t['nav.instruments'] }}</a>
       <span class="language-switch">
         <span>{{ t['language.label'] }}</span>
-        <a href="/ui/language/pl?next={{ next_path | urlencode }}"{% if language == "pl" %} aria-current="true"{% endif %}>{{ t['language.pl'] }}</a>
-        <a href="/ui/language/en?next={{ next_path | urlencode }}"{% if language == "en" %} aria-current="true"{% endif %}>{{ t['language.en'] }}</a>
+        <form method="post" action="/ui/language/pl">
+          <input type="hidden" name="next" value="{{ next_path }}">
+          <button type="submit"{% if language == "pl" %} aria-current="true"{% endif %}>{{ t['language.pl'] }}</button>
+        </form>
+        <form method="post" action="/ui/language/en">
+          <input type="hidden" name="next" value="{{ next_path }}">
+          <button type="submit"{% if language == "en" %} aria-current="true"{% endif %}>{{ t['language.en'] }}</button>
+        </form>
       </span>
     </nav>
   </header>

@@ -23,23 +23,19 @@ Any other port must be written out. ``https`` does not match ``http``.
 
 Safe methods (GET, HEAD, OPTIONS, TRACE) are not checked by
 ``require_same_origin``. They do not change stored rows. The
-exception is ``GET /ui/language/{code}``, which sets the language
-cookie. That route calls ``origin_allowed`` itself.
+language cookie is set by ``POST /ui/language/{code}``. That POST
+is an unsafe method, so this dependency checks it. The PL and EN
+controls are small same-origin forms with a hidden ``next`` field.
+A same-origin form POST sends ``Origin``. A missing or blank
+``Origin`` falls back to ``Referer``. A cross-site ``Origin``
+fails even when ``Referer`` is ours. A cross-site ``Referer``
+with no ``Origin`` fails.
 
-A click on the PL/EN link is a GET navigation. Browsers usually
-omit ``Origin`` on that click. ``Referrer-Policy: same-origin``
-still sends the full ``Referer`` for a same-origin link, so a
-missing or blank ``Origin`` plus that ``Referer`` passes. A
-cross-site ``Origin`` fails even when ``Referer`` is ours. A
-cross-site ``Referer`` with no ``Origin`` fails.
-
-Typing the URL, or opening a bookmark, sends neither header. That
-request is rejected: HTML 403, and the cookie is not set. Allowing
-it would also allow a cross-site GET that strips ``Referer``
-(``Referrer-Policy: no-referrer``, or a subresource). The language
-links live on the ``/ui`` pages, and the 403 page links back to
-``/ui``. An unknown language code does not set a cookie, so it
-stays the HTML 404 and does not use this check.
+``GET /ui/language/{code}`` does not set the cookie. An old
+bookmark or a typed URL redirects to ``/ui`` (or to a safe
+``next``) and is not a 403. An unknown code is the HTML 404 and
+does not set a cookie. A cross-site POST of an unknown code is
+403, because the dependency runs before the route sees the code.
 """
 
 from urllib.parse import urlsplit
@@ -99,7 +95,7 @@ def _stated_endpoint(request):
 def origin_allowed(request):
     """True when the stated endpoint is this request's own.
 
-    Used for unsafe methods and for the language-switch GET. A
+    Used for unsafe methods, including the language-switch POST. A
     missing or blank ``Origin`` falls back to ``Referer``. Neither
     header means the caller did not name an endpoint.
     """
