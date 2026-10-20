@@ -227,6 +227,7 @@ def instrument_list(
             instrument_types=instrument_types,
             exchanges=exchanges,
             currencies=currencies,
+            oob_language_next=is_htmx(request),
             filters=filters,
         )
     )

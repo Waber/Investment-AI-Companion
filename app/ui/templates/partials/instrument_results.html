@@ -1,4 +1,11 @@
 <div id="instrument-results">
+  {# A filter pushes a new URL and swaps only this region. These
+     inputs replace the header's hidden next fields, so PL/EN return
+     to the filtered list. No inline script: the page CSP is 'self'. #}
+  {% if oob_language_next %}
+  <input type="hidden" name="next" value="{{ next_path }}" id="language-next-pl" hx-swap-oob="outerHTML">
+  <input type="hidden" name="next" value="{{ next_path }}" id="language-next-en" hx-swap-oob="outerHTML">
+  {% endif %}
   {% if instruments %}
   <table>
     <thead>
