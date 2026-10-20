@@ -67,9 +67,32 @@ nav {
   align-items: baseline;
 }
 
-.language-switch a[aria-current="true"] {
-  font-weight: 700;
+/* The PL/EN controls are forms, so a click is a POST. The global
+   form and button rules are for the filters and editors. These
+   stay on one line and look like the links they replaced. */
+.language-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+}
+
+.language-switch form {
+  display: inline;
+  margin: 0;
+}
+
+.language-switch button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0b4f8a;
   text-decoration: underline;
+  cursor: pointer;
+}
+
+.language-switch button[aria-current="true"] {
+  font-weight: 700;
 }
 
 .disclaimer {

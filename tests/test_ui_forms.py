@@ -71,10 +71,19 @@ def _parse_form(html):
 
 
 def _assert_labeled(html):
-    """Every input has a label, and error ids point at real elements."""
+    """Every visible input has a label, and error ids point at real elements.
+
+    A hidden field is not a control the user labels. The language
+    switch posts ``next`` that way.
+    """
     parsed = _parse_form(html)
-    assert parsed.controls
-    for control in parsed.controls:
+    visible = [
+        control
+        for control in parsed.controls
+        if control.get("type") != "hidden"
+    ]
+    assert visible
+    for control in visible:
         element_id = control.get("id")
         assert element_id
         assert element_id in parsed.labels

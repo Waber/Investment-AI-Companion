@@ -34,8 +34,8 @@ def test_safe_next_rejects_a_parent_segment():
     assert safe_next("/ui/%252e%252e/api/v1/companies/") == "/ui"
     assert safe_next("/ui/%5cevil") == "/ui"
     assert safe_next("/ui/instruments/1") == "/ui/instruments/1"
-    # The language route sets the cookie. Returning there would set
-    # it a second time. The list and a filtered list stay allowed.
+    # The language route must not be the return path. The list and
+    # a filtered list stay allowed.
     assert safe_next("/ui/language/pl") == "/ui"
     assert safe_next("/ui/language/en") == "/ui"
     assert safe_next("/ui/language/en?next=/ui") == "/ui"
@@ -85,23 +85,33 @@ def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
     assert ui_router.safe_next("/ui/instruments/1") == "/ui"
 
 
-# A same-origin <a> click sends Referer and usually no Origin.
-# Referrer-Policy on /ui is same-origin. This client uses port 80.
-_LANGUAGE_REFERER = {"referer": "http://127.0.0.1/ui"}
+# A same-origin form POST sends Origin. This client uses port 80.
+_LANGUAGE_ORIGIN = {"origin": "http://127.0.0.1"}
 
 
-async def _switch_language(client, code, *, params=None, headers=None):
-    """GET the language route the way a same-origin link click does.
+async def _switch_language(client, code, *, next="/ui", headers=None):
+    """POST the language route the way the PL/EN button does.
 
-    Pass ``headers`` to replace that Referer, including ``{}`` for a
-    request that carries neither Origin nor Referer.
+    Pass ``headers`` to replace Origin, including ``{}`` for a request
+    that carries neither Origin nor Referer.
     """
-    sent = dict(_LANGUAGE_REFERER)
+    sent = dict(_LANGUAGE_ORIGIN)
     if headers is not None:
         sent = headers
-    return await client.get(
-        f"/ui/language/{code}", params=params, headers=sent
+    return await client.post(
+        f"/ui/language/{code}", data={"next": next}, headers=sent
     )
+
+
+def _language_next(html, code):
+    """Return the hidden ``next`` value on the PL or EN form."""
+    match = re.search(
+        rf'<form method="post" action="/ui/language/{code}">\s*'
+        rf'<input type="hidden" name="next" value="([^"]*)">',
+        html,
+    )
+    assert match is not None
+    return match.group(1).replace("&amp;", "&")
 
 
 def _location(response):
@@ -191,7 +201,7 @@ async def test_pages_render_in_polish_by_default(seeded):
 
 @pytest.mark.asyncio
 async def test_english_cookie_persists_across_pages(seeded):
-    switched = await _switch_language(seeded, "en", params={"next": "/ui"})
+    switched = await _switch_language(seeded, "en")
     assert switched.status_code == 303
     assert _location(switched) == "/ui"
     cookie = switched.headers["set-cookie"]
@@ -233,16 +243,18 @@ async def test_language_switch_rejects_open_redirects(client):
         "/ui/../api/v1/companies/",
     ]
     for target in targets:
-        response = await _switch_language(
-            client, "en", params={"next": target}
-        )
+        response = await _switch_language(client, "en", next=target)
         assert response.status_code == 303
         assert _location(response) == "/ui"
-    plain = await _switch_language(client, "pl")
+    # A POST with no ``next`` field falls back to /ui.
+    plain = await client.post(
+        "/ui/language/pl", headers={"origin": "http://127.0.0.1"}
+    )
     assert plain.status_code == 303
     assert _location(plain) == "/ui"
-    # An unknown code does not set a cookie, so it stays 404 even
-    # with no Origin and even from another site.
+    # An unknown code does not set a cookie. GET stays 404. A
+    # same-origin POST stays 404. A cross-site POST is 403 because
+    # the origin dependency runs before the route sees the code.
     missing = await client.get("/ui/language/de")
     assert missing.status_code == 404
     assert "Nie znaleziono instrumentu" in missing.text
@@ -252,6 +264,16 @@ async def test_language_switch_rejects_open_redirects(client):
     )
     assert foreign_code.status_code == 404
     assert "set-cookie" not in foreign_code.headers
+    posted_missing = await _switch_language(client, "de")
+    assert posted_missing.status_code == 404
+    assert "set-cookie" not in posted_missing.headers
+    foreign_post = await client.post(
+        "/ui/language/de",
+        data={"next": "/ui"},
+        headers={"origin": "http://evil.example"},
+    )
+    assert foreign_post.status_code == 403
+    assert "set-cookie" not in foreign_post.headers
     unknown = await client.get("/ui/instruments/999999")
     assert unknown.status_code == 404
     assert "Nie jest poradą inwestycyjną" in unknown.text
@@ -287,6 +309,11 @@ async def test_history_restore_returns_the_full_page(seeded):
     fragment = await seeded.get("/ui", headers={"HX-Request": "true"})
     assert "<html" not in fragment.text.casefold()
     assert "Nie jest poradą inwestycyjną" not in fragment.text
+    assert 'action="/ui/language/pl"' in restored.text
+    assert 'action="/ui/language/en"' in restored.text
+    assert 'method="post"' in restored.text
+    assert "hx-post" not in restored.text
+    assert "/ui/language/" not in fragment.text
     _assert_ui_headers(fragment)
 
 
@@ -359,36 +386,39 @@ async def test_leading_zero_is_not_a_second_url(seeded):
 
 @pytest.mark.asyncio
 async def test_language_redirect_sends_the_ui_headers(client):
-    response = await _switch_language(client, "pl", params={"next": "/ui"})
+    response = await _switch_language(client, "pl")
     assert response.status_code == 303
     _assert_ui_headers(response)
+    bookmark = await client.get("/ui/language/en", params={"next": "/ui"})
+    assert bookmark.status_code == 303
+    assert "set-cookie" not in bookmark.headers
+    _assert_ui_headers(bookmark)
 
 
 @pytest.mark.asyncio
 async def test_language_link_returns_to_the_filtered_list(seeded):
     page = await seeded.get("/ui", params={"exchange": "DEMO-WSE"})
-    match = re.search(r'href="(/ui/language/en\?next=[^"]*)"', page.text)
-    assert match is not None
-    href = match.group(1).replace("&amp;", "&")
-    response = await seeded.get(
-        href, headers={"referer": "http://127.0.0.1/ui?exchange=DEMO-WSE"}
-    )
+    target = _language_next(page.text, "en")
+    assert target == "/ui?exchange=DEMO-WSE"
+    assert "hx-post" not in page.text
+    assert 'href="/ui/language/' not in page.text
+    assert 'aria-current="true"' in page.text
+    response = await _switch_language(seeded, "en", next=target)
     assert response.status_code == 303
     assert _location(response) == "/ui?exchange=DEMO-WSE"
+    assert "ui_lang=en" in response.headers["set-cookie"].casefold()
 
 
 @pytest.mark.asyncio
 async def test_language_switch_requires_same_origin(client):
-    """The cookie GET uses the same endpoint check as a form POST.
+    """The cookie POST uses the same endpoint check as the other forms.
 
-    A plain link click omits Origin and sends a same-origin Referer.
-    That passes. A cross-site Origin or Referer is an HTML 403 and
-    does not set the cookie. A bad Origin is not rescued by a good
-    Referer. The address bar sends neither header: that is the same
-    403, so a cross-site request that strips Referer cannot change
-    the language either. The 403 page links back to /ui.
+    A same-origin form sends ``Origin``. A cross-site ``Origin`` or
+    ``Referer`` is an HTML 403 and does not set the cookie. A bad
+    ``Origin`` is not rescued by a good ``Referer``. A POST with
+    neither header is the same 403. The 403 page links back to /ui.
     """
-    switched = await _switch_language(client, "en", params={"next": "/ui"})
+    switched = await _switch_language(client, "en")
     assert switched.status_code == 303
     assert _location(switched) == "/ui"
     cookie = switched.headers["set-cookie"]
@@ -396,11 +426,17 @@ async def test_language_switch_requires_same_origin(client):
     page = await client.get("/ui")
     assert 'lang="en"' in page.text
     assert "Language" in page.text
+    assert 'action="/ui/language/en"' in page.text
+    assert (
+        'action="/ui/language/en">\n'
+        '          <input type="hidden" name="next" value="/ui">\n'
+        '          <button type="submit" aria-current="true">'
+    ) in page.text
     client.cookies.clear()
 
-    cross_origin = await client.get(
+    cross_origin = await client.post(
         "/ui/language/en",
-        params={"next": "/ui"},
+        data={"next": "/ui"},
         headers={"origin": "http://evil.example"},
     )
     assert cross_origin.status_code == 403
@@ -411,15 +447,17 @@ async def test_language_switch_requires_same_origin(client):
     assert not cross_origin.text.lstrip().startswith("{")
     _assert_ui_headers(cross_origin)
 
-    cross_referer = await client.get(
+    cross_referer = await client.post(
         "/ui/language/pl",
+        data={"next": "/ui"},
         headers={"referer": "http://evil.example/trap"},
     )
     assert cross_referer.status_code == 403
     assert "set-cookie" not in cross_referer.headers
 
-    rescued = await client.get(
+    rescued = await client.post(
         "/ui/language/en",
+        data={"next": "/ui"},
         headers={
             "origin": "http://evil.example",
             "referer": "http://127.0.0.1/ui",
@@ -428,20 +466,12 @@ async def test_language_switch_requires_same_origin(client):
     assert rescued.status_code == 403
     assert "set-cookie" not in rescued.headers
 
-    direct = await client.get("/ui/language/en", params={"next": "/ui"})
+    direct = await _switch_language(client, "en", headers={})
     assert direct.status_code == 403
     assert "set-cookie" not in direct.headers
     assert "Żądanie zostało odrzucone" in direct.text
     assert 'href="/ui"' in direct.text
     _assert_ui_headers(direct)
-
-    client.cookies.set("ui_lang", "en")
-    direct_english = await client.get("/ui/language/pl")
-    assert direct_english.status_code == 403
-    assert "Request rejected" in direct_english.text
-    assert "set-cookie" not in direct_english.headers
-    unchanged = await client.get("/ui")
-    assert 'lang="en"' in unchanged.text
 
     listing = await client.get(
         "/ui", headers={"origin": "http://evil.example"}
@@ -450,38 +480,64 @@ async def test_language_switch_requires_same_origin(client):
 
 
 @pytest.mark.asyncio
-async def test_language_switch_does_not_return_to_itself(client):
-    """The 403 page's EN link must not bounce back and reset the cookie.
+async def test_language_bookmark_does_not_set_the_cookie(client):
+    """GET /ui/language/{code} redirects and leaves the cookie alone.
 
-    A direct visit to ``/ui/language/pl`` is the HTML 403, rendered
-    at that URL. The header link is ``/ui/language/en?next=`` plus
-    the current path, so ``next`` names ``/ui/language/pl``. Chrome
-    follows the 303 with a same-origin Referer. If that target is
-    the language route again, the second request sets ``pl`` and
-    the click on EN is lost.
+    An old bookmark has no Origin and no Referer. It must not 403
+    and must not change the language. A cross-site GET is the same
+    redirect, because that GET does not change state.
     """
-    blocked = await client.get("/ui/language/pl")
-    assert blocked.status_code == 403
-    match = re.search(r'href="(/ui/language/en\?next=[^"]*)"', blocked.text)
-    assert match is not None
-    href = match.group(1).replace("&amp;", "&")
-    chosen = await client.get(
-        href, headers={"referer": "http://127.0.0.1/ui/language/pl"}
+    client.cookies.set("ui_lang", "en")
+    bookmark = await client.get("/ui/language/pl", params={"next": "/ui"})
+    assert bookmark.status_code == 303
+    assert _location(bookmark) == "/ui"
+    assert "set-cookie" not in bookmark.headers
+    unchanged = await client.get("/ui")
+    assert 'lang="en"' in unchanged.text
+
+    detailed = await client.get(
+        "/ui/language/pl", params={"next": "/ui/instruments/1"}
     )
-    assert chosen.status_code == 303
-    assert "ui_lang=en" in chosen.headers["set-cookie"].casefold()
-    landed = _location(chosen)
-    assert "/language/" not in landed
-    assert landed.split("?", 1)[0] == "/ui"
-    # The browser sends the switch URL as Referer on the next hop.
-    followed = await client.get(
-        landed, headers={"referer": "http://127.0.0.1" + href}
+    assert detailed.status_code == 303
+    assert _location(detailed) == "/ui/instruments/1"
+    assert "set-cookie" not in detailed.headers
+
+    foreign = await client.get(
+        "/ui/language/en",
+        params={"next": "/ui"},
+        headers={"origin": "http://evil.example"},
     )
-    assert followed.status_code == 200
-    assert "set-cookie" not in followed.headers
-    assert 'lang="en"' in followed.text
-    page = await client.get("/ui")
-    assert 'lang="en"' in page.text
+    assert foreign.status_code == 303
+    assert "set-cookie" not in foreign.headers
+    still = await client.get("/ui")
+    assert 'lang="en"' in still.text
+
+
+@pytest.mark.asyncio
+async def test_language_switch_does_not_return_to_itself(client):
+    """A posted ``next`` that names the language route lands on /ui.
+
+    The cookie is the language that was posted. A dotted or encoded
+    path is the same route and is also replaced with ``/ui``.
+    """
+    targets = (
+        "/ui/language/pl",
+        "/ui/./language/pl",
+        "/ui/%2e/language/pl",
+        "/ui/%252e/language/en",
+        "/ui/foo/../language/pl",
+    )
+    for target in targets:
+        chosen = await _switch_language(client, "en", next=target)
+        assert chosen.status_code == 303, target
+        assert "ui_lang=en" in chosen.headers["set-cookie"].casefold()
+        landed = _location(chosen)
+        assert "/language/" not in landed
+        assert landed.split("?", 1)[0] == "/ui"
+        followed = await client.get(landed)
+        assert followed.status_code == 200
+        assert "set-cookie" not in followed.headers
+        assert 'lang="en"' in followed.text
 
 
 @pytest.mark.asyncio
