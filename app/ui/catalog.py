@@ -143,12 +143,15 @@ _POLISH = {
     "error.duplicate_company": (
         "Istnieje już spółka o tej nazwie lub tym tickerze."
     ),
+    "error.duplicate_ticker": "Istnieje już spółka o tym tickerze.",
     "error.duplicate_metrics": (
         "Wskaźniki dla tej spółki, końca okresu i typu okresu już istnieją."
     ),
     "error.constraint": (
         "Nie można zapisać tych danych, bo naruszają regułę unikalności."
     ),
+    "error.method_title": "Metoda niedozwolona",
+    "error.method_body": "Ta strona nie obsługuje tej metody.",
     "error.forbidden_title": "Żądanie zostało odrzucone",
     "error.forbidden_body": (
         "Zmiana danych jest możliwa tylko z tej samej strony."
@@ -284,6 +287,7 @@ _ENGLISH = {
     "error.duplicate_company": (
         "A company with this name or ticker already exists."
     ),
+    "error.duplicate_ticker": "A company with this ticker already exists.",
     "error.duplicate_metrics": (
         "Metrics for this company, period end, and period type "
         "already exist."
@@ -291,6 +295,8 @@ _ENGLISH = {
     "error.constraint": (
         "These values cannot be saved because they are not unique."
     ),
+    "error.method_title": "Method not allowed",
+    "error.method_body": "This page does not accept this method.",
     "error.forbidden_title": "Request rejected",
     "error.forbidden_body": "Changes are only accepted from this site.",
 }

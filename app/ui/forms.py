@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.database_models import CompanyDB
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
@@ -311,10 +312,9 @@ def _company_conflict(
     title_key,
     action,
     cancel_href,
+    invalid_fields,
     updated_at=None,
 ):
-    # Name and ticker are the two columns the repository treats as
-    # unique. The summary links to both; the message says "or".
     return _company_page(
         request,
         title_key=title_key,
@@ -323,8 +323,45 @@ def _company_conflict(
         cancel_href=cancel_href,
         updated_at=updated_at,
         form_error=key,
-        invalid_fields=("name", "ticker"),
+        invalid_fields=invalid_fields,
         status_code=400,
+    )
+
+
+def _row_with_value(db, column, value, exclude_id):
+    """True when a different company already stores ``value`` in ``column``.
+
+    The comparison is ``==``, which is how
+    ``CompanyRepository`` compares a name and a ticker. The ticker on
+    ``model`` is already stripped and uppercased by the write model.
+    """
+    query = db.query(CompanyDB.id).filter(column == value)
+    if exclude_id is not None:
+        query = query.filter(CompanyDB.id != exclude_id)
+    return query.first() is not None
+
+
+def _company_save_failed(request, db, model, values, *, exclude_id, **page):
+    """Choose the page from the stored row, not from the exception text.
+
+    Create and update both land here after ``ValueError`` or
+    ``IntegrityError``. A sentence such as "already exists" is not
+    read. Another row with this ticker selects the ticker message.
+    Another row with this name selects the name message. Anything
+    else is the generic constraint message.
+    """
+    db.rollback()
+    if _row_with_value(db, CompanyDB.ticker, model.ticker, exclude_id):
+        key = "error.duplicate_ticker"
+        invalid = ("ticker",)
+    elif _row_with_value(db, CompanyDB.name, model.name, exclude_id):
+        key = "error.duplicate_company"
+        invalid = ("name",)
+    else:
+        key = "error.constraint"
+        invalid = ()
+    return _company_conflict(
+        request, values, key, invalid_fields=invalid, **page
     )
 
 
@@ -366,29 +403,16 @@ def create_company(
             action="/ui/companies",
             cancel_href="/ui",
         )
+    page = {
+        "title_key": "page.create_company",
+        "action": "/ui/companies",
+        "cancel_href": "/ui",
+    }
     try:
         row = _save_company(db, model, update=False, company_id=None)
-    except ValueError as exc:
-        return _company_conflict(
-            request,
-            values,
-            catalog_key_for_repository_error(exc),
-            title_key="page.create_company",
-            action="/ui/companies",
-            cancel_href="/ui",
-        )
-    except IntegrityError:
-        # The ticker column is unique on its own. The repository turns
-        # the (name, ticker) constraint into ValueError and re-raises
-        # the ticker-only failure. Show that as a duplicate, not a 500.
-        db.rollback()
-        return _company_conflict(
-            request,
-            values,
-            "error.duplicate_company",
-            title_key="page.create_company",
-            action="/ui/companies",
-            cancel_href="/ui",
+    except (ValueError, IntegrityError):
+        return _company_save_failed(
+            request, db, model, values, exclude_id=None, **page
         )
     return _see_other(f"/ui/instruments/{row.id}")
 
@@ -433,17 +457,9 @@ def update_company(
         return _company_invalid(request, values, errors, form_error, **page)
     try:
         saved = _save_company(db, model, update=True, company_id=row.id)
-    except ValueError as exc:
-        return _company_conflict(
-            request,
-            values,
-            catalog_key_for_repository_error(exc),
-            **page,
-        )
-    except IntegrityError:
-        db.rollback()
-        return _company_conflict(
-            request, values, "error.duplicate_company", **page
+    except (ValueError, IntegrityError):
+        return _company_save_failed(
+            request, db, model, values, exclude_id=row.id, **page
         )
     if saved is None:
         return _not_found(request)

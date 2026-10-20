@@ -23,18 +23,26 @@
   (#28), `source=manual` and a synthetic-marker column (backend ask;
   none exists), cascades past financial metrics. Edit time uses the
   existing `updated_at`.
+- QA on PR #77, not merged: a duplicate ticker is decided by a
+  query for another row with that ticker (`==` on the normalized
+  value), not by the repository sentence. A blank or whitespace-only
+  name is 422 from the form layer. A test records that editing the
+  description drops the `[IAC-DEMO-V1]` badge. A wrong method on
+  `/ui` is an HTML 405 with the `/ui` security headers; API 405
+  stays JSON.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1349 passed, 121 deselected, coverage 95.71%. Scoped black,
+  -> 1356 passed, 121 deselected, coverage 95.81%. Scoped black,
   isort, and flake8 passed. `pip-audit` on both locks: no known
   vulnerabilities. `python-multipart` 0.0.32 with hashes.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  GitHub Actions
-  [run 39462413658](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462413658)
-  on `76367fc` succeeded. SQLite job `118765004831` and PostgreSQL
-  job `118765005870` both concluded success.
+  The earlier run
+  [39462413658](https://github.com/Waber/Investment-AI-Companion/actions/runs/39462413658)
+  on `76367fc` succeeded (SQLite job `118765004831`, PostgreSQL job
+  `118765005870`). The QA commit's run is recorded after it finishes.
 - Browser: create, inline validation, metrics create, edit, and
-  delete confirmation exercised on `127.0.0.1:8000` in PL and EN.
+  delete confirmation exercised on `127.0.0.1:8000` in PL and EN
+  before these QA notes. The notes are covered by pytest.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
 - Next action: the owner reviews the pull request and merges it with

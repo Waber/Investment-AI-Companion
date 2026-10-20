@@ -1,5 +1,36 @@
 # Development Journal
 
+## 2026-10-20 - QA notes on the company forms (PR #77)
+
+- Scope: four notes from QA on
+  [PR #77](https://github.com/Waber/Investment-AI-Companion/pull/77).
+  Models, the repository, the schema, and the backend sentences were
+  not changed.
+- Decisions: a failed company create or update no longer reads the
+  exception text. The form asks whether another row already stores
+  that ticker, with ``==`` on the value the write model already
+  uppercased, which is how the repository compares it. Only then
+  does the page show the ticker sentence, in Polish or English. The
+  same lookup on the name selects the existing name sentence. Any
+  other failure stays the generic constraint sentence, including
+  both "Company name or ticker already exists" and the #75 sentence
+  "A company with this ticker already exists" when no such row is
+  stored. A blank or whitespace-only name is ``error.required`` and
+  422 in the form layer; ``CompanyCreate`` still accepts ``""``.
+  A wrong method on a `/ui` path is an HTML 405 with the `/ui`
+  security headers. API 405 responses stay JSON. Editing a
+  description drops the `[IAC-DEMO-V1]` badge; a test records that
+  today's read model works that way.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1356 passed, 121 deselected, coverage 95.81%. Scoped black,
+  isort, and flake8 passed. PostgreSQL was not run locally.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 17:25 to 17:45.
+- Next: the owner reviews PR #77 again. It still says Refs #34 and
+  stays unmerged.
+
 ## 2026-10-20 - Company and financial-metrics forms under /ui (#34, part)
 
 - Scope: the part of
