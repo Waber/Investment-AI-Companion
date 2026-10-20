@@ -85,6 +85,50 @@ def test_company_create_ignores_constraint_name_in_the_driver_message(
     assert rollbacks == [True]
 
 
+def test_dotted_ticker_is_a_duplicate_before_insert_and_after_rollback(
+    monkeypatch, session
+):
+    """``BRK.B`` is DuplicateTickerError on both lookup paths.
+
+    The first repeat is caught before insert. The second hides that
+    lookup once, so the unique index fires. SQLite's message names
+    the columns, not ``uq_company_name_ticker``. The mapping reads
+    the stored row after rollback and does not chain the driver
+    error.
+    """
+    repo = CompanyRepository(session)
+    repo.create(CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B"))
+
+    with pytest.raises(DuplicateTickerError) as pre_insert:
+        repo.create(CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B"))
+
+    assert pre_insert.value.code == "duplicate_ticker"
+    assert pre_insert.value.__cause__ is None
+
+    original = repo.get_by_ticker
+    calls = {"count": 0}
+
+    def hide_the_first_lookup(ticker):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return original(ticker)
+
+    monkeypatch.setattr(repo, "get_by_ticker", hide_the_first_lookup)
+
+    with pytest.raises(DuplicateTickerError) as raced:
+        repo.create(CompanyCreate(name="Berkshire Hathaway", ticker="brk.b"))
+
+    assert raced.value.code == "duplicate_ticker"
+    assert raced.value.__cause__ is None
+    assert "uq_company_name_ticker" not in str(raced.value)
+    assert "UNIQUE" not in str(raced.value)
+    assert (
+        session.query(CompanyDB).filter(CompanyDB.ticker == "BRK.B").count()
+        == 1
+    )
+
+
 def test_duplicate_ticker_from_integrity_error_hides_the_driver_text(
     monkeypatch, session
 ):

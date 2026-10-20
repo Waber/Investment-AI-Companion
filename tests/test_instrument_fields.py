@@ -194,6 +194,43 @@ async def test_one_bad_stored_type_does_not_break_the_company_list(
 
 
 @pytest.mark.asyncio
+async def test_second_create_of_a_dotted_ticker_is_400(client):
+    """The same name and ``BRK.B`` is a client error, not a 500.
+
+    SQLite reports ``UNIQUE constraint failed`` and the column
+    names. That text does not contain ``uq_company_name_ticker``,
+    so a handler that searches for the constraint name would let
+    the driver error become HTTP 500. The pre-insert lookup uses
+    the stored ticker instead.
+    """
+    body = {"name": "Berkshire Hathaway", "ticker": "BRK.B"}
+    first = await client.post(COMPANIES, json=body)
+    assert first.status_code == 201
+    assert first.json()["ticker"] == "BRK.B"
+
+    duplicate = await client.post(COMPANIES, json=body)
+
+    assert duplicate.status_code == 400
+    assert duplicate.json() == {
+        "detail": DUPLICATE_TICKER_DETAIL,
+        "code": "duplicate_ticker",
+    }
+    lowered = duplicate.text.lower()
+    assert "integrityerror" not in lowered
+    assert "unique" not in lowered
+    assert "uq_company_name_ticker" not in lowered
+
+    db = client.app.state.testing_session_local()
+    try:
+        rows = db.query(CompanyDB).all()
+        assert len(rows) == 1
+        assert rows[0].ticker == "BRK.B"
+        assert rows[0].name == "Berkshire Hathaway"
+    finally:
+        db.close()
+
+
+@pytest.mark.asyncio
 async def test_duplicate_ticker_is_400_and_the_session_recovers(client):
     first = await client.post(COMPANIES, json={"name": "A", "ticker": "DUP"})
     assert first.status_code == 201
