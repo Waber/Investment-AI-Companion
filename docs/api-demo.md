@@ -81,6 +81,14 @@ as `null` on read, so one bad row does not fail `GET /companies/`.
 spaces is 422. Surrounding spaces are removed before the name is
 stored.
 
+An existing database does not gain these columns by itself. Startup
+creates missing tables and then refuses to serve when `companies`
+exists without `instrument_type` or `isin`. An Alembic-managed
+database runs `alembic upgrade head`. A database created by an older
+startup `create_all` needs that upgrade, or the columns added. A
+fresh `create_all` database already has the columns: run
+`alembic stamp head`, not `alembic upgrade head`.
+
 A duplicate ticker or ISIN is 400. `detail` stays a plain string.
 `code` is an extra field for form mapping (`duplicate_ticker` or
 `duplicate_isin`). Create and update use the same sentence. The

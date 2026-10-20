@@ -18,6 +18,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.core import database as database_module
+from app.core.init_db import (
+    CompanySchemaError,
+    require_company_instrument_columns,
+)
 from app.models.company import CompanyCreate
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from app.repositories.company_errors import DuplicateTickerError
@@ -480,3 +484,40 @@ async def test_lowercase_ticker_collides_with_uppercase(
 
     with postgres_session_factory() as db:
         assert db.query(CompanyDB).count() == 1
+
+
+def test_old_companies_table_fails_fast_on_postgresql(postgres_engine):
+    """A public companies table without the new columns stops startup.
+
+    The real table is renamed for this test and put back afterwards.
+    PostgreSQL's inspector reads the public schema, which is the
+    schema the application uses.
+    """
+    with postgres_engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE companies RENAME TO companies_with_columns")
+        )
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id integer PRIMARY KEY, "
+                "name varchar(255) NOT NULL, "
+                "ticker varchar(20) NOT NULL)"
+            )
+        )
+    try:
+        with pytest.raises(CompanySchemaError) as error:
+            require_company_instrument_columns(postgres_engine)
+        message = str(error.value)
+        assert "instrument_type" in message
+        assert "isin" in message
+        assert "alembic upgrade head" in message
+        assert "alembic stamp head" in message
+    finally:
+        with postgres_engine.begin() as connection:
+            connection.execute(text("DROP TABLE companies"))
+            connection.execute(
+                text(
+                    "ALTER TABLE companies_with_columns " "RENAME TO companies"
+                )
+            )
