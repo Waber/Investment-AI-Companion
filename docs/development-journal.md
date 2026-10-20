@@ -1,5 +1,46 @@
 # Development Journal
 
+## 2026-10-20 - Code review round 1 on instrument type and ISIN
+
+- Scope: code review on
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75),
+  head was `5316d26`. Same branch, rebased onto current
+  `origin/master` `9d26948` already. No UI files.
+- Decisions: startup calls `create_all`, then refuses to serve
+  when `companies` exists without `instrument_type` or `isin`.
+  The error names `alembic upgrade head` and `alembic stamp head`.
+  README and `docs/api-demo.md` say which command matches an
+  Alembic database, an older `create_all` database, and a fresh
+  `create_all` database. `DuplicateTickerError` and
+  `DuplicateIsinError` are raised after the `IntegrityError`
+  handler, so `__context__` and `__cause__` are empty. A name
+  that is only Unicode format characters (`Cf`) after strip is
+  rejected. The ISIN pattern comment says the country prefix is
+  not checked. `test_duplicate_ticker_create_returns_400` was
+  not in this repository (it lived on `qa/known-defects-xfail`);
+  it is restored as a passing test in `tests/test_known_defects.py`.
+- Verification: no `.env`, `DATABASE_URL` unset. Each commit was
+  green locally on SQLite and PostgreSQL, then on both GitHub
+  Actions jobs.
+  `6190e85` run
+  [39484912819](https://github.com/Waber/Investment-AI-Companion/actions/runs/39484912819)
+  (SQLite `118842697553`: 1415 passed, 124 deselected, coverage
+  96.17%; PostgreSQL `118842697008`: 124 passed).
+  `bdffb76` run
+  [39485111338](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485111338)
+  (SQLite `118843392239`, PostgreSQL `118843392660`).
+  `93771eb` run
+  [39485323078](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485323078)
+  (SQLite `118844117434`, PostgreSQL `118844117786`).
+  `03d8d43` run
+  [39485556256](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485556256)
+  (SQLite `118844913556`: 1416 passed, 124 deselected, coverage
+  96.13%; PostgreSQL `118844913923`: 124 passed, 1416 deselected).
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-20): review round from about 19:25.
+- Next: the owner reviews PR #75. Agents do not merge.
+
 ## 2026-10-20 - Generic update error drops the SQL text
 
 - Scope: a security nit on

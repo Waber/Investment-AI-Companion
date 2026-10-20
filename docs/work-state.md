@@ -1,5 +1,39 @@
 # Current Work State
 
+## Code review round 1 on #75: 2026-10-20
+
+- Branch `cursor/instrument-type-isin-1db6`, based on
+  `origin/master` `9d26948`.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is ready for review. The body says Closes #16 and Refs #26.
+  Not merged. Code head `03d8d43`.
+- Completed: startup fails when `companies` lacks
+  `instrument_type` or `isin`, with the Alembic command in the
+  message. README and `docs/api-demo.md` document upgrade versus
+  stamp. Duplicate errors are raised after the integrity handler.
+  A format-only name is rejected. The ISIN country prefix is
+  documented as unchecked. `test_duplicate_ticker_create_returns_400`
+  is a passing test in `tests/test_known_defects.py`.
+- Tests: SQLite on `03d8d43`: 1416 passed, 124 deselected,
+  coverage 96.13%. PostgreSQL: 124 passed, 1416 deselected.
+  GitHub Actions
+  [run 39485556256](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485556256)
+  succeeded. SQLite job `118844913556` and PostgreSQL job
+  `118844913923`. Earlier commits in this round also succeeded:
+  `6190e85` run
+  [39484912819](https://github.com/Waber/Investment-AI-Companion/actions/runs/39484912819),
+  `bdffb76` run
+  [39485111338](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485111338),
+  `93771eb` run
+  [39485323078](https://github.com/Waber/Investment-AI-Companion/actions/runs/39485323078).
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews PR #75 and merges with
+  "Rebase and merge". Agents do not merge. A named unique
+  constraint on ticker alone remains a follow-up. The next
+  rebase against PR #78 keeps `name` `min_length=1` and ticker
+  `max_length`.
+
 ## Generic update error drops the SQL text: 2026-10-20
 
 - Branch `cursor/instrument-type-isin-1db6`, based on
