@@ -22,6 +22,7 @@ from app.ui.form_fields import (
     catalog_key_for_repository_error,
     company_payload,
     metrics_payload,
+    normalized_company_name,
     validate_company,
 )
 from app.ui.origin import OriginRejected
@@ -211,17 +212,33 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
             catalog_key_for_repository_error(ValueError(message))
             == "error.constraint"
         )
-    blank, errors, _form_key = validate_company(
-        {"name": "   ", "ticker": "ABC"}, update=False
-    )
-    assert blank is None
-    assert errors["name"] == "error.required"
-    for invisible in ("\u00a0", "\u3000", "\u200b", "\u200b\u00a0"):
-        rejected, field_errors, _key = validate_company(
-            {"name": invisible, "ticker": "ABC"}, update=False
-        )
-        assert rejected is None
-        assert field_errors["name"] == "error.required"
+    assert normalized_company_name("  Kept\n") == "Kept"
+    assert normalized_company_name("\u00a0Kept\u3000") == "Kept"
+    assert normalized_company_name("\u200bKept\u200b") == "\u200bKept\u200b"
+    # A format character, then a space, then text. strip() leaves the
+    # format character, and the space is not surrounding whitespace.
+    assert normalized_company_name("\u200b Kept") == "\u200b Kept"
+    assert normalized_company_name(None) is None
+    for invisible in (
+        "",
+        "   ",
+        "\n\t",
+        "\u00a0",
+        "\u3000",
+        "\u200b",
+        "\u200b\u00a0",
+        "\u200c\u200d\ufeff",
+        "\u200b \u3000",
+        "\x00",
+        "\x00 \x01",
+    ):
+        assert normalized_company_name(invisible) is None
+        for update in (False, True):
+            rejected, field_errors, _key = validate_company(
+                {"name": invisible, "ticker": "ABC"}, update=update
+            )
+            assert rejected is None
+            assert field_errors["name"] == "error.required"
     kept = company_payload({"name": " \u200bKept\u200b "})
     assert kept["name"] == "\u200bKept\u200b"
 
@@ -600,7 +617,7 @@ async def test_blank_company_name_is_422_in_both_languages(client, name):
     cleared = await _post(
         client,
         f"/ui/companies/{company_id}/edit",
-        {"name": "  ", "ticker": "NAMED"},
+        {"name": name, "ticker": "NAMED"},
     )
     assert cleared.status_code == 422
     assert "To pole jest wymagane." in cleared.text
@@ -622,6 +639,18 @@ async def test_surrounding_space_is_stripped_from_the_stored_name(client):
     assert stored == "Kept Name"
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert "Kept Name" in detail.text
+    updated = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "\n  Edited Name\u3000", "ticker": "KEPTNM"},
+    )
+    assert updated.status_code == 303
+    session = client.app.state.testing_session_local()
+    try:
+        stored = session.get(CompanyDB, company_id).name
+    finally:
+        session.close()
+    assert stored == "Edited Name"
 
 
 @pytest.mark.asyncio

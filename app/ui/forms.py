@@ -349,6 +349,12 @@ def _company_save_failed(request, db, model, values, *, exclude_id, **page):
     read. Another row with this ticker selects the ticker message.
     Another row with this name selects the name message. Anything
     else is the generic constraint message.
+
+    TODO(#75): map ``DuplicateTickerError.code`` (``duplicate_ticker``)
+    and ``DuplicateIsinError.code`` (``duplicate_isin``) once those
+    ``ValueError`` subclasses exist in
+    ``app.repositories.company_errors``. This row lookup stays until
+    that pull request is on master. Do not match the exception text.
     """
     db.rollback()
     if _row_with_value(db, CompanyDB.ticker, model.ticker, exclude_id):
