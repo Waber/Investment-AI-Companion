@@ -1,11 +1,34 @@
 # Current Work State
 
+## Local venv and IDE interpreter setup: 2026-10-20
+
+- Branch `chore/local-venv-setup`, based on `origin/master` `ba15c33`.
+  Not pushed yet; the pull request is the next step.
+- Completed: `.gitignore` excludes `.venv/` (README asked for `.venv`,
+  but only `venv/` was ignored). README step 1 creates the venv with
+  `python3.12`. `docs/ide-startup.md` explains the per-machine venv and
+  selecting it in PyCharm, IntelliJ IDEA and Cursor, plus two
+  troubleshooting entries. A persistent `.venv` exists in this checkout
+  (Homebrew Python 3.12.15, installed by the owner on 2026-10-20).
+  Issue [#73](https://github.com/Waber/Investment-AI-Companion/issues/73)
+  records the move to Python 3.14 with the probe results.
+- Tests: in `.venv`, no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command: 1300 passed, 121 deselected, coverage 95.80%.
+  `-m integration`: 105 passed, 16 skipped (no PostgreSQL).
+- Known local issue: `~/.local/bin/python3.12` is a broken link to a
+  deleted session directory and comes first on `PATH`; the owner
+  decides whether to remove it.
+- Active agents: none. Blockers: none. Account usage was not available
+  in this session.
+- Next action: the owner reviews the pull request and merges it with
+  "Rebase and merge". Then #26 together with #16.
+
 ## One-command offline demo (#25): 2026-10-15
 
 - Branch `cursor/one-command-offline-demo-64f5`, rebased on
   2026-10-19 onto `origin/master` `922bdfe` (PR #72 merged).
   [PR #71](https://github.com/Waber/Investment-AI-Companion/pull/71)
-  (Closes #25), not merged.
+  (Closes #25) merged on 2026-10-19; #25 is closed.
 - Completed: `python -m scripts.run_demo` creates a fresh SQLite file
   at `demo/investment_demo.db`, seeds `demo-v1`, forces the fake
   collector and loopback hosts, always generates a fresh in-process
@@ -40,11 +63,7 @@
   command gives 1300 passed, 121 deselected, coverage 95.80%;
   `-m integration` gives 105 passed, 16 skipped (no PostgreSQL).
 - Active agents: none. Blockers: none.
-- Stop reason: PR #71 is rebased and waits for the owner's review and
-  merge; agents do not merge. Account usage was not available in this
-  session.
-- Next action: the owner reviews PR #71 and merges it with "Rebase
-  and merge". Then #26 together with #16.
+- Next action: none for #25. Then #26 together with #16.
 
 ## Collector guard, part 2 of #24: 2026-10-14
 
@@ -66,12 +85,11 @@
   #54); storing `retrieved_at`; mypy typing of the guarded class; then
   #25. With this branch, every item of #24 is done (part 1 in PR #68).
 - Overlapping pull requests:
-  - PR #70 (Cursor Agent) implements the same part 2 of #24. PR #72
-    was chosen, so PR #70 is to be closed without merging.
-  - PR #69 (docs) updates the part 1 section below. It needs a rebase
-    onto `origin/master` that keeps both entries.
+  - PR #70 (Cursor Agent) implemented the same part 2 of #24. PR #72
+    was chosen; PR #70 is closed without merging.
+  - PR #69 (docs) merged on 2026-10-19 without conflicts.
 - Active agents: none. Blockers: none.
-- Next action: none for #24. The owner closes PR #70.
+- Next action: none for #24.
 
 ## Collector interface, part 1 of #24: 2026-10-12
 
