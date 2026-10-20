@@ -11,25 +11,66 @@ recovery worktree from the September session is
 `$TMPDIR/investment-pr-delivery`; temporary directories can disappear, so
 prefer a persistent checkout for ongoing work.
 
-In **Settings > Project > Python Interpreter**, select an existing Python 3.12
-interpreter. On the original development machine it is:
+### Create the virtual environment on each machine
+
+A virtual environment (`.venv`) is the Python counterpart of the
+classpath Maven or Gradle builds for a Java project: its own interpreter
+and the exact libraries from the lock, for this checkout only. It holds
+absolute paths and platform binaries, so it belongs to one machine.
+Create it on every machine from the lock; never commit or copy it
+(`.gitignore` excludes `.venv/`).
+
+Use Python 3.12, the version CI runs. Python 3.14 does not install the
+locks yet ([#73](https://github.com/Waber/Investment-AI-Companion/issues/73)).
+On macOS with Homebrew:
+
+```bash
+brew install python@3.12
+which -a python3.12        # the first entry is the one the shell runs
+python3.12 --version       # Python 3.12.x
+```
+
+From the checkout root, create the environment and install the hashed
+dev lock:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+.venv/bin/python -m pytest -q
+```
+
+That was checked on 2026-10-20 with Homebrew Python 3.12.15 on macOS
+arm64. Use `requirements.lock` instead when the environment only runs
+the API. Do not upgrade an existing environment merely to follow this
+guide. After a lock changes, rerun the install command, or delete
+`.venv` and create it again.
+
+### Select the interpreter in the IDE
+
+Select `<checkout>/.venv/bin/python` once per machine and IDE. On the
+original development machine it is:
 
 ```text
 ~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 ```
 
-Reusing this interpreter does not select its source checkout. For another
-machine, create a Python 3.12 virtual environment and install the hashed
-dev lock:
+The setting stays local: `.idea/` and `.vscode/` are git-ignored, so IDEs on
+different machines do not overwrite each other's configuration.
 
-```bash
-python -m venv .venv
-.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
-```
+- **PyCharm**: **Settings > Project > Python Interpreter > Add
+  Interpreter > Add Local Interpreter > Select existing**, then choose
+  `.venv/bin/python` in the checkout.
+- **IntelliJ IDEA**: install the Python plugin, then **File > Project
+  Structure > SDKs > + > Add Python SDK from disk > Virtualenv
+  Environment > Existing environment** with the same path, and select
+  that SDK for the project (or as the module SDK).
+- **Cursor** (based on VS Code): install the Python extension, open
+  the command palette, run **Python: Select Interpreter**, and choose
+  `.venv`. Cursor usually offers a `.venv` in the opened folder on its
+  own, which is one reason to keep that name.
 
-That command was checked on Python 3.12.3 with the lock in this branch.
-Use `requirements.lock` instead when the environment only runs the API.
-Do not upgrade an existing environment merely to follow this guide.
+The interpreter does not choose the source checkout: open the checkout
+that contains this guide, and keep one `.venv` per checkout.
 
 ## 2. Prepare A Dedicated Local Database
 
@@ -150,6 +191,12 @@ ingestion is still a placeholder.
 ## Troubleshooting And Verification Limits
 
 - Import errors: check interpreter, module target and explicit `PYTHONPATH`.
+- `python3.12` fails to start or reports another version: run
+  `which -a python3.12`. An older entry earlier on `PATH` (for example a
+  broken link in `~/.local/bin`) wins over Homebrew's
+  `/opt/homebrew/bin/python3.12`; remove it or call the full path.
+- `git status` lists `.venv/` files: the checkout predates the
+  `.gitignore` entry; pull `master`. Do not commit the environment.
 - Database errors: check PostgreSQL status, database ownership and the URL.
 - Settings errors: ensure the working directory has no `.env` and CORS is `[]`. Check `SECRET_KEY` is at least 32 characters.
 - Blank Swagger: CDN assets require network access; use curl or OpenAPI JSON.
