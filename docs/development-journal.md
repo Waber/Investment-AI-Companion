@@ -1,5 +1,41 @@
 # Development Journal
 
+## 2026-10-20 - Security round 1 on instrument type and ISIN
+
+- Scope: three low findings on
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75).
+  A named unique constraint on ticker alone is a follow-up and is
+  not in this pull request. The ticker column stays unique.
+- Decisions: `update()` uses the same lookup as `create` after an
+  `IntegrityError`. A stored ticker or ISIN raises the fixed
+  sentence, and that error is not chained to the driver. Any other
+  constraint keeps `Update failed due to constraint violation`.
+  The handler does not bind the unused driver exception. ISIN
+  uniqueness is `Index("uq_companies_isin", unique=True)` on the
+  model and in revision `0001`. A test compares `create_all` with
+  the migrated schema on SQLite and on PostgreSQL. An explicit
+  `instrument_type: null` on update is HTTP 422. Omitting the
+  field keeps the stored type.
+- Verification: each commit was run locally on SQLite and
+  PostgreSQL before it was pushed, then GitHub Actions ran on
+  that commit. `add849e` run
+  [39464829393](https://github.com/Waber/Investment-AI-Companion/actions/runs/39464829393)
+  succeeded (SQLite job `118773372256`, PostgreSQL job
+  `118773371523`). `65bd0b2` run
+  [39465048567](https://github.com/Waber/Investment-AI-Companion/actions/runs/39465048567)
+  succeeded (SQLite job `118774146241`, PostgreSQL job
+  `118774146797`). `a81e646` run
+  [39465272356](https://github.com/Waber/Investment-AI-Companion/actions/runs/39465272356)
+  succeeded. SQLite job `118774915084`: 1341 passed, 122
+  deselected, coverage 96.05%. PostgreSQL job `118774915673`:
+  122 passed, 1341 deselected.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-20): security fixes after the first
+  CI report, from about 17:05.
+- Next: the owner reviews PR #75. QA findings may follow. Agents
+  do not merge.
+
 ## 2026-10-20 - Instrument type, ISIN, and duplicate ticker 400
 
 - Scope: add `instrument_type` and `isin` on the existing company

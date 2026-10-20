@@ -1,5 +1,35 @@
 # Current Work State
 
+## Security round 1 on #75: 2026-10-20
+
+- Branch `cursor/instrument-type-isin-1db6`, still based on
+  `origin/master` `1f1678f`.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  remains a draft (Refs #26, Refs #16). Not merged.
+- Completed: `update()` maps a duplicate ticker or ISIN to the
+  same fixed sentences as `create`, and leaves every other
+  integrity error on the generic sentence. The unused `as e` is
+  gone. `uq_companies_isin` is a unique index in the model and in
+  revision `0001`, and a test compares those two schemas. An
+  explicit `instrument_type: null` on update is HTTP 422.
+- Follow-up, not in this pull request: a named unique constraint
+  on ticker alone. The column is already unique.
+- Tests: local SQLite CI command on the security head: 1341
+  passed, 122 deselected, coverage 96.05%. PostgreSQL
+  `-m integration`: 122 passed, 1341 deselected, 0 xfailed.
+  Each commit is green on both GitHub Actions jobs:
+  `add849e` run
+  [39464829393](https://github.com/Waber/Investment-AI-Companion/actions/runs/39464829393),
+  `65bd0b2` run
+  [39465048567](https://github.com/Waber/Investment-AI-Companion/actions/runs/39465048567),
+  `a81e646` run
+  [39465272356](https://github.com/Waber/Investment-AI-Companion/actions/runs/39465272356)
+  (SQLite job `118774915084`, PostgreSQL job `118774915673`).
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews PR #75. QA findings may follow.
+  Agents do not merge.
+
 ## Instrument type and ISIN (#26) with duplicate ticker 400 (#16): 2026-10-20
 
 - Branch `cursor/instrument-type-isin-1db6`, based on
