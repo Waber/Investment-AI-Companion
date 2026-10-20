@@ -367,24 +367,7 @@ async def created_dup_company(postgres_client):
     return response
 
 
-# Shown on the xfail line. The marker is added only after DUP exists,
-# so a failed create is a normal test failure.
-_EXACT_DUPLICATE_XFAIL = (
-    "Issue #16 is open. An exact duplicate ticker should be "
-    "400 or 409 and leave one row. Today the duplicate is 500. "
-    "Remove this marker when that behaviour lands. A lowercase "
-    "ticker is uppercased first, so it hits this same 500."
-)
-
-# dup is stored as DUP, so this is the #16 unique-index 500.
-# The target is still a client error. strict=True fails the suite
-# when that 500 becomes 400 or 409.
-_CASE_FOLDING_XFAIL = (
-    "Ticker normalization uppercases dup to DUP, so this request "
-    "hits the same unique-index 500 as issue #16. The target is "
-    "still 400 or 409 and one row. Remove this marker when #16 "
-    "returns a client error."
-)
+_DUPLICATE_TICKER_DETAIL = "A company with this ticker already exists"
 
 
 async def _create_company(postgres_client, ticker: str, name: str):
@@ -394,84 +377,50 @@ async def _create_company(postgres_client, ticker: str, name: str):
     return response
 
 
-def _mark_strict_xfail(request, reason: str) -> None:
-    """Expect the rest of this test to fail, and fail if it passes.
-
-    Pytest reads the marker when it builds the report, which is
-    after the test function returns. Adding it here means assertions
-    above this call are ordinary failures. A pass after this call
-    is a strict XPASS, so the marker has to be removed when the
-    behaviour lands.
-    """
-    request.node.add_marker(pytest.mark.xfail(strict=True, reason=reason))
+def _assert_duplicate_ticker_is_400(response):
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == _DUPLICATE_TICKER_DETAIL
+    lowered = response.text.lower()
+    assert "integrityerror" not in lowered
+    assert "unique" not in lowered
+    assert "duplicate key" not in lowered
 
 
 @pytest.mark.asyncio
-async def test_duplicate_ticker_is_500(created_dup_company, postgres_client):
-    """Current PostgreSQL behaviour for issue #16. This file does not fix it.
+async def test_duplicate_ticker_is_a_client_error(
+    created_dup_company, postgres_client, postgres_session_factory
+):
+    """The same ticker is 400, and the session can still insert another.
 
-    The ticker unique index is not ``uq_company_name_ticker``, so the
-    repository re-raises ``IntegrityError`` and the API returns 500
-    with a fixed detail. A different ticker after that 500 shows the
-    request session recovered. Case folding is not part of #16.
+    The unique index is not ``uq_company_name_ticker``. The response
+    uses a fixed sentence and does not include the driver text.
     """
     duplicate = await postgres_client.post(
         COMPANIES, json={"name": "B", "ticker": "DUP"}
     )
-    assert duplicate.status_code == 500
-    assert duplicate.json()["detail"] == "Internal server error"
-    assert "IntegrityError" not in duplicate.text
-    assert "duplicate" not in duplicate.text.lower()
+    _assert_duplicate_ticker_is_400(duplicate)
 
     other = await postgres_client.post(
         COMPANIES, json={"name": "C", "ticker": "OTHER"}
     )
     assert other.status_code == 201, other.text
 
-
-@pytest.mark.asyncio
-async def test_duplicate_ticker_is_a_client_error(
-    request, postgres_client, postgres_session_factory
-):
-    """Target behaviour for issue #16: the same ticker is a client error.
-
-    The first create is ordinary. The strict xfail marker is added
-    only after it returns 201, so a broken client is an error.
-    ``strict=True`` fails the suite when the duplicate check starts
-    passing, so the fix has to delete the marker in the same change.
-    """
-    created = await _create_company(postgres_client, "DUP", "A")
-    assert created.status_code == 201, created.text
-    _mark_strict_xfail(request, _EXACT_DUPLICATE_XFAIL)
-
-    duplicate = await postgres_client.post(
-        COMPANIES, json={"name": "B", "ticker": "DUP"}
-    )
-    assert duplicate.status_code in (400, 409), duplicate.text
-
     with postgres_session_factory() as db:
-        assert db.query(CompanyDB).count() == 1
+        assert db.query(CompanyDB).count() == 2
 
 
 @pytest.mark.asyncio
 async def test_lowercase_ticker_collides_with_uppercase(
-    request, postgres_client, postgres_session_factory
+    postgres_client, postgres_session_factory
 ):
-    """Lowercase dup is uppercased, then hits the #16 duplicate 500.
-
-    Issue #26 asked for a case collision to be its own client
-    error. Create and update now uppercase the ticker, so dup and
-    DUP are the same stored value. The strict xfail stays until
-    that unique-index 500 becomes 400 or 409.
-    """
+    """``dup`` is uppercased, then rejected as the same ticker."""
     created = await _create_company(postgres_client, "DUP", "A")
     assert created.status_code == 201, created.text
-    _mark_strict_xfail(request, _CASE_FOLDING_XFAIL)
 
     lower = await postgres_client.post(
         COMPANIES, json={"name": "C", "ticker": "dup"}
     )
-    assert lower.status_code in (400, 409), lower.text
+    _assert_duplicate_ticker_is_400(lower)
 
     with postgres_session_factory() as db:
         assert db.query(CompanyDB).count() == 1

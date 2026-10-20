@@ -97,8 +97,8 @@ def _record_skip(report) -> None:
     """Remember one skipped report, ignoring expected failures.
 
     An expected failure is also ``outcome == "skipped"``. ``wasxfail``
-    is the reason string on that report, so those two strict xfails
-    are not counted. The same node id is stored once.
+    is the reason string on that report, so an expected failure is
+    not counted as a skip. The same node id is stored once.
     """
     if not getattr(report, "skipped", False):
         return

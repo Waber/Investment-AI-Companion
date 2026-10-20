@@ -61,20 +61,81 @@ def company(session):
     return row
 
 
-# company-shaped pin, see #26
-def test_company_create_maps_named_constraint_to_value_error(
+def test_company_create_ignores_constraint_name_in_the_driver_message(
     monkeypatch, session
 ):
+    """A message that names the old constraint is not a duplicate.
+
+    Nothing was inserted, so the ticker lookup after rollback finds
+    no row. The driver text is not turned into a client error.
+    """
     rollbacks = fail_commit(
         monkeypatch, session, "violates uq_company_name_ticker"
     )
 
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(IntegrityError):
         CompanyRepository(session).create(
             CompanyCreate(name="Acme", ticker="ACME")
         )
 
     assert rollbacks == [True]
+
+
+def test_duplicate_ticker_from_integrity_error_hides_the_driver_text(
+    monkeypatch, session
+):
+    """The pre-check is skipped once, so the unique index fires.
+
+    The ValueError is the fixed sentence. It is not chained to the
+    database error, and the second row is not kept.
+    """
+    repo = CompanyRepository(session)
+    repo.create(CompanyCreate(name="A", ticker="DUP"))
+    original = repo.get_by_ticker
+    calls = {"count": 0}
+
+    def hide_the_first_lookup(ticker):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return original(ticker)
+
+    monkeypatch.setattr(repo, "get_by_ticker", hide_the_first_lookup)
+
+    with pytest.raises(
+        ValueError, match="^A company with this ticker already exists$"
+    ) as error:
+        repo.create(CompanyCreate(name="B", ticker="DUP"))
+
+    assert error.value.__cause__ is None
+    assert "UNIQUE" not in str(error.value)
+    assert (
+        session.query(CompanyDB).filter(CompanyDB.ticker == "DUP").count() == 1
+    )
+
+
+def test_duplicate_isin_from_integrity_error_uses_the_fixed_sentence(
+    monkeypatch, session
+):
+    repo = CompanyRepository(session)
+    repo.create(CompanyCreate(name="A", ticker="AAA", isin="US0378331005"))
+    original = repo.get_by_isin
+    calls = {"count": 0}
+
+    def hide_the_first_lookup(isin):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return original(isin)
+
+    monkeypatch.setattr(repo, "get_by_isin", hide_the_first_lookup)
+
+    with pytest.raises(
+        ValueError, match="^A company with this ISIN already exists$"
+    ):
+        repo.create(CompanyCreate(name="B", ticker="BBB", isin="US0378331005"))
+
+    assert session.query(CompanyDB).count() == 1
 
 
 def test_company_create_reraises_other_integrity_errors(monkeypatch, session):
