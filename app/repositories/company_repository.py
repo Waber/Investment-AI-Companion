@@ -98,6 +98,7 @@ class CompanyRepository:
         # Add to database session
         self.db.add(db_company)
 
+        duplicate = None
         try:
             # Commit the transaction
             self.db.commit()
@@ -112,9 +113,12 @@ class CompanyRepository:
             # still an unexpected database error.
             self.db.rollback()
             duplicate = _duplicate_error(self, company.ticker, company.isin)
-            if duplicate is not None:
-                raise duplicate from None
-            raise
+            if duplicate is None:
+                raise
+            # Raise after this handler. ``raise duplicate from None``
+            # written here still stores the driver error on
+            # ``__context__``.
+        raise duplicate from None
 
     def get_by_id(self, company_id: int) -> Optional[CompanyDB]:
         """
@@ -218,6 +222,7 @@ class CompanyRepository:
         # Update timestamp
         db_company.updated_at = datetime.now(timezone.utc)
 
+        duplicate = None
         try:
             self.db.commit()
             self.db.refresh(db_company)
@@ -228,6 +233,8 @@ class CompanyRepository:
             # A stored ticker or ISIN is a client error. Anything
             # else keeps the generic sentence, including a NOT NULL
             # failure, so it is not reported as a duplicate ticker.
+            # Both raises happen after this handler so ``__context__``
+            # does not keep the SQL text.
             self.db.rollback()
             duplicate = _duplicate_error(
                 self,
@@ -239,14 +246,8 @@ class CompanyRepository:
                 ),
                 exclude_id=company_id,
             )
-            if duplicate is not None:
-                raise duplicate from None
-            # Fall out of this handler before the generic raise.
-            # ``raise ValueError(...) from None`` written here would
-            # still store the driver error on ``__context__``, and
-            # that object includes the SQL text. Raising on the next
-            # line, after the handler has ended, leaves both
-            # ``__context__`` and ``__cause__`` empty.
+        if duplicate is not None:
+            raise duplicate from None
         raise ValueError("Update failed due to constraint violation") from None
 
     def _other_company_with_name_or_ticker(self, company_id, name, ticker):

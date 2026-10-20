@@ -103,6 +103,7 @@ def test_dotted_ticker_is_a_duplicate_before_insert_and_after_rollback(
         repo.create(CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B"))
 
     assert pre_insert.value.code == "duplicate_ticker"
+    assert pre_insert.value.__context__ is None
     assert pre_insert.value.__cause__ is None
 
     original = repo.get_by_ticker
@@ -120,6 +121,7 @@ def test_dotted_ticker_is_a_duplicate_before_insert_and_after_rollback(
         repo.create(CompanyCreate(name="Berkshire Hathaway", ticker="brk.b"))
 
     assert raced.value.code == "duplicate_ticker"
+    assert raced.value.__context__ is None
     assert raced.value.__cause__ is None
     assert "uq_company_name_ticker" not in str(raced.value)
     assert "UNIQUE" not in str(raced.value)
@@ -158,6 +160,7 @@ def test_duplicate_ticker_from_integrity_error_hides_the_driver_text(
 
     assert isinstance(error.value, ValueError)
     assert error.value.code == "duplicate_ticker"
+    assert error.value.__context__ is None
     assert error.value.__cause__ is None
     assert "UNIQUE" not in str(error.value)
     assert (
@@ -185,6 +188,8 @@ def test_duplicate_isin_from_integrity_error_uses_the_fixed_sentence(
         repo.create(CompanyCreate(name="B", ticker="BBB", isin="US0378331005"))
 
     assert error.value.code == "duplicate_isin"
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
     assert str(error.value) == "A company with this ISIN already exists"
 
     assert session.query(CompanyDB).count() == 1
@@ -214,6 +219,7 @@ def test_update_duplicate_ticker_from_integrity_error_uses_the_fixed_sentence(
         repo.update(first.id, CompanyUpdate(ticker="BBB"))
 
     assert error.value.code == "duplicate_ticker"
+    assert error.value.__context__ is None
     assert error.value.__cause__ is None
     assert "UNIQUE" not in str(error.value)
     stored = session.get(CompanyDB, first.id)
@@ -242,6 +248,7 @@ def test_update_duplicate_isin_from_integrity_error_uses_the_fixed_sentence(
         repo.update(second.id, CompanyUpdate(isin="US0378331005"))
 
     assert error.value.code == "duplicate_isin"
+    assert error.value.__context__ is None
     assert error.value.__cause__ is None
     assert "UNIQUE" not in str(error.value)
     stored = session.get(CompanyDB, second.id)

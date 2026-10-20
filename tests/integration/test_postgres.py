@@ -447,6 +447,7 @@ async def test_second_create_of_a_dotted_ticker_is_400(
                 CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B")
             )
         assert pre_insert.value.code == "duplicate_ticker"
+        assert pre_insert.value.__context__ is None
         assert pre_insert.value.__cause__ is None
 
         original = repo.get_by_ticker
@@ -464,6 +465,7 @@ async def test_second_create_of_a_dotted_ticker_is_400(
                 CompanyCreate(name="Berkshire Hathaway", ticker="BRK.B")
             )
         assert raced.value.code == "duplicate_ticker"
+        assert raced.value.__context__ is None
         assert raced.value.__cause__ is None
         assert "uq_company_name_ticker" not in str(raced.value)
         assert db.query(CompanyDB).count() == 1
