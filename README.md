@@ -43,19 +43,24 @@ investment_ai_companion/
 - Python 3.12 is the minimum. The locked numpy 2.5.3 requires
   Python >=3.12.
 - PostgreSQL for the default application database.
-- A local virtual environment at `.venv`.
+- A local virtual environment at `.venv`, created on each machine
+  (it is not committed or copied). Python 3.14 does not install the
+  locks yet; see [#73](https://github.com/Waber/Investment-AI-Companion/issues/73).
 - Redis, Elasticsearch, OpenAI, news, and social-media credentials only when working on features that use them.
 
 ## Setup
 
-For step-by-step IDE configuration, see [Run and debug in PyCharm](docs/ide-startup.md).
+For step-by-step IDE configuration (PyCharm, IntelliJ IDEA, Cursor), see [Run and debug in an IDE](docs/ide-startup.md).
 The application currently has a backend and Swagger UI, not a separate frontend.
 
-1. Create and activate the virtual environment:
+1. Create and activate the virtual environment with Python 3.12.
+   Name the version: plain `python3` can be a newer Python (Homebrew
+   installs 3.14), and plain `python` may not exist on macOS.
 
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
+python --version   # Python 3.12.x
 ```
 
 2. Install dependencies from the hashed lock. Use the dev lock for
