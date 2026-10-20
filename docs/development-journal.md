@@ -1,5 +1,50 @@
 # Development Journal
 
+## 2026-10-20 - Code review on the language switch and the name helper (PR #81)
+
+- Scope: the review on
+  [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81).
+  Dot segments in `safe_next`, the language switch as a POST, bidi
+  controls in a company name, and every M* mark in the only-marks
+  check. Models, the schema, migrations, repositories, and the API
+  were not changed.
+- Decisions: `safe_next` unquotes the path until it settles (at most
+  eight times). A path that is still changing is refused. Any `.`
+  or `..` segment is refused, so `/ui/./language/pl` and
+  `/ui/%2e/language/pl` are not a return path. The language
+  comparison also uses `posixpath.normpath` after that decode.
+  The PL and EN controls are same-origin forms. Each posts a hidden
+  `next` and a button that looks like the old link. Keyboard focus
+  uses the existing outline. There is no `hx-post`, so HTMX history
+  restore still gets the full page and a fragment still has no
+  switch. `POST /ui/language/{code}` sets the cookie and is covered
+  by `require_same_origin`. `GET /ui/language/{code}` does not set
+  the cookie: a known code redirects to `safe_next` (an old
+  bookmark is not a 403), and an unknown code stays HTML 404. A
+  cross-site POST of an unknown code is 403 because the dependency
+  runs first. A bidi override or isolate (U+202A–U+202E,
+  U+2066–U+2069) anywhere in a name is 422, including at an end the
+  strip would otherwise remove. Mn, Mc, and Me with no base letter
+  are invisible. A letter with one of those marks is kept. The
+  form rule stays stricter than #75 `normalize_name` at `2c64565`
+  until that pull request merges. The duplicate `error.code`
+  mapping still waits for #75.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  after the dot-segment commit: 1366 passed, 121 deselected,
+  coverage 95.96%. After the POST switch: 1367 passed, 121
+  deselected, coverage 95.96%. After the name rule: 1367 passed,
+  121 deselected, coverage 95.97%. Scoped black, isort, and flake8
+  passed. The language buttons were also clicked in a browser, with
+  the keyboard, and on a narrow viewport. PostgreSQL was not run
+  locally. GitHub Actions for this head is not recorded yet.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-20 about 20:12 to 20:28.
+- Next: the owner reviews PR #81 again. It still says Refs #80 and
+  stays unmerged. After #75 lands, align the name helper with
+  `normalize_name` and map `error.code`.
+
 ## 2026-10-20 - QA on the language switch and the name helper (PR #81)
 
 - Scope: one medium and one low finding on
