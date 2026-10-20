@@ -22,10 +22,16 @@ _CDN = (
 
 def test_safe_next_rejects_a_parent_segment():
     """``/ui/../api/...`` starts with /ui and still leaves /ui."""
-    from app.ui.router import safe_next
+    from app.ui.router import (
+        _fully_unquoted_path,
+        _is_language_switch,
+        _path_escapes_ui,
+        safe_next,
+    )
 
     assert safe_next("/ui/../api/v1/companies/") == "/ui"
     assert safe_next("/ui/%2e%2e/api/v1/companies/") == "/ui"
+    assert safe_next("/ui/%252e%252e/api/v1/companies/") == "/ui"
     assert safe_next("/ui/%5cevil") == "/ui"
     assert safe_next("/ui/instruments/1") == "/ui/instruments/1"
     # The language route sets the cookie. Returning there would set
@@ -37,6 +43,33 @@ def test_safe_next_rejects_a_parent_segment():
     assert safe_next("/ui/language") == "/ui"
     assert safe_next("/ui/language/") == "/ui"
     assert safe_next("/ui?exchange=DEMO-WSE") == "/ui?exchange=DEMO-WSE"
+    # ``.`` is the current directory. ``%2e`` is that dot, and
+    # ``%252e`` is an encoded ``%2e``. One unquote is not enough.
+    dot_paths = (
+        "/ui/./language/pl",
+        "/ui/./language/en",
+        "/ui/%2e/language/pl",
+        "/ui/%2E/language/pl",
+        "/ui/%252e/language/pl",
+        "/ui/%25252e/language/en",
+        "/ui/language/./pl",
+        "/ui/language/%2e/en",
+        "/ui/foo/../language/pl",
+    )
+    for value in dot_paths:
+        assert _path_escapes_ui(value) is True, value
+        assert _is_language_switch(value) is True, value
+        assert safe_next(value) == "/ui", value
+    # A dot in front of a normal page is also not a second URL.
+    assert _path_escapes_ui("/ui/./instruments/1") is True
+    assert _is_language_switch("/ui/./instruments/1") is False
+    assert safe_next("/ui/./instruments/1") == "/ui"
+    # Nine encodings of ``.``. Eight unquotes still leave ``%2e``.
+    unsettled = "/ui/%25252525252525252e/language/pl"
+    assert _fully_unquoted_path(unsettled) is None
+    assert _path_escapes_ui(unsettled) is True
+    assert _is_language_switch(unsettled) is True
+    assert safe_next(unsettled) == "/ui"
 
 
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
