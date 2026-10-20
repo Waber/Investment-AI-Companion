@@ -62,6 +62,76 @@ def normalize_ticker(value: object) -> object:
     return normalized
 
 
+# ISO 6166: two letters, nine letters or digits, one check digit.
+_ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
+
+
+def isin_checksum_is_valid(isin: str) -> bool:
+    """Return True when ``isin`` has a valid ISO 6166 check digit.
+
+    The value must already be twelve uppercase ASCII characters.
+    This function does not strip or change case.
+
+    The check digit is the Luhn algorithm applied after letters are
+    expanded to numbers (A=10, B=11, ... Z=35). Luhn only adds single
+    digits, so 10 is stored as the two digits 1 and 0, not as ten.
+    Counting from the right, every second digit is doubled. The
+    rightmost digit is the check digit itself, so it is not doubled.
+    A doubled number above 9 is reduced by 9, which is the same as
+    adding its two digits. The total must be divisible by 10.
+
+    ``US0378331005`` is a published example that passes this rule.
+    """
+    if _ISIN_RE.fullmatch(isin) is None:
+        return False
+    digits: list[int] = []
+    for char in isin:
+        if char.isdigit():
+            digits.append(ord(char) - ord("0"))
+            continue
+        # A=10 ... Z=35. Two decimal digits, most significant first.
+        number = ord(char) - ord("A") + 10
+        digits.append(number // 10)
+        digits.append(number % 10)
+    total = 0
+    for index, digit in enumerate(reversed(digits)):
+        if index % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return total % 10 == 0
+
+
+def normalize_isin(value: object) -> object:
+    """Uppercase an ISIN and reject anything that is not a real one.
+
+    ``None`` stays ``None`` so a create can omit the field and an
+    update can clear it. Non-ASCII and control characters are rejected
+    before ``strip`` and ``upper``, for the same reason as a ticker:
+    those calls would hide a no-break space or a trailing newline.
+    A blank string is not a missing ISIN; the caller must send null
+    to clear the field.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    if not value.isascii():
+        raise ValueError("isin must be ASCII")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError("isin must not contain control characters")
+    normalized = value.strip().upper()
+    if _ISIN_RE.fullmatch(normalized) is None:
+        raise ValueError(
+            "isin must be 12 characters: two letters, "
+            "nine letters or digits, and a check digit"
+        )
+    if not isin_checksum_is_valid(normalized):
+        raise ValueError("isin checksum is invalid")
+    return normalized
+
+
 def normalize_currency(value: object) -> object:
     """Uppercase a three-letter currency code, except Yahoo minor units.
 
