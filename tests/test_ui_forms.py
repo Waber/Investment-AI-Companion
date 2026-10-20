@@ -8,6 +8,7 @@ market-data provider.
 import re
 import unicodedata
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -366,6 +367,80 @@ async def test_company_delete_removes_financial_metrics(client):
     deleted = await _post(client, f"/ui/companies/{company_id}/delete")
     assert deleted.status_code == 303
     assert _counts(client) == (0, 0)
+
+
+def _language_next(html, code):
+    """Hidden return path on the PL or EN form."""
+    match = re.search(
+        rf'action="/ui/language/{code}">\s*'
+        rf'<input type="hidden" name="next" value="([^"]*)"',
+        html,
+    )
+    assert match is not None
+    return match.group(1).replace("&amp;", "&")
+
+
+def _follow(client, response):
+    """GET the redirect target, keeping a query string."""
+    parts = urlsplit(response.headers["location"])
+    target = parts.path
+    if parts.query:
+        target = f"{target}?{parts.query}"
+    return client.get(target)
+
+
+@pytest.mark.asyncio
+async def test_language_switch_from_a_post_error_opens_the_get_form(client):
+    """A 422 is rendered at the POST URL. next names the GET form.
+
+    EN from ``POST /ui/companies`` used to GET that URL and answer
+    405. The blank form is ``/ui/companies/new``. A metrics 422 is
+    the same kind of miss: the form is ``.../metrics/new``. The GET
+    form does not keep what was typed. A normal GET page returns to
+    itself.
+    """
+    create_get = await client.get("/ui/companies/new")
+    assert _language_next(create_get.text, "en") == "/ui/companies/new"
+    switched = await _post(
+        client, "/ui/language/en", {"next": "/ui/companies/new"}
+    )
+    assert switched.status_code == 303
+    landed = await _follow(client, switched)
+    assert landed.status_code == 200
+    assert "New instrument" in landed.text
+
+    rejected = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Kept Name", "ticker": "", "currency": "US"},
+    )
+    assert rejected.status_code == 422
+    assert "Kept Name" in rejected.text
+    target = _language_next(rejected.text, "en")
+    assert target == "/ui/companies/new"
+    switched = await _post(client, "/ui/language/en", {"next": target})
+    assert switched.status_code == 303
+    landed = await _follow(client, switched)
+    assert landed.status_code == 200
+    assert "New instrument" in landed.text
+    assert 'action="/ui/companies"' in landed.text
+    assert "Kept Name" not in landed.text
+
+    company_id, _data = await _create(client, name="Metric Co", ticker="METNX")
+    metrics = await _post(
+        client,
+        f"/ui/companies/{company_id}/metrics",
+        {"period_end": "not-a-date", "period_type": "annual"},
+    )
+    assert metrics.status_code == 422
+    target = _language_next(metrics.text, "pl")
+    assert target == f"/ui/companies/{company_id}/metrics/new"
+    switched = await _post(client, "/ui/language/pl", {"next": target})
+    assert switched.status_code == 303
+    landed = await _follow(client, switched)
+    assert landed.status_code == 200
+    assert "Nowe wskaźniki" in landed.text
+    assert f'action="/ui/companies/{company_id}/metrics"' in landed.text
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 import pytest
 import pytest_asyncio
+from starlette.requests import Request
 
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from scripts.seed_demo import SqliteSeedClient, load_fixture, seed_demo
@@ -70,6 +71,71 @@ def test_safe_next_rejects_a_parent_segment():
     assert _path_escapes_ui(unsettled) is True
     assert _is_language_switch(unsettled) is True
     assert safe_next(unsettled) == "/ui"
+
+
+def _page_request(method, path, query=""):
+    """A request with just enough scope to read method, path, and query."""
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": query.encode("ascii"),
+        "headers": [(b"host", b"127.0.0.1")],
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 80),
+    }
+    return Request(scope)
+
+
+def test_language_next_path_uses_the_get_form_for_a_post():
+    """A POST page must not send the language switch to a POST-only URL."""
+    from app.ui.templating import language_next_path
+
+    assert (
+        language_next_path(_page_request("GET", "/ui", "q=Lodz"))
+        == "/ui?q=Lodz"
+    )
+    assert (
+        language_next_path(_page_request("GET", "/ui/companies/new"))
+        == "/ui/companies/new"
+    )
+    assert (
+        language_next_path(_page_request("POST", "/ui/companies", "from=1"))
+        == "/ui/companies/new?from=1"
+    )
+    assert (
+        language_next_path(_page_request("POST", "/ui/companies/7/metrics"))
+        == "/ui/companies/7/metrics/new"
+    )
+    assert (
+        language_next_path(_page_request("POST", "/ui/companies/7/edit"))
+        == "/ui/companies/7/edit"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/delete", "x=1")
+        )
+        == "/ui/companies/7/delete?x=1"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/metrics/3/edit")
+        )
+        == "/ui/companies/7/metrics/3/edit"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/metrics/3/delete")
+        )
+        == "/ui/companies/7/metrics/3/delete"
+    )
+    assert language_next_path(_page_request("POST", "/ui")) == "/ui"
+    assert (
+        language_next_path(_page_request("POST", "/ui/instruments/1")) == "/ui"
+    )
 
 
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):

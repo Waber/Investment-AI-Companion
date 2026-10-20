@@ -5,6 +5,7 @@ Pages pass catalog lookups and formatters into the context. They do
 not mark data as safe.
 """
 
+import re
 from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
@@ -43,12 +44,62 @@ def resolve_language(request):
     return DEFAULT_LANGUAGE
 
 
-def current_path(request):
-    """Path and query the language switch should return to."""
-    path = request.url.path
-    if request.url.query:
-        return f"{path}?{request.url.query}"
+# POST /ui/companies/{id}/edit and .../delete already have a GET at
+# the same path. The create actions do not: the empty forms live at
+# /new.
+_COMPANY_FORM = re.compile(
+    r"^/ui/companies/(?P<company_id>[^/]+)/(?:edit|delete)$"
+)
+_METRICS_CREATE = re.compile(r"^/ui/companies/(?P<company_id>[^/]+)/metrics$")
+_METRICS_FORM = re.compile(
+    r"^/ui/companies/(?P<company_id>[^/]+)/metrics/"
+    r"(?P<metrics_id>[^/]+)/(?:edit|delete)$"
+)
+
+
+def _path_with_query(path, query):
+    """Join a path and a raw query string. The query has no ``?``."""
+    if query:
+        return f"{path}?{query}"
     return path
+
+
+def _get_form_for_post(path):
+    """Return the GET form for a POST path, or None.
+
+    ``POST /ui/companies`` inserts a company. The blank form is
+    ``GET /ui/companies/new``. ``POST /ui/companies/{id}/metrics``
+    inserts a period. That form is ``GET .../metrics/new``. Edit and
+    delete are the same path for GET and POST.
+    """
+    if path == "/ui/companies":
+        return "/ui/companies/new"
+    created = _METRICS_CREATE.match(path)
+    if created is not None:
+        company_id = created.group("company_id")
+        return f"/ui/companies/{company_id}/metrics/new"
+    if _COMPANY_FORM.match(path) or _METRICS_FORM.match(path):
+        return path
+    return None
+
+
+def language_next_path(request):
+    """Path the language buttons can open with a GET.
+
+    A page loaded with GET returns to that URL, including the query.
+    A page rendered from a POST (a 422 or a 400) was built at the
+    form action. Some of those actions do not accept GET, so opening
+    them is a 405. The switch names the GET form instead. A POST
+    with no form to return to uses ``/ui``.
+    """
+    path = request.url.path
+    query = request.url.query
+    if request.method.upper() == "GET":
+        return _path_with_query(path, query)
+    form = _get_form_for_post(path)
+    if form is None:
+        return "/ui"
+    return _path_with_query(form, query)
 
 
 def render(request, template_name, *, status_code=200, **extra):
@@ -59,7 +110,7 @@ def render(request, template_name, *, status_code=200, **extra):
         "t": MessageCatalog(language),
         "format_number": format_number,
         "format_date": format_date,
-        "next_path": current_path(request),
+        "next_path": language_next_path(request),
     }
     context.update(extra)
     return templates.TemplateResponse(
