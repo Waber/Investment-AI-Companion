@@ -26,8 +26,8 @@ collector now, not only built as a hook.
 - Mapping yfinance errors (`YFRateLimitError`, HTTP 429, timeouts) to
   the retryable error. R1 (#54) does that. Until then the retry path is
   exercised only by tests.
-- Request coalescing (two simultaneous misses for one key both call
-  the provider).
+- Request coalescing was out of scope for #24. #76 shares one
+  upstream call across simultaneous misses of the same cache key.
 - A shared or persistent cache (Redis, disk). The cache is per process.
 - Rewriting currency values already stored. There are no Alembic
   migration files; the schema is built with `create_all`.
@@ -181,6 +181,8 @@ with `Field(ge=..., le=...)`, and a model validator checks
 | `COLLECTOR_RETRY_MAX_RETRIES` | int | 2 | 0..5 | Retries after the first attempt. |
 | `COLLECTOR_BACKOFF_BASE_SECONDS` | float | 1 | > 0, <= 60 | First backoff ceiling. |
 | `COLLECTOR_BACKOFF_MAX_SECONDS` | float | 8 | > 0, <= 300 | Backoff cap. |
+| `COLLECTOR_TOTAL_DEADLINE_SECONDS` | float | 15 | 1..120 | Shared budget for the waits of one call (#76). |
+| `COLLECTOR_MAX_INFLIGHT` | int | 4 | 1..16 | Provider calls running at once. A further call fails immediately (#76). |
 
 A frozen `GuardPolicy` dataclass holds these values;
 `GuardPolicy.from_settings(settings)` builds it, so the guard itself

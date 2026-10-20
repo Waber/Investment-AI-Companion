@@ -94,6 +94,8 @@ VALID_TICKERS = (
 
 # Control characters stay in the value. strip() would hide a trailing
 # newline, and the rule is to reject the character, not delete it.
+DOT_TICKERS = (".", "..")
+
 CONTROL_TICKERS = (
     "AAPL\nINFO forged",
     "AAPL\r\nINFO",
@@ -194,6 +196,24 @@ async def test_non_ascii_ticker_is_rejected_on_create(client, ticker):
 
     assert response.status_code == 422
     assert _count(client) == 0
+
+
+@pytest.mark.parametrize("ticker", DOT_TICKERS)
+def test_dot_and_dotdot_tickers_are_rejected(ticker):
+    """``.`` and ``..`` are not symbols. ``PKN.WA`` still is."""
+    with pytest.raises(ValueError, match="ticker must match"):
+        normalize_ticker(ticker)
+    assert normalize_ticker("PKN.WA") == "PKN.WA"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ticker", DOT_TICKERS)
+async def test_dot_tickers_are_rejected_on_create(client, ticker):
+    response = await client.post(
+        COMPANIES, json={"name": "Dot", "ticker": ticker}
+    )
+
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -383,7 +403,22 @@ def test_normalize_currency(value, expected):
 
 
 @pytest.mark.parametrize(
-    "value", ["US1", "US", "USDD", " usd", "usd ", "u$d", "", "ŁÓD"]
+    "value",
+    [
+        "US1",
+        "US",
+        "USDD",
+        " usd",
+        "usd ",
+        "u$d",
+        "",
+        "ŁÓD",
+        # A no-break space, a long s, and a ligature. upper() would
+        # fold the long s into S and the ligature into ASCII letters.
+        "\u00a0USD",
+        "\u017fsd",
+        "\ufb01at",
+    ],
 )
 def test_normalize_currency_rejects_a_bad_shape(value):
     with pytest.raises(ValueError, match="exactly three letters"):
@@ -631,16 +666,22 @@ def test_yahoo_error_text_with_newline_does_not_forge_a_log_line(
 
 
 def test_yahoo_logs_do_not_split_on_a_newline_ticker(monkeypatch, caplog):
+    """A newline ticker is refused before Yahoo is called, and not logged."""
+    called = []
+
     class _Info:
         def __init__(self, symbol):
+            called.append(symbol)
             self.info = {"longName": "Acme", "currency": "USD"}
 
     monkeypatch.setattr(yahoo_finance.yf, "Ticker", _Info)
     ticker = "ACME\nINFO forged-admin-login"
     with caplog.at_level(logging.INFO, logger=yahoo_finance.__name__):
-        result = YahooFinanceCollector().fetch_company_info(ticker)
+        with pytest.raises(ProviderError, match="ticker was rejected"):
+            YahooFinanceCollector().fetch_company_info(ticker)
 
-    assert result is not None
+    assert called == []
+    assert "forged-admin-login" not in caplog.text
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 
 

@@ -7,7 +7,10 @@ a TTL cache, so a repeat call within the TTL does not reach the
 provider. A cache miss takes a slot in a sliding-window rate limit and
 calls the provider. A ``TransientProviderError`` is retried after an
 exponential backoff with full jitter; after the last retry it reaches
-the caller.
+the caller. Rate-limit waits and retry sleeps share one deadline
+(``total_deadline``), so they cannot stack into minutes. The deadline
+does not kill the provider call itself; the Yahoo collector reads the
+same budget and caps each HTTP request.
 
 Java analogy: the returned object is like
 ``java.lang.reflect.Proxy.newProxyInstance`` given only the interfaces
@@ -42,6 +45,7 @@ from app.data_collectors.base import (
     Sourced,
     TransientProviderError,
 )
+from app.data_collectors.call_budget import pop_budget, push_budget
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,8 @@ _SETTING_NAMES = {
     "max_retries": "COLLECTOR_RETRY_MAX_RETRIES",
     "backoff_base": "COLLECTOR_BACKOFF_BASE_SECONDS",
     "backoff_max": "COLLECTOR_BACKOFF_MAX_SECONDS",
+    "total_deadline": "COLLECTOR_TOTAL_DEADLINE_SECONDS",
+    "max_inflight": "COLLECTOR_MAX_INFLIGHT",
 }
 
 # Capability method -> the GuardPolicy field with its cache TTL.
@@ -93,6 +99,12 @@ class GuardPolicy:
     max_retries: int = 2
     backoff_base: float = 1.0
     backoff_max: float = 8.0
+    # One budget for the sleeps of a single call (rate-limit wait and
+    # retry backoff together). The provider call is not interrupted.
+    total_deadline: float = 15.0
+    # Provider calls allowed to run at the same time. A further call
+    # fails immediately. Cache hits do not take a permit.
+    max_inflight: int = 4
 
     @classmethod
     def from_settings(cls, settings: Any) -> "GuardPolicy":
@@ -111,8 +123,20 @@ class GuardPolicy:
 def _cache_key(
     method_name: str, arguments: Dict[str, Any]
 ) -> Optional[Hashable]:
-    """``(method, ((name, value), ...))``, or None when not hashable."""
-    key = (method_name, tuple(arguments.items()))
+    """``(method, ((name, value), ...))``, or None when not hashable.
+
+    A ``ticker`` string is stripped and uppercased in the key only, so
+    ``aapl`` and ``AAPL`` share one entry. The arguments forwarded to
+    the inner collector stay exactly as the caller sent them. Yahoo
+    normalizes again before it builds a ``yf.Ticker``.
+    """
+    normalized = {}
+    for name, value in arguments.items():
+        if name == "ticker" and isinstance(value, str):
+            normalized[name] = value.strip().upper()
+        else:
+            normalized[name] = value
+    key = (method_name, tuple(normalized.items()))
     try:
         hash(key)
     except TypeError:
@@ -120,6 +144,46 @@ def _cache_key(
         # this is defensive: the call still works, it skips the cache.
         return None
     return key
+
+
+def _has_transient(exc: BaseException) -> bool:
+    """True when ``exc`` or a linked error is ``TransientProviderError``.
+
+    ``raise New() from Other()`` sets ``__cause__``. Doing that inside
+    ``except Old`` also leaves ``Old`` on ``__context__``. A transient
+    error on either link is worth retrying. The walk does not read the
+    exception text, which can contain a URL or a response body.
+    """
+    seen = set()
+    stack = [exc]
+    while stack:
+        current = stack.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, TransientProviderError):
+            return True
+        stack.append(current.__cause__)
+        stack.append(current.__context__)
+    return False
+
+
+# A missing cache entry. ``None`` is a real "no data" result, so it
+# cannot be the missing marker.
+_MISS = object()
+
+
+class _Flight:
+    """One provider call that other threads for the same key wait on.
+
+    The leader fills ``result`` or ``error``, then sets ``done``.
+    Waiters block on ``done`` instead of calling the provider again.
+    """
+
+    def __init__(self) -> None:
+        self.done = threading.Event()
+        self.result: Any = _MISS
+        self.error: Optional[BaseException] = None
 
 
 class _GuardedBase:
@@ -156,6 +220,13 @@ class _GuardedBase:
         # Start times of the provider calls in the current window,
         # oldest first. A deque is a double-ended queue (ArrayDeque).
         self._calls: Deque[float] = deque()
+        # How many provider calls may run at once. ``acquire(blocking=
+        # False)`` is Java's ``Semaphore.tryAcquire``: it fails at once
+        # instead of parking another worker. Cache hits do not take one.
+        self._inflight = threading.BoundedSemaphore(policy.max_inflight)
+        # Cache key -> the call already fetching it. A second miss waits
+        # for that result instead of calling the provider again.
+        self._flights: Dict[Hashable, "_Flight"] = {}
 
     @property
     def inner(self) -> Any:
@@ -183,20 +254,98 @@ class _GuardedBase:
             if hit:
                 logger.debug("Cache hit for %s %r", method_name, ticker)
                 return value
-        result = self._call_provider(method_name, method, bound)
-        if use_cache:
-            # A "no data" answer (None) is kept for a shorter time:
-            # yfinance can report a hidden HTTP failure as None, and the
-            # full TTL (up to 24 h) would make one blip a long false
-            # "not found". min() keeps the capability TTL as the cap.
-            stored_ttl = (
-                ttl
-                if result is not None
-                else min(ttl, self._policy.ttl_no_data)
+            # Two requests for the same key at the same time share one
+            # provider call. A key that cannot be cached cannot be shared.
+            return self._coalesced(key, method_name, method, bound, ttl)
+        return self._call_provider(method_name, method, bound)
+
+    def _coalesced(
+        self,
+        key: Hashable,
+        method_name: str,
+        method: Callable[..., Any],
+        bound: inspect.BoundArguments,
+        ttl: int,
+    ) -> Any:
+        """One upstream call per key while that call is in progress.
+
+        The leader calls the provider. Other threads wait on an
+        ``Event`` (Java's ``CountDownLatch`` of one) and then take the
+        same result or the same error. They do not take a rate-limit
+        slot and they do not take an in-flight permit.
+        """
+        started = self._clock()
+        with self._lock:
+            cached = self._lookup_locked(key)
+            if cached is not _MISS:
+                value = cached
+                flight = None
+                leader = False
+            else:
+                value = None
+                flight = self._flights.get(key)
+                if flight is None:
+                    flight = _Flight()
+                    self._flights[key] = flight
+                    leader = True
+                else:
+                    leader = False
+        if flight is None:
+            return copy.deepcopy(value)
+        if not leader:
+            return self._wait_for_flight(flight, started, method_name, bound)
+        try:
+            result = self._call_provider(method_name, method, bound)
+            self._remember(key, result, ttl)
+            flight.result = result
+            return result
+        except Exception as exc:
+            flight.error = exc
+            raise
+        finally:
+            if flight.error is None and flight.result is _MISS:
+                flight.error = ProviderError("Data provider error")
+            with self._lock:
+                current = self._flights.get(key)
+                if current is flight:
+                    del self._flights[key]
+            flight.done.set()
+
+    def _wait_for_flight(
+        self,
+        flight: "_Flight",
+        started: float,
+        method_name: str,
+        bound: inspect.BoundArguments,
+    ) -> Any:
+        """Wait for the leader, but not past this call's deadline."""
+        ticker = bound.arguments.get("ticker")
+        remaining_s = self._policy.total_deadline - (self._clock() - started)
+        if remaining_s <= 0 or not flight.done.wait(timeout=remaining_s):
+            logger.warning(
+                "Deadline reached for %s %r after %.2f s",
+                method_name,
+                ticker,
+                self._clock() - started,
             )
-            if stored_ttl > 0:
-                self._cache_put(key, result, stored_ttl)
-        return result
+            raise ProviderError("Collector deadline reached")
+        if flight.error is not None:
+            raise flight.error
+        return copy.deepcopy(flight.result)
+
+    def _remember(self, key: Hashable, result: Any, ttl: int) -> None:
+        """Store ``result`` for ``ttl`` seconds, or skip a short no-data.
+
+        A "no data" answer (None) is kept for a shorter time: yfinance
+        can report a hidden HTTP failure as None, and the full TTL (up
+        to 24 h) would make one blip a long false "not found". ``min``
+        keeps the capability TTL as the cap.
+        """
+        stored_ttl = (
+            ttl if result is not None else min(ttl, self._policy.ttl_no_data)
+        )
+        if stored_ttl > 0:
+            self._cache_put(key, result, stored_ttl)
 
     def _call_provider(
         self,
@@ -213,29 +362,93 @@ class _GuardedBase:
         ticker = bound.arguments.get("ticker")
         retries = self._policy.max_retries
         attempt = 1
-        while True:
-            self._acquire_slot(method_name, ticker)
-            try:
-                return method(*bound.args, **bound.kwargs)
-            except TransientProviderError:
-                if attempt > retries:
-                    raise
-                delay = self._backoff_delay(attempt)
-                # The inner collector logged the provider's own text.
-                # This line names only the method and the ticker.
-                logger.warning(
-                    "Transient provider error in %s for %r; "
-                    "retry %d of %d in %.2f s",
-                    method_name,
-                    ticker,
-                    attempt,
-                    retries,
-                    delay,
-                )
-                self._sleep(delay)
-                attempt += 1
+        # One clock for every sleep in this call. The provider call
+        # itself is not interrupted; Yahoo reads the same budget.
+        started = self._clock()
+        token = push_budget(started + self._policy.total_deadline, self._clock)
+        try:
+            while True:
+                self._acquire_slot(method_name, ticker, started)
+                try:
+                    return self._call_upstream(
+                        method, bound, method_name, ticker
+                    )
+                except Exception as exc:
+                    if not self._should_retry(exc, attempt, retries):
+                        if isinstance(exc, ProviderError):
+                            raise
+                        # A raw ValueError used to become HTTP 400 and
+                        # copy its text into the body. The fixed message
+                        # has no provider text, and ``from None`` drops
+                        # the chain so the text is not attached.
+                        logger.warning(
+                            "Unexpected %s in %s for %r",
+                            type(exc).__name__,
+                            method_name,
+                            ticker,
+                        )
+                        raise ProviderError("Data provider error") from None
+                    delay = self._backoff_delay(attempt)
+                    # The inner collector logged the provider's own text.
+                    # This line names only the class, the method and the
+                    # ticker.
+                    logger.warning(
+                        "Transient %s in %s for %r; "
+                        "retry %d of %d in %.2f s",
+                        type(exc).__name__,
+                        method_name,
+                        ticker,
+                        attempt,
+                        retries,
+                        delay,
+                    )
+                    self._sleep_within_deadline(
+                        started, delay, method_name, ticker
+                    )
+                    attempt += 1
+        finally:
+            pop_budget(token)
 
-    def _acquire_slot(self, method_name: str, ticker: Any) -> None:
+    def _should_retry(
+        self, exc: BaseException, attempt: int, retries: int
+    ) -> bool:
+        """True when a transient error is still allowed another try.
+
+        ``TransientProviderError`` counts when it is the error itself,
+        its ``__cause__`` (``raise New from Old``), or its
+        ``__context__`` (the error being handled when ``raise`` ran).
+        The walk does not read the exception text.
+        """
+        if attempt > retries:
+            return False
+        return _has_transient(exc)
+
+    def _call_upstream(
+        self,
+        method: Callable[..., Any],
+        bound: inspect.BoundArguments,
+        method_name: str,
+        ticker: Any,
+    ) -> Any:
+        """Run one provider call if a permit is free.
+
+        The permit covers only this call. It is released before the
+        retry sleep, so a backoff does not hold a worker slot. Failing
+        to get a permit is immediate: this method does not wait.
+        """
+        if not self._inflight.acquire(blocking=False):
+            logger.warning(
+                "In-flight limit reached for %s %r", method_name, ticker
+            )
+            raise ProviderError("Too many collector calls are in flight")
+        try:
+            return method(*bound.args, **bound.kwargs)
+        finally:
+            self._inflight.release()
+
+    def _acquire_slot(
+        self, method_name: str, ticker: Any, started: float
+    ) -> None:
         """Wait for a free slot in the sliding window, or fail.
 
         At most ``rate_limit_calls`` provider calls may start within any
@@ -266,9 +479,33 @@ class _GuardedBase:
                 )
                 raise ProviderError("Local rate limit reached")
             # Sleep outside the lock, then check again: another thread
-            # may have taken the slot meanwhile.
-            self._sleep(wait)
+            # may have taken the slot meanwhile. A sleep that would
+            # pass the call's deadline is refused.
+            self._sleep_within_deadline(started, wait, method_name, ticker)
             waited += wait
+
+    def _sleep_within_deadline(
+        self,
+        started: float,
+        delay: float,
+        method_name: str,
+        ticker: Any,
+    ) -> None:
+        """Sleep, unless this wait would pass the call's deadline.
+
+        The clock does not interrupt a provider call that is already
+        running. It only refuses the next sleep.
+        """
+        remaining = self._policy.total_deadline - (self._clock() - started)
+        if delay > remaining:
+            logger.warning(
+                "Deadline reached for %s %r after %.2f s",
+                method_name,
+                ticker,
+                self._clock() - started,
+            )
+            raise ProviderError("Collector deadline reached")
+        self._sleep(delay)
 
     def _backoff_delay(self, retry: int) -> float:
         """Full jitter: a random time up to an exponential ceiling.
@@ -289,21 +526,32 @@ class _GuardedBase:
         A flag is needed because ``None`` ("no data") is a valid cached
         value. Expired entries are removed when found.
         """
-        now = self._clock()
         with self._lock:
-            entry = self._cache.get(key)
-            if entry is None:
-                return False, None
-            expires_at, value = entry
-            if now >= expires_at:
-                del self._cache[key]
-                return False, None
-            self._cache.move_to_end(key)
+            value = self._lookup_locked(key)
+        if value is _MISS:
+            return False, None
         # Deep copy: Sourced is frozen, but its dict value is not. A
         # caller that edits its result must not change the next hit.
         # The stored value is never mutated, so copying outside the
         # lock is safe.
         return True, copy.deepcopy(value)
+
+    def _lookup_locked(self, key: Hashable) -> Any:
+        """The stored value, or ``_MISS``. The caller holds ``_lock``.
+
+        Expired entries are removed. ``None`` ("no data") is returned
+        as itself, which is why the missing marker is a separate object.
+        """
+        now = self._clock()
+        entry = self._cache.get(key)
+        if entry is None:
+            return _MISS
+        expires_at, value = entry
+        if now >= expires_at:
+            del self._cache[key]
+            return _MISS
+        self._cache.move_to_end(key)
+        return value
 
     def _cache_put(self, key: Hashable, value: Any, ttl: int) -> None:
         stored = copy.deepcopy(value)

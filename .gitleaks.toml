@@ -1,0 +1,15 @@
+# Gitleaks configuration.
+#
+# The default rules stay on. The pytest placeholder below is not a
+# credential: tests/conftest.py line 7 sets SECRET_KEY so collection
+# does not depend on a developer .env file.
+
+title = "Investment AI Companion"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Pytest placeholder SECRET_KEY in tests/conftest.py. Not a real secret."
+paths = ['''tests/conftest\.py''']
+regexes = ['''test-secret-key-for-pytest-0123456789''']

@@ -293,14 +293,20 @@ def fetch_company_data(
         # Handle uniqueness violations. The message is a fixed business
         # error, not a provider traceback, so it stays in the response.
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        # The client gets a fixed sentence. The traceback, including
-        # anything the provider put in the exception, stays in the log.
-        # %r keeps a newline in the ticker from starting a new log line.
-        logger.exception("Error fetching company data for ticker %r", ticker)
-        raise HTTPException(
-            status_code=500, detail="Error fetching company data"
+    except Exception as exc:
+        # An unexpected error used to be HTTP 500 with the traceback in
+        # the log. The traceback can include provider text. The client
+        # gets the same fixed sentence as a ProviderError, and the log
+        # keeps the class name only. %r keeps a newline in the ticker
+        # from starting a new log line.
+        logger.error(
+            "Unexpected %s fetching company data for ticker %r",
+            type(exc).__name__,
+            ticker,
         )
+        raise HTTPException(
+            status_code=502, detail="Data provider error"
+        ) from None
 
 
 @router.post("/fetch-financial-metrics")

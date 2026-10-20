@@ -25,12 +25,15 @@ DEFAULTS = {
     "COLLECTOR_RETRY_MAX_RETRIES": 2,
     "COLLECTOR_BACKOFF_BASE_SECONDS": 1.0,
     "COLLECTOR_BACKOFF_MAX_SECONDS": 8.0,
+    "COLLECTOR_TOTAL_DEADLINE_SECONDS": 15.0,
+    "COLLECTOR_MAX_INFLIGHT": 4,
 }
 FLOAT_SETTINGS = [
     "COLLECTOR_RATE_LIMIT_PERIOD_SECONDS",
     "COLLECTOR_RATE_LIMIT_MAX_WAIT_SECONDS",
     "COLLECTOR_BACKOFF_BASE_SECONDS",
     "COLLECTOR_BACKOFF_MAX_SECONDS",
+    "COLLECTOR_TOTAL_DEADLINE_SECONDS",
 ]
 
 
@@ -96,6 +99,8 @@ def test_policy_reads_each_setting(monkeypatch):
         COLLECTOR_RETRY_MAX_RETRIES="4",
         COLLECTOR_BACKOFF_BASE_SECONDS="0.25",
         COLLECTOR_BACKOFF_MAX_SECONDS="2.5",
+        COLLECTOR_TOTAL_DEADLINE_SECONDS="19.5",
+        COLLECTOR_MAX_INFLIGHT="6",
     )
 
     assert GuardPolicy.from_settings(built) == GuardPolicy(
@@ -111,6 +116,8 @@ def test_policy_reads_each_setting(monkeypatch):
         max_retries=4,
         backoff_base=0.25,
         backoff_max=2.5,
+        total_deadline=19.5,
+        max_inflight=6,
     )
 
 
@@ -138,6 +145,10 @@ def test_policy_reads_each_setting(monkeypatch):
         ("COLLECTOR_BACKOFF_BASE_SECONDS", "61"),
         ("COLLECTOR_BACKOFF_MAX_SECONDS", "0"),
         ("COLLECTOR_BACKOFF_MAX_SECONDS", "301"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "0.9"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "121"),
+        ("COLLECTOR_MAX_INFLIGHT", "0"),
+        ("COLLECTOR_MAX_INFLIGHT", "17"),
     ],
 )
 def test_out_of_range_guard_setting_fails_startup(monkeypatch, name, value):
@@ -160,6 +171,10 @@ def test_out_of_range_guard_setting_fails_startup(monkeypatch, name, value):
         ("COLLECTOR_RETRY_MAX_RETRIES", "0"),
         ("COLLECTOR_RETRY_MAX_RETRIES", "5"),
         ("COLLECTOR_BACKOFF_MAX_SECONDS", "300"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "1"),
+        ("COLLECTOR_TOTAL_DEADLINE_SECONDS", "120"),
+        ("COLLECTOR_MAX_INFLIGHT", "1"),
+        ("COLLECTOR_MAX_INFLIGHT", "16"),
     ],
 )
 def test_boundary_guard_setting_is_accepted(monkeypatch, name, value):

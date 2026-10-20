@@ -319,6 +319,19 @@ class Settings(BaseSettings):
     COLLECTOR_BACKOFF_MAX_SECONDS: float = Field(
         8.0, gt=0, le=300, allow_inf_nan=False
     )
+    # One budget for every sleep in a single call: the rate-limit wait
+    # and the retry backoff together. The provider call is not killed
+    # by this clock. Yahoo caps each HTTP request on its own, and those
+    # requests share whatever time this deadline has left. 1 second is
+    # the shortest budget; 120 seconds is the longest a sync worker may
+    # spend sleeping for one request.
+    COLLECTOR_TOTAL_DEADLINE_SECONDS: float = Field(
+        15.0, ge=1, le=120, allow_inf_nan=False
+    )
+    # How many provider calls may run at once in this process. A further
+    # call fails immediately instead of waiting, so a stuck fetch cannot
+    # fill the server's thread pool. Cache hits do not take a permit.
+    COLLECTOR_MAX_INFLIGHT: int = Field(4, ge=1, le=16)
 
     @model_validator(mode="after")
     def backoff_max_is_not_below_base(self) -> "Settings":

@@ -10,7 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 # dots, dashes, carets, and equals signs in GPW, EU, US, index, and
 # FX symbols (PKN.WA, BRK-B, ^GSPC, EURUSD=X). Control characters and
 # spaces are not in the class.
-TICKER_PATTERN = r"^[A-Z0-9._\-^=]{1,20}$"
+# ``.`` and ``..`` are not symbols. They would be path segments if a
+# ticker were ever joined onto a directory. ``PKN.WA`` still matches.
+# Pydantic's regex engine has no lookahead, so the shape is two
+# alternatives: a symbol that does not start with ``.``, or one that
+# starts with ``.`` and is longer than ``.`` and ``..``.
+TICKER_PATTERN = (
+    r"^(?:[A-Z0-9_\-^=][A-Z0-9._\-^=]{0,19}"
+    r"|\.(?:[A-Z0-9_\-^=]|[A-Z0-9._\-^=]{2})[A-Z0-9._\-^=]{0,17})$"
+)
 # Three ASCII letters, either case, before normalization.
 _CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
 # Yahoo's minor-unit codes, where the letter case is the meaning:
@@ -58,10 +66,17 @@ def normalize_currency(value: object) -> object:
     code. ``GBp`` and ``ZAc`` stay as sent; ``gbp`` becomes ``GBP``,
     because only the exact spelling ``GBp`` means pence. ``None`` and
     non-strings are left for the field type to handle.
+
+    ``isascii`` runs before any later case change. A long s, a ligature,
+    or a no-break space must not fold into a real ISO code.
     """
     if value is None or not isinstance(value, str):
         return value
-    if _CURRENCY_RE.fullmatch(value) is None:
+    # Before ``upper``. ``"ſ".upper()`` is ``"S"`` and a ligature can
+    # grow into ASCII letters. The shape check alone uses ``[A-Za-z]``,
+    # which does not match those characters; the ASCII check stays even
+    # if a later edit strips the value first.
+    if not value.isascii() or _CURRENCY_RE.fullmatch(value) is None:
         raise ValueError("currency must be exactly three letters")
     if value in MINOR_UNIT_CURRENCIES:
         return value

@@ -117,7 +117,13 @@ Yahoo can report a hidden failure as no data. The cache and the rate
 limit belong to one process (several workers each get their own limit),
 the cache starts empty, and changed settings apply after a restart.
 A full rate limit, or a provider error after the last retry, returns
-502 `Data provider error`. The limits, with their defaults:
+502 `Data provider error`. The rate-limit wait and the retry sleeps of
+one call share `COLLECTOR_TOTAL_DEADLINE_SECONDS`, so they cannot stack.
+At most `COLLECTOR_MAX_INFLIGHT` provider calls run at once; another
+call fails immediately instead of waiting. A cache hit does neither.
+Each Yahoo HTTP request times out after 10 seconds
+(`YFINANCE_HTTP_TIMEOUT_SECONDS`), and several requests inside one call
+share the time the deadline has left. The limits, with their defaults:
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -133,6 +139,8 @@ A full rate limit, or a provider error after the last retry, returns
 | `COLLECTOR_RETRY_MAX_RETRIES` | 2 | Retries for a temporary provider error. |
 | `COLLECTOR_BACKOFF_BASE_SECONDS` | 1 | Ceiling of the first random retry delay. |
 | `COLLECTOR_BACKOFF_MAX_SECONDS` | 8 | Largest retry delay ceiling. |
+| `COLLECTOR_TOTAL_DEADLINE_SECONDS` | 15 | Shared budget for the waits and retries of one call. |
+| `COLLECTOR_MAX_INFLIGHT` | 4 | Provider calls allowed to run at the same time. |
 
 `ALLOWED_HOSTS` is enforced, so a request with any other Host gets
 400 Invalid host header.
