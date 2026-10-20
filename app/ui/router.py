@@ -86,11 +86,26 @@ def _path_escapes_ui(candidate):
     return any(segment == ".." for segment in path.split("/"))
 
 
+def _is_language_switch(candidate):
+    """True when the return path is the language cookie route.
+
+    ``/ui/language/pl`` is a page under ``/ui``, and it sets the
+    cookie again. The 403 for a direct visit is rendered at that
+    URL, so its PL/EN links would otherwise send the browser back
+    to the other language URL and flip the cookie a second time.
+    """
+    path = unquote(urlsplit(candidate).path)
+    return path == "/ui/language" or path.startswith("/ui/language/")
+
+
 def safe_next(value):
     """Allow a return path under /ui, and nothing else.
 
     The language switch puts the current path in the query string.
     A value that points at another site, or at a scheme, is ignored.
+    A path under ``/ui/language/`` is also ignored: that route sets
+    the language cookie, so returning there would replace the
+    language the user just chose. The fallback is ``/ui``.
     """
     if not value:
         return "/ui"
@@ -108,6 +123,8 @@ def safe_next(value):
         or candidate.startswith("/ui?")
     )
     if not allowed or _path_escapes_ui(candidate):
+        return "/ui"
+    if _is_language_switch(candidate):
         return "/ui"
     return candidate
 
