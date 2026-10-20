@@ -1,5 +1,41 @@
 # Development Journal
 
+## 2026-10-20 - Local venv, IDE interpreter guide and the Python 3.14 probe
+
+- Scope: a persistent `.venv` for local tests, the missing `.venv/`
+  ignore rule, IDE interpreter setup for PyCharm, IntelliJ IDEA and
+  Cursor, and an issue for moving to Python 3.14.
+- Decisions: stay on Python 3.12 locally because CI and the locks use
+  it. The README names `python3.12` instead of `python`, because
+  Homebrew's `python3` is 3.14 and plain `python` may not exist on
+  macOS. The 3.14 move is
+  [#73](https://github.com/Waber/Investment-AI-Companion/issues/73),
+  not part of this branch. The existing docs test that requires the
+  shared checkout path in `docs/ide-startup.md` failed once after the
+  rewrite; the path was restored as the example interpreter path.
+- Python 3.14 probe (throwaway venv in the session scratchpad, Homebrew
+  3.14.3): the hashed install fails on `psycopg2-binary==2.9.9` (no
+  3.14 wheel, source build needs `pg_config`). A PyPI check of the 70
+  locked pins found no other missing wheel. `sqlalchemy==2.0.23` then
+  fails at import (`TypingOnly` sees `__firstlineno__` and
+  `__static_attributes__`). With `sqlalchemy` 2.0.55 and
+  `psycopg2-binary` 2.9.13 the CI command gives 1300 passed and
+  `-m integration` 105 passed, 16 skipped.
+- Verification: in `.venv` (Python 3.12.15), no `.env`,
+  `DATABASE_URL` and `SECRET_KEY` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-fail-under=80`
+  -> 1300 passed, 121 deselected, coverage 95.80%. `pytest -m
+  integration` -> 105 passed, 16 skipped. `git check-ignore` confirms
+  `.venv/` is ignored. The IDE menu paths were written from the IDE
+  docs, not clicked through; names vary by IDE version.
+- AI model: Claude Opus 5.5 (Claude Code). Account usage was not
+  available in this session.
+- Time tracking (+0200): 2026-10-19 about 15:10, discussion of the
+  environment; 2026-10-20 13:02 Python 3.12 installed by the owner,
+  13:02 to 13:20 venv, probe, issue, docs and this entry.
+- Next: pull request for `chore/local-venv-setup`, then #26 together
+  with #16.
+
 ## 2026-10-19 - Rebase of the offline demo (#25) onto PR #72
 
 - Scope: the owner merged
