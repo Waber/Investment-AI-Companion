@@ -4,6 +4,7 @@ The JSON API stays under /api/v1. These routes are left out of the
 OpenAPI document so /docs remains the API reference.
 """
 
+import posixpath
 from urllib.parse import unquote, urlsplit
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -70,32 +71,62 @@ def is_htmx(request):
     return request.headers.get("hx-request", "").casefold() == "true"
 
 
+# ``%252e`` is an encoded ``%2e``. One unquote is not enough to see
+# the dot. A handful of layers covers a doubled or tripled encoding.
+# Anything still changing after that is not a path we will follow.
+_MAX_UNQUOTES = 8
+
+
+def _fully_unquoted_path(candidate):
+    """Return the path with percent-encoding removed, repeatedly.
+
+    ``urlsplit`` does not decode ``%2e``. One ``unquote`` turns
+    ``%252e`` into ``%2e``, and the next turns that into ``.``.
+    ``None`` means the encoding did not settle.
+    """
+    path = urlsplit(candidate).path
+    for _ in range(_MAX_UNQUOTES):
+        decoded = unquote(path)
+        if decoded == path:
+            return path
+        path = decoded
+    return None
+
+
 def _path_escapes_ui(candidate):
     """True when the path is not a page under /ui.
 
     ``/ui/../api/v1/companies/`` starts with ``/ui/`` and is still
-    outside /ui once the ``..`` segment is applied. Same-origin is
-    not enough.
+    outside /ui once the ``..`` segment is applied. ``/ui/./language/pl``
+    is the language route once the ``.`` segment is applied.
+    ``%2e`` and ``%252e`` are that same dot. Same-origin is not enough.
     """
     parts = urlsplit(candidate)
     if parts.scheme or parts.netloc:
         return True
-    path = unquote(parts.path)
-    if "\\" in path:
+    path = _fully_unquoted_path(candidate)
+    if path is None or "\\" in path:
         return True
-    return any(segment == ".." for segment in path.split("/"))
+    # ``.`` is the current directory and ``..`` is the parent. Either
+    # one can hide the language route or leave /ui.
+    return any(segment in {".", ".."} for segment in path.split("/"))
 
 
 def _is_language_switch(candidate):
     """True when the return path is the language cookie route.
 
-    ``/ui/language/pl`` is a page under ``/ui``, and it sets the
-    cookie again. The 403 for a direct visit is rendered at that
-    URL, so its PL/EN links would otherwise send the browser back
-    to the other language URL and flip the cookie a second time.
+    The comparison uses the fully decoded path after
+    ``posixpath.normpath``, so ``/ui/./language/pl`` and
+    ``/ui/%2e/language/pl`` are the same route as ``/ui/language/pl``.
+    Returning there would set the cookie a second time.
     """
-    path = unquote(urlsplit(candidate).path)
-    return path == "/ui/language" or path.startswith("/ui/language/")
+    path = _fully_unquoted_path(candidate)
+    if path is None:
+        return True
+    normalized = posixpath.normpath(path)
+    return normalized == "/ui/language" or normalized.startswith(
+        "/ui/language/"
+    )
 
 
 def safe_next(value):
