@@ -346,6 +346,17 @@ class CompanyUpdate(_CompanyWriteChecks):
         description="ISO 6166 ISIN. Send null to clear the stored value.",
     )
 
+    @field_validator("instrument_type", mode="before")
+    @classmethod
+    def _reject_null_instrument_type(cls, value: object) -> object:
+        """A JSON null is not a type. Omitting the field keeps the row."""
+        if value is None:
+            raise ValueError(
+                "instrument_type cannot be null; "
+                "omit it to keep the stored type"
+            )
+        return value
+
 
 class Company(CompanyBase):
     """Full company model with additional fields."""
