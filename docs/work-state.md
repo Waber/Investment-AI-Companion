@@ -30,9 +30,17 @@
   description drops the `[IAC-DEMO-V1]` badge. A wrong method on
   `/ui` is an HTML 405 with the `/ui` security headers; API 405
   stays JSON.
+- Review on PR #77, not merged: `python-multipart` floor is
+  `>=0.0.32` (GHSA-5rvq-cxj2-64vf / CVE-2026-53539, fixed in
+  0.0.30). Regenerating both locks left the pin and hashes at
+  0.0.32. The form strips surrounding whitespace from the name and
+  rejects a name with no visible character (nbsp, ideographic
+  space, zero-width-only). The origin docstring says the check
+  relies on `TrustedHostMiddleware`, so `ALLOWED_HOSTS` must stay
+  loopback-only. The disclaimer-banner asserts stay.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1356 passed, 121 deselected, coverage 95.81%. Scoped black,
+  -> 1363 passed, 121 deselected, coverage 95.83%. Scoped black,
   isort, and flake8 passed. `pip-audit` on both locks: no known
   vulnerabilities. `python-multipart` 0.0.32 with hashes.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).

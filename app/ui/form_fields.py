@@ -3,8 +3,9 @@
 The browser posts strings. Empty optional company fields become
 ``None`` (a blank website is "no website", not the empty string).
 Empty metric numbers become ``None``, which is "no data" on the
-detail page. The text the user typed is kept for the other fields
-and handed to ``CompanyCreate``, ``CompanyUpdate``,
+detail page. Surrounding whitespace is removed from the company
+name before it is saved. The text the user typed is kept for the
+other fields and handed to ``CompanyCreate``, ``CompanyUpdate``,
 ``FinancialMetricsCreate``, or ``FinancialMetricsUpdate``. Those
 models own the ticker, currency, length, URL, date, and finite-number
 rules. This module does not add a second copy of them.
@@ -22,6 +23,7 @@ raw strings are returned unchanged for the inputs.
 """
 
 import math
+import unicodedata
 from datetime import datetime
 
 from pydantic import ValidationError
@@ -147,13 +149,20 @@ def metrics_values(row):
 
 
 def company_payload(values):
-    """Map posted strings onto company create/update fields."""
+    """Map posted strings onto company create/update fields.
+
+    The name loses surrounding whitespace here, in the form layer.
+    The write model does not strip it. Ticker text is left as typed;
+    ``normalize_ticker`` strips and uppercases that field.
+    """
     payload = {}
     for field in COMPANY_FIELDS:
         raw = values.get(field, "")
         if not isinstance(raw, str):
             raw = "" if raw is None else str(raw)
-        if field in _OPTIONAL_COMPANY and raw.strip() == "":
+        if field == "name":
+            payload[field] = raw.strip()
+        elif field in _OPTIONAL_COMPANY and raw.strip() == "":
             payload[field] = None
         else:
             payload[field] = raw
@@ -260,16 +269,24 @@ def catalog_key_for_repository_error(exc):
 
 
 def _name_is_blank(values):
-    """True when the posted name has no visible characters.
+    """True when the posted name has no visible character.
 
-    ``CompanyCreate`` accepts ``""``. The form does not: a blank name
-    is the same as a missing one. The check lives here so the model
-    stays unchanged.
+    ``CompanyCreate`` accepts ``""``. The form does not. ``strip``
+    removes spaces, including ``\\u00a0`` and ``\\u3000``. A name that
+    is only format characters (category Cf), such as ``\\u200b``, is
+    blank too. The check lives here so the model stays unchanged.
     """
     name = values.get("name", "")
     if not isinstance(name, str):
         name = "" if name is None else str(name)
-    return name.strip() == ""
+    for char in name:
+        if char.isspace():
+            continue
+        # C covers control, format, surrogate, private use, unassigned.
+        if unicodedata.category(char).startswith("C"):
+            continue
+        return False
+    return True
 
 
 def validate_company(values, *, update):

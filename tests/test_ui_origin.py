@@ -81,6 +81,21 @@ def test_referer_is_only_the_fallback_and_get_is_not_checked():
     assert origin_allowed(blank_origin) is True
     evil_referer = _request(headers={"referer": "http://evil.example/form"})
     assert origin_allowed(evil_referer) is False
+    # A suffix, a dotted host, or userinfo must not look like loopback.
+    # localhost and 127.0.0.1 are different hosts.
+    for referer in (
+        "http://127.0.0.1:8000.evil",
+        "http://127.0.0.1.evil",
+        "http://127.0.0.1:8000@evil",
+        "http://localhost/ui/companies/new",
+    ):
+        forged = _request(headers={"referer": referer})
+        assert origin_allowed(forged) is False, referer
+    swapped = _request(
+        host="localhost",
+        headers={"referer": "http://127.0.0.1/ui/companies/new"},
+    )
+    assert origin_allowed(swapped) is False
     # GET does not change rows, so a foreign Origin is ignored.
     require_same_origin(
         _request(method="GET", headers={"origin": "http://evil.example"})
