@@ -1,5 +1,43 @@
 # Current Work State
 
+## Instrument type and ISIN (#26) with duplicate ticker 400 (#16): 2026-10-20
+
+- Branch `cursor/instrument-type-isin-1db6`, based on
+  `origin/master` `1f1678f` (PR #74 merged).
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is a draft (Refs #26, Refs #16). Not merged.
+- Completed: `instrument_type` (`STOCK` / `ETF` / `ETC`, default
+  `STOCK`) and nullable unique `isin` on the company ORM,
+  Pydantic write and read models, repository, and
+  `/api/v1/companies/` responses. Existing response fields are
+  unchanged. Revision `0001` adds both columns with
+  `ALTER TABLE` (no batch rebuild). ISIN format and checksum are
+  checked before insert. A duplicate ticker or ISIN is HTTP 400
+  with a fixed sentence on SQLite and PostgreSQL. The driver
+  text is not in the body. An integrity error that is not one of
+  those two duplicates stays a generic 500.
+- Incomplete: no rename to Instrument, no `/api/v1/instruments/`,
+  no unique `(ticker, exchange)`, no list filters, metrics are
+  not limited to stocks, and #8 (Alembic baseline) is still
+  open. `app/ui/`, `templates/`, and `static/` were not edited.
+  The shipped `/ui` still uses lowercase `stock` and catalog key
+  `type.stock`, and it does not show `isin`.
+- Tests: `.venv` Python 3.12, no `.env`, `DATABASE_URL` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1337 passed, 121 deselected, coverage 96.01%.
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  and `pytest -m integration` -> 121 passed, 1337 deselected,
+  0 xfailed. GitHub Actions on this head is not recorded yet.
+  The earlier run
+  [39460651955](https://github.com/Waber/Investment-AI-Companion/actions/runs/39460651955)
+  succeeded on `07f7983` only (checksum helper).
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: push this head (already based on `1f1678f`; rebase
+  only if `origin/master` moves), wait for both Actions jobs, then
+  the owner reviews PR #75 and merges with "Rebase and merge".
+  Agents do not merge.
 ## Collector hardening (#76): 2026-10-20
 
 - Branch `cursor/collector-hardening-76-fe8d`, rebased onto
@@ -54,7 +92,6 @@
 - Next action: wait for both GitHub Actions jobs on this commit, add
   the code-review table to the pull request, and record the run id.
   After the owner rebases and merges, #26 together with #16.
-
 ## Company and financial-metrics forms (#34, part): 2026-10-20
 
 - Branch `cursor/d5-company-metric-forms-cfb0`, based on
