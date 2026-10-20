@@ -1,5 +1,28 @@
 # Development Journal
 
+## 2026-10-20 - Generic update error drops the SQL text
+
+- Scope: a security nit on
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75).
+  The generic update `ValueError` was raised inside
+  `except IntegrityError`.
+- Decisions: that sentence is raised after the handler ends, with
+  `from None`. Written inside the handler, `from None` still
+  stores the driver error on `__context__`, and that object
+  includes the SQL text. `test_not_null_rollback_reuses_same_session`
+  asserts `__context__` and `__cause__` are both `None`. The
+  session can still update the same row afterwards.
+- Verification: no `.env`, `DATABASE_URL` unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1411 passed, 123 deselected, coverage 96.15%. PostgreSQL
+  (`TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  `REQUIRE_POSTGRES=1`, `pytest -m integration`) -> 123 passed,
+  1411 deselected.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-20): security nit from about 19:05.
+- Next: the owner reviews PR #75. Agents do not merge.
+
 ## 2026-10-20 - Dotted ticker duplicate is 400
 
 - Scope: extra QA finding on

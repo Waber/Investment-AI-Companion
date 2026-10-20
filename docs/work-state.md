@@ -1,5 +1,27 @@
 # Current Work State
 
+## Generic update error drops the SQL text: 2026-10-20
+
+- Branch `cursor/instrument-type-isin-1db6`, based on
+  `origin/master` `9d26948`.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is a draft. The body says Closes #16 and Refs #26. Not merged.
+- Completed: the generic update sentence is raised after the
+  `IntegrityError` handler ends, with `from None`.
+  `__context__` and `__cause__` are both `None`, so the SQL text
+  is not chained. The same session can still update the row.
+- Tests: SQLite CI command: 1411 passed, 123 deselected,
+  coverage 96.15%. PostgreSQL `-m integration`: 123 passed,
+  1411 deselected. GitHub Actions on this commit is not recorded
+  in this file; the session report names the run.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews PR #75 and merges with
+  "Rebase and merge". Agents do not merge. A named unique
+  constraint on ticker alone remains a follow-up. The next
+  rebase against PR #78 keeps `name` `min_length=1` and ticker
+  `max_length`.
+
 ## Dotted ticker duplicate on #75: 2026-10-20
 
 - Branch `cursor/instrument-type-isin-1db6`, rebased onto
