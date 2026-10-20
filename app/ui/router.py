@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.ui.catalog import LANGUAGE_COOKIE, SUPPORTED_LANGUAGES
-from app.ui.origin import require_same_origin
+from app.ui.origin import OriginRejected, origin_allowed, require_same_origin
 from app.ui.queries import ListFilters, get_instrument, list_instruments
 from app.ui.templating import render
 from app.ui.view_models import METRIC_FIELDS, MONETARY_FIELDS
@@ -21,7 +21,9 @@ router = APIRouter(
     prefix="/ui",
     tags=["ui"],
     # POST, PUT, PATCH, and DELETE must come from this host. GET is
-    # unchanged. The forms router uses the same dependency.
+    # not checked here. The language switch is the GET that sets a
+    # cookie, and that route calls origin_allowed itself. The forms
+    # router uses the same dependency.
     dependencies=[Depends(require_same_origin)],
 )
 
@@ -206,12 +208,23 @@ def instrument_detail(
 
 @router.get("/language/{language_code}", include_in_schema=False)
 def switch_language(request: Request, language_code: str, next: str = ""):
-    """Store the language in a cookie and redirect back to /ui."""
+    """Store the language in a cookie and redirect back to /ui.
+
+    Unknown codes are the HTML 404 and do not set a cookie. A known
+    code must pass ``origin_allowed`` (see that module). A same-origin
+    link click has no ``Origin`` and a same-origin ``Referer``, and
+    that passes. Neither header (the address bar or a bookmark) is
+    the HTML 403, and the cookie is left as it was.
+    """
     if language_code not in SUPPORTED_LANGUAGES:
         return _with_ui_headers(
             render(request, "not_found.html", status_code=404)
         )
+    if not origin_allowed(request):
+        raise OriginRejected()
     response = RedirectResponse(safe_next(next), status_code=303)
+    # Secure waits for HTTPS (#56). On this HTTP demo a Secure cookie
+    # would not be stored, so the language switch would not stick.
     response.set_cookie(
         key=LANGUAGE_COOKIE,
         value=language_code,

@@ -96,7 +96,9 @@ def test_referer_is_only_the_fallback_and_get_is_not_checked():
         headers={"referer": "http://127.0.0.1/ui/companies/new"},
     )
     assert origin_allowed(swapped) is False
-    # GET does not change rows, so a foreign Origin is ignored.
+    # The router dependency still ignores GET. The language switch
+    # is the GET that sets a cookie, and that route calls
+    # origin_allowed itself instead of this dependency.
     require_same_origin(
         _request(method="GET", headers={"origin": "http://evil.example"})
     )

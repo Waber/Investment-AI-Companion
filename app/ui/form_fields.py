@@ -3,8 +3,10 @@
 The browser posts strings. Empty optional company fields become
 ``None`` (a blank website is "no website", not the empty string).
 Empty metric numbers become ``None``, which is "no data" on the
-detail page. Surrounding whitespace is removed from the company
-name before it is saved. The text the user typed is kept for the
+detail page. ``normalized_company_name`` is the one name rule for
+create and for edit: surrounding whitespace is removed on save, and
+a name with no visible character is rejected before the write model.
+The text the user typed is kept for the
 other fields and handed to ``CompanyCreate``, ``CompanyUpdate``,
 ``FinancialMetricsCreate``, or ``FinancialMetricsUpdate``. Those
 models own the ticker, currency, length, URL, date, and finite-number
@@ -148,12 +150,48 @@ def metrics_values(row):
     return values
 
 
+def normalized_company_name(value):
+    """Return the name to save, or None when nothing visible remains.
+
+    Create and edit both call this. It is the form-layer rule.
+    ``CompanyCreate`` and ``CompanyUpdate`` are not changed, and
+    ``CompanyCreate`` still accepts ``""``.
+
+    Surrounding whitespace is removed with ``str.strip``. That
+    includes a normal space, a newline, NBSP (U+00A0), and the
+    ideographic space (U+3000). ``strip`` does not remove a
+    zero-width character.
+
+    The stripped text is blank when it is empty, or when every
+    remaining character is whitespace or Unicode category C.
+    Category Cf (format) is the zero-width case: U+200B, U+200C,
+    U+200D, and U+FEFF. The other C categories (control, surrogate,
+    private use, unassigned) are not visible either, so they are
+    blank for the same reason. A visible character keeps the
+    stripped text, including a zero-width mark beside it.
+    """
+    if not isinstance(value, str):
+        value = "" if value is None else str(value)
+    stripped = value.strip()
+    for char in stripped:
+        if char.isspace():
+            continue
+        # C covers control, format, surrogate, private use, unassigned.
+        if unicodedata.category(char).startswith("C"):
+            continue
+        return stripped
+    return None
+
+
 def company_payload(values):
     """Map posted strings onto company create/update fields.
 
-    The name loses surrounding whitespace here, in the form layer.
-    The write model does not strip it. Ticker text is left as typed;
-    ``normalize_ticker`` strips and uppercases that field.
+    The name goes through ``normalized_company_name``, the helper
+    create and edit share. A blank name stays a string (the stripped
+    text) so the write model still receives ``str``. The 422 is
+    applied in ``validate_company``. Ticker text is left as typed;
+    ``normalize_ticker`` strips and uppercases that field. The
+    company write model does not strip the name.
     """
     payload = {}
     for field in COMPANY_FIELDS:
@@ -161,7 +199,8 @@ def company_payload(values):
         if not isinstance(raw, str):
             raw = "" if raw is None else str(raw)
         if field == "name":
-            payload[field] = raw.strip()
+            normalized = normalized_company_name(raw)
+            payload[field] = raw.strip() if normalized is None else normalized
         elif field in _OPTIONAL_COMPANY and raw.strip() == "":
             payload[field] = None
         else:
@@ -268,33 +307,14 @@ def catalog_key_for_repository_error(exc):
     return _VALUE_ERROR_KEYS.get(str(exc), "error.constraint")
 
 
-def _name_is_blank(values):
-    """True when the posted name has no visible character.
-
-    ``CompanyCreate`` accepts ``""``. The form does not. ``strip``
-    removes spaces, including ``\\u00a0`` and ``\\u3000``. A name that
-    is only format characters (category Cf), such as ``\\u200b``, is
-    blank too. The check lives here so the model stays unchanged.
-    """
-    name = values.get("name", "")
-    if not isinstance(name, str):
-        name = "" if name is None else str(name)
-    for char in name:
-        if char.isspace():
-            continue
-        # C covers control, format, surrogate, private use, unassigned.
-        if unicodedata.category(char).startswith("C"):
-            continue
-        return False
-    return True
-
-
 def validate_company(values, *, update):
     """Return ``(model, field_errors, form_error_key)``.
 
     ``model`` is None when validation failed. The raw ``values`` stay
-    with the caller for the inputs. A whitespace-only name is
-    ``error.required`` even when the write model would accept it.
+    with the caller for the inputs. Create (``update`` false) and
+    edit (``update`` true) both use ``normalized_company_name``. A
+    name with no visible character is ``error.required`` even when
+    the write model would accept it.
     """
     model_type = CompanyUpdate if update else CompanyCreate
     try:
@@ -304,7 +324,7 @@ def validate_company(values, *, update):
         model = None
     else:
         errors, form_key = {}, None
-    if _name_is_blank(values):
+    if normalized_company_name(values.get("name", "")) is None:
         rest = {key: value for key, value in errors.items() if key != "name"}
         errors = {"name": "error.required", **rest}
         model = None
