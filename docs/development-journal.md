@@ -1,5 +1,48 @@
 # Development Journal
 
+## 2026-10-21 - Negative zero, price rollback, SQLite check pin
+
+- Scope: QA approved PR #94 at `36d171b` on content. Three small
+  items on the same branch, one commit. Revision `0006` still
+  revises `0003`. The re-chain to `0005` waits until #91 merges.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: `Decimal('-0')` compares equal to zero and still has a
+  sign. `quantize` keeps that sign. SQLite then stores
+  `-0.00000000`. PostgreSQL stores `0`, the read-back does not
+  match, and the POST is 400. The price model sets the value to
+  `Decimal(0)` before rounding when it is already zero, and again
+  after rounding. The second step matters for a value such as
+  `-0.000000001`, which is not zero yet and still rounds to
+  negative zero. A forced read-back (a different decimal,
+  `UnreadablePrice`, null, or `1e400`) raises, rolls the write
+  back, leaves no new row, and leaves the earlier row unchanged.
+  `upsert_many` is one transaction: the lie is on the last bar, so
+  an earlier insert in that batch has already passed the check, and
+  rollback removes that insert and the update of the stored row.
+  The SQLite `CAST AS REAL` check accepts `'not-a-price'` (the cast
+  is 0) and the float-equal pair `1000000000000.00000000` /
+  `999999999999.99999999`. The API returns 422 for both. One
+  sentence in `docs/demo-data.md` says the Pydantic validators are
+  the authoritative rule on SQLite.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market-data calls. Scoped black, isort, and flake8 passed.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1594 passed, 143 deselected, coverage 95.88%
+  (3842 statements, 132 miss, 1080 branches, 55 partial).
+  `app/repositories/price_bar_repository.py` is fully covered on
+  that run, including the mismatch rollback. Local PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 143 passed, 1594 deselected. The Actions run id is recorded
+  on the pull request after both jobs are green. This commit is
+  the behavior change, not a CI note.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 17:31 to 17:40.
+- Next: both GitHub Actions jobs on this head, then the owner
+  reviews PR #94. Agents do not merge. After #90 and #91 merge,
+  set `down_revision` to `0005`.
+
 ## 2026-10-21 - Rebase price bars onto master as revision 0006
 
 - Scope: rebase `cursor/price-bar-followups-85-5c38` onto

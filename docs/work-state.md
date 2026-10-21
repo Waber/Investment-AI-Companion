@@ -1,6 +1,48 @@
 # Current Work State
 
+## QA follow-up on price bars (PR #94): 2026-10-21
+
+- Branch `cursor/price-bar-followups-85-5c38`. QA approved the
+  content at `36d171b`. This section is the small follow-up on
+  that same branch. PR #94 stays a draft and still says Closes #85.
+  Not merged.
+- Completed: negative zero is stored as zero. `Decimal('-0')` and a
+  value that rounds to negative zero (`-0.000000001`) both POST as
+  201 with open `0.00000000` on SQLite and PostgreSQL. A read-back
+  that does not match the sent price rolls `create` back: the
+  exception is raised, the new row is absent, and the earlier row
+  is unchanged. `upsert_many` does the same for a whole batch, so
+  a later mismatch does not leave an earlier insert or an update.
+  A raw SQLite insert of `'not-a-price'` and of open
+  `1000000000000.00000000` with high `999999999999.99999999` is
+  accepted by `CAST AS REAL`. The API returns 422 for both.
+  `docs/demo-data.md` says the Pydantic validators are the
+  authoritative rule on SQLite. Revision `0006` still revises
+  `0003`. `templates/`, `static/`, and `app/ui/` were not edited.
+- Incomplete: #90 is revision `0004` and #91 is revision `0005`.
+  They merge before this file. The final re-chain sets
+  `down_revision` from `0003` to `0005`. That re-chain is not part
+  of this commit. #87 is already on master as `0003`.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1594 passed, 143 deselected, coverage 95.88%
+  (3842 statements, 132 miss, 1080 branches, 55 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `-m integration` -> 143 passed, 1594 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. The Actions run id goes on the pull request, not in a
+  later docs-only commit.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: both GitHub Actions jobs on this head (SQLite and
+  PostgreSQL), then the owner reviews PR #94 again. Agents do not
+  merge. After #90 and #91 merge, set `down_revision` to `0005`.
+
 ## QA round 1 on price bars (PR #94): 2026-10-21
+
+Superseded by the QA follow-up section above. CI on `36d171b`
+was green, and QA then approved that content.
 
 - Branch `cursor/price-bar-followups-85-5c38`, rebased onto
   `origin/master` `ad44969` (#89). PR #94 says Closes #85.
