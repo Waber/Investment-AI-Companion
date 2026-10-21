@@ -42,11 +42,13 @@
   name with ZWNJ (U+200C) was stored between the letters.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 06:46 to 07:05.
-- Next: open the pull request (Refs #80, not merged). Wait for
-  both GitHub Actions jobs. The owner reviews and merges with
-  "Rebase and merge". Agents do not merge. #80 stays open until
-  QA, Security, and Code Review approve, and until the HTTPS
-  cookie in #56.
+- Pull request: [PR #82](https://github.com/Waber/Investment-AI-Companion/pull/82)
+  (Refs #80), opened on 2026-10-21. Not merged. GitHub Actions
+  on this head is not recorded yet.
+- Next: wait for both GitHub Actions jobs, then record the run.
+  The owner reviews and merges with "Rebase and merge". Agents
+  do not merge. #80 stays open until QA, Security, and Code
+  Review approve, and until the HTTPS cookie in #56.
 
 ## 2026-10-21 - Rebase the UI follow-up onto master after #75 and #78
 

@@ -3,8 +3,10 @@
 ## Duplicate codes and company-name alignment (#80, remainder): 2026-10-21
 
 - Branch `cursor/ui-duplicate-codes-name-align-fec9`, based on
-  `origin/master` `6d45f01`. Pull request not opened yet.
-  Refs #80. Not merged.
+  `origin/master` `6d45f01`.
+  [PR #82](https://github.com/Waber/Investment-AI-Companion/pull/82)
+  says Refs #80. Not merged. GitHub Actions for this head is
+  not recorded yet.
 - Completed: company create and edit map `DuplicateTickerError.code`
   (`duplicate_ticker`) and `DuplicateIsinError.code`
   (`duplicate_isin`) to the localized field sentences. The branch
@@ -30,9 +32,9 @@
   error on edit; Persian ZWNJ stored as U+200C.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: commit, push, open the pull request (Refs #80),
-  and wait for both GitHub Actions jobs. The owner reviews and
-  merges with "Rebase and merge". Agents do not merge.
+- Next action: wait for both GitHub Actions jobs and record the
+  run. The owner reviews PR #82 and merges with "Rebase and
+  merge". Agents do not merge.
 
 ## UI forms follow-up (#80, part): 2026-10-20
 
