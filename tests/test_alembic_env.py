@@ -19,10 +19,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_alembic_script_has_one_head():
-    """Revision 0003 continues 0002. A second head would fork upgrades."""
+    """One head: 0006 revises 0003, and 0003 revises 0002.
+
+    Pull requests #90 and #91 add 0004 and 0005 and merge first.
+    The final re-chain points 0006 at 0005. Until then the parent
+    is 0003, so an upgrade still has a single head.
+    """
     config = Config(str(ROOT / "alembic.ini"))
     heads = ScriptDirectory.from_config(config).get_heads()
-    assert len(heads) == 1
+    assert heads == ["0006"]
 
 
 def test_version_num_format_is_a_literal_percent():

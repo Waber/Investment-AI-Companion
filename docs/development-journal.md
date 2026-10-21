@@ -1,14 +1,48 @@
 # Development Journal
 
+## 2026-10-21 - Rebase price bars onto master as revision 0006
+
+- Scope: rebase `cursor/price-bar-followups-85-5c38` onto
+  `origin/master` `ad44969` (#89, after #87). The price migration
+  is `0006_price_bar_numeric.py`, revision `0006`,
+  `down_revision` `0003`. #90 is `0004` and #91 is `0005`. They
+  merge before this file. The final re-chain sets `down_revision`
+  to `0005`. `templates/`, `static/`, and `app/ui/` were not
+  edited.
+- Decisions: master already owns revision `0003` (unique ticker
+  index). A second file also numbered `0003` would be a second
+  Alembic head, and pull-request CI does not start on a conflict.
+  `0006` revises `0003` for now, so `get_heads()` is `['0006']`.
+  Upgrade, downgrade to `0002`, and upgrade again still pass on
+  SQLite and PostgreSQL. The SQLite rebuild is still only
+  `price_bars`. The migration still uses frozen literals and does
+  not import the application.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market-data calls. Scoped black, isort, and flake8 passed
+  on the Python this change touches. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1587 passed, 142 deselected, coverage 95.69%
+  (3838 statements, 139 miss, 1076 branches, 57 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 142 passed, 1587 deselected. The Actions run id is recorded
+  on the pull request after both jobs are green. This commit is
+  the rebase and the renumber, not a CI note.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 17:13 to 17:20.
+- Next: the owner reviews PR #94. Agents do not merge. After #90
+  and #91 merge, set `down_revision` to `0005`.
+
 ## 2026-10-21 - QA round 1 on price bars (PR #94)
 
 - Scope: QA round 1 on PR #94, head `8360ef8`, was not approved.
   Same branch `cursor/price-bar-followups-85-5c38`. The contract on
   both engines: the API never returns a price string different from
   the one it stored, and no read returns HTTP 500.
-  `templates/`, `static/`, and `app/ui/` were not edited. Revision
-  `0003` keeps its number. Re-chain still waits until #87, #90, or
-  #91 merges.
+  `templates/`, `static/`, and `app/ui/` were not edited. The price
+  migration is revision `0006` with `down_revision` `0003`. #90
+  (`0004`) and #91 (`0005`) merge first. The final re-chain sets
+  `down_revision` to `0005`.
 - Decisions: `PriceAmount` is a SQLAlchemy `TypeDecorator`.
   `load_dialect_impl` uses `Numeric(20, 8)` on PostgreSQL and
   `TEXT` on SQLite. `process_bind_param` writes the canonical
@@ -58,8 +92,8 @@
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 16:38 to 17:00.
 - Next: the owner reviews PR #94 again and merges with
-  "Rebase and merge". Agents do not merge. If #87, #90, or #91
-  merges first, re-chain revision `0003`.
+  "Rebase and merge". Agents do not merge. After #90 and #91
+  merge, set this migration's `down_revision` to `0005`.
 
 ## 2026-10-21 - Price bar follow-ups (#85)
 
@@ -89,11 +123,12 @@ that fix.
   then half-even rounding to 8 places. FastAPI asks Pydantic for
   JSON mode, and Pydantic encodes `Decimal` as a string. The
   response uses fixed-point, so `0.00000001` is not `1E-8`. A
-  JSON number or a numeric string is accepted on input. Revision
-  `0003` revises `0002`. Open pull requests #87, #90, and #91
-  also add revisions, so this file is re-chained if one of them
-  merges first and takes `0003`. SQLite declares the same numeric
-  type; its numeric affinity stores a real. PostgreSQL stores an
+  JSON number or a numeric string is accepted on input. The price
+  migration is `0006` and revises `0003` (the ticker index from
+  #87). #90 is `0004` and #91 is `0005`. They merge first, and the
+  final re-chain sets `down_revision` to `0005`. SQLite declares
+  the same numeric type; its numeric affinity stores a real.
+  PostgreSQL stores an
   exact numeric.
   `docs/demo-data.md` no longer says the `/ui` badge matches
   `[IAC-DEMO-V1]` only. The badge matches a description that
@@ -114,8 +149,8 @@ that fix.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 16:05 to 16:28.
 - Next: the owner reviews the pull request and merges with
-  "Rebase and merge". Agents do not merge. If #87, #90, or #91
-  merges first, re-chain revision `0003`.
+  "Rebase and merge". Agents do not merge. After #90 and #91
+  merge, set this migration's `down_revision` to `0005`.
 
 ## 2026-10-21 - Re-chain notes and theses to revision 0005
 

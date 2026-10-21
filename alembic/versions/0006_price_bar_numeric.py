@@ -1,7 +1,7 @@
 """store OHLC prices exactly
 
-Revision ID: 0003
-Revises: 0002
+Revision ID: 0006
+Revises: 0003
 Create Date: 2026-10-21
 
 ``open_price``, ``high_price``, ``low_price``, and ``close_price``
@@ -20,11 +20,12 @@ again on the numeric columns. On SQLite they compare
 candle such as low 9 and open 10. The API model is the exact check.
 This rebuilds ``price_bars`` only. It does not rebuild ``companies``.
 
-This is the next number after master's 0002. Open pull requests
-#87, #90, and #91 also add revisions. When one of those merges,
-re-chain this file onto the new head and renumber it if 0003 was
-taken. The literals below are frozen on purpose: a migration does
-not import the application.
+This revision is ``0006`` and it revises ``0003`` (the unique
+ticker index). Pull requests #90 and #91 add ``0004`` and ``0005``
+and merge before this file. The final re-chain sets
+``down_revision`` to ``0005``. Until those merge, the parent stays
+``0003`` so this branch has one Alembic head. The literals below
+are frozen on purpose: a migration does not import the application.
 
 PostgreSQL rounds each stored float half away from zero to 8 places
 while it changes the type. SQLite rewrites each stored float to the
@@ -39,8 +40,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0003"
-down_revision = "0002"
+revision = "0006"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 

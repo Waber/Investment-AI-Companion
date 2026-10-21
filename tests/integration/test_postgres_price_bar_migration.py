@@ -209,8 +209,8 @@ def _column_types(connection):
     }
 
 
-def test_revision_0003_changes_float_prices_to_numeric(postgres_engine):
-    """A float stored at 0002 is numeric after 0003, on PostgreSQL."""
+def test_revision_0006_changes_float_prices_to_numeric(postgres_engine):
+    """A float stored at 0002 is numeric after 0006, on PostgreSQL."""
     with postgres_engine.connect() as connection:
         _scratch(connection)
         try:
