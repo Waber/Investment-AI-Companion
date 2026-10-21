@@ -1,5 +1,40 @@
 # Development Journal
 
+## 2026-10-21 - QA follow-up: ticker collisions ignore case and surrounding spaces
+
+- Scope: QA on pull request #87 at `d50ce1c`, pass with findings.
+  Same branch `cursor/ticker-unique-and-alembic-0e9d`. No rebase.
+  Revision `0002` is not renumbered. Pull request #83 also adds a
+  revision `0002` and merges first. After that lands, this revision
+  becomes `0003` with `down_revision` pointing at #83's `0002`.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: the migration and
+  `scripts.check_duplicate_tickers` group by
+  `UPPER(TRIM(ticker))`, which is the application's `strip` and
+  `upper`. `aapl` and `AAPL ` are one collision. The message quotes
+  the stored text, including the trailing space. The rows are not
+  rewritten. An `OperationalError` (database unreachable, or the
+  read failing) prints one line to stderr and exits 1, with no
+  traceback. A missing `companies` table found by the inspector is
+  still exit 2. `alembic.script.ScriptDirectory.get_heads()` is
+  asserted to have length 1, so this branch stays a single head
+  until the later renumber.
+- Verification: no `.env`. `SECRET_KEY` comes from
+  `tests/conftest.py`. SQLite CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  : 1485 passed, 128 deselected, coverage 95.94%. PostgreSQL
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration`: 128 passed, 1485 deselected. Scoped
+  black, isort, and flake8 passed on the Python this change
+  touches. PostgreSQL 16.15. GitHub Actions for this commit is
+  recorded on the pull request when it finishes, not in a later
+  docs-only commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 15:27 to 15:32.
+- Next: push this commit. Do not renumber until #83 is on master.
+  The owner reviews pull request #87. Agents do not merge.
+
 ## 2026-10-21 - Ticker uniqueness, shared name rule, and Alembic follow-ups
 
 - Scope: issues #79 and #8 together, with the `normalize_name`

@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app.core.config import settings
 from app.core.database import create_db_engine
 from tests.company_migration import (
@@ -15,6 +16,13 @@ from tests.company_migration import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_alembic_script_has_one_head():
+    """Revision 0002 continues 0001. A second head would fork upgrades."""
+    config = Config(str(ROOT / "alembic.ini"))
+    heads = ScriptDirectory.from_config(config).get_heads()
+    assert len(heads) == 1
 
 
 def test_version_num_format_is_a_literal_percent():

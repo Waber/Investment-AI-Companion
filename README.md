@@ -159,8 +159,10 @@ process stops before it serves and names the missing columns.
   applies revision `0001` (the columns, the
   `ck_companies_instrument_type` CHECK, and the `uq_companies_isin`
   unique index) and revision `0002` (the `uq_companies_ticker`
-  unique index). `0002` stops if a ticker is already stored more
-  than once and names those tickers. It does not delete rows.
+  unique index). `0002` stops when stored tickers collide after
+  trim and uppercase, including a different case or surrounding
+  spaces such as `aapl` and `AAPL `. It names the stored text and
+  does not rewrite or delete those rows.
   `python -m scripts.check_duplicate_tickers DATABASE_URL` reports
   the same list before you upgrade.
 - A database created by an older startup `create_all` has `companies`

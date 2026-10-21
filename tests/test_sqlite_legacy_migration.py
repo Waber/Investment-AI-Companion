@@ -180,7 +180,7 @@ def test_duplicate_tickers_stop_the_upgrade_without_a_unique_index(tmp_path):
             upgrade_head(connection)
 
     message = str(error.value)
-    assert "DUP (2 rows)" in message
+    assert "'DUP' (2 rows)" in message
     assert "did not change those rows" in message
     with engine.connect() as connection:
         indexes = {index["name"] for index in inspect_indexes(connection)}
@@ -193,6 +193,47 @@ def test_duplicate_tickers_stop_the_upgrade_without_a_unique_index(tmp_path):
             .all()
         )
         assert rows == ["DUP", "DUP"]
+    engine.dispose()
+
+
+def test_case_and_space_collisions_stop_the_sqlite_upgrade(tmp_path):
+    """``aapl`` and ``AAPL `` are named, and neither row is rewritten."""
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'case.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, "
+                "name VARCHAR(255) NOT NULL, "
+                "ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) VALUES "
+                "(1, 'Lower', 'aapl'), (2, 'Padded', 'AAPL ')"
+            )
+        )
+
+    with pytest.raises(DuplicateTickersError) as error:
+        with engine.connect() as connection:
+            upgrade_head(connection)
+
+    message = str(error.value)
+    assert "'aapl'" in message
+    assert "'AAPL '" in message
+    assert "did not change those rows" in message
+    with engine.connect() as connection:
+        indexes = {index["name"] for index in inspect_indexes(connection)}
+        assert "uq_companies_ticker" not in indexes
+        rows = (
+            connection.execute(
+                text("SELECT ticker FROM companies ORDER BY id")
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == ["aapl", "AAPL "]
     engine.dispose()
 
 
