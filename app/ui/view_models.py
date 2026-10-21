@@ -4,7 +4,7 @@ Templates bind to these objects. They do not read ``CompanyDB``.
 Issue #26 can swap the query that loads rows; the field names here
 already match an instrument (type, source, synthetic flag, as-of).
 Until that model exists, every company is presented as a stock, and
-a description that starts with the demo-v1 marker is synthetic.
+a description that starts with the ``[IAC-DEMO-`` prefix is synthetic.
 """
 
 import math
@@ -15,8 +15,12 @@ from urllib.parse import urlsplit
 
 from app.core.utc_datetime import as_utc
 
-# The fixture marker. Kept here so the UI does not import the seeder.
-DEMO_MARKER = "[IAC-DEMO-V1]"
+# Fixture descriptions start with this prefix. The V1 marker is
+# "[IAC-DEMO-V1]". Later fixtures, including V2, use the same
+# prefix. Kept here so the UI does not import the seeder. The
+# comparison in ``to_instrument`` is case-sensitive and does not
+# strip the stored description.
+DEMO_MARKER = "[IAC-DEMO-"
 DEMO_SOURCE = "demo-v1"
 # Every current row is a company. #26 introduces stock, ETF, and ETC.
 COMPANY_INSTRUMENT_TYPE = "stock"
