@@ -1,5 +1,26 @@
 # Development Journal
 
+## 2026-10-21 - Rebase instrument type onto master after PR #78
+
+- Scope: rebase `cursor/instrument-type-isin-1db6` onto
+  `origin/master` `d772409` (PR #78 merged). No new behavior.
+  Conflicts in `app/models/company.py` keep both sets:
+  `name` `min_length=1` and `max_length=255`, and `ticker`
+  `max_length=TICKER_MAX_LENGTH` with `pattern=TICKER_PATTERN`.
+  `normalize_name`, ISIN, `instrument_type`, and the `isascii`
+  currency check stay. Journal and work-state conflicts keep
+  both the collector entries and the instrument-type entries.
+- Verification: no `.env`, `DATABASE_URL` unset,
+  `REQUIRE_POSTGRES=1`. Every rebased commit passed the SQLite
+  CI command and `pytest -m integration`. The tip
+  `9d4c0e9` is 1458 passed, 124 deselected, coverage 95.90%
+  on SQLite, and 124 passed, 1458 deselected on PostgreSQL.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC, 2026-10-21): rebase started about 06:11.
+- Next: the owner merges PR #75 with "Rebase and merge".
+  Agents do not merge.
+
 ## 2026-10-20 - Code review round 1 on instrument type and ISIN
 
 - Scope: code review on
