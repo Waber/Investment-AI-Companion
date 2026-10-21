@@ -104,3 +104,32 @@ async def assert_failed_post_leaves_no_row(client, ticker):
     rows = listed.json()
     assert [row["date"] for row in rows] == ["2026-05-01"]
     assert rows[0]["open"] == "10.50000000"
+
+
+async def assert_negative_zero_is_zero(client, ticker):
+    """POST open ``-0`` returns 201 and ``0.00000000``.
+
+    ``Decimal('-0')`` compares equal to zero and still has a sign.
+    Left alone, SQLite stores ``-0.00000000``. PostgreSQL drops the
+    sign, the read-back does not match, and the POST is 400.
+    The other three prices are ``0`` so the candle stays valid.
+    """
+    created_company = await client.post(
+        "/api/v1/companies/", json=_company_body(ticker)
+    )
+    assert created_company.status_code == 201, created_company.text
+    instrument_id = created_company.json()["id"]
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    created = await client.post(
+        path, json=flat_price("0", open="-0", date="2026-06-01")
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["open"] == "0.00000000"
+    # This is not zero yet. Rounding half-even to 8 places makes
+    # negative zero, which has the same sign split as "-0".
+    rounded = await client.post(
+        path,
+        json=flat_price("0", open="-0.000000001", date="2026-06-02"),
+    )
+    assert rounded.status_code == 201, rounded.text
+    assert rounded.json()["open"] == "0.00000000"

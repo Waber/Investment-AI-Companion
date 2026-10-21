@@ -17,10 +17,12 @@ from app.api.prices import _bar_from_collector, _decimal_price
 from app.data_collectors.base import PriceBar as CollectedPriceBar
 from app.data_collectors.base import Provenance, ProviderError, Sourced
 from app.data_collectors.fake import FakeCollector
+from app.models.price_amount import UnreadablePrice
 from app.models.price_bar import VOLUME_MAX, PriceBar, PriceBarCreate
 from tests.price_round_trip import (
     assert_exact_round_trip,
     assert_failed_post_leaves_no_row,
+    assert_negative_zero_is_zero,
 )
 
 RETRIEVED = datetime(2026, 9, 30, 18, 0, tzinfo=timezone.utc)
@@ -424,6 +426,11 @@ async def test_failed_price_post_leaves_no_row(client):
 
 
 @pytest.mark.asyncio
+async def test_negative_zero_is_zero(client):
+    await assert_negative_zero_is_zero(client, "DEMO_NEG0")
+
+
+@pytest.mark.asyncio
 async def test_unreadable_price_is_skipped(client, caplog):
     """One bad stored cell does not 500 the series.
 
@@ -462,6 +469,79 @@ async def test_unreadable_price_is_skipped(client, caplog):
     assert [row["date"] for row in listed.json()] == ["2026-01-05"]
     assert listed.json()[0]["open"] == "10.00000000"
     assert "stored price" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_sqlite_cast_check_accepts_values_the_api_rejects(client):
+    """SQLite's CAST AS REAL check is not the decimal rule.
+
+    ``CAST('not-a-price' AS REAL)`` is 0, so garbage passes.
+    ``1000000000000.00000000`` and ``999999999999.99999999`` are the
+    same float, so a high below that open also passes. The API
+    rejects both.
+    """
+    instrument_id = await _company(client, ticker="DEMO_CAST")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    with client.app.state.testing_session_local() as db:
+        db.execute(
+            text(
+                "INSERT INTO price_bars ("
+                "instrument_id, bar_date, open_price, high_price, "
+                "low_price, close_price, currency, source, retrieved_at"
+                ") VALUES ("
+                ":instrument_id, '2020-03-01', "
+                "'not-a-price', 'not-a-price', 'not-a-price', "
+                "'not-a-price', 'PLN', 'cast-check', "
+                "'2020-03-01 00:00:00'"
+                "), ("
+                ":instrument_id, '2020-03-02', "
+                "'1000000000000.00000000', "
+                "'999999999999.99999999', "
+                "'999999999999.99999999', "
+                "'1000000000000.00000000', "
+                "'PLN', 'cast-check', '2020-03-02 00:00:00'"
+                ")"
+            ),
+            {"instrument_id": instrument_id},
+        )
+        db.commit()
+        stored = db.execute(
+            text(
+                "SELECT bar_date, open_price, high_price "
+                "FROM price_bars WHERE source = 'cast-check' "
+                "ORDER BY bar_date"
+            )
+        ).all()
+    assert [tuple(row) for row in stored] == [
+        ("2020-03-01", "not-a-price", "not-a-price"),
+        (
+            "2020-03-02",
+            "1000000000000.00000000",
+            "999999999999.99999999",
+        ),
+    ]
+    garbage = await client.post(
+        path,
+        json=_bar(
+            date="2026-03-01",
+            open="not-a-price",
+            high="not-a-price",
+            low="not-a-price",
+            close="not-a-price",
+        ),
+    )
+    assert garbage.status_code == 422, garbage.text
+    boundary = await client.post(
+        path,
+        json=_bar(
+            date="2026-03-02",
+            open="1000000000000.00000000",
+            high="999999999999.99999999",
+            low="999999999999.99999999",
+            close="1000000000000.00000000",
+        ),
+    )
+    assert boundary.status_code == 422, boundary.text
 
 
 def _volume_maxima(node):
@@ -873,9 +953,8 @@ async def test_provider_error_is_a_fixed_502(client):
     assert "secret" not in response.text
 
 
-def _race_repo():
-    """A repository whose next commit raises, and a stored company."""
-    from sqlalchemy.exc import IntegrityError
+def _sqlite_price_repo():
+    """An in-memory price repository and one stored company."""
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
 
@@ -896,12 +975,44 @@ def _race_repo():
     session.commit()
     instrument_id = session.query(CompanyDB).one().id
     repo = PriceBarRepository(session)
+    return engine, session, repo, instrument_id
+
+
+def _race_repo():
+    """A repository whose next commit raises, and a stored company."""
+    from sqlalchemy.exc import IntegrityError
+
+    engine, session, repo, instrument_id = _sqlite_price_repo()
 
     def fail_commit():
         raise IntegrityError("INSERT", {}, Exception("duplicate key"))
 
     session.commit = fail_commit
     return engine, session, repo, instrument_id
+
+
+def _lie_about_open(session, read_back, only_date=None):
+    """Report a different open from the one just written.
+
+    The column stores an exact decimal, so a real round-trip matches.
+    Replacing the value after refresh is how the test reaches the
+    rollback. ``only_date`` limits the lie to one session, so an
+    earlier bar in the same batch can pass the check.
+    """
+    real_refresh = session.refresh
+
+    def refresh(instance, *args, **kwargs):
+        real_refresh(instance, *args, **kwargs)
+        if only_date is None or instance.bar_date == only_date:
+            instance.open_price = read_back
+
+    session.refresh = refresh
+
+
+def _stored_price_rows(session):
+    from app.models.database_models import PriceBarDB
+
+    return session.query(PriceBarDB).order_by(PriceBarDB.bar_date.asc()).all()
 
 
 def test_a_lost_insert_race_is_already_stored_when_the_row_remains():
@@ -934,6 +1045,92 @@ def test_a_lost_insert_race_is_already_stored_when_the_row_remains():
         assert "duplicate key" not in str(upserted.value)
         assert upserted.value.__context__ is None
         assert upserted.value.__cause__ is None
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "read_back",
+    [
+        Decimal("1.00000000"),
+        UnreadablePrice(),
+        None,
+        Decimal("1e400"),
+    ],
+)
+def test_create_rolls_back_when_the_read_back_differs(read_back):
+    """A read-back that is not the sent price stores nothing.
+
+    The row committed earlier stays, with its original prices.
+    """
+    engine, session, repo, instrument_id = _sqlite_price_repo()
+    try:
+        repo.create(instrument_id, PriceBarCreate(**_bar()))
+        _lie_about_open(session, read_back)
+        with pytest.raises(
+            ValueError, match="^Price bar could not be stored$"
+        ):
+            repo.create(
+                instrument_id, PriceBarCreate(**_bar(date="2026-01-06"))
+            )
+        rows = _stored_price_rows(session)
+        assert [row.bar_date for row in rows] == [date(2026, 1, 5)]
+        kept = rows[0]
+        assert kept.open_price == Decimal("10.00000000")
+        assert kept.high_price == Decimal("12.00000000")
+        assert kept.low_price == Decimal("9.00000000")
+        assert kept.close_price == Decimal("11.00000000")
+        assert kept.volume == 100
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_upsert_many_rolls_back_the_whole_batch_on_a_mismatch():
+    """One bad read-back drops the whole batch.
+
+    The update of the stored row and the new rows share one
+    transaction. The lie is on the last bar, so the earlier insert
+    has already passed the check when the failure happens. Neither
+    that insert nor the update remains.
+    """
+    engine, session, repo, instrument_id = _sqlite_price_repo()
+    try:
+        repo.create(instrument_id, PriceBarCreate(**_bar()))
+        _lie_about_open(session, Decimal("1.00000000"), date(2026, 1, 7))
+        updated = PriceBarCreate(
+            **_bar(open="20", high="20", low="20", close="20")
+        )
+        first_new = PriceBarCreate(
+            **_bar(
+                date="2026-01-06",
+                open="5",
+                high="5",
+                low="5",
+                close="5",
+            )
+        )
+        second_new = PriceBarCreate(
+            **_bar(
+                date="2026-01-07",
+                open="6",
+                high="6",
+                low="6",
+                close="6",
+            )
+        )
+        with pytest.raises(
+            ValueError, match="^Price bar could not be stored$"
+        ):
+            repo.upsert_many(instrument_id, [updated, first_new, second_new])
+        rows = _stored_price_rows(session)
+        assert [row.bar_date for row in rows] == [date(2026, 1, 5)]
+        kept = rows[0]
+        assert kept.open_price == Decimal("10.00000000")
+        assert kept.high_price == Decimal("12.00000000")
+        assert kept.low_price == Decimal("9.00000000")
+        assert kept.close_price == Decimal("11.00000000")
     finally:
         session.close()
         engine.dispose()

@@ -11,6 +11,7 @@ from sqlalchemy import text
 from tests.price_round_trip import (
     assert_exact_round_trip,
     assert_failed_post_leaves_no_row,
+    assert_negative_zero_is_zero,
 )
 
 pytestmark = pytest.mark.integration
@@ -43,3 +44,8 @@ async def test_postgres_failed_price_post_leaves_no_row(postgres_client):
     await assert_failed_post_leaves_no_row(
         postgres_client, "DEMO_EXACT_PG_FAIL"
     )
+
+
+@pytest.mark.asyncio
+async def test_postgres_negative_zero_is_zero(postgres_client):
+    await assert_negative_zero_is_zero(postgres_client, "DEMO_NEG0_PG")

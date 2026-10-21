@@ -148,7 +148,10 @@ string is accepted on input, and extra digits are rounded half-even
 to 8 places. Volume stays a JSON integer. The string `"100"` is
 rejected. PostgreSQL stores `Numeric(20, 8)`. SQLite stores that same
 8-place string as TEXT and reads it back as the same decimal, so both
-engines return the price string that was stored.
+engines return the price string that was stored. On SQLite the database
+checks compare `CAST(column AS REAL)`, which is not an exact decimal
+comparison, so the Pydantic validators are the authoritative rule on
+SQLite.
 
 `POST /api/v1/instruments/{id}/prices/refresh`
 upserts bars from the configured collector. With `DATA_COLLECTOR=fake`

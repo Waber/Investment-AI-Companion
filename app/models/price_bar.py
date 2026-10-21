@@ -173,11 +173,24 @@ class PriceBarBase(BaseModel):
         the decimal point does not fit. ``quantize_price`` turns an
         exponent the decimal context cannot round (``1e400``) into
         ``ValueError``, so this field is HTTP 422 and not HTTP 500.
+        Negative zero, including a value that rounds to it, is stored
+        as zero. A sign on zero is not a different price, and the two
+        databases do not keep that sign the same way.
         """
         if value is None:
             return None
+        # Decimal('-0') compares equal to zero and still carries a
+        # sign. quantize keeps that sign. SQLite would then store
+        # "-0.00000000", while PostgreSQL stores 0 and the read-back
+        # check rejects the write. Collapse the sign before rounding.
+        if value == 0:
+            value = Decimal(0)
         # Non-finite values are already rejected by allow_inf_nan.
         quantized = quantize_price(value)
+        # A value that is not zero yet can still round to negative
+        # zero, for example -0.000000001. Same sign split as "-0".
+        if quantized == 0:
+            quantized = Decimal(0)
         if abs(quantized) >= PRICE_LIMIT:
             raise ValueError("price exceeds Numeric(20, 8)")
         return quantized
