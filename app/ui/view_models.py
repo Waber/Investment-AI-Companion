@@ -89,6 +89,9 @@ class InstrumentView:
     id: int
     instrument_type: str
     ticker: str | None
+    # The company's ISIN. None when the row has none. The detail
+    # page prints a dash for that empty value.
+    isin: str | None
     name: str | None
     exchange: str | None
     currency: str | None
@@ -224,6 +227,7 @@ def to_instrument(company):
         id=company.id,
         instrument_type=COMPANY_INSTRUMENT_TYPE,
         ticker=_text(company.ticker),
+        isin=_text(company.isin),
         name=_text(company.name),
         exchange=_text(company.exchange),
         currency=_text(company.currency),

@@ -33,13 +33,16 @@
   remains in the middle, or the name is only invisible characters
   or marks. The create and edit forms now have an ISIN field so
   the ISIN error has an input. A blank ISIN is stored as null.
+  QA on PR #82: the detail page, where a save redirects, shows
+  that ISIN after the ticker. The label is the localized field
+  name. A null ISIN is a dash.
   Instrument type is still not on the form; create keeps the
   model's STOCK default. `Secure` on the language cookie stays
   deferred until HTTPS (#56).
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1473 passed, 124 deselected, coverage 96.08%. Scoped black,
+  -> 1478 passed, 124 deselected, coverage 96.08%. Scoped black,
   isort, and flake8 passed on the Python this change owns.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
   Browser on `127.0.0.1:8000` with the fake collector and a
@@ -47,7 +50,11 @@
   second ticker showed the Polish ticker sentence on that field;
   the same ISIN showed the Polish ISIN sentence; English showed
   the ISIN sentence and, on edit, the ticker sentence; a Persian
-  name with ZWNJ (U+200C) was stored between the letters.
+  name with ZWNJ (U+200C) was stored between the letters. After
+  the detail-page fix, a save with US0378331005 landed on the
+  detail page and showed that ISIN in EN and PL. A blank ISIN
+  showed a dash in both languages. The list still showed both
+  tickers.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 06:46 to 07:05.
 - Pull request: [PR #82](https://github.com/Waber/Investment-AI-Companion/pull/82)

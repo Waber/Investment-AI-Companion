@@ -634,6 +634,91 @@ def _assert_field_message(html, field, message):
     assert invalid == [field]
 
 
+def _dd_text(html, code):
+    """Visible text of one ``<dd data-field>``, with nested tags removed.
+
+    The detail page marks each value that way. A missing-data
+    ``span`` would otherwise hide the sentence inside the markup.
+    """
+    match = re.search(
+        rf'<dd data-field="{re.escape(code)}">(.*?)</dd>',
+        html,
+        flags=re.DOTALL,
+    )
+    assert match is not None, code
+    return re.sub(r"<[^>]+>", "", match.group(1)).strip()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("language", "isin", "shown"),
+    [
+        ("pl", _APPLE_ISIN, _APPLE_ISIN),
+        ("en", _APPLE_ISIN, _APPLE_ISIN),
+        ("pl", None, "-"),
+        ("en", None, "-"),
+    ],
+)
+async def test_instrument_detail_shows_the_company_isin(
+    client, language, isin, shown
+):
+    """The detail page lists the ISIN after the ticker.
+
+    The label is the catalog string for that language. A company
+    with no ISIN shows a dash. That field does not reuse the
+    missing-data sentence the other empty fields use.
+    """
+    client.cookies.set("ui_lang", language)
+    fields = {"name": "Shown Co", "ticker": "SHOWN"}
+    if isin is not None:
+        fields["isin"] = isin
+    company_id, _data = await _create(client, **fields)
+    if isin is None:
+        assert _stored_column(client, company_id, "isin") is None
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert detail.status_code == 200
+    html = detail.text
+    ticker_at = html.index('data-field="ticker"')
+    isin_at = html.index('data-field="isin"')
+    type_at = html.index('data-field="type"')
+    assert ticker_at < isin_at < type_at
+    assert _dd_text(html, "isin") == shown
+    label = CATALOGS[language]["field.isin"]
+    assert f">{label}</dt>" in html
+    isin_markup = re.search(
+        r'data-field="isin">(.*?)</dd>',
+        html,
+        flags=re.DOTALL,
+    ).group(1)
+    assert CATALOGS[language]["missing"] not in isin_markup
+
+
+@pytest.mark.asyncio
+async def test_create_redirect_lands_on_a_detail_page_with_the_isin(client):
+    """A successful create sends the browser to the detail page.
+
+    That page is where the saved ISIN has to be visible. The test
+    follows the 303 instead of trusting the form response.
+    """
+    response = await _post(
+        client,
+        "/ui/companies",
+        {
+            "name": "Apple",
+            "ticker": "AAPL",
+            "isin": _APPLE_ISIN,
+            "currency": "usd",
+        },
+    )
+    assert response.status_code == 303
+    location = _location(response)
+    assert location.startswith("/ui/instruments/")
+    detail = await client.get(location)
+    assert detail.status_code == 200
+    assert _dd_text(detail.text, "isin") == _APPLE_ISIN
+    assert f">{CATALOGS['pl']['field.isin']}</dt>" in detail.text
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("message", _DUPLICATE_MESSAGES)
 async def test_plain_value_error_is_not_read_as_a_duplicate_code(
