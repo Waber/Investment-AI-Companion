@@ -18,6 +18,7 @@ from app.models.database_models import NoteDB
 from app.models.research import Note, NoteCreate, NoteUpdate
 from app.repositories.research_store import (
     commit_company_scoped,
+    commit_research_change,
     ensure_company_exists,
 )
 
@@ -84,8 +85,10 @@ class NoteRepository:
             return Note.model_validate(row)
         for field, value in changes.items():
             setattr(row, field, value)
+        # One clock. The column has no ``onupdate``, so this UTC
+        # value is the only timestamp the UPDATE writes.
         row.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
+        commit_research_change(self.db)
         self.db.refresh(row)
         return Note.model_validate(row)
 
@@ -95,7 +98,7 @@ class NoteRepository:
         if row is None:
             return False
         self.db.delete(row)
-        self.db.commit()
+        commit_research_change(self.db)
         return True
 
     def _row(self, company_id: int, note_id: int) -> NoteDB | None:

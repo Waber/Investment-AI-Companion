@@ -22,6 +22,7 @@ from app.models.research import (
 )
 from app.repositories.research_store import (
     commit_company_scoped,
+    commit_research_change,
     ensure_company_exists,
 )
 
@@ -114,8 +115,10 @@ class ThesisRepository:
             changes["status"] = _status_value(changes["status"])
         for field, value in changes.items():
             setattr(row, field, value)
+        # One clock, same as ``NoteRepository.update``. The column
+        # has no ``onupdate``.
         row.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
+        commit_research_change(self.db)
         self.db.refresh(row)
         return Thesis.model_validate(row)
 
@@ -140,7 +143,7 @@ class ThesisRepository:
             return Thesis.model_validate(row)
         row.status = value
         row.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
+        commit_research_change(self.db)
         self.db.refresh(row)
         return Thesis.model_validate(row)
 
@@ -150,7 +153,7 @@ class ThesisRepository:
         if row is None:
             return False
         self.db.delete(row)
-        self.db.commit()
+        commit_research_change(self.db)
         return True
 
     def _row(self, company_id: int, thesis_id: int) -> ThesisDB | None:

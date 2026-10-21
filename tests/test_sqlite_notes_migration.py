@@ -65,9 +65,10 @@ def test_autogenerate_against_sqlite_notes_is_empty(tmp_path):
     ``compare_metadata`` is empty only when every table matches the
     models. A legacy companies table would still show diffs, so this
     database is built with ``create_all``. Dropping the research
-    tables and stamping ``0001`` makes the upgrade create them the
-    way a real deploy would. An empty diff means that upgrade already
-    matches ``NoteDB`` and ``ThesisDB``.
+    tables and stamping ``0002`` makes revision 0033 create them
+    again. Price bars stay, because that revision already ran on
+    master. An empty diff means 0033 matches ``NoteDB`` and
+    ``ThesisDB``.
     """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'full.db'}")
     Base.metadata.create_all(bind=engine)
@@ -76,7 +77,7 @@ def test_autogenerate_against_sqlite_notes_is_empty(tmp_path):
         connection.execute(text("DROP TABLE notes"))
     with engine.connect() as connection:
         config = _config(connection)
-        command.stamp(config, "0001")
+        command.stamp(config, "0002")
         upgrade_head(connection)
         assert_compare_metadata_is_empty(connection)
     engine.dispose()

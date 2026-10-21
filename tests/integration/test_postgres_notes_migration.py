@@ -92,8 +92,9 @@ def test_autogenerate_against_postgresql_notes_is_empty(postgres_engine):
 
     ``public`` is the schema the other PostgreSQL tests share. This
     one builds a full model there is no reason to share, drops
-    ``notes`` and ``theses``, stamps ``0001``, and upgrades. The
-    schema is removed afterwards, including the Alembic version table.
+    ``notes`` and ``theses``, stamps ``0002``, and upgrades. Price
+    bars from ``create_all`` stay in place. The schema is removed
+    afterwards, including the Alembic version table.
     """
     schema = "notes_autogen"
     with postgres_engine.connect() as connection:
@@ -107,7 +108,7 @@ def test_autogenerate_against_postgresql_notes_is_empty(postgres_engine):
             connection.execute(text("DROP TABLE notes"))
             connection.commit()
             config = _config(connection)
-            command.stamp(config, "0001")
+            command.stamp(config, "0002")
             upgrade_head(connection)
             connection.execute(text(f"SET search_path TO {schema}"))
             assert_compare_metadata_is_empty(connection)
