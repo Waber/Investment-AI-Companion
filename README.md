@@ -6,6 +6,8 @@ Analysis, scores and signals show sources, data freshness, assumptions, risks an
 
 To run the local `/ui` demo, follow [Run the demo](docs/RUN_DEMO.md).
 
+To continue development with a coding agent (Claude Code, Codex, Cursor IDE), start with the [handoff guide](docs/HANDOFF.md).
+
 ## Current Scope
 
 - FastAPI backend with API routes under `/api/v1`.
