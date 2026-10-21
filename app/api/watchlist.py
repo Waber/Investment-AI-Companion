@@ -52,7 +52,11 @@ def list_watchlist(db: Session = Depends(get_db)):
         },
         200: {
             "model": WatchlistItem,
-            "description": "The company was already on the watchlist",
+            "description": (
+                "The company was already on the watchlist. "
+                "A repeat keeps the original label. A different "
+                "label in this request is not stored."
+            ),
         },
         404: {"description": "Company not found"},
     },
@@ -64,10 +68,10 @@ def add_to_watchlist(
 ):
     """Add a company, or return the row that is already stored.
 
-    The first add is 201. A repeat is 200 and keeps the original
-    label, including when this request loses the unique-constraint
-    race. An unknown company, or one deleted before the insert, is
-    404.
+    The first add is 201. A repeat is 200 and keeps the original label.
+    A different label in the body is not stored. That includes the
+    request that loses the unique-constraint race. An unknown company,
+    or one deleted before the insert, is 404.
     """
     _require_company(db, body.company_id)
     repo = WatchlistRepository(db)
@@ -84,14 +88,12 @@ def add_to_watchlist(
         row = None
         created = False
     if missing:
-        raise HTTPException(
-            status_code=404, detail="Company not found"
-        ) from None
+        raise HTTPException(status_code=404, detail="Company not found")
     if row is None:
         raise HTTPException(
             status_code=500,
             detail="Watchlist item could not be stored",
-        ) from None
+        )
     response.status_code = (
         status.HTTP_201_CREATED if created else status.HTTP_200_OK
     )

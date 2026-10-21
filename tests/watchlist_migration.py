@@ -1,7 +1,7 @@
 """Shared checks for the watchlist_items revision.
 
 SQLite and PostgreSQL both compare a ``create_all`` database with a
-database that revision 0002 upgraded. They also ask Alembic whether
+database that revision 0003 upgraded. They also ask Alembic whether
 autogenerate still wants to change ``watchlist_items``.
 """
 
@@ -45,7 +45,7 @@ def watchlist_structure(connection):
     """Column, key, and foreign-key shape of ``watchlist_items``.
 
     Callers compare a ``create_all`` database with one that revision
-    0002 created. The two dialects report types differently, so the
+    0003 created. The two dialects report types differently, so the
     comparison is within one dialect, not across dialects.
     """
     inspector = inspect(connection)
@@ -127,7 +127,7 @@ def assert_autogenerate_is_empty(connection):
 
     This is the check that a second ``alembic revision --autogenerate``
     would write an empty upgrade. It has to run on a database built by
-    ``create_all``, with the watchlist table recreated by revision 0002,
+    ``create_all``, with the watchlist table recreated by revision 0003,
     so a drift in that revision shows up here.
     """
     context = MigrationContext.configure(connection)

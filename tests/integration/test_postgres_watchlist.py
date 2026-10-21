@@ -18,6 +18,7 @@ from tests.watchlist_checks import (
     assert_company_update_leaves_the_watchlist_row,
     assert_list_orders_by_added_at_then_id,
     assert_missing_company_is_raised_outside_the_handler,
+    assert_race_keeps_earlier_pending_work,
     assert_race_returns_the_existing_row,
     assert_remove_is_bool_and_company_delete_cascades,
     assert_unrelated_integrity_error_is_raised_outside_the_handler,
@@ -107,10 +108,11 @@ def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
                 )
             )
             connection.commit()
-            downgrade_to(connection, "0001")
+            downgrade_to(connection, "0002")
             assert (
                 "watchlist_items" not in inspect(connection).get_table_names()
             )
+            assert "price_bars" in inspect(connection).get_table_names()
             assert (
                 connection.execute(
                     text("SELECT ticker FROM companies WHERE id = 1")
@@ -161,7 +163,7 @@ def test_autogenerate_against_postgresql_watchlist_is_empty(postgres_engine):
             connection.execute(text("DROP TABLE watchlist_items"))
             connection.commit()
             config = _config(connection)
-            command.stamp(config, "0001")
+            command.stamp(config, "0002")
             upgrade_head(connection)
             assert_autogenerate_is_empty(connection)
             script = command.revision(
@@ -199,6 +201,16 @@ def test_race_returns_the_existing_row_on_postgresql(
     session = _session(postgres_session_factory)
     try:
         assert_race_returns_the_existing_row(monkeypatch, session)
+    finally:
+        session.close()
+
+
+def test_race_keeps_earlier_pending_work_on_postgresql(
+    postgres_session_factory, monkeypatch
+):
+    session = _session(postgres_session_factory)
+    try:
+        assert_race_keeps_earlier_pending_work(monkeypatch, session)
     finally:
         session.close()
 

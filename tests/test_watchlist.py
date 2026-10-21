@@ -22,6 +22,7 @@ from tests.watchlist_checks import (
     assert_list_orders_by_added_at_then_id,
     assert_missing_company_is_raised_outside_the_handler,
     assert_model_declares_cascade_and_one_row_per_company,
+    assert_race_keeps_earlier_pending_work,
     assert_race_returns_the_existing_row,
     assert_remove_is_bool_and_company_delete_cascades,
     assert_unrelated_integrity_error_is_raised_outside_the_handler,
@@ -78,8 +79,15 @@ def test_create_model_strips_the_label_and_rejects_a_long_one():
         "\u2069",
         "\u200e",
         "\u200f",
+        "\u061c",
+        "A\u061cB",
+        "\u206a",
+        "\u206f",
+        "A\u206aB",
         "A\u200eB",
         "A\u200fB",
+        "\U000e0001",
+        "A\U000e007fB",
     ],
 )
 def test_create_model_rejects_controls_and_bidi(label):
@@ -119,28 +127,29 @@ def test_create_model_keeps_a_format_character_beside_a_letter():
 
 
 def test_stale_price_days_defaults_to_seven(monkeypatch):
-    monkeypatch.delenv("watchlist_stale_price_days", raising=False)
+    monkeypatch.delenv("WATCHLIST_STALE_PRICE_DAYS", raising=False)
     built = Settings(_env_file=None, SECRET_KEY=SECRET)
-    assert built.watchlist_stale_price_days == 7
+    assert built.WATCHLIST_STALE_PRICE_DAYS == 7
 
 
 def test_stale_price_days_reads_the_environment(monkeypatch):
-    monkeypatch.setenv("watchlist_stale_price_days", "3")
+    """The env name matches the field, like the other settings."""
+    monkeypatch.setenv("WATCHLIST_STALE_PRICE_DAYS", "3")
     built = Settings(_env_file=None, SECRET_KEY=SECRET)
-    assert built.watchlist_stale_price_days == 3
-    monkeypatch.setenv("watchlist_stale_price_days", "nope")
+    assert built.WATCHLIST_STALE_PRICE_DAYS == 3
+    monkeypatch.setenv("WATCHLIST_STALE_PRICE_DAYS", "nope")
     with pytest.raises(ValidationError):
         Settings(_env_file=None, SECRET_KEY=SECRET)
 
 
 @pytest.mark.parametrize("days", [0, -1])
 def test_stale_price_days_rejects_non_positive(monkeypatch, days):
-    monkeypatch.delenv("watchlist_stale_price_days", raising=False)
+    monkeypatch.delenv("WATCHLIST_STALE_PRICE_DAYS", raising=False)
     with pytest.raises(ValidationError):
         Settings(
             _env_file=None,
             SECRET_KEY=SECRET,
-            watchlist_stale_price_days=days,
+            WATCHLIST_STALE_PRICE_DAYS=days,
         )
 
 
@@ -154,6 +163,10 @@ def test_blank_label_is_stored_as_null(session):
 
 def test_race_returns_the_existing_row(monkeypatch, session):
     assert_race_returns_the_existing_row(monkeypatch, session)
+
+
+def test_race_keeps_earlier_pending_work(monkeypatch, session):
+    assert_race_keeps_earlier_pending_work(monkeypatch, session)
 
 
 def test_missing_company_is_raised_outside_the_handler(session):
@@ -376,10 +389,27 @@ async def test_delete_rejects_a_non_positive_company_id(client):
 @pytest.mark.asyncio
 async def test_openapi_documents_watchlist_post_statuses(client):
     schema = (await client.get("/api/v1/openapi.json")).json()
-    responses = schema["paths"]["/api/v1/watchlist/"]["post"]["responses"]
+    operation = schema["paths"]["/api/v1/watchlist/"]["post"]
+    responses = operation["responses"]
     assert "200" in responses
     assert "201" in responses
     assert "404" in responses
+    description = " ".join(operation["description"].split())
+    repeat = " ".join(responses["200"]["description"].split())
+    assert "keeps the original label" in description
+    assert "keeps the original label" in repeat
+
+
+@pytest.mark.asyncio
+async def test_watchlist_post_without_a_trailing_slash_redirects(client):
+    """FastAPI's slash redirect is 307, so the POST method is kept."""
+    response = await client.post(
+        "/api/v1/watchlist",
+        json={"company_id": 1},
+        follow_redirects=False,
+    )
+    assert response.status_code == 307
+    assert response.headers["location"].endswith("/api/v1/watchlist/")
 
 
 @pytest.mark.asyncio
