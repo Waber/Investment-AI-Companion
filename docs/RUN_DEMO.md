@@ -1,6 +1,6 @@
 # Run the demo
 
-One command: `python -m scripts.run_demo` (it generates a fresh `SECRET_KEY` and does not reuse the shell).
+One command: `python -m scripts.run_demo` (it generates a fresh `SECRET_KEY`, does not reuse the shell, and seeds `demo-v2`). The manual steps below still seed `demo-v1` unless you pass `--fixture demo-v2`.
 
 Short path to the local `/ui` pages. These commands were run on Linux
 with Python 3.12.3. `python` was not on `PATH` before the virtualenv

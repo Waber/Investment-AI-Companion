@@ -18,10 +18,15 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import Settings, settings
 from app.core.database import create_db_engine
 from app.models.company import CompanyCreate
-from app.models.database_models import CompanyDB, FinancialMetricsDB
+from app.models.database_models import (
+    CompanyDB,
+    FinancialMetricsDB,
+    PriceBarDB,
+)
 from app.repositories.company_repository import CompanyRepository
 from scripts import run_demo
 from scripts.run_demo import DemoDatabaseRefused
+from scripts.seed_demo import load_demo_v2
 
 PROVIDED_SECRET = "unit-test-secret-key-0123456789abcd"
 DOTENV_SECRET = "dotenv-secret-key-should-not-win-0123456789"
@@ -29,6 +34,12 @@ DOTENV_URL = (
     "postgresql://user:from-dotenv-secret@localhost:5432/investment_ai"
 )
 SHELL_URL = "postgresql://user:from-shell-secret@localhost:5432/investment_ai"
+
+_V2 = load_demo_v2()
+V2_COMPANIES = len(_V2["companies"])
+V2_METRICS = sum(len(item["metrics"]) for item in _V2["companies"])
+V2_PRICES = sum(len(item["prices"]) for item in _V2["companies"])
+V2_TICKERS = sorted(item["company"]["ticker"] for item in _V2["companies"])
 
 
 @pytest.fixture
@@ -111,7 +122,7 @@ def _tickers(url: str) -> list[str]:
         engine.dispose()
 
 
-def _counts(url: str) -> tuple[int, int]:
+def _counts(url: str) -> tuple[int, int, int]:
     engine = create_db_engine(url)
     try:
         session = sessionmaker(bind=engine)()
@@ -119,6 +130,7 @@ def _counts(url: str) -> tuple[int, int]:
             return (
                 session.query(CompanyDB).count(),
                 session.query(FinancialMetricsDB).count(),
+                session.query(PriceBarDB).count(),
             )
         finally:
             session.close()
@@ -499,9 +511,10 @@ def test_fresh_seed_twice_has_no_duplicates(tmp_path):
     plan = run_demo.build_demo_plan(tmp_path)
     before = settings.DATABASE_URL
     first = run_demo.seed_demo_database(plan, reset=True)
-    assert first["companies"]["created"] == 6
-    assert first["metrics"]["created"] == 20
-    assert _counts(plan.database_url) == (6, 20)
+    assert first["companies"]["created"] == V2_COMPANIES
+    assert first["metrics"]["created"] == V2_METRICS
+    assert first["prices"]["created"] == V2_PRICES
+    assert _counts(plan.database_url) == (V2_COMPANIES, V2_METRICS, V2_PRICES)
 
     engine = create_db_engine(plan.database_url)
     try:
@@ -518,24 +531,22 @@ def test_fresh_seed_twice_has_no_duplicates(tmp_path):
 
     kept = run_demo.seed_demo_database(plan, reset=False)
     assert kept["companies"]["created"] == 0
-    assert kept["companies"]["skipped"] == 6
+    assert kept["companies"]["skipped"] == V2_COMPANIES
     assert kept["metrics"]["created"] == 0
-    assert kept["metrics"]["skipped"] == 20
-    assert _counts(plan.database_url) == (7, 20)
+    assert kept["metrics"]["skipped"] == V2_METRICS
+    assert kept["prices"]["created"] == 0
+    assert kept["prices"]["skipped"] == V2_PRICES
+    assert _counts(plan.database_url) == (
+        V2_COMPANIES + 1,
+        V2_METRICS,
+        V2_PRICES,
+    )
 
     second = run_demo.seed_demo_database(plan, reset=True)
-    assert second["companies"]["created"] == 6
-    assert second["metrics"]["created"] == 20
-    assert _tickers(plan.database_url) == sorted(
-        [
-            "DEMO_DE_INDUSTRY",
-            "DEMO_JP_STABLE",
-            "DEMO_PL_EMPTY",
-            "DEMO_PL_TECH",
-            "DEMO_SG_EARLY",
-            "DEMO_US_GROWTH",
-        ]
-    )
+    assert second["companies"]["created"] == V2_COMPANIES
+    assert second["metrics"]["created"] == V2_METRICS
+    assert second["prices"]["created"] == V2_PRICES
+    assert _tickers(plan.database_url) == V2_TICKERS
     assert settings.DATABASE_URL == before
 
 
@@ -547,7 +558,7 @@ def test_reset_removes_sqlite_sidecars(tmp_path):
     wal.write_text("wal", encoding="utf-8")
     run_demo.seed_demo_database(plan, reset=True)
     assert not wal.exists()
-    assert _counts(plan.database_url) == (6, 20)
+    assert _counts(plan.database_url) == (V2_COMPANIES, V2_METRICS, V2_PRICES)
 
 
 def test_reset_refuses_to_replace_a_directory(tmp_path):
@@ -575,7 +586,10 @@ def test_main_prints_the_ui_url_and_not_the_secret(
     assert "http://127.0.0.1:8765/ui" in captured.out
     assert "0.0.0.0" not in captured.out
     assert "Collector: fake" in captured.out
-    assert "Seeded 6 companies and 20 metrics." in captured.out
+    assert (
+        f"Seeded {V2_COMPANIES} companies, {V2_METRICS} metrics, "
+        f"and {V2_PRICES} prices."
+    ) in captured.out
     secret = settings.SECRET_KEY
     assert secret not in captured.out
     assert secret not in captured.err
@@ -599,10 +613,13 @@ def test_main_keep_does_not_duplicate_rows(
     captured = capsys.readouterr()
     assert code == 0
     assert "http://127.0.0.1:8000/docs" in captured.out
-    assert "Seeded 0 companies and 0 metrics." in captured.out
-    assert "Already present: 6 companies and 20 metrics." in captured.out
+    assert "Seeded 0 companies, 0 metrics, and 0 prices." in captured.out
+    assert (
+        f"Already present: {V2_COMPANIES} companies, "
+        f"{V2_METRICS} metrics, and {V2_PRICES} prices."
+    ) in captured.out
     plan = run_demo.build_demo_plan(tmp_path)
-    assert _counts(plan.database_url) == (6, 20)
+    assert _counts(plan.database_url) == (V2_COMPANIES, V2_METRICS, V2_PRICES)
 
 
 def test_main_refuses_a_non_demo_url_without_serving(
@@ -718,7 +735,11 @@ def test_busy_port_does_not_reset_the_database(tmp_path, capsys):
     assert "already in use" in captured.err
     assert "not changed" in captured.err
     assert "DEMO_EXTRA" in _tickers(plan.database_url)
-    assert _counts(plan.database_url) == (7, 20)
+    assert _counts(plan.database_url) == (
+        V2_COMPANIES + 1,
+        V2_METRICS,
+        V2_PRICES,
+    )
 
 
 def _free_loopback_port() -> int:
@@ -748,7 +769,7 @@ def test_main_rejects_a_bad_port(port):
 
 @pytest.mark.asyncio
 async def test_smoke_seeds_and_serves_pages_without_a_server(tmp_path):
-    """Seed demo-v1 and request the API, /docs, and /ui in-process.
+    """Seed demo-v2 and request the API, /docs, and /ui in-process.
 
     ``ASGITransport`` does not open a socket. The network guard is the
     autouse fixture, so a real provider call fails this test.
@@ -756,7 +777,8 @@ async def test_smoke_seeds_and_serves_pages_without_a_server(tmp_path):
     before = settings.DATABASE_URL
     plan = run_demo.build_demo_plan(tmp_path, port=8000)
     summary = run_demo.seed_demo_database(plan, reset=True)
-    assert summary["companies"]["created"] == 6
+    assert summary["companies"]["created"] == V2_COMPANIES
+    assert summary["prices"]["created"] == V2_PRICES
     app = run_demo.demo_asgi_app(plan)
     try:
         async with AsyncClient(
@@ -779,7 +801,7 @@ async def test_smoke_seeds_and_serves_pages_without_a_server(tmp_path):
             assert docs.status_code == 200
             assert companies.status_code == 200
             rows = companies.json()
-            assert len(rows) == 6
+            assert len(rows) == V2_COMPANIES
             tickers = {row["ticker"] for row in rows}
             assert "DEMO_PL_TECH" in tickers
             tech = next(row for row in rows if row["ticker"] == "DEMO_PL_TECH")
@@ -793,7 +815,21 @@ async def test_smoke_seeds_and_serves_pages_without_a_server(tmp_path):
             assert fetched.json()["success"] is True
             assert missing.status_code == 404
             again = await client.get("/api/v1/companies/?skip=0&limit=100")
-            assert len(again.json()) == 6
+            assert len(again.json()) == V2_COMPANIES
+            prices = await client.get(
+                f"/api/v1/instruments/{tech['id']}/prices"
+            )
+            assert prices.status_code == 200
+            assert prices.json()
+            assert prices.json()[0]["source"] == "[IAC-DEMO-V2]"
+            empty = next(
+                row for row in rows if row["ticker"] == "DEMO_PL_EMPTY"
+            )
+            no_prices = await client.get(
+                f"/api/v1/instruments/{empty['id']}/prices"
+            )
+            assert no_prices.status_code == 200
+            assert no_prices.json() == []
 
             if run_demo.demo_open_path() == "/ui":
                 page = await client.get("/ui")

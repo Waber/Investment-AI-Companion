@@ -2,6 +2,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -79,6 +80,16 @@ class CompanyDB(Base):
     # This creates a virtual field that allows us to access related data
     financial_metrics = relationship(
         "FinancialMetricsDB",
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+    # Daily or weekly bars. Deleting the company deletes its bars,
+    # the same way it deletes financial metrics. The column is
+    # instrument_id because a price belongs to an instrument. The
+    # row it points at is still companies.id: issue #26 added the
+    # type and the ISIN on this table and did not rename it.
+    price_bars = relationship(
+        "PriceBarDB",
         back_populates="company",
         cascade="all, delete-orphan",
     )
@@ -171,5 +182,46 @@ class FinancialMetricsDB(Base):
             "period_end",
             "period_type",
             name="uq_metrics_company_period",
+        ),
+    )
+
+
+class PriceBarDB(Base):
+    """One stored price bar for an instrument.
+
+    ``bar_date`` is a calendar date, not a timestamp: a daily or
+    weekly bar names the session, and two offsets must not turn one
+    session into two rows. OHLC and volume may be null. A missing
+    provider value stays null and is never written as zero.
+
+    The same session can be stored twice only when ``source`` differs
+    (a seeded synthetic bar and a later collector refresh). The
+    unique key is ``(instrument_id, bar_date, source)``.
+    """
+
+    __tablename__ = "price_bars"
+
+    id = Column(Integer, primary_key=True, index=True)
+    instrument_id = Column(
+        Integer, ForeignKey("companies.id"), nullable=False, index=True
+    )
+    bar_date = Column(Date, nullable=False)
+    open_price = Column(Float, nullable=True)
+    high_price = Column(Float, nullable=True)
+    low_price = Column(Float, nullable=True)
+    close_price = Column(Float, nullable=True)
+    volume = Column(Integer, nullable=True)
+    currency = Column(String(3), nullable=False)
+    source = Column(String(64), nullable=False)
+    retrieved_at = Column(UTCDateTime(), nullable=False)
+
+    company = relationship("CompanyDB", back_populates="price_bars")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id",
+            "bar_date",
+            "source",
+            name="uq_price_bars_instrument_date_source",
         ),
     )
