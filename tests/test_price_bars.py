@@ -146,17 +146,66 @@ async def test_null_volume_is_stored_as_null_and_duplicate_is_400(client):
 
 
 @pytest.mark.asyncio
-async def test_bad_bar_is_422(client):
-    instrument_id = await _company(client)
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        (
+            {"open": 10.0, "high": 9.0, "low": None, "close": None},
+            "high must be greater than or equal to open",
+        ),
+        (
+            {"open": None, "high": 9.0, "low": None, "close": 10.0},
+            "high must be greater than or equal to close",
+        ),
+        (
+            {"open": 8.0, "high": None, "low": 9.0, "close": None},
+            "low must be less than or equal to open",
+        ),
+        (
+            {"open": None, "high": None, "low": 9.0, "close": 8.0},
+            "low must be less than or equal to close",
+        ),
+        (
+            {"open": None, "high": 1.0, "low": 2.0, "close": None},
+            "high must be greater than or equal to low",
+        ),
+        (
+            {"volume": -1},
+            "volume must be zero or greater",
+        ),
+    ],
+)
+async def test_candle_violation_is_422(client, overrides, message):
+    """Each broken bound is rejected, and nothing is stored."""
+    instrument_id = await _company(client, ticker="DEMO_CANDLE")
     path = f"/api/v1/instruments/{instrument_id}/prices"
-    high_low = await client.post(path, json=_bar(high=1, low=2))
-    assert high_low.status_code == 422
-    negative = await client.post(path, json=_bar(volume=-1))
-    assert negative.status_code == 422
-    boolean = await client.post(path, json=_bar(volume=True))
-    assert boolean.status_code == 422
+    response = await client.post(path, json=_bar(**overrides))
+    assert response.status_code == 422
+    assert message in response.text
     listed = await client.get(path)
     assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_flat_bar_and_a_boolean_volume_are_handled(client):
+    """Equal prices and a zero volume are a valid session.
+
+    A JSON boolean is still not a volume. ``True`` must not become 1.
+    """
+    instrument_id = await _company(client, ticker="DEMO_FLAT")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    flat = await client.post(
+        path,
+        json=_bar(open=10.0, high=10.0, low=10.0, close=10.0, volume=0),
+    )
+    assert flat.status_code == 201, flat.text
+    boolean = await client.post(
+        path, json=_bar(volume=True, date="2026-01-12")
+    )
+    assert boolean.status_code == 422
+    listed = await client.get(path)
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["volume"] == 0
 
 
 def test_price_model_rejects_nan_and_a_blank_source():
@@ -397,8 +446,12 @@ def test_a_lost_insert_race_is_a_value_error():
         with pytest.raises(ValueError, match="already exists") as caught:
             repo.create(instrument_id, bar)
         assert "duplicate key" not in str(caught.value)
-        with pytest.raises(ValueError, match="already exists"):
+        assert caught.value.__context__ is None
+        assert caught.value.__cause__ is None
+        with pytest.raises(ValueError, match="already exists") as upserted:
             repo.upsert_many(instrument_id, [bar])
+        assert upserted.value.__context__ is None
+        assert upserted.value.__cause__ is None
     finally:
         session.close()
         engine.dispose()

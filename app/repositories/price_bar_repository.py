@@ -76,11 +76,18 @@ class PriceBarRepository:
             raise ValueError(_ALREADY_STORED)
         row = self._new_row(instrument_id, bar)
         self.db.add(row)
+        # Keep the driver error in this handler, then raise outside
+        # it. A ``raise`` written inside the ``except`` stores that
+        # driver error on ``ValueError.__context__``, and the SQL
+        # text would travel with the client error.
+        integrity_error = None
         try:
             self.db.commit()
-        except IntegrityError:
+        except IntegrityError as error:
             self.db.rollback()
-            raise ValueError(_ALREADY_STORED)
+            integrity_error = error
+        if integrity_error is not None:
+            raise ValueError(_ALREADY_STORED) from None
         self.db.refresh(row)
         return row
 
@@ -103,11 +110,16 @@ class PriceBarRepository:
             else:
                 self._copy_onto(existing, bar)
             rows.append(existing)
+        # Same as create: raise after the handler so ``__context__``
+        # does not keep the driver error.
+        integrity_error = None
         try:
             self.db.commit()
-        except IntegrityError:
+        except IntegrityError as error:
             self.db.rollback()
-            raise ValueError(_ALREADY_STORED)
+            integrity_error = error
+        if integrity_error is not None:
+            raise ValueError(_ALREADY_STORED) from None
         for row in rows:
             self.db.refresh(row)
         return rows

@@ -197,6 +197,13 @@ class PriceBarDB(Base):
     The same session can be stored twice only when ``source`` differs
     (a seeded synthetic bar and a later collector refresh). The
     unique key is ``(instrument_id, bar_date, source)``.
+
+    The check constraints match ``PriceBarCreate``. A SQL ``CHECK``
+    passes when its expression is true or null, so a missing price
+    does not fail the comparison that uses it. When both sides are
+    present, high is at least the open and the close, low is at most
+    the open and the close, high is at least the low, and volume is
+    not negative.
     """
 
     __tablename__ = "price_bars"
@@ -223,5 +230,29 @@ class PriceBarDB(Base):
             "bar_date",
             "source",
             name="uq_price_bars_instrument_date_source",
+        ),
+        CheckConstraint(
+            "high_price >= open_price",
+            name="ck_price_bars_high_gte_open",
+        ),
+        CheckConstraint(
+            "high_price >= close_price",
+            name="ck_price_bars_high_gte_close",
+        ),
+        CheckConstraint(
+            "low_price <= open_price",
+            name="ck_price_bars_low_lte_open",
+        ),
+        CheckConstraint(
+            "low_price <= close_price",
+            name="ck_price_bars_low_lte_close",
+        ),
+        CheckConstraint(
+            "high_price >= low_price",
+            name="ck_price_bars_high_gte_low",
+        ),
+        CheckConstraint(
+            "volume >= 0",
+            name="ck_price_bars_volume_gte_zero",
         ),
     )

@@ -1,5 +1,90 @@
 # Current Work State
 
+## QA round 1 on price bars (PR #83): 2026-10-21
+
+- Branch `cursor/pricebar-demo-v2-203d`.
+  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83)
+  says Refs #27. Not merged. The issue stays open.
+- Completed on top of `93c676c`: `PriceBarCreate` checks the
+  candle when values are present (high at least the open and the
+  close, low at most the open and the close, high at least the
+  low, volume at least zero). The same six named checks are on
+  `PriceBarDB` and in Alembic `0002`. A null price still stores.
+  A flat bar and volume zero still store. Parametrized API tests
+  expect 422 for each violation. Parametrized migration tests
+  expect the named check to reject the row, on SQLite and on
+  PostgreSQL, and downgrade still drops the table. The
+  duplicate-bar `ValueError` is raised after the handler;
+  `__context__` is `None`. The product-requirements PriceBar row
+  says the demo fixture is weekly (Mondays). The journal's
+  PostgreSQL command matches CI and has no `--cov-fail-under`.
+- Incomplete: the `/ui` synthetic badge (M2) still matches only
+  `[IAC-DEMO-V1]`. `templates/`, `static/`, and `app/ui/` were
+  not edited. ETF/ETC attributes stay on #28. Float prices stay.
+  Code Reviewer approval of #27 is still open.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. SQLite
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1503 passed, 131 deselected, coverage 96.30%. PostgreSQL
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  with `REQUIRE_POSTGRES=1`: 131 passed, 1503 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. GitHub Actions for this commit has not run yet.
+- Active agents: none. Blockers: none for this pull request.
+  Account usage was not available in this session.
+- Next action: commit and push `cursor/pricebar-demo-v2-203d`
+  (a new commit, not a rewrite), then record both GitHub Actions
+  jobs. The owner reviews PR #83 and rebase-merges. Agents do
+  not merge.
+
+
+## Price bars and demo-v2 (#27): 2026-10-21
+
+- Branch `cursor/pricebar-demo-v2-203d`, based on `origin/master`
+  `6d45f01`. Head `533e2bd`.
+  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83)
+  says Refs #27. Not merged. The issue stays open.
+- Completed: `price_bars` table (Alembic `0002`), `PriceBar`
+  models, repository range query and upsert, `GET` and `POST`
+  `/api/v1/instruments/{id}/prices`, and `POST .../prices/refresh`.
+  `fixtures/demo-v2.json` (10 companies, 20 metrics, 1777 weekly
+  bars). `seed_demo --fixture demo-v2` and `scripts/run_demo.py`
+  load it. Every seeded company description and every fixture
+  price source is `[IAC-DEMO-V2]`. The fixture test checks a
+  missing series (`DEMO_PL_EMPTY`), a stale series
+  (`DEMO_JP_STABLE`), and mixed currencies. Refreshing twice from
+  `FakeCollector` does not insert a second bar for the same
+  instrument, date, and source. `docs/demo-data.md` and
+  `docs/RUN_DEMO.md` describe the split: `run_demo` is demo-v2,
+  and the manual `seed_demo` steps stay demo-v1 unless
+  `--fixture demo-v2`.
+- Incomplete, and not in this change: ETF/ETC attribute columns
+  (#28). The `/ui` synthetic badge still matches only
+  `[IAC-DEMO-V1]` (`app/ui/view_models.py`). That file was not
+  edited. The Frontend Developer owns `templates/`, `static/`,
+  and `app/ui/`. Code Reviewer approval of #27 is still open.
+  The fake collector still serves demo-v1 price profiles.
+  `scripts/smoke_demo.py` was not changed. It is a generic CRUD
+  smoke. The in-process `run_demo` smoke covers demo-v2 prices.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. SQLite
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1491 passed, 124 deselected, coverage 96.26%. PostgreSQL
+  with `REQUIRE_POSTGRES=1`: 124 passed, 1491 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. GitHub Actions on `533e2bd` succeeded
+  ([run 39560060518](https://github.com/Waber/Investment-AI-Companion/actions/runs/39560060518)):
+  SQLite job 119088883697 (1491 passed, 124 deselected, coverage
+  96.26%) and PostgreSQL job 119088883999 (124 passed, 1491
+  deselected).
+- Active agents: none. Blockers: none for this pull request.
+  Account usage was not available in this session.
+- Next action: the owner reviews PR #83 and merges it with
+  "Rebase and merge". Agents do not merge. The Frontend
+  Developer still owns the `/ui` badge for `[IAC-DEMO-V2]`.
+  ETF and ETC attributes stay on #28.
+
 ## Synthetic badge source token: 2026-10-21
 
 - Branch `cursor/ui-demo-badge-prefix-dc6c`, based on
@@ -85,52 +170,6 @@
   the owner reviews PR #82 and merges with "Rebase and merge".
   Agents do not merge. #80 stays open until QA, Security, and
   Code Review approve, and until the HTTPS cookie in #56.
-
-## Price bars and demo-v2 (#27): 2026-10-21
-
-- Branch `cursor/pricebar-demo-v2-203d`, based on `origin/master`
-  `6d45f01`. Head `533e2bd`.
-  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83)
-  says Refs #27. Not merged. The issue stays open.
-- Completed: `price_bars` table (Alembic `0002`), `PriceBar`
-  models, repository range query and upsert, `GET` and `POST`
-  `/api/v1/instruments/{id}/prices`, and `POST .../prices/refresh`.
-  `fixtures/demo-v2.json` (10 companies, 20 metrics, 1777 weekly
-  bars). `seed_demo --fixture demo-v2` and `scripts/run_demo.py`
-  load it. Every seeded company description and every fixture
-  price source is `[IAC-DEMO-V2]`. The fixture test checks a
-  missing series (`DEMO_PL_EMPTY`), a stale series
-  (`DEMO_JP_STABLE`), and mixed currencies. Refreshing twice from
-  `FakeCollector` does not insert a second bar for the same
-  instrument, date, and source. `docs/demo-data.md` and
-  `docs/RUN_DEMO.md` describe the split: `run_demo` is demo-v2,
-  and the manual `seed_demo` steps stay demo-v1 unless
-  `--fixture demo-v2`.
-- Incomplete, and not in this change: ETF/ETC attribute columns
-  (#28). The `/ui` synthetic badge still matches only
-  `[IAC-DEMO-V1]` (`app/ui/view_models.py`). That file was not
-  edited. The Frontend Developer owns `templates/`, `static/`,
-  and `app/ui/`. Code Reviewer approval of #27 is still open.
-  The fake collector still serves demo-v1 price profiles.
-  `scripts/smoke_demo.py` was not changed. It is a generic CRUD
-  smoke. The in-process `run_demo` smoke covers demo-v2 prices.
-- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. SQLite
-  CI command
-  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1491 passed, 124 deselected, coverage 96.26%. PostgreSQL
-  with `REQUIRE_POSTGRES=1`: 124 passed, 1491 deselected.
-  Scoped black, isort, and flake8 passed. No live market-data
-  calls. GitHub Actions on `533e2bd` succeeded
-  ([run 39560060518](https://github.com/Waber/Investment-AI-Companion/actions/runs/39560060518)):
-  SQLite job 119088883697 (1491 passed, 124 deselected, coverage
-  96.26%) and PostgreSQL job 119088883999 (124 passed, 1491
-  deselected).
-- Active agents: none. Blockers: none for this pull request.
-  Account usage was not available in this session.
-- Next action: the owner reviews PR #83 and merges it with
-  "Rebase and merge". Agents do not merge. The Frontend
-  Developer still owns the `/ui` badge for `[IAC-DEMO-V2]`.
-  ETF and ETC attributes stay on #28.
 
 ## UI forms follow-up (#80, part): 2026-10-20
 

@@ -130,7 +130,7 @@ The model generalizes from `companies` to `instruments`. Today's `companies` and
 | Stock details | Today's company fields: sector, industry, description, website. |
 | ETF/ETC details | Issuer, tracked index or underlying (ETC: commodity or asset), TER, domicile, replication method, distribution policy, AUM with "as of" date. The exact set is **[Open]** (Q5). |
 | `FinancialMetrics` | Stocks only, the existing 20 fields, linked to the instrument. |
-| `PriceBar` | Daily OHLCV per instrument, with source and "as of". Needed for ETF/ETC trends, comparisons and price-based score components. Today's `app/models/historical_data.py` is a Pydantic model only and isn't stored. |
+| `PriceBar` | OHLCV per instrument, with source and "as of". The demo fixture is weekly (Mondays). Needed for ETF/ETC trends, comparisons and price-based score components. Today's `app/models/historical_data.py` is a Pydantic model only and isn't stored. |
 | `WatchlistItem` | Instrument, added date, optional short label. |
 | `Note`, `Thesis` | Instrument, text fields, status (theses only), timestamps. |
 | `ScoreWeights` / `InstrumentScore` | Weight set per instrument type (version, weights per component); computed score with per-component breakdown, inputs' "as of" dates, weight-set version and computed time. Persisting computed scores vs computing on request is **[Proposal: compute on request in v1]**. |
