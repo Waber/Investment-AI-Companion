@@ -87,11 +87,21 @@ def price_bar_structure(connection):
     indexes = tuple(
         sorted(index["name"] for index in inspector.get_indexes("price_bars"))
     )
+    check_sql = tuple(
+        sorted(
+            (
+                item["name"],
+                " ".join(item["sqltext"].split()),
+            )
+            for item in inspector.get_check_constraints("price_bars")
+        )
+    )
     return {
         "columns": columns,
         "foreign_keys": foreign_keys,
         "indexes": indexes,
         "checks": tuple(sorted(check_names(connection))),
+        "check_sql": check_sql,
     }
 
 

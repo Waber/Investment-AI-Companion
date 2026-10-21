@@ -1,6 +1,49 @@
 # Current Work State
 
+## QA round 1 on price bars (PR #94): 2026-10-21
+
+- Branch `cursor/price-bar-followups-85-5c38`, based on
+  `origin/master` `192c521`. PR #94 says Closes #85. Not merged.
+  QA round 1 on `8360ef8` was not approved. This section is the
+  fix on that same branch.
+- Completed: OHLC uses a `TypeDecorator`. PostgreSQL stays
+  `Numeric(20, 8)`. SQLite stores the canonical 8-place string as
+  TEXT and parses it back to the same `Decimal`. The API returns
+  that string. A stored cell that is not a decimal is logged and
+  skipped, so a read does not return 500. A write checks the
+  round-trip before commit and rolls back on mismatch. SQLite
+  OHLC checks use `CAST(column AS REAL)`. PostgreSQL checks compare
+  numeric columns. Revision `0003` still revises `0002` and still
+  rebuilds only `price_bars`. `1e400` is HTTP 422. The OpenAPI
+  volume maximum is the integer `9223372036854775807`. After a
+  fake refresh the default series is 252 `fake` bars, and
+  `[IAC-DEMO-V2]` is the named source. `docs/demo-data.md` no
+  longer says SQLite drops precision. `templates/`, `static/`,
+  and `app/ui/` were not edited.
+- Incomplete: open pull requests #87, #90, and #91 also add Alembic
+  revisions. This `0003` is re-chained if one of them merges first
+  and takes that number. The re-chain is not part of this fix.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1542 passed, 137 deselected, coverage 95.88%
+  (3728 statements, 130 miss, 1034 branches, 50 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `-m integration` -> 137 passed, 1542 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. The Actions run id goes on the pull request, not in a
+  later docs-only commit.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: both GitHub Actions jobs on this head (SQLite and
+  PostgreSQL), then the owner reviews PR #94 again and merges
+  with "Rebase and merge". Agents do not merge. Re-chain revision
+  `0003` if #87, #90, or #91 merges first.
+
 ## Price bar follow-ups (#85): 2026-10-21
+
+Superseded by the QA round 1 section above. The SQLite note in
+this section described numeric affinity before that fix.
 
 - Branch `cursor/price-bar-followups-85-5c38`, based on
   `origin/master` `192c521`.

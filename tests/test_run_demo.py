@@ -845,6 +845,56 @@ async def test_smoke_seeds_and_serves_pages_without_a_server(tmp_path):
     assert settings.DATA_COLLECTOR == "fake"
 
 
+@pytest.mark.asyncio
+async def test_refresh_defaults_to_fake_and_keeps_the_demo_source(tmp_path):
+    """After a fake refresh the default series is the 252 fake bars.
+
+    The demo-v2 fixture stays stored. It is returned only when the
+    caller passes ``source=[IAC-DEMO-V2]``. That is the intended
+    behaviour for issue #38: a later refresh wins the default, and
+    the named source still reaches the fixture.
+    """
+    before = settings.DATABASE_URL
+    plan = run_demo.build_demo_plan(tmp_path, port=8000)
+    run_demo.seed_demo_database(plan, reset=True)
+    app = run_demo.demo_asgi_app(plan)
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://127.0.0.1",
+        ) as client:
+            companies = await client.get("/api/v1/companies/?skip=0&limit=100")
+            assert companies.status_code == 200
+            tech = next(
+                row
+                for row in companies.json()
+                if row["ticker"] == "DEMO_PL_TECH"
+            )
+            path = f"/api/v1/instruments/{tech['id']}/prices"
+            before_refresh = await client.get(path)
+            assert before_refresh.status_code == 200
+            demo_rows = before_refresh.json()
+            assert demo_rows
+            assert {row["source"] for row in demo_rows} == {"[IAC-DEMO-V2]"}
+            refreshed = await client.post(path + "/refresh")
+            assert refreshed.status_code == 200, refreshed.text
+            assert refreshed.json()["bar_count"] == 252
+            assert refreshed.json()["source"] == "fake"
+            default = await client.get(path)
+            assert default.status_code == 200
+            assert len(default.json()) == 252
+            assert {row["source"] for row in default.json()} == {"fake"}
+            named = await client.get(path, params={"source": "[IAC-DEMO-V2]"})
+            assert named.status_code == 200
+            assert len(named.json()) == len(demo_rows)
+            assert {row["source"] for row in named.json()} == {"[IAC-DEMO-V2]"}
+    finally:
+        app.state.demo_engine.dispose()
+
+    assert settings.DATABASE_URL == before
+    assert settings.DATA_COLLECTOR == "fake"
+
+
 def test_plain_settings_after_configure_still_ignore_dotenv(
     tmp_path, monkeypatch, restore_process_settings
 ):

@@ -142,15 +142,13 @@ fixture rows it skips.
 
 Each OHLC value in that JSON is a string with 8 digits after the
 decimal point, for example `"119.64060000"`, not a JSON number.
-The columns are `Numeric(20, 8)`. FastAPI serializes `Decimal` as a
-string; the model uses fixed-point so a tiny price is not written as
-`1E-8`. A JSON number or a numeric string is accepted on input, and
-extra digits are rounded half-even to 8 places. Volume stays a JSON
-integer. The string `"100"` is rejected. PostgreSQL stores the
-decimal exactly. SQLite declares the same numeric type, and its
-numeric affinity keeps the value as a real, so a price with more
-significant digits than a binary float can hold is exact on
-PostgreSQL only.
+FastAPI serializes `Decimal` as a string; the model uses fixed-point
+so a tiny price is not written as `1E-8`. A JSON number or a numeric
+string is accepted on input, and extra digits are rounded half-even
+to 8 places. Volume stays a JSON integer. The string `"100"` is
+rejected. PostgreSQL stores `Numeric(20, 8)`. SQLite stores that same
+8-place string as TEXT and reads it back as the same decimal, so both
+engines return the price string that was stored.
 
 `POST /api/v1/instruments/{id}/prices/refresh`
 upserts bars from the configured collector. With `DATA_COLLECTOR=fake`

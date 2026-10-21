@@ -4,18 +4,24 @@ The collector used here is the offline fake, or a stub that returns
 bars in memory. Nothing in this file calls a market-data provider.
 """
 
+import json
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import text
 
 from app.api.data_collection import get_collector
 from app.api.prices import _bar_from_collector, _decimal_price
 from app.data_collectors.base import PriceBar as CollectedPriceBar
 from app.data_collectors.base import Provenance, ProviderError, Sourced
 from app.data_collectors.fake import FakeCollector
-from app.models.price_bar import PriceBar, PriceBarCreate
+from app.models.price_bar import VOLUME_MAX, PriceBar, PriceBarCreate
+from tests.price_round_trip import (
+    assert_exact_round_trip,
+    assert_failed_post_leaves_no_row,
+)
 
 RETRIEVED = datetime(2026, 9, 30, 18, 0, tzinfo=timezone.utc)
 
@@ -297,6 +303,18 @@ def test_ohlc_is_decimal_and_json_is_fixed_point():
         PriceBarCreate(**_bar(open="1000000000000"))
     with pytest.raises(ValidationError):
         PriceBarCreate(**_bar(close="NaN"))
+    # 1e400 is a Decimal, but quantize raises InvalidOperation.
+    # That has to become a validation error, not an uncaught 500.
+    with pytest.raises(ValidationError) as caught:
+        PriceBarCreate(
+            **_bar(
+                open="1e400",
+                high="1e400",
+                low="1e400",
+                close="1e400",
+            )
+        )
+    assert "not a finite decimal" in str(caught.value)
 
 
 def test_collector_float_becomes_a_decimal_price():
@@ -373,6 +391,114 @@ async def test_refresh_stores_collector_floats_as_decimal_strings(client):
     assert row["low"] == "9.25000000"
     assert row["close"] == "10.75000000"
     assert row["volume"] == 3
+
+
+@pytest.mark.asyncio
+async def test_sqlite_exact_price_round_trip(client):
+    """The string that was stored is the string GET returns.
+
+    These three values are the ones a binary float cannot keep.
+    SQLite stores them as TEXT, not as a real.
+    """
+    instrument_id = await assert_exact_round_trip(client, "DEMO_EXACT_SQL")
+    with client.app.state.testing_session_local() as db:
+        stored = db.execute(
+            text(
+                "SELECT typeof(open_price), open_price FROM price_bars "
+                "WHERE instrument_id = :instrument_id"
+            ),
+            {"instrument_id": instrument_id},
+        ).all()
+    assert stored
+    assert {kind for kind, _value in stored} == {"text"}
+    assert {value for _kind, value in stored} == {
+        "999999999.99999999",
+        "999999999999.99999999",
+        "999999999999.12345678",
+    }
+
+
+@pytest.mark.asyncio
+async def test_failed_price_post_leaves_no_row(client):
+    await assert_failed_post_leaves_no_row(client, "DEMO_EXACT_FAIL")
+
+
+@pytest.mark.asyncio
+async def test_unreadable_price_is_skipped(client, caplog):
+    """One bad stored cell does not 500 the series.
+
+    The good bar is still returned. The text that is not a decimal
+    is logged and skipped. A decimal outside Numeric(20, 8) is
+    skipped by the API for the same reason.
+    """
+    instrument_id = await _company(client, ticker="DEMO_BAD_PRICE")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    good = await client.post(path, json=_bar())
+    assert good.status_code == 201, good.text
+    with client.app.state.testing_session_local() as db:
+        db.execute(
+            text(
+                "INSERT INTO price_bars ("
+                "instrument_id, bar_date, open_price, high_price, "
+                "low_price, close_price, currency, source, retrieved_at"
+                ") VALUES ("
+                ":instrument_id, '2020-01-06', "
+                "'not-a-price', 'not-a-price', 'not-a-price', "
+                "'not-a-price', 'PLN', '[IAC-DEMO-V2]', "
+                "'2020-01-06 00:00:00'"
+                "), ("
+                ":instrument_id, '2020-01-07', "
+                "'1000000000000.00000000', '1000000000000.00000000', "
+                "'1000000000000.00000000', '1000000000000.00000000', "
+                "'PLN', '[IAC-DEMO-V2]', '2020-01-07 00:00:00'"
+                ")"
+            ),
+            {"instrument_id": instrument_id},
+        )
+        db.commit()
+    with caplog.at_level("WARNING"):
+        listed = await client.get(path)
+    assert listed.status_code == 200, listed.text
+    assert [row["date"] for row in listed.json()] == ["2026-01-05"]
+    assert listed.json()[0]["open"] == "10.00000000"
+    assert "stored price" in caplog.text
+
+
+def _volume_maxima(node):
+    found = []
+    if not isinstance(node, dict):
+        return found
+    if "maximum" in node:
+        found.append(node["maximum"])
+    for key in ("anyOf", "allOf", "oneOf"):
+        for child in node.get(key) or []:
+            found.extend(_volume_maxima(child))
+    return found
+
+
+@pytest.mark.asyncio
+async def test_openapi_volume_maximum_is_an_integer(client):
+    """The served schema uses 9223372036854775807, not a float.
+
+    FastAPI's OpenAPI model types ``maximum`` as float. That float
+    is ``9.223372036854776e+18``, which is not the integer cap.
+    """
+    schema = (await client.get("/api/v1/openapi.json")).json()
+    found_volume = False
+    for body in schema["components"]["schemas"].values():
+        volume = (body.get("properties") or {}).get("volume")
+        if not isinstance(volume, dict):
+            continue
+        maxima = _volume_maxima(volume)
+        if not maxima:
+            continue
+        found_volume = True
+        assert maxima == [VOLUME_MAX] * len(maxima)
+        assert all(type(item) is int for item in maxima)
+        rendered = json.dumps(volume)
+        assert "9223372036854775807" in rendered
+        assert "9.223372036854776e+18" not in rendered
+    assert found_volume
 
 
 @pytest.mark.asyncio

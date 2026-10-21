@@ -827,7 +827,7 @@ class SqliteSeedClient:
 def _json_price(value):
     """The same fixed-point string the HTTP price API returns.
 
-    A float from an older row and a Decimal from Numeric(20, 8) both
+    A float from an older row and a Decimal from the price column both
     become 8 digits after the decimal point. Null stays null.
     """
     from decimal import Decimal
