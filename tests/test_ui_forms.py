@@ -1196,7 +1196,7 @@ async def test_edge_controls_are_422_on_edit(client):
 
 @pytest.mark.asyncio
 async def test_editing_the_description_drops_the_demo_badge(client):
-    """The synthetic badge is the [IAC-DEMO-V1] prefix, not a column.
+    """The synthetic badge is the [IAC-DEMO- prefix, not a column.
 
     Saving a description that does not start with that prefix removes
     the badge. That is today's read model.

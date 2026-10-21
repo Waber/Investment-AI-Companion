@@ -1,5 +1,40 @@
 # Development Journal
 
+## 2026-10-21 - Synthetic badge matches any [IAC-DEMO- prefix
+
+- Scope: the `/ui` synthetic-data badge. `to_instrument` still
+  reads `company.description` and still uses a case-sensitive
+  `startswith`, with no strip. The matched text is now the prefix
+  `[IAC-DEMO-` instead of the exact `[IAC-DEMO-V1]` string. V1,
+  V2, and a hypothetical V3 show the badge. An ordinary company
+  does not. A lookalike that omits the bracketed prefix does not.
+  A leading space and a different letter case stay unmarked. The
+  source text stays `demo-v1` when the row is synthetic. Models,
+  the schema, migrations, repositories, the API, and the demo
+  fixtures were not changed. This is independent of PR #83 and
+  can merge in either order.
+- Decisions: `DEMO_MARKER` stays the name, and the check stays
+  in `to_instrument`. Only the string changed. The HTML test uses
+  the existing async test client and the English catalog string
+  `synthetic data`. It inserts the rows in the test database. It
+  does not load a fixture and it does not call a market-data
+  provider. The older edit test still uses a V1 description. Its
+  comment now names the shared prefix.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1466 passed, 124 deselected, coverage 96.05%. Scoped black,
+  isort, and flake8 passed on `app/ui/view_models.py`,
+  `tests/test_ui_pages.py`, and `tests/test_ui_forms.py`.
+  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
+  GitHub Actions is not recorded yet.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 07:32 to 07:38.
+- Next: open the pull request against master and wait for both
+  GitHub Actions jobs. The owner reviews and merges with
+  "Rebase and merge". Agents do not merge. PR #83 can merge
+  before or after this one.
+
 ## 2026-10-21 - Map duplicate codes and align the company name (#80)
 
 - Scope: the remainder of

@@ -217,6 +217,61 @@ def _href_for(html, ticker):
     return match.group(1)
 
 
+def _list_row(html, ticker):
+    """The ``/ui`` table row for this ticker, including its badge cell."""
+    match = re.search(
+        rf'<tr data-ticker="{re.escape(ticker)}">.*?</tr>',
+        html,
+        flags=re.DOTALL,
+    )
+    assert match is not None, ticker
+    return match.group(0)
+
+
+# English catalog string. The list and the detail page use the same span.
+_SYNTHETIC_BADGE = '<span class="badge">synthetic data</span>'
+
+
+@pytest.mark.asyncio
+async def test_synthetic_badge_matches_the_demo_prefix(client):
+    """The badge follows ``[IAC-DEMO-``, not only the V1 marker.
+
+    The read model still looks at the stored description, with no
+    strip and no case folding. V1 keeps the badge. V2 is the marker
+    seeded by PR #83. V3 is a later marker that does not exist yet.
+    An ordinary company has no badge. A lookalike that omits the
+    bracketed prefix has no badge either. A leading space and a
+    different letter case stay unmarked, as they do today.
+    """
+    client.cookies.set("ui_lang", "en")
+    cases = (
+        ("DEMOV1", "[IAC-DEMO-V1] seeded text", True),
+        ("DEMOV2", "[IAC-DEMO-V2] seeded text", True),
+        ("DEMOV3", "[IAC-DEMO-V3] later marker", True),
+        ("ORDCO", "Ordinary company notes", False),
+        ("LOOKV2", "IAC-DEMO-V2 seeded text", False),
+        ("PADV1", " [IAC-DEMO-V1] seeded text", False),
+        ("LOWV2", "[iac-demo-v2] seeded text", False),
+    )
+    ids = {}
+    for ticker, description, _shows_badge in cases:
+        ids[ticker] = _add_company(
+            client,
+            name=f"Name {ticker}",
+            ticker=ticker,
+            description=description,
+        )
+
+    page = await client.get("/ui")
+    assert page.status_code == 200
+    for ticker, _description, shows_badge in cases:
+        row = _list_row(page.text, ticker)
+        assert (_SYNTHETIC_BADGE in row) is shows_badge, ticker
+        detail = await client.get(f"/ui/instruments/{ids[ticker]}")
+        assert detail.status_code == 200
+        assert (_SYNTHETIC_BADGE in detail.text) is shows_badge, ticker
+
+
 @pytest_asyncio.fixture
 async def seeded(client):
     session = client.app.state.testing_session_local()
