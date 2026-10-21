@@ -349,9 +349,9 @@ class Settings(BaseSettings):
 
     # How many days old a watchlist price may be before the page marks
     # it stale. The page itself is a later change. Seven days is the
-    # US2.1 proposal. The name is the environment variable, because
-    # settings are case-sensitive.
-    watchlist_stale_price_days: int = 7
+    # US2.1 proposal. Zero and negative values are rejected. The name
+    # is the environment variable, because settings are case-sensitive.
+    watchlist_stale_price_days: int = Field(7, ge=1)
 
     # Logging
     LOG_LEVEL: str = "INFO"

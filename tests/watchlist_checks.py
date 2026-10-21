@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.models.database_models import CompanyDB, WatchlistItemDB
+from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.watchlist_repository import (
     WatchlistRepository,
@@ -43,9 +44,11 @@ def assert_add_is_idempotent_and_keeps_the_first_label(session):
     company = add_company(session, "Acme", "ACME")
     repo = WatchlistRepository(session)
 
-    first = repo.add(company.id, "  core  ")
-    second = repo.add(company.id, "replaced")
+    first, created = repo.add(company.id, "  core  ")
+    second, again = repo.add(company.id, "replaced")
 
+    assert created is True
+    assert again is False
     assert second.id == first.id
     assert second.label == "core"
     assert first.added_at.tzinfo is not None
@@ -57,7 +60,8 @@ def assert_add_is_idempotent_and_keeps_the_first_label(session):
 
 def assert_blank_label_is_stored_as_null(session):
     company = add_company(session, "Blank", "BLANK")
-    row = WatchlistRepository(session).add(company.id, "   ")
+    row, created = WatchlistRepository(session).add(company.id, "   ")
+    assert created is True
     assert row.label is None
 
 
@@ -69,7 +73,8 @@ def assert_race_returns_the_existing_row(monkeypatch, session):
     """
     company = add_company(session, "Race", "RACE")
     repo = WatchlistRepository(session)
-    first = repo.add(company.id, "keep")
+    first, created = repo.add(company.id, "keep")
+    assert created is True
     original = repo.get_by_company_id
     calls = {"count": 0}
 
@@ -81,8 +86,9 @@ def assert_race_returns_the_existing_row(monkeypatch, session):
 
     monkeypatch.setattr(repo, "get_by_company_id", hide_the_first_lookup)
 
-    second = repo.add(company.id, "other")
+    second, again = repo.add(company.id, "other")
 
+    assert again is False
     assert second.id == first.id
     assert second.label == "keep"
     assert calls["count"] == 2
@@ -101,26 +107,59 @@ def assert_missing_company_is_raised_outside_the_handler(session):
     """
     repo = WatchlistRepository(session)
 
-    with pytest.raises(WatchlistStorageError) as caught:
+    with pytest.raises(CompanyNotFoundError) as caught:
         repo.add(999)
 
-    assert str(caught.value) == "Watchlist item could not be stored"
+    assert caught.value.company_id == 999
+    assert str(caught.value) == "Company 999 was not found"
     assert caught.value.__context__ is None
     assert caught.value.__cause__ is None
     assert "FOREIGN" not in str(caught.value)
     assert "UNIQUE" not in str(caught.value)
 
     company = add_company(session, "After", "AFTER")
-    stored = repo.add(company.id, "ok")
+    stored, created = repo.add(company.id, "ok")
+    assert created is True
     assert stored.company_id == company.id
+
+
+def assert_unrelated_integrity_error_is_raised_outside_the_handler(
+    monkeypatch, session
+):
+    """An integrity error that is not a missing company stays fixed.
+
+    The company row is still there, and no watchlist row was stored.
+    The error is raised after the handler, so the driver text is not
+    on ``__context__``.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    company = add_company(session, "Stuck", "STUCK")
+    repo = WatchlistRepository(session)
+
+    def fail_commit():
+        raise IntegrityError("INSERT", {}, Exception("constraint"))
+
+    monkeypatch.setattr(session, "commit", fail_commit)
+
+    with pytest.raises(WatchlistStorageError) as caught:
+        repo.add(company.id, "x")
+
+    assert str(caught.value) == "Watchlist item could not be stored"
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert "constraint" not in str(caught.value)
+    assert "IntegrityError" not in str(caught.value)
 
 
 def assert_list_orders_by_added_at_then_id(session):
     first_company = add_company(session, "First", "FIRST")
     second_company = add_company(session, "Second", "SECOND")
     repo = WatchlistRepository(session)
-    older_id = repo.add(first_company.id).id
-    newer_id = repo.add(second_company.id).id
+    older, _created = repo.add(first_company.id)
+    newer, _created = repo.add(second_company.id)
+    older_id = older.id
+    newer_id = newer.id
     older = session.get(WatchlistItemDB, older_id)
     newer = session.get(WatchlistItemDB, newer_id)
     # The later insert gets the earlier instant, so id order and
@@ -141,7 +180,7 @@ def assert_remove_is_bool_and_company_delete_cascades(session):
     other = add_company(session, "Stay", "STAY")
     repo = WatchlistRepository(session)
     repo.add(company.id, "drop")
-    kept = repo.add(other.id, "keep")
+    kept, _created = repo.add(other.id, "keep")
 
     assert repo.remove(company.id) is True
     assert repo.remove(company.id) is False
@@ -163,7 +202,7 @@ def assert_company_update_leaves_the_watchlist_row(session):
 
     company = add_company(session, "Refresh", "REFRESH")
     repo = WatchlistRepository(session)
-    item = repo.add(company.id, "still")
+    item, _created = repo.add(company.id, "still")
 
     updated = CompanyRepository(session).update(
         company.id, CompanyUpdate(name="Refresh Co")
