@@ -6,6 +6,7 @@ not add a second one. That is what makes a collector refresh safe
 to run twice.
 """
 
+import logging
 from datetime import date
 from typing import List, Optional
 
@@ -13,7 +14,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.database_models import PriceBarDB
-from app.models.price_bar import PriceBarCreate
+from app.models.price_amount import UnreadablePrice
+from app.models.price_bar import PriceBarCreate, price_to_json
+
+logger = logging.getLogger(__name__)
 
 _ALREADY_STORED = (
     "A price bar for this instrument, date, and source already exists"
@@ -71,11 +75,14 @@ class PriceBarRepository:
             query = query.filter(PriceBarDB.bar_date >= start)
         if end is not None:
             query = query.filter(PriceBarDB.bar_date <= end)
-        return query.order_by(
+        rows = query.order_by(
             PriceBarDB.bar_date.asc(),
             PriceBarDB.source.asc(),
             PriceBarDB.id.asc(),
         ).all()
+        # A cell that is not a decimal must not fail this query.
+        # Dropping the row keeps the rest of the series readable.
+        return [row for row in rows if _readable(row)]
 
     @staticmethod
     def _default_source(query) -> Optional[str]:
@@ -113,19 +120,7 @@ class PriceBarRepository:
             raise ValueError(_ALREADY_STORED)
         row = self._new_row(instrument_id, bar)
         self.db.add(row)
-        # Keep the driver error in this handler, then raise outside
-        # it. A ``raise`` written inside the ``except`` stores that
-        # driver error on ``ValueError.__context__``, and the SQL
-        # text would travel with the client error.
-        integrity_error = None
-        try:
-            self.db.commit()
-        except IntegrityError as error:
-            self.db.rollback()
-            integrity_error = error
-        if integrity_error is not None:
-            self._raise_after_integrity(instrument_id, [bar])
-        self.db.refresh(row)
+        self._flush_check_commit(instrument_id, [bar], [row], [bar])
         return row
 
     def upsert_many(
@@ -149,19 +144,43 @@ class PriceBarRepository:
             else:
                 self._copy_onto(existing, bar)
             rows.append(existing)
-        # Same as create: raise after the handler so ``__context__``
-        # does not keep the driver error.
+        self._flush_check_commit(instrument_id, inserted, rows, bars)
+        return rows
+
+    def _flush_check_commit(
+        self,
+        instrument_id: int,
+        inserted: List[PriceBarCreate],
+        rows: List[PriceBarDB],
+        bars: List[PriceBarCreate],
+    ) -> None:
+        """Flush, prove each price round-trips, then commit.
+
+        The check runs in this transaction. A value we cannot return
+        as the same price string is rolled back, so a failed write
+        leaves no row behind. ``inserted`` is only the bars this call
+        added. An update of a row that was already stored is not in
+        that list.
+        """
+        # Keep the driver error in this handler, then raise outside
+        # it. A ``raise`` written inside the ``except`` stores that
+        # driver error on ``ValueError.__context__``, and the SQL
+        # text would travel with the client error.
         integrity_error = None
         try:
+            self.db.flush()
+            for row, bar in zip(rows, bars):
+                self.db.refresh(row)
+                _require_round_trip(row, bar)
             self.db.commit()
         except IntegrityError as error:
             self.db.rollback()
             integrity_error = error
+        except ValueError:
+            self.db.rollback()
+            raise
         if integrity_error is not None:
             self._raise_after_integrity(instrument_id, inserted)
-        for row in rows:
-            self.db.refresh(row)
-        return rows
 
     def _raise_after_integrity(
         self, instrument_id: int, bars: List[PriceBarCreate]
@@ -212,3 +231,50 @@ class PriceBarRepository:
         row.volume = bar.volume
         row.currency = bar.currency
         row.retrieved_at = bar.retrieved_at
+
+
+def _readable(row: PriceBarDB) -> bool:
+    """False when any OHLC cell did not parse as a decimal."""
+    prices = (
+        row.open_price,
+        row.high_price,
+        row.low_price,
+        row.close_price,
+    )
+    if any(isinstance(price, UnreadablePrice) for price in prices):
+        logger.warning(
+            "Skipping price bar id=%s instrument_id=%s: "
+            "stored price is not a decimal",
+            row.id,
+            row.instrument_id,
+        )
+        return False
+    return True
+
+
+def _require_round_trip(row: PriceBarDB, bar: PriceBarCreate) -> None:
+    """The value just flushed must be the price we are about to return.
+
+    Called before commit. A mismatch raises, and the caller rolls the
+    transaction back.
+    """
+    pairs = (
+        (row.open_price, bar.open),
+        (row.high_price, bar.high),
+        (row.low_price, bar.low),
+        (row.close_price, bar.close),
+    )
+    for stored, expected in pairs:
+        if not _same_price(stored, expected):
+            raise ValueError(_CONSTRAINT)
+
+
+def _same_price(stored, expected) -> bool:
+    if isinstance(stored, UnreadablePrice):
+        return False
+    if stored is None or expected is None:
+        return stored is None and expected is None
+    try:
+        return price_to_json(stored) == price_to_json(expected)
+    except (ValueError, ArithmeticError):
+        return False

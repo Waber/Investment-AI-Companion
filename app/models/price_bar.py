@@ -7,17 +7,18 @@ the provenance (source and retrieval time). The two types are easy
 to mix up because they share the name. Import this one when the
 value is going into the database or out through the API.
 
-OHLC prices are ``Decimal``, stored in ``Numeric(20, 8)``. FastAPI
-asks Pydantic for JSON mode, and Pydantic encodes a ``Decimal`` as a
-string. A very small value would otherwise become ``1E-8``.
-``price_to_json`` writes fixed-point with 8 digits after the decimal
-point, so the wire value matches the column. A JSON number on input
-is still accepted and then rounded half-even to that scale.
+OHLC prices are ``Decimal``. FastAPI asks Pydantic for JSON mode, and
+Pydantic encodes a ``Decimal`` as a string. A very small value would
+otherwise become ``1E-8``. ``price_to_json`` writes fixed-point with
+8 digits after the decimal point, which is the same string SQLite
+stores and the same decimal PostgreSQL stores in ``Numeric(20, 8)``.
+A JSON number on input is still accepted and then rounded half-even
+to that scale.
 """
 
 from datetime import date as DateType
 from datetime import datetime
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import Decimal
 from typing import Annotated, Optional
 
 from pydantic import (
@@ -32,6 +33,7 @@ from pydantic import (
 
 from app.core.utc_datetime import as_utc
 from app.models.company import normalize_currency
+from app.models.price_amount import PRICE_LIMIT, quantize_price
 
 # Provenance source, for example "fake" or the demo marker. The
 # column is String(64). A longer value would be a 500 on PostgreSQL
@@ -40,21 +42,18 @@ SOURCE_MAX_LENGTH = 64
 # Signed 64-bit maximum. PostgreSQL BIGINT stores this value.
 # A larger volume is rejected here so it never becomes a database error.
 VOLUME_MAX = 2**63 - 1
-# Numeric(20, 8): 12 digits before the decimal point, 8 after.
-# 10**12 does not fit. Half-even matches the rounding SQLAlchemy
-# applies when it reads the column back.
-PRICE_PRECISION = 20
-PRICE_SCALE = 8
-_PRICE_QUANTUM = Decimal("0.00000001")
-_PRICE_LIMIT = Decimal(10) ** (PRICE_PRECISION - PRICE_SCALE)
 # Shown on each OHLC field. Input may be a JSON number or a numeric
 # string. FastAPI's response is the fixed-point string from
 # price_to_json, because Pydantic's JSON mode encodes Decimal as text.
 _PRICE_JSON = (
-    "A stored price is a JSON string with 8 decimal places, "
-    "matching Numeric(20, 8). A JSON number or a numeric string "
-    "is accepted on input. Null when unknown."
+    "A stored price is a JSON string with 8 decimal places. "
+    "A JSON number or a numeric string is accepted on input. "
+    "Null when unknown."
 )
+# float(2**63 - 1) is 9223372036854775808, printed in OpenAPI as
+# 9.223372036854776e+18. FastAPI's schema model types ``maximum``
+# as float, so the integer has to be put back after generation.
+_LOSSY_VOLUME_MAX = float(VOLUME_MAX)
 
 
 def price_to_json(value: Decimal) -> str:
@@ -62,11 +61,38 @@ def price_to_json(value: Decimal) -> str:
 
     ``format(Decimal('0.00000001'), 'f')`` is ``0.00000001``.
     Pydantic's default JSON encoding of that value is ``1E-8``.
-    The column scale is 8, so the string always has 8 digits after
-    the decimal point.
+    The scale is 8, so the string always has 8 digits after the
+    decimal point. That string is what SQLite stores.
     """
-    quantized = value.quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_EVEN)
-    return format(quantized, "f")
+    return format(quantize_price(value), "f")
+
+
+def restore_volume_openapi_maximum(schema: dict) -> None:
+    """Put the volume maximum back as an integer.
+
+    FastAPI copies each JSON Schema into its OpenAPI model, and that
+    model types ``maximum`` as ``float``. ``9223372036854775807`` is
+    not a float64 value, so the served document would say
+    ``9.223372036854776e+18``. This edits the generated dict in place.
+    Call it from ``app.openapi`` after FastAPI builds the document.
+    """
+    components = (schema.get("components") or {}).get("schemas") or {}
+    for body in components.values():
+        if not isinstance(body, dict):
+            continue
+        volume = (body.get("properties") or {}).get("volume")
+        if isinstance(volume, dict):
+            _restore_maximum(volume)
+
+
+def _restore_maximum(node: dict) -> None:
+    maximum = node.get("maximum")
+    if isinstance(maximum, float) and maximum == _LOSSY_VOLUME_MAX:
+        node["maximum"] = VOLUME_MAX
+    for key in ("anyOf", "allOf", "oneOf"):
+        for child in node.get(key) or []:
+            if isinstance(child, dict):
+                _restore_maximum(child)
 
 
 # return_type=str tells the JSON schema this field is a string.
@@ -140,19 +166,19 @@ class PriceBarBase(BaseModel):
     @field_validator("open", "high", "low", "close")
     @classmethod
     def _quantize_price(cls, value: Optional[Decimal]) -> Optional[Decimal]:
-        """Fit one price into Numeric(20, 8).
+        """Fit one price into 8 decimal places and 12 integer digits.
 
         Extra digits are rounded half-even, the same rule the column
-        uses when the value is read back. A result with 13 digits
-        before the decimal point does not fit the precision, so it is
-        rejected here. PostgreSQL would otherwise raise, and SQLite
-        would store it.
+        uses when the value is written. A result with 13 digits before
+        the decimal point does not fit. ``quantize_price`` turns an
+        exponent the decimal context cannot round (``1e400``) into
+        ``ValueError``, so this field is HTTP 422 and not HTTP 500.
         """
         if value is None:
             return None
         # Non-finite values are already rejected by allow_inf_nan.
-        quantized = value.quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_EVEN)
-        if abs(quantized) >= _PRICE_LIMIT:
+        quantized = quantize_price(value)
+        if abs(quantized) >= PRICE_LIMIT:
             raise ValueError("price exceeds Numeric(20, 8)")
         return quantized
 

@@ -1,11 +1,12 @@
 """Revision 0002 adds price_bars on top of a legacy companies table.
 
-Revision 0003 changes the OHLC columns from FLOAT to NUMERIC(20, 8).
+Revision 0003 changes the OHLC columns from FLOAT to TEXT. The text
+is the canonical 8-place price string. PostgreSQL uses NUMERIC(20, 8)
+instead, in the integration suite.
 
 The application engine is not used. SQLite is enough to see that
 upgrade creates the table and the candle checks, and that downgrade
-removes the table without dropping the company row. PostgreSQL runs
-the same checks in the integration suite.
+removes the table without dropping the company row.
 """
 
 from decimal import Decimal
@@ -100,10 +101,11 @@ def _column_types(connection):
     }
 
 
-def test_revision_0003_changes_float_prices_to_numeric(tmp_path):
-    """A float stored at 0002 is a decimal after 0003.
+def test_revision_0003_stores_sqlite_prices_as_text(tmp_path):
+    """A float stored at 0002 is the canonical string after 0003.
 
-    Downgrade returns the column to FLOAT and keeps the value.
+    Upgrade, downgrade, and upgrade again. The second upgrade still
+    stores the 8-place string. ``companies`` is not rebuilt.
     """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
     with engine.begin() as connection:
@@ -120,9 +122,12 @@ def test_revision_0003_changes_float_prices_to_numeric(tmp_path):
         assert _column_types(connection)["open_price"].startswith("FLOAT")
         connection.execute(text(_FLOAT_BAR_SQL))
         connection.commit()
+        companies_sql = connection.execute(
+            text("SELECT sql FROM sqlite_master WHERE name = 'companies'")
+        ).scalar()
         upgrade_to(connection, "head")
         kinds = _column_types(connection)
-        assert kinds["open_price"].startswith("NUMERIC")
+        assert kinds["open_price"].startswith("TEXT")
         assert check_names(connection) == set(CANDLE_CHECK_NAMES)
         stored = connection.execute(
             text(
@@ -130,18 +135,30 @@ def test_revision_0003_changes_float_prices_to_numeric(tmp_path):
                 "FROM price_bars"
             )
         ).one()
-        assert [Decimal(str(value)) for value in stored] == [
-            Decimal("10.5"),
-            Decimal("11"),
-            Decimal("9.25"),
-            Decimal("10.75"),
+        assert list(stored) == [
+            "10.50000000",
+            "11.00000000",
+            "9.25000000",
+            "10.75000000",
         ]
+        assert (
+            connection.execute(
+                text("SELECT sql FROM sqlite_master WHERE name = 'companies'")
+            ).scalar()
+            == companies_sql
+        )
         downgrade_to(connection, "0002")
         assert _column_types(connection)["open_price"].startswith("FLOAT")
         again = connection.execute(
             text("SELECT open_price FROM price_bars")
         ).scalar()
         assert Decimal(str(again)) == Decimal("10.5")
+        upgrade_to(connection, "head")
+        restored = connection.execute(
+            text("SELECT open_price FROM price_bars")
+        ).scalar()
+        assert restored == "10.50000000"
+        assert _column_types(connection)["open_price"].startswith("TEXT")
     engine.dispose()
 
 
@@ -172,8 +189,14 @@ def test_migrated_sqlite_price_bars_match_the_model(tmp_path):
     assert from_migration == from_model
     kinds = {name: kind for name, kind, _nullable in from_model["columns"]}
     for name in ("open_price", "high_price", "low_price", "close_price"):
-        assert kinds[name].startswith("NUMERIC")
-        assert "20" in kinds[name] and "8" in kinds[name]
+        assert kinds[name].startswith("TEXT")
+    sql_by_name = dict(from_model["check_sql"])
+    for name in CANDLE_CHECK_NAMES:
+        if name == "ck_price_bars_volume_gte_zero":
+            assert "CAST" not in sql_by_name[name]
+        else:
+            assert "CAST" in sql_by_name[name]
+            assert "REAL" in sql_by_name[name]
     index_names = set(from_model["indexes"])
     assert "ix_price_bars_id" not in index_names
     assert "ix_price_bars_instrument_id" not in index_names

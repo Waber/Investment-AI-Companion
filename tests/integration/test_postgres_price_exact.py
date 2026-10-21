@@ -1,0 +1,45 @@
+"""Exact OHLC round-trips on PostgreSQL.
+
+The SQLite suite covers the same HTTP contract. This module is here
+so the PostgreSQL CI job, which runs only ``integration`` tests,
+checks it too. Prices stay ``numeric``. They are not cast to float.
+"""
+
+import pytest
+from sqlalchemy import text
+
+from tests.price_round_trip import (
+    assert_exact_round_trip,
+    assert_failed_post_leaves_no_row,
+)
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.mark.asyncio
+async def test_postgres_exact_price_round_trip(postgres_client):
+    instrument_id = await assert_exact_round_trip(
+        postgres_client, "DEMO_EXACT_PG"
+    )
+    with postgres_client.app.state.testing_session_local() as db:
+        stored = db.execute(
+            text(
+                "SELECT pg_typeof(open_price)::text, open_price::text "
+                "FROM price_bars WHERE instrument_id = :instrument_id"
+            ),
+            {"instrument_id": instrument_id},
+        ).all()
+    assert stored
+    assert {kind for kind, _value in stored} == {"numeric"}
+    assert {value for _kind, value in stored} == {
+        "999999999.99999999",
+        "999999999999.99999999",
+        "999999999999.12345678",
+    }
+
+
+@pytest.mark.asyncio
+async def test_postgres_failed_price_post_leaves_no_row(postgres_client):
+    await assert_failed_post_leaves_no_row(
+        postgres_client, "DEMO_EXACT_PG_FAIL"
+    )

@@ -131,7 +131,7 @@ def list_prices(
                 status_code=422, detail="source must not be blank"
             )
     rows = PriceBarRepository(db).get_range(instrument_id, start, end, source)
-    return [db_to_price(row) for row in rows]
+    return _bars_or_skip(rows, instrument_id)
 
 
 @router.post(
@@ -246,6 +246,28 @@ def refresh_prices(
         retrieved_at=retrieved.isoformat().replace("+00:00", "Z"),
         bar_count=len(stored),
     )
+
+
+def _bars_or_skip(rows, instrument_id: int) -> List[PriceBar]:
+    """Build the response, dropping a bar the model cannot return.
+
+    The repository already drops a cell that is not a decimal. This
+    is the second net: a decimal the write model rejects (for example
+    a hand-inserted price outside Numeric(20, 8)) must not turn the
+    whole series into HTTP 500. The other bars are still returned.
+    """
+    loaded = []
+    for row in rows:
+        try:
+            loaded.append(db_to_price(row))
+        except (ValidationError, ValueError):
+            logger.warning(
+                "Skipping price bar id=%s instrument_id=%s: "
+                "stored price cannot be returned",
+                getattr(row, "id", None),
+                instrument_id,
+            )
+    return loaded
 
 
 def _decimal_price(value):

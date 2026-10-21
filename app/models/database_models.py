@@ -8,7 +8,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -19,6 +18,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utc_datetime import UTCDateTime
+from app.models.price_amount import PriceAmount, price_compare
 from app.models.research import (
     NOTE_BODY_MAX,
     THESIS_BODY_MAX,
@@ -257,7 +257,10 @@ class PriceBarDB(Base):
     does not fail the comparison that uses it. When both sides are
     present, high is at least the open and the close, low is at most
     the open and the close, high is at least the low, and volume is
-    not negative.
+    not negative. The API model is the exact check. On SQLite the
+    prices are text, so the database check casts each side to REAL
+    (a text comparison would reject low 9 and open 10). PostgreSQL
+    compares the numeric columns directly.
     """
 
     __tablename__ = "price_bars"
@@ -279,15 +282,13 @@ class PriceBarDB(Base):
         nullable=False,
     )
     bar_date = Column(Date, nullable=False)
-    # Numeric(20, 8), not Float. Twelve digits before the decimal
-    # point and eight after cover a share price without turning it
-    # into a binary fraction. PostgreSQL stores that exact decimal.
-    # SQLite's numeric affinity still keeps the value as a real; the
-    # application reads it back as Decimal rounded to this scale.
-    open_price = Column(Numeric(20, 8), nullable=True)
-    high_price = Column(Numeric(20, 8), nullable=True)
-    low_price = Column(Numeric(20, 8), nullable=True)
-    close_price = Column(Numeric(20, 8), nullable=True)
+    # PriceAmount is Numeric(20, 8) on PostgreSQL and TEXT on SQLite.
+    # The text is the canonical 8-place string, so SQLite does not
+    # round the price through a binary float.
+    open_price = Column(PriceAmount(), nullable=True)
+    high_price = Column(PriceAmount(), nullable=True)
+    low_price = Column(PriceAmount(), nullable=True)
+    close_price = Column(PriceAmount(), nullable=True)
     # BigInteger, not Integer. PostgreSQL INTEGER is int4 and rejects
     # a volume above 2_147_483_647. A busy session can be larger.
     # The Pydantic model caps the value at the signed 64-bit maximum.
@@ -306,23 +307,23 @@ class PriceBarDB(Base):
             name="uq_price_bars_instrument_date_source",
         ),
         CheckConstraint(
-            "high_price >= open_price",
+            price_compare("high_price", ">=", "open_price"),
             name="ck_price_bars_high_gte_open",
         ),
         CheckConstraint(
-            "high_price >= close_price",
+            price_compare("high_price", ">=", "close_price"),
             name="ck_price_bars_high_gte_close",
         ),
         CheckConstraint(
-            "low_price <= open_price",
+            price_compare("low_price", "<=", "open_price"),
             name="ck_price_bars_low_lte_open",
         ),
         CheckConstraint(
-            "low_price <= close_price",
+            price_compare("low_price", "<=", "close_price"),
             name="ck_price_bars_low_lte_close",
         ),
         CheckConstraint(
-            "high_price >= low_price",
+            price_compare("high_price", ">=", "low_price"),
             name="ck_price_bars_high_gte_low",
         ),
         CheckConstraint(

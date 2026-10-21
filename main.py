@@ -19,6 +19,7 @@ from app.api.watchlist import router as watchlist_router
 from app.core.config import settings
 from app.core.init_db import init_db
 from app.core.validation import request_validation_exception_handler
+from app.models.price_bar import restore_volume_openapi_maximum
 from app.ui.forms import router as ui_forms_router
 from app.ui.origin import OriginRejected, forbidden_page
 from app.ui.router import router as ui_router
@@ -160,6 +161,16 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
         StaticFiles(directory=str(STATIC_DIR)),
         name="static",
     )
+
+    def openapi() -> Dict:
+        # FastAPI stores ``maximum`` as float. 2**63-1 is not exact
+        # in float64, so volume's maximum would be a rounded float.
+        # Put the integer back on the dict FastAPI cached.
+        schema = FastAPI.openapi(application)
+        restore_volume_openapi_maximum(schema)
+        return schema
+
+    application.openapi = openapi
 
     return application
 

@@ -244,6 +244,9 @@ def test_revision_0003_changes_float_prices_to_numeric(postgres_engine):
                 Decimal("9.25"),
                 Decimal("10.75"),
             ]
+            check_sql = dict(price_bar_structure(connection)["check_sql"])
+            for name in CANDLE_CHECK_NAMES:
+                assert "CAST" not in check_sql[name]
             downgrade_to(connection, "0002")
             restored = _column_types(connection)["open_price"]
             assert "NUMERIC" not in restored
@@ -251,5 +254,12 @@ def test_revision_0003_changes_float_prices_to_numeric(postgres_engine):
                 text("SELECT open_price FROM price_bars")
             ).scalar()
             assert Decimal(str(again)) == Decimal("10.5")
+            upgrade_to(connection, "head")
+            kind_again = _column_types(connection)["open_price"]
+            assert kind_again.startswith("NUMERIC")
+            round_trip = connection.execute(
+                text("SELECT open_price FROM price_bars")
+            ).scalar()
+            assert Decimal(str(round_trip)) == Decimal("10.5")
         finally:
             _drop(connection)

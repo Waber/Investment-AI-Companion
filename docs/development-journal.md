@@ -1,6 +1,71 @@
 # Development Journal
 
+## 2026-10-21 - QA round 1 on price bars (PR #94)
+
+- Scope: QA round 1 on PR #94, head `8360ef8`, was not approved.
+  Same branch `cursor/price-bar-followups-85-5c38`. The contract on
+  both engines: the API never returns a price string different from
+  the one it stored, and no read returns HTTP 500.
+  `templates/`, `static/`, and `app/ui/` were not edited. Revision
+  `0003` keeps its number. Re-chain still waits until #87, #90, or
+  #91 merges.
+- Decisions: `PriceAmount` is a SQLAlchemy `TypeDecorator`.
+  `load_dialect_impl` uses `Numeric(20, 8)` on PostgreSQL and
+  `TEXT` on SQLite. `process_bind_param` writes the canonical
+  8-place string on SQLite and a `Decimal` on PostgreSQL.
+  `process_result_value` parses that string back with `Decimal`.
+  A cell that is not a decimal becomes `UnreadablePrice` instead
+  of raising, because a raise during load aborts the whole SELECT.
+  The repository logs the bar id and skips that row. The API also
+  skips a row the response model rejects, so one bad bar cannot
+  500 the series. `create` and `upsert_many` flush, read the row
+  back, and compare the fixed-point strings before commit. A
+  mismatch rolls the transaction back, so a failed write leaves
+  no row. OHLC checks stay in the Pydantic model, which is the
+  exact check. On SQLite the database check uses
+  `CAST(column AS REAL)`, because a text comparison treats
+  `'10' >= '9'` as false and would reject a valid candle. PostgreSQL
+  compares the numeric columns. Revision 0002 had created those
+  checks on FLOAT, and PostgreSQL kept `::double precision` after
+  a type change, so upgrade drops the five OHLC checks and creates
+  them again after the columns are numeric. The SQLite rebuild is
+  `batch_alter_table` on `price_bars` only. `companies` is not
+  rebuilt. The migration uses frozen literals and does not import
+  the application. `Decimal('1e400')` makes `quantize` raise
+  `InvalidOperation`, which is not a `ValueError`. That is caught
+  and re-raised as `ValueError`, so the API returns 422. FastAPI's
+  OpenAPI model types `maximum` as float, which turns
+  `9223372036854775807` into `9.223372036854776e+18`. After FastAPI
+  builds the document, the volume maximum is put back as that
+  integer. After a fake refresh the default series is the 252
+  `fake` bars. The demo-v2 fixture is returned only for
+  `source=[IAC-DEMO-V2]`. `docs/demo-data.md` no longer says SQLite
+  keeps a binary float.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market-data calls. Scoped black, isort, and flake8 passed.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1542 passed, 137 deselected, coverage 95.88%
+  (3728 statements, 130 miss, 1034 branches, 50 partial).
+  Local PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`,
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 137 passed, 1542 deselected. The Actions run id is recorded
+  on the pull request after both jobs are green. This commit does
+  not exist only to note CI.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 16:38 to 17:00.
+- Next: the owner reviews PR #94 again and merges with
+  "Rebase and merge". Agents do not merge. If #87, #90, or #91
+  merges first, re-chain revision `0003`.
+
 ## 2026-10-21 - Price bar follow-ups (#85)
+
+Superseded for SQLite storage by the QA round 1 entry above.
+The decimal note in this entry described numeric affinity before
+that fix.
 
 - Scope: follow-ups from PR #83, issue
   [#85](https://github.com/Waber/Investment-AI-Companion/issues/85).
