@@ -1,5 +1,65 @@
 # Development Journal
 
+## 2026-10-21 - Review delta on price bars (PR #94)
+
+- Scope: code review on #94 at `82e0b20` requested small changes.
+  Same branch, one commit. `0006` still revises `0005`. The pull
+  request stays ready. `templates/`, `static/`, and `app/ui/`
+  were not edited.
+- Decisions: `docs/work-state.md` stays a short snapshot and
+  adds "Open work elsewhere". The trim had dropped other teams'
+  open items. Restored, one bullet each: #33 (`/ui` forms and
+  HTTP API; backend merged in #91), #32 (watchlist page,
+  stale-price marker, and PL/EN strings; backend merged in
+  #90), #8/#10 (the `0001_baseline.py` plan; prices, the
+  watchlist, and notes now have later revisions; `init_db`
+  still uses `create_all`), and the rest of #86 (one text
+  validator for names, labels, notes, and theses: Tag,
+  U+206A–U+206F, U+061C, the Cs gap, Co/Cn treated as blank;
+  the `/ui` part is to be agreed with the Frontend Developer).
+  Also still open, and not superseded by this pull request:
+  #28 fund attributes and forms, #54 (`hide_exceptions` and
+  the balance-sheet ratio), the #26 remainder (no Instrument
+  rename, no unique `(ticker, exchange)`, no company-list
+  filters, metrics not limited to stocks), #34 (`source=manual`
+  and a synthetic marker that survives a description edit),
+  and the fake collector still serving demo-v1 profiles.
+  `StatementError` includes `DBAPIError`. `IntegrityError` is
+  still caught first, so a duplicate keeps the duplicate
+  sentence. A lost connection, a locked database, or
+  `DataError` is rolled back and re-raised unchanged. The
+  price routes map `ValueError` to HTTP 400, so swallowing
+  the driver error was turning a 500 into a 400. Only a bind
+  `ValueError` on `error.orig` becomes "Price bar could not
+  be stored", and that raise sits outside the handler so
+  `__context__` does not keep the SQL. SQLite text `NaN`
+  survives `quantize`, and `abs(NaN)` then raises
+  `InvalidOperation` outside the old try, which aborted the
+  upgrade with a traceback. `is_finite` inside the try names
+  the id. Text `Infinity` already fails inside `quantize`.
+  The default source is one `max(retrieved_at)`, then the
+  distinct source names at that instant, then Python `max`.
+  A tie does not load the full rows. `render_item` says
+  autogenerate would render `NUMERIC` on SQLite for a future
+  table. The live SQLite column is TEXT, so a new migration
+  still has to say so, the way `0006` does.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. No live market-data calls. Scoped black, isort, and
+  flake8 passed on the Python this change touches. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1718 passed, 216 deselected, coverage 96.35%
+  (4318 statements, 131 miss, 1188 branches, 54 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 216 passed, 1718 deselected. The Actions run id is
+  recorded on the pull request after both jobs are green. This
+  commit is the review delta, not a CI note.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-21 about 19:13 to 19:26.
+- Next: both GitHub Actions jobs on this head. The pull request
+  stays ready for review. Agents do not merge.
+
 ## 2026-10-21 - QA delta on the price preflight (PR #94)
 
 - Scope: one medium and two nits on #94 at `310c960`. Same

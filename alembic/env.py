@@ -45,7 +45,10 @@ def render_item(type_, obj, autogen_context):
     ``PriceAmount`` would be written the same way, as
     ``app.models.price_amount.PriceAmount()``, and that name is not
     imported either. The column is ``NUMERIC(20, 8)`` in a migration.
-    Alembic already imports ``sqlalchemy as sa``.
+    Alembic already imports ``sqlalchemy as sa``. Autogenerate would
+    render NUMERIC on SQLite for a future table too. The live SQLite
+    column is TEXT; a new migration still has to say so itself, the
+    way revision ``0006`` does.
     """
     if type_ == "type" and isinstance(obj, UTCDateTime):
         autogen_context.imports.add(

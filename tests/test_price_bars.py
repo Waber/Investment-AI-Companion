@@ -1250,6 +1250,95 @@ def _unvalidated_oversized_bar(**overrides):
     return PriceBarCreate.model_construct(**values)
 
 
+def test_a_database_operational_error_is_reraised():
+    """A locked database is not turned into a client ``ValueError``.
+
+    ``OperationalError`` is a ``StatementError``. The repository
+    rolls the transaction back and lets the driver error through,
+    so the API can answer 500. Autoflush is off so the lookup
+    query does not call the patched flush before the insert.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    engine, session, repo, instrument_id = _sqlite_price_repo()
+    try:
+        repo.create(instrument_id, PriceBarCreate(**_bar()))
+        rollbacks = {"count": 0}
+        real_rollback = session.rollback
+
+        def fail_flush(*args, **kwargs):
+            raise OperationalError(
+                "INSERT", {}, Exception("database is locked")
+            )
+
+        def count_rollback():
+            rollbacks["count"] += 1
+            return real_rollback()
+
+        session.autoflush = False
+        session.flush = fail_flush
+        session.rollback = count_rollback
+        with pytest.raises(OperationalError, match="database is locked"):
+            repo.create(
+                instrument_id, PriceBarCreate(**_bar(date="2026-01-06"))
+            )
+        assert rollbacks["count"] == 1
+        assert list(session.new) == []
+        rows = _stored_price_rows(session)
+        assert [row.bar_date for row in rows] == [date(2026, 1, 5)]
+        with pytest.raises(OperationalError, match="database is locked"):
+            repo.upsert_many(
+                instrument_id,
+                [PriceBarCreate(**_bar(date="2026-01-07"))],
+            )
+        assert rollbacks["count"] == 2
+        assert list(session.new) == []
+        rows = _stored_price_rows(session)
+        assert [row.bar_date for row in rows] == [date(2026, 1, 5)]
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_database_operational_error_is_http_500(client, monkeypatch):
+    """A locked database on POST is 500, and the new bar is not stored.
+
+    The ASGI transport re-raises after the server has already sent
+    500. This client turns that off so the status is the assertion.
+    """
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm import Session
+
+    instrument_id = await _company(client, ticker="DEMO_LOCKED")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    rollbacks = {"count": 0}
+    real_rollback = Session.rollback
+
+    def fail_flush(self, *args, **kwargs):
+        raise OperationalError("INSERT", {}, Exception("database is locked"))
+
+    def count_rollback(self, *args, **kwargs):
+        rollbacks["count"] += 1
+        return real_rollback(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "flush", fail_flush)
+    monkeypatch.setattr(Session, "rollback", count_rollback)
+    async with AsyncClient(
+        transport=ASGITransport(app=client.app, raise_app_exceptions=False),
+        base_url="http://127.0.0.1",
+    ) as quiet:
+        response = await quiet.post(path, json=_bar())
+    assert response.status_code == 500
+    assert rollbacks["count"] >= 1
+    assert "INSERT" not in response.text
+    monkeypatch.undo()
+    listed = await client.get(path)
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == []
+
+
 def test_unvalidated_price_rolls_back_without_sql_in_the_message():
     """A bind error is a fixed ValueError, and the new row is gone.
 
