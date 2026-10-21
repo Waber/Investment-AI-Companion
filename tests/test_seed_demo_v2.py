@@ -6,6 +6,7 @@ covered by the tests that load ``fixtures/demo-v2.json``.
 """
 
 import copy
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -72,10 +73,23 @@ class _Client:
             owner = int(path.rsplit("/", 1)[1].split("?", 1)[0])
             return [row for row in self.metrics if row["company_id"] == owner]
         if method == "GET" and path.startswith("/api/v1/instruments/"):
-            owner = int(path.split("/")[4])
-            return [
+            parsed = urlsplit(path)
+            owner = int(parsed.path.split("/")[4])
+            rows = [
                 row for row in self.prices if row["instrument_id"] == owner
             ]
+            chosen = parse_qs(parsed.query).get("source", [None])[0]
+            if chosen is None and rows:
+                # Same default as the API: latest retrieval, then the
+                # source name that sorts last.
+                winner = max(
+                    rows,
+                    key=lambda row: (row["retrieved_at"], row["source"]),
+                )
+                chosen = winner["source"]
+            if chosen is not None:
+                rows = [row for row in rows if row["source"] == chosen]
+            return rows
         if method == "POST" and path == "/api/v1/companies/":
             row = dict(payload, id=len(self.companies) + 1)
             self.companies.append(row)
@@ -114,6 +128,33 @@ def test_second_apply_skips_prices_as_well_as_companies():
         "pending": 0,
     }
     assert len(client.prices) == 1
+
+
+def test_seed_skips_demo_prices_when_a_newer_source_is_the_default():
+    """The seeder names its own source.
+
+    A newer ``fake`` bar would be the default list. The fixture row
+    must still be seen and skipped, not inserted again.
+    """
+    fixture = _fixture()
+    client = _Client()
+    seed.seed_demo(fixture, client, apply=True)
+    client.prices.append(
+        {
+            "id": 99,
+            "instrument_id": 1,
+            "date": "2026-01-05",
+            "source": "fake",
+            "retrieved_at": "2026-10-01T18:00:00Z",
+        }
+    )
+    second = seed.seed_demo(fixture, client, apply=True)
+    assert second["prices"] == {
+        "created": 0,
+        "skipped": 1,
+        "pending": 0,
+    }
+    assert len(client.prices) == 2
 
 
 def test_dry_run_leaves_prices_pending():

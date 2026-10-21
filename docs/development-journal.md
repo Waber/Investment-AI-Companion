@@ -1,5 +1,54 @@
 # Development Journal
 
+## 2026-10-21 - Code review round 1 on price bars (PR #83)
+
+- Scope: the review on `e346725`. Volume is BIGINT so a session
+  above 2,147,483,647 is stored on PostgreSQL. The price list
+  defaults to one source. A failed insert that leaves no row is a
+  generic constraint error, not "already exists". A collector
+  `ValidationError` is HTTP 502 before the `ValueError` handler.
+  Deleting a company cascades to its bars. The redundant indexes
+  on `id` and `instrument_id` are gone. The fixture test pins
+  1777 bars. `templates/`, `static/`, and `app/ui/` were not
+  edited. Float prices stay. The `/ui` badge stays with the
+  Frontend Developer. This entry also records the green run for
+  `e346725`, which the previous note had left on `03952d9`.
+- Decisions: `volume` is `BigInteger` in the model and in Alembic
+  `0002` (edited in place; the revision is unreleased). The
+  Pydantic field rejects a volume above `2**63 - 1`. The default
+  list keeps the source with the latest `retrieved_at` in the
+  date range. A tie keeps the source name that sorts last, so
+  `fake` wins a tie with `[IAC-DEMO-V2]`. Pass `source` to read
+  the other series. The seeder requests `source=[IAC-DEMO-V2]`
+  so a newer refresh does not hide the rows it skips. After
+  rollback, `get_by_key` on the keys this call tried to insert
+  decides the message: a row means the duplicate sentence, no
+  row means "Price bar could not be stored". Both raises are
+  outside the handler, so `__context__` is `None`. The collector
+  `ValidationError` uses the fixed provider sentence and is not
+  logged with the provider's values. `passive_deletes=True` and
+  `ON DELETE CASCADE` let the database remove bars. The unique
+  key already indexes `instrument_id`, and the primary key
+  already indexes `id`.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  SQLite CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1510 passed, 134 deselected, coverage 96.30%
+  (3558 statements, 112 miss, 978 branches, 40 partial).
+  PostgreSQL, `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`:
+  134 passed, 1510 deselected. Scoped black, isort, and flake8
+  passed on the Python this change owns. No live market-data
+  call.
+- AI model: Grok 4.7. Account usage was not available in this
+  session, so no usage percent was recorded.
+- Time tracking (UTC): 2026-10-21 about 07:48 to 07:57.
+- Next: one push of this commit. No follow-up commit to record
+  the Actions run. PR #83 still says Refs #27 and stays
+  unmerged. Agents do not merge.
+
 ## 2026-10-21 - QA round 1 on price bars (PR #83)
 
 - Scope: the candle bounds on a stored bar. `PriceBarCreate`
@@ -39,6 +88,10 @@
   ([run 39563380255](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563380255)):
   SQLite job 119099695642, 1503 passed, 131 deselected, coverage
   96.30%. PostgreSQL job 119099695294, 131 passed, 1503
+  deselected. The docs commit `e346725` succeeded
+  ([run 39563741560](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563741560)):
+  SQLite job 119100911310, 1503 passed, 131 deselected, coverage
+  96.30%. PostgreSQL job 119100911030, 131 passed, 1503
   deselected.
 - AI model: Grok 4.7. Account usage was not available in this
   session, so no usage percent was recorded.

@@ -27,6 +27,9 @@ from app.models.company import normalize_currency
 # column is String(64). A longer value would be a 500 on PostgreSQL
 # and a silent store on SQLite, so the limit lives on the write model.
 SOURCE_MAX_LENGTH = 64
+# Signed 64-bit maximum. PostgreSQL BIGINT stores this value.
+# A larger volume is rejected here so it never becomes a database error.
+VOLUME_MAX = 2**63 - 1
 
 
 class PriceBarBase(BaseModel):
@@ -45,7 +48,9 @@ class PriceBarBase(BaseModel):
     low: Optional[float] = Field(None, description="Lowest price")
     close: Optional[float] = Field(None, description="Closing price")
     volume: Optional[int] = Field(
-        None, description="Volume for the session, or null when unknown"
+        None,
+        le=VOLUME_MAX,
+        description="Volume for the session, or null when unknown",
     )
     currency: str = Field(
         ...,

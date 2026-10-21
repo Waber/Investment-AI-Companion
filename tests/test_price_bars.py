@@ -215,6 +215,93 @@ def test_price_model_rejects_nan_and_a_blank_source():
         PriceBarCreate(**_bar(source="   "))
     with pytest.raises(ValidationError):
         PriceBarCreate(**_bar(source=12))
+    with pytest.raises(ValidationError):
+        PriceBarCreate(**_bar(volume=2**63))
+
+
+@pytest.mark.asyncio
+async def test_sqlite_stores_a_volume_above_int32(client):
+    """3_000_000_000 fits in BIGINT and in the Pydantic cap."""
+    instrument_id = await _company(client, ticker="DEMO_BIG_VOL")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    created = await client.post(path, json=_bar(volume=3_000_000_000))
+    assert created.status_code == 201, created.text
+    assert created.json()["volume"] == 3_000_000_000
+
+
+@pytest.mark.asyncio
+async def test_default_list_is_one_source(client):
+    """Two sources on one date do not both come back by default.
+
+    The later retrieval wins. The same retrieval time keeps the
+    source name that sorts last. ``source`` reads the other series.
+    """
+    instrument_id = await _company(client, ticker="DEMO_TWO_SRC")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    older = await client.post(
+        path,
+        json=_bar(source="[IAC-DEMO-V2]", retrieved_at="2026-09-30T18:00:00Z"),
+    )
+    assert older.status_code == 201, older.text
+    newer = await client.post(
+        path,
+        json=_bar(source="fake", retrieved_at="2026-10-01T18:00:00Z"),
+    )
+    assert newer.status_code == 201, newer.text
+
+    listed = await client.get(path)
+    assert [row["source"] for row in listed.json()] == ["fake"]
+    demo = await client.get(path, params={"source": "[IAC-DEMO-V2]"})
+    assert [row["source"] for row in demo.json()] == ["[IAC-DEMO-V2]"]
+
+    tied = await client.post(
+        path,
+        json=_bar(
+            date="2026-01-12",
+            source="aaa",
+            retrieved_at="2026-10-02T18:00:00Z",
+        ),
+    )
+    assert tied.status_code == 201, tied.text
+    other = await client.post(
+        path,
+        json=_bar(
+            date="2026-01-12",
+            source="zzz",
+            retrieved_at="2026-10-02T18:00:00Z",
+        ),
+    )
+    assert other.status_code == 201, other.text
+    that_day = await client.get(
+        path, params={"from": "2026-01-12", "to": "2026-01-12"}
+    )
+    assert [row["source"] for row in that_day.json()] == ["zzz"]
+    blank = await client.get(path, params={"source": "   "})
+    assert blank.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_collector_validation_error_is_a_fixed_502(client):
+    """A ValidationError raised by the collector is not a 422.
+
+    ValidationError is a ValueError. The route must catch it first.
+    The message contains the bad price, and the body must not.
+    """
+    instrument_id = await _company(client)
+
+    class Invalid:
+        def fetch_price_history(self, ticker, period="1y", interval="1d"):
+            PriceBarCreate(**_bar(low=9.5, high=1.0, open=1.0, close=1.0))
+
+    _use(client, Invalid())
+    response = await client.post(
+        f"/api/v1/instruments/{instrument_id}/prices/refresh"
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Data provider error"
+    assert "9.5" not in response.text
+    listed = await client.get(f"/api/v1/instruments/{instrument_id}/prices")
+    assert listed.json() == []
 
 
 @pytest.mark.asyncio
@@ -276,12 +363,18 @@ async def test_refresh_keeps_null_prices_and_a_different_source(client):
 
     listed = await client.get(f"/api/v1/instruments/{instrument_id}/prices")
     rows = listed.json()
-    assert len(rows) == 2
-    stored = next(row for row in rows if row["source"] == "stub")
-    assert stored["open"] is None
-    assert stored["close"] is None
-    assert stored["volume"] is None
-    assert any(row["source"] == "[IAC-DEMO-V2]" for row in rows)
+    # Same retrieval time. The source name that sorts last is the
+    # default series, so the list is not both sources at once.
+    assert len(rows) == 1
+    assert rows[0]["source"] == "stub"
+    assert rows[0]["open"] is None
+    assert rows[0]["close"] is None
+    assert rows[0]["volume"] is None
+    seeded_rows = await client.get(
+        f"/api/v1/instruments/{instrument_id}/prices",
+        params={"source": "[IAC-DEMO-V2]"},
+    )
+    assert [row["source"] for row in seeded_rows.json()] == ["[IAC-DEMO-V2]"]
 
 
 @pytest.mark.asyncio
@@ -407,12 +500,8 @@ async def test_provider_error_is_a_fixed_502(client):
     assert "secret" not in response.text
 
 
-def test_a_lost_insert_race_is_a_value_error():
-    """The pre-check can miss a row that lands before COMMIT.
-
-    The unique index is the backstop. Both create and upsert turn
-    that integrity error into the same sentence, with no SQL text.
-    """
+def _race_repo():
+    """A repository whose next commit raises, and a stored company."""
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
@@ -428,30 +517,75 @@ def test_a_lost_insert_race_is_a_value_error():
     )
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
+    session.add(
+        CompanyDB(name="Synthetic", ticker="DEMO_RACE", currency="USD")
+    )
+    session.commit()
+    instrument_id = session.query(CompanyDB).one().id
+    repo = PriceBarRepository(session)
+
+    def fail_commit():
+        raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+
+    session.commit = fail_commit
+    return engine, session, repo, instrument_id
+
+
+def test_a_lost_insert_race_is_already_stored_when_the_row_remains():
+    """The pre-check misses a row that is there after rollback.
+
+    That row is a duplicate. The driver text is not the message, and
+    it is not chained on ``__context__``.
+    """
+    engine, session, repo, instrument_id = _race_repo()
     try:
-        session.add(
-            CompanyDB(name="Synthetic", ticker="DEMO_RACE", currency="USD")
-        )
-        session.commit()
-        instrument_id = session.query(CompanyDB).one().id
-        repo = PriceBarRepository(session)
         bar = PriceBarCreate(**_bar())
-        repo.create(instrument_id, bar)
+        calls = {"count": 0}
 
-        def fail_commit():
-            raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+        def hide_then_find(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return None
+            return object()
 
-        session.commit = fail_commit
-        repo.get_by_key = lambda *args, **kwargs: None
+        repo.get_by_key = hide_then_find
         with pytest.raises(ValueError, match="already exists") as caught:
             repo.create(instrument_id, bar)
         assert "duplicate key" not in str(caught.value)
         assert caught.value.__context__ is None
         assert caught.value.__cause__ is None
+
+        calls["count"] = 0
         with pytest.raises(ValueError, match="already exists") as upserted:
+            repo.upsert_many(instrument_id, [bar])
+        assert "duplicate key" not in str(upserted.value)
+        assert upserted.value.__context__ is None
+        assert upserted.value.__cause__ is None
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_integrity_error_without_a_row_is_a_generic_constraint_error():
+    """A failed commit that leaves no row is not reported as a duplicate."""
+    engine, session, repo, instrument_id = _race_repo()
+    try:
+        bar = PriceBarCreate(**_bar())
+        repo.get_by_key = lambda *args, **kwargs: None
+        with pytest.raises(
+            ValueError, match="^Price bar could not be stored$"
+        ) as caught:
+            repo.create(instrument_id, bar)
+        assert caught.value.__context__ is None
+        assert caught.value.__cause__ is None
+        assert "duplicate key" not in str(caught.value)
+        with pytest.raises(
+            ValueError, match="^Price bar could not be stored$"
+        ) as upserted:
             repo.upsert_many(instrument_id, [bar])
         assert upserted.value.__context__ is None
         assert upserted.value.__cause__ is None
+        assert "duplicate key" not in str(upserted.value)
     finally:
         session.close()
         engine.dispose()
@@ -465,7 +599,15 @@ async def test_deleting_the_instrument_deletes_its_bars(client):
         json=_bar(),
     )
     assert created.status_code == 201
+    with client.app.state.testing_session_local() as db:
+        from app.models.database_models import PriceBarDB
+
+        assert db.query(PriceBarDB).count() == 1
     deleted = await client.delete(f"/api/v1/companies/{instrument_id}")
     assert deleted.status_code == 204
+    with client.app.state.testing_session_local() as db:
+        from app.models.database_models import PriceBarDB
+
+        assert db.query(PriceBarDB).count() == 0
     missing = await client.get(f"/api/v1/instruments/{instrument_id}/prices")
     assert missing.status_code == 404
