@@ -175,10 +175,14 @@ def _sqlite_oversized_ids(bind):
                 continue
             try:
                 quantized = _quantized_legacy(raw)
+                # ``Decimal('NaN')`` quantizes without raising.
+                # ``abs(NaN) >= limit`` then raises outside this
+                # try, which would abort the upgrade with a
+                # traceback instead of the id list.
+                if not quantized.is_finite() or abs(quantized) >= _PRICE_LIMIT:
+                    bad.append(row.id)
+                    break
             except (InvalidOperation, ValueError):
-                bad.append(row.id)
-                break
-            if abs(quantized) >= _PRICE_LIMIT:
                 bad.append(row.id)
                 break
     return bad

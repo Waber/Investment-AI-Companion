@@ -10,8 +10,8 @@ import logging
 from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import tuple_
-from sqlalchemy.exc import IntegrityError, StatementError
+from sqlalchemy import func, tuple_
+from sqlalchemy.exc import DBAPIError, IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from app.models.database_models import PriceBarDB
@@ -94,19 +94,26 @@ class PriceBarRepository:
     def _default_source(query) -> Optional[str]:
         """The one source a list uses when the caller did not name one.
 
-        The latest ``retrieved_at`` is chosen in SQL. Sources that
-        share that instant are ordered in Python. ``max`` compares
-        code points, which matches SQLite's byte order for these
-        names. PostgreSQL ``en_US.UTF-8`` can ignore ``[``, so
-        ``ORDER BY source`` would let ``[IAC-DEMO-V2]`` beat ``fake``.
+        The latest ``retrieved_at`` is one aggregate. The source
+        names at that instant are a second, narrow query. Ordering
+        those names in Python compares code points, which matches
+        SQLite's byte order. PostgreSQL ``en_US.UTF-8`` can ignore
+        ``[``, so ``ORDER BY source`` would let ``[IAC-DEMO-V2]``
+        beat ``fake``. The full bar is not loaded: a tie can be
+        every session of one source.
         """
-        latest = query.order_by(PriceBarDB.retrieved_at.desc()).first()
-        if latest is None:
+        latest_at = query.with_entities(
+            func.max(PriceBarDB.retrieved_at)
+        ).scalar()
+        if latest_at is None:
             return None
-        tied = query.filter(
-            PriceBarDB.retrieved_at == latest.retrieved_at
-        ).all()
-        return max(row.source for row in tied)
+        sources = (
+            query.filter(PriceBarDB.retrieved_at == latest_at)
+            .with_entities(PriceBarDB.source)
+            .distinct()
+            .all()
+        )
+        return max(source for (source,) in sources)
 
     def get_by_key(
         self, instrument_id: int, bar_date: date, source: str
@@ -204,14 +211,18 @@ class PriceBarRepository:
         # it. A ``raise`` written inside the ``except`` stores that
         # driver error on ``ValueError.__context__``, and the SQL
         # text would travel with the client error.
-        # ``IntegrityError`` is a ``StatementError``. It is caught
-        # first so a duplicate still uses the duplicate sentence.
-        # A ``ValueError`` from the column type is wrapped as
-        # ``StatementError`` and carries the SQL. That wrapper is
-        # turned into the fixed sentence outside this handler, so
-        # ``__context__`` does not keep the driver error.
+        # ``IntegrityError`` is a ``DBAPIError``, which is a
+        # ``StatementError``. It is caught first so a duplicate
+        # still uses the duplicate sentence. A lost connection or
+        # a locked database is also a ``DBAPIError``. That one is
+        # rolled back and re-raised, so the API answers 500.
+        # A ``ValueError`` from the column type is a
+        # ``StatementError`` whose ``orig`` is that ``ValueError``.
+        # Only that case becomes the fixed sentence, and the raise
+        # is outside this handler so ``__context__`` does not keep
+        # the SQL.
         integrity_error = None
-        statement_error = False
+        bind_error = False
         try:
             self.db.flush()
             self._reload_flushed(rows)
@@ -221,13 +232,17 @@ class PriceBarRepository:
         except IntegrityError as error:
             self.db.rollback()
             integrity_error = error
-        except StatementError:
+        except StatementError as error:
             self.db.rollback()
-            statement_error = True
+            if isinstance(error, DBAPIError) or not isinstance(
+                getattr(error, "orig", None), ValueError
+            ):
+                raise
+            bind_error = True
         except ValueError:
             self.db.rollback()
             raise
-        if statement_error:
+        if bind_error:
             raise ValueError(_CONSTRAINT) from None
         if integrity_error is not None:
             self._raise_after_integrity(instrument_id, inserted)

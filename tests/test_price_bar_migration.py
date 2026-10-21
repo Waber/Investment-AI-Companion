@@ -345,6 +345,61 @@ def test_oversized_legacy_prices_abort_the_sqlite_upgrade(tmp_path):
     engine.dispose()
 
 
+def test_sqlite_text_nan_aborts_the_upgrade(tmp_path):
+    """The text ``NaN`` is a decimal that is not finite.
+
+    ``Decimal('NaN').quantize`` does not raise, and comparing it
+    with ``>=`` raises ``InvalidOperation``. The preflight has to
+    report the id instead. ``Infinity`` text is the same class of
+    stored value.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'nan.db'}")
+    with engine.begin() as connection:
+        _legacy_company(connection)
+    with engine.connect() as connection:
+        upgrade_to(connection, "0005")
+        connection.execute(
+            text(
+                "INSERT INTO price_bars ("
+                "id, instrument_id, bar_date, open_price, high_price, "
+                "low_price, close_price, volume, currency, source, "
+                "retrieved_at) VALUES "
+                "(1, 1, '2024-05-01', 'NaN', 'NaN', 'NaN', 'NaN', 1, "
+                "'USD', 'nan', '2024-05-01 00:00:00'), "
+                "(2, 1, '2024-05-02', 'Infinity', 'Infinity', "
+                "'Infinity', 'Infinity', 1, 'USD', 'inf', "
+                "'2024-05-02 00:00:00')"
+            )
+        )
+        connection.commit()
+        before = connection.execute(
+            text("SELECT id, open_price FROM price_bars ORDER BY id")
+        ).all()
+
+    with pytest.raises(RuntimeError) as error:
+        with engine.connect() as connection:
+            upgrade_to(connection, "head")
+
+    assert type(error.value).__name__ == "OversizedPricesError"
+    assert str(error.value) == (
+        "price_bars ids 1, 2 have a price outside Numeric(20, 8) "
+        "or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
+    with engine.connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar()
+            == "0005"
+        )
+        after = connection.execute(
+            text("SELECT id, open_price FROM price_bars ORDER BY id")
+        ).all()
+        assert after == before
+    engine.dispose()
+
+
 # These floats are below 1e12. SQLite's REAL-to-text cast, then the
 # same quantize the upgrade uses, turns each of them into 1e12.
 _ROUNDS_TO_LIMIT = (
