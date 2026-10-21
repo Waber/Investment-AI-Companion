@@ -1,5 +1,34 @@
 # Current Work State
 
+## QA follow-up on the ticker preflight (PR #87): 2026-10-21
+
+- Branch `cursor/ticker-unique-and-alembic-0e9d`. Not rebased.
+  Revision stays `0002`. Pull request #83 also adds a revision
+  `0002` and merges first. After that lands, rebase onto
+  `origin/master` and renumber this revision to `0003` with
+  `down_revision` pointing at #83's `0002`. That renumber is not
+  in this commit.
+- Completed: the migration and `scripts.check_duplicate_tickers`
+  group by `UPPER(TRIM(ticker))`. `aapl` and `AAPL ` fail the
+  preflight. The message quotes the stored rows. Nothing is
+  rewritten. `OperationalError` prints one line to stderr and
+  exits 1. `ScriptDirectory.get_heads()` is asserted to have
+  length 1. SQLite and PostgreSQL both cover the collision.
+- Incomplete: #8's instrument baseline and the rest of #86, as
+  in the section below. The `0002` to `0003` renumber waits for
+  #83.
+- Tests: no `.env`. SQLite CI command: 1485 passed, 128
+  deselected, coverage 95.94%. PostgreSQL `-m integration` with
+  `REQUIRE_POSTGRES=1`: 128 passed, 1485 deselected. PostgreSQL
+  16.15. GitHub Actions for this commit is not recorded in this
+  file.
+- Active agents: none. Blockers: do not renumber while #83's
+  `0002` is still open. Account usage was not available in this
+  session.
+- Next action: push this commit without rewriting history. The
+  owner reviews pull request #87. After #83 merges, rebase and
+  renumber to `0003`. Agents do not merge.
+
 ## Ticker uniqueness, shared names, Alembic (#79, #8, #86): 2026-10-21
 
 - Branch `cursor/ticker-unique-and-alembic-0e9d`, from

@@ -9,8 +9,10 @@ uniqueness with the index ``ix_companies_ticker``. An older
 ``CREATE TABLE`` used ``ticker UNIQUE``, which PostgreSQL names
 ``companies_ticker_key``. A database that only had the
 ``(name, ticker)`` constraint can hold one ticker twice when the
-names differ. This revision stops in that case, with the tickers
-named, and does not change those rows.
+names differ. This revision stops in that case. It also stops
+when two stored tickers match after trim and uppercase, such as
+``aapl`` and ``AAPL ``. The message quotes the stored text. The
+rows are not rewritten.
 
 It then leaves one unique index, ``uq_companies_ticker``. SQLite
 cannot ``ADD CONSTRAINT`` while ``financial_metrics`` points at
@@ -44,10 +46,9 @@ def _ticker_only(column_names):
 
 def upgrade() -> None:
     bind = op.get_bind()
-    # Before any index change. A repeated ticker makes CREATE UNIQUE
-    # INDEX fail with a driver message, after the database has started
-    # the statement. Naming the rows here leaves the table untouched
-    # by this revision.
+    # Before any index change. The check uses UPPER(TRIM(ticker)),
+    # matching the application's strip and uppercase. Naming the
+    # stored rows here leaves the table untouched by this revision.
     found = duplicate_tickers(bind)
     if found:
         raise DuplicateTickersError(format_duplicate_tickers(found))

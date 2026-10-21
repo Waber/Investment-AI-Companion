@@ -211,7 +211,7 @@ def test_duplicate_tickers_stop_the_upgrade_on_postgresql(postgres_engine):
         connection.commit()
         with pytest.raises(DuplicateTickersError) as error:
             upgrade_head(connection)
-        assert "DUP (2 rows)" in str(error.value)
+        assert "'DUP' (2 rows)" in str(error.value)
         connection.rollback()
         connection.execute(text(f"SET search_path TO {schema}"))
         indexes = {
@@ -227,6 +227,53 @@ def test_duplicate_tickers_stop_the_upgrade_on_postgresql(postgres_engine):
             .all()
         )
         assert rows == ["DUP", "DUP"]
+    finally:
+        _drop_scratch(connection, schema)
+
+
+def test_case_and_space_collisions_stop_the_postgresql_upgrade(
+    postgres_engine,
+):
+    """``aapl`` and ``AAPL `` are named, and neither row is rewritten."""
+    schema = "company_ticker_case"
+    connection = _scratch(postgres_engine, schema)
+    try:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id integer PRIMARY KEY, "
+                "name varchar(255) NOT NULL, "
+                "ticker varchar(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) VALUES "
+                "(1, 'Lower', 'aapl'), (2, 'Padded', 'AAPL ')"
+            )
+        )
+        connection.commit()
+        with pytest.raises(DuplicateTickersError) as error:
+            upgrade_head(connection)
+        message = str(error.value)
+        assert "'aapl'" in message
+        assert "'AAPL '" in message
+        assert "did not change those rows" in message
+        connection.rollback()
+        connection.execute(text(f"SET search_path TO {schema}"))
+        indexes = {
+            index["name"]
+            for index in inspect(connection).get_indexes("companies")
+        }
+        assert "uq_companies_ticker" not in indexes
+        rows = (
+            connection.execute(
+                text("SELECT ticker FROM companies ORDER BY id")
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == ["aapl", "AAPL "]
     finally:
         _drop_scratch(connection, schema)
 
