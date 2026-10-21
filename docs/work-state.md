@@ -1,5 +1,43 @@
 # Current Work State
 
+## Price bar follow-ups (#85): 2026-10-21
+
+- Branch `cursor/price-bar-followups-85-5c38`, based on
+  `origin/master` `192c521`.
+  The pull request says Closes #85. Not merged.
+- Completed: the default price source is chosen from every bar of
+  the instrument (latest `retrieved_at`, then source name
+  descending). The date window is applied after that choice.
+  `volume` is `StrictInt`: `100` is stored and `"100"` is rejected.
+  An unknown `source` filter is 200 and `[]`. OHLC is `Decimal`
+  in the Pydantic models and `Numeric(20, 8)` in the database.
+  Revision `0003` revises `0002`. FastAPI returns each price as a
+  fixed-point JSON string with 8 decimal places. A collector float
+  is converted with `Decimal(str(value))` on the way in.
+  `docs/demo-data.md` records the source rule and that the `/ui`
+  badge matches any `[IAC-DEMO-` prefix. `templates/`, `static/`,
+  and `app/ui/` were not edited.
+- Incomplete: none for #85. Open pull requests #87, #90, and #91
+  also add Alembic revisions. This `0003` is re-chained if one of
+  them merges first and takes that number. SQLite stores the
+  numeric column with real affinity, so a price with more
+  significant digits than a binary float can hold is exact on
+  PostgreSQL only.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1537 passed, 135 deselected, coverage 96.31%.
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `-m integration` -> 135 passed, 1537 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: both GitHub Actions jobs on this head, then the
+  owner reviews and merges with "Rebase and merge". Agents do
+  not merge. Re-chain revision `0003` if #87, #90, or #91 merges
+  first.
+
 ## Notes and investment theses, backend (#33): 2026-10-21
 
 - Branch `cursor/notes-theses-backend-b69b`, rebased onto

@@ -1,5 +1,57 @@
 # Development Journal
 
+## 2026-10-21 - Price bar follow-ups (#85)
+
+- Scope: follow-ups from PR #83, issue
+  [#85](https://github.com/Waber/Investment-AI-Companion/issues/85).
+  All five items. `templates/`, `static/`, and `app/ui/` were not
+  edited.
+- Base: `origin/master` `192c521`.
+- Decisions: when `source` is omitted, the series is chosen from
+  every bar of the instrument. The bar with the latest
+  `retrieved_at` wins. A tie keeps the source name that sorts
+  last. `from` and `to` run after that choice, so a date window
+  cannot switch between the demo marker and a later `fake`
+  refresh. A window that only contains the other source is `[]`.
+  After a refresh the default source is `fake`. Pass
+  `source=[IAC-DEMO-V2]` to read the demo series.
+  `volume` is `StrictInt`. The integer `100` is stored. The
+  string `"100"` is a validation error. An unknown `source`
+  filter is HTTP 200 and `[]`.
+  OHLC prices are `Decimal`. The columns are `Numeric(20, 8)`:
+  12 digits before the decimal point and 8 after. A collector
+  float becomes `Decimal(str(value))` (so `0.1` stays `0.1`),
+  then half-even rounding to 8 places. FastAPI asks Pydantic for
+  JSON mode, and Pydantic encodes `Decimal` as a string. The
+  response uses fixed-point, so `0.00000001` is not `1E-8`. A
+  JSON number or a numeric string is accepted on input. Revision
+  `0003` revises `0002`. Open pull requests #87, #90, and #91
+  also add revisions, so this file is re-chained if one of them
+  merges first and takes `0003`. SQLite declares the same numeric
+  type; its numeric affinity stores a real. PostgreSQL stores an
+  exact numeric.
+  `docs/demo-data.md` no longer says the `/ui` badge matches
+  `[IAC-DEMO-V1]` only. The badge matches a description that
+  starts with `[IAC-DEMO-`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1537 passed, 135 deselected, coverage 96.31%
+  (3611 statements, 113 miss, 996 branches, 41 partial).
+  Local PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`,
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 135 passed, 1537 deselected. Scoped black, isort, and
+  flake8 passed on the Python this change owns. No live
+  market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 16:05 to 16:28.
+- Next: the owner reviews the pull request and merges with
+  "Rebase and merge". Agents do not merge. If #87, #90, or #91
+  merges first, re-chain revision `0003`.
+
 ## 2026-10-21 - Re-chain notes and theses to revision 0005
 
 - Scope: Raul approved
