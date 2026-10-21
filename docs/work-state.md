@@ -18,21 +18,22 @@
   the badge. That is a misleading label, not a bypass of the
   seeder, and it is acceptable for the local demo. The note is
   in `docs/demo-data.md`. Models and fixtures were not changed.
-- Incomplete: GitHub Actions for this commit is not recorded
-  yet. PostgreSQL was not run locally.
+- Incomplete: none for this pull request. PostgreSQL was not
+  run locally.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 1468 passed, 124 deselected, coverage 96.07%. Scoped
-  black, isort, and flake8 passed on the touched Python. The
-  earlier head `d6cd957` remains
-  [run 39563358213](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563358213),
-  1466 passed, coverage 96.05%.
+  black, isort, and flake8 passed on the touched Python.
+  GitHub Actions
+  [run 39565019024](https://github.com/Waber/Investment-AI-Companion/actions/runs/39565019024)
+  on `c85f287` succeeded. SQLite job `119105110715`: 1468
+  passed, 124 deselected, coverage 96.07%. PostgreSQL job
+  `119105110896`: 124 passed, 1468 deselected.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: push and wait for both GitHub Actions jobs.
-  Then the owner sends PR #84 to the Code Reviewer. Agents do
-  not merge.
+- Next action: the owner sends PR #84 to the Code Reviewer.
+  Agents do not merge.
 
 ## Duplicate codes and company-name alignment (#80, remainder): 2026-10-21
 
