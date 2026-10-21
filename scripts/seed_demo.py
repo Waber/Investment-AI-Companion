@@ -20,7 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib import request as http
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from scripts.smoke_demo import NoRedirect, loopback_base
 
@@ -36,8 +36,8 @@ FIXTURE_PATH = (
 FIXTURE_V2_PATH = FIXTURE_PATH.with_name("demo-v2.json")
 MARKER = "[IAC-DEMO-V1]"
 MARKER_V2 = "[IAC-DEMO-V2]"
-# The price route is not paged. One GET returns every bar for the
-# instrument, which is how a second seed can see what is already stored.
+# The price route is not paged. One GET returns one source. The seeder
+# names the fixture marker so a second seed can see its own rows.
 PRICES = "/api/v1/instruments/{instrument_id}/prices"
 COMPANIES = "/api/v1/companies/"
 METRICS = "/api/v1/financial-metrics/"
@@ -556,7 +556,9 @@ def seed_demo_v2(fixture, client, *, apply=False):
                 if key in existing_metrics:
                     item.update(status="skipped", id=existing_metrics[key])
             existing_prices = {}
-            price_path = PRICES.format(instrument_id=company_id)
+            # The list defaults to one source. Ask for the fixture
+            # marker so a newer refresh does not hide these rows.
+            price_path = _prices_path(company_id, MARKER_V2)
             price_rows = client.request("GET", price_path)
             _require(isinstance(price_rows, list), "prices: expected a list")
             for row in price_rows:
@@ -771,7 +773,8 @@ class SqliteSeedClient:
         instrument_id = _price_instrument_id(parsed.path)
         if instrument_id is not None and method == "GET":
             start, end = _price_query_range(query)
-            rows = self.prices.get_range(instrument_id, start, end)
+            source = _price_query_source(query)
+            rows = self.prices.get_range(instrument_id, start, end, source)
             return [self._price_json(row) for row in rows]
         if instrument_id is not None and method == "POST":
             from app.models.price_bar import PriceBarCreate
@@ -861,6 +864,20 @@ def _price_instrument_id(path):
     return int(middle)
 
 
+def _prices_path(instrument_id, source):
+    """Price list URL that asks for one source.
+
+    The API default is a single chosen source. The seeder must name
+    the fixture marker, or a later refresh would hide the rows it
+    needs to skip.
+    """
+    return (
+        PRICES.format(instrument_id=instrument_id)
+        + "?source="
+        + quote(source, safe="")
+    )
+
+
 def _price_query_range(query):
     """Read optional ``from`` and ``to`` query dates. Absent means open."""
 
@@ -870,6 +887,14 @@ def _price_query_range(query):
         return datetime.strptime(query[name][0], "%Y-%m-%d").date()
 
     return one("from"), one("to")
+
+
+def _price_query_source(query):
+    """The ``source`` query value, or None when the caller omitted it."""
+    values = query.get("source")
+    if not values:
+        return None
+    return values[0]
 
 
 def seed_sqlite_database(database_url, *, apply, fixture=None):

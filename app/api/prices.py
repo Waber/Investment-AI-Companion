@@ -93,14 +93,27 @@ def list_prices(
         alias="to",
         description="Last session date to include.",
     ),
+    source: Optional[str] = Query(
+        None,
+        description=(
+            "Provenance source to return. When omitted, one source "
+            "is chosen: the latest retrieved_at in the date range. "
+            "If two sources share that time, the source name that "
+            "sorts last is used."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """Return stored bars for one instrument, oldest session first.
 
     ``from`` and ``to`` are inclusive calendar dates. Omit them to
-    return every stored bar. The list is not paged: a weekly series
-    of a few years, or one year of daily bars from the fake
-    collector, fits in one response on this local app.
+    leave that side open. The list is not paged: a weekly series of
+    a few years, or one year of daily bars from the fake collector,
+    fits in one response on this local app.
+
+    One session can be stored under two sources. The default response
+    is still a single series, chosen as the ``source`` parameter
+    describes. Pass ``source`` to read the other series.
     """
     _require_instrument(db, instrument_id)
     if start is not None and end is not None and start > end:
@@ -108,7 +121,13 @@ def list_prices(
             status_code=422,
             detail="from must be on or before to",
         )
-    rows = PriceBarRepository(db).get_range(instrument_id, start, end)
+    if source is not None:
+        source = source.strip()
+        if not source:
+            raise HTTPException(
+                status_code=422, detail="source must not be blank"
+            )
+    rows = PriceBarRepository(db).get_range(instrument_id, start, end, source)
     return [db_to_price(row) for row in rows]
 
 
@@ -161,6 +180,16 @@ def refresh_prices(
         result = collector.fetch_price_history(ticker)
     except ProviderError:
         logger.error("Data provider error for ticker %r", ticker)
+        raise HTTPException(status_code=502, detail=_PROVIDER_ERROR)
+    except ValidationError:
+        # ValidationError is a ValueError. It has to be caught first,
+        # or the next handler would call it an unsupported request.
+        # The message lists the provider's values, so it is not the
+        # response and it is not the log line.
+        logger.error(
+            "Invalid price data from the collector for ticker %r",
+            ticker,
+        )
         raise HTTPException(status_code=502, detail=_PROVIDER_ERROR)
     except ValueError as exc:
         # The collector rejects a period or interval it does not

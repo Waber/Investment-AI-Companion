@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -88,10 +89,14 @@ class CompanyDB(Base):
     # instrument_id because a price belongs to an instrument. The
     # row it points at is still companies.id: issue #26 added the
     # type and the ISIN on this table and did not rename it.
+    # passive_deletes leaves the DELETE of these rows to the database.
+    # The foreign key uses ON DELETE CASCADE. Loading every bar into
+    # the session just to delete the company would be wasted work.
     price_bars = relationship(
         "PriceBarDB",
         back_populates="company",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     # Database constraints
@@ -208,16 +213,31 @@ class PriceBarDB(Base):
 
     __tablename__ = "price_bars"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # No index=True on the primary key. That flag would add a second
+    # index, ix_price_bars_id, beside the primary key itself.
+    id = Column(Integer, primary_key=True)
+    # No separate index on instrument_id. The unique key starts with
+    # that column, so a lookup by instrument already has an index.
+    # ON DELETE CASCADE removes the bars when the company row goes,
+    # including a DELETE that did not load this relationship.
     instrument_id = Column(
-        Integer, ForeignKey("companies.id"), nullable=False, index=True
+        Integer,
+        ForeignKey(
+            "companies.id",
+            name="fk_price_bars_instrument_id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
     )
     bar_date = Column(Date, nullable=False)
     open_price = Column(Float, nullable=True)
     high_price = Column(Float, nullable=True)
     low_price = Column(Float, nullable=True)
     close_price = Column(Float, nullable=True)
-    volume = Column(Integer, nullable=True)
+    # BigInteger, not Integer. PostgreSQL INTEGER is int4 and rejects
+    # a volume above 2_147_483_647. A busy session can be larger.
+    # The Pydantic model caps the value at the signed 64-bit maximum.
+    volume = Column(BigInteger, nullable=True)
     currency = Column(String(3), nullable=False)
     source = Column(String(64), nullable=False)
     retrieved_at = Column(UTCDateTime(), nullable=False)

@@ -127,7 +127,15 @@ is that day, so the series is stale against the fixture `as_of` of
 zero. The numbers are a closed-form curve, not a market.
 
 `GET /api/v1/instruments/{id}/prices?from=&to=` reads the stored bars.
-`from` and `to` are inclusive. `POST /api/v1/instruments/{id}/prices/refresh`
+`from` and `to` are inclusive. One session can be stored under two
+sources, for example the fixture marker and a later `fake` refresh.
+When `source` is omitted, the list is one series: the source with
+the latest `retrieved_at` in that date range. If two sources share
+that time, the source name that sorts last is used, so `fake` wins
+a tie with `[IAC-DEMO-V2]`. Pass `source` to read the other series.
+The seeder asks for `source=[IAC-DEMO-V2]`, so a newer refresh does
+not hide the fixture rows it skips.
+`POST /api/v1/instruments/{id}/prices/refresh`
 upserts bars from the configured collector. With `DATA_COLLECTOR=fake`
 a second refresh does not insert a second copy of the same session.
 The currency on a refreshed bar is the currency stored on the

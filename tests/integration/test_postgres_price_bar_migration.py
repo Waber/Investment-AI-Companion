@@ -21,6 +21,7 @@ from tests.price_bar_checks import (
     NULL_BAR_SQL,
     check_names,
     model_check_names,
+    price_bar_structure,
     violation_sql,
 )
 
@@ -41,6 +42,67 @@ def _drop(connection):
     connection.execute(text("SET search_path TO public"))
     connection.execute(text(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE"))
     connection.commit()
+
+
+def test_migrated_postgres_price_bars_match_the_model(postgres_engine):
+    """The public create_all table and revision 0002 agree.
+
+    Volume is BIGINT, the foreign key cascades, and the redundant
+    indexes are absent. That is an empty autogenerate diff for
+    ``price_bars``.
+    """
+    with postgres_engine.connect() as public:
+        public.execute(text("SET search_path TO public"))
+        from_model = price_bar_structure(public)
+    with postgres_engine.connect() as connection:
+        _scratch(connection)
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.commit()
+            upgrade_head(connection)
+            from_migration = price_bar_structure(connection)
+            assert from_migration == from_model
+            volume = dict(
+                (name, (kind, nullable))
+                for name, kind, nullable in from_migration["columns"]
+            )
+            assert volume["volume"][0] == "BIGINT"
+            assert "ix_price_bars_id" not in from_migration["indexes"]
+            assert (
+                "ix_price_bars_instrument_id" not in from_migration["indexes"]
+            )
+            assert from_migration["foreign_keys"][0][2].upper() == "CASCADE"
+        finally:
+            _drop(connection)
+
+
+def test_postgres_cascade_deletes_bars_with_the_company(postgres_engine):
+    with postgres_engine.connect() as connection:
+        _scratch(connection)
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.execute(
+                text(
+                    "INSERT INTO companies (id, name, ticker) "
+                    "VALUES (1, 'Apple', 'AAPL')"
+                )
+            )
+            connection.commit()
+            upgrade_head(connection)
+            connection.execute(text(NULL_BAR_SQL))
+            connection.commit()
+            connection.execute(text("DELETE FROM companies WHERE id = 1"))
+            connection.commit()
+            remaining = connection.execute(
+                text("SELECT COUNT(*) FROM price_bars")
+            ).scalar()
+            assert remaining == 0
+            downgrade_base(connection)
+            assert "price_bars" not in inspect(connection).get_table_names()
+        finally:
+            _drop(connection)
 
 
 def test_upgrade_adds_candle_checks_and_downgrade_drops_them(postgres_engine):

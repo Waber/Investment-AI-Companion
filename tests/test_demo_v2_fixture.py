@@ -98,6 +98,7 @@ def test_demo_v2_covers_the_score_ready_cases():
     assert missing == ["DEMO_PL_EMPTY"]
     assert stale == ["DEMO_JP_STABLE"]
     assert fresh_spans
+    assert sum(len(entry["prices"]) for entry in companies) == 1777
 
 
 def test_demo_v2_stale_retrieval_is_older_than_the_as_of_date():

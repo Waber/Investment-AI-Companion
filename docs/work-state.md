@@ -1,5 +1,46 @@
 # Current Work State
 
+## Code review round 1 on price bars (PR #83): 2026-10-21
+
+- Branch `cursor/pricebar-demo-v2-203d`, parent `e346725`.
+  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83)
+  says Refs #27. Not merged. The issue stays open.
+- Completed: `volume` is BIGINT in `PriceBarDB` and Alembic
+  `0002`, and the write model rejects a volume above `2**63 - 1`.
+  PostgreSQL stores 3,000,000,000. `GET /prices` without `source`
+  returns one series: latest `retrieved_at`, then the source name
+  that sorts last. `source` selects the other series. The seeder
+  asks for `[IAC-DEMO-V2]`. An `IntegrityError` that leaves no
+  inserted row is "Price bar could not be stored", raised outside
+  the handler. A collector `ValidationError` is HTTP 502
+  "Data provider error" and does not echo the value. Company
+  delete uses `ON DELETE CASCADE` and `passive_deletes=True`.
+  `ix_price_bars_id` and `ix_price_bars_instrument_id` are not
+  created. The migrated table matches the model on SQLite and
+  PostgreSQL. The fixture test asserts 1777 bars. The journal
+  records the green run for `e346725`
+  ([run 39563741560](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563741560)).
+- Incomplete: the `/ui` synthetic badge still matches only
+  `[IAC-DEMO-V1]`. `templates/`, `static/`, and `app/ui/` were
+  not edited. ETF/ETC attributes stay on #28. Float prices stay.
+  Code Reviewer approval of #27 is still open.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. SQLite
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1510 passed, 134 deselected, coverage 96.30%. PostgreSQL
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  with `REQUIRE_POSTGRES=1`: 134 passed, 1510 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. This commit is the one push for the review. There will
+  be no later commit whose only job is to record Actions.
+- Active agents: none. Blockers: none for this pull request.
+  Account usage was not available in this session.
+- Next action: the owner reviews PR #83 again and merges it with
+  "Rebase and merge" when the review is accepted. Agents do not
+  merge. The Frontend Developer still owns the `/ui` badge.
+  ETF and ETC attributes stay on #28.
+
 ## QA round 1 on price bars (PR #83): 2026-10-21
 
 - Branch `cursor/pricebar-demo-v2-203d`. Code head `03952d9`.

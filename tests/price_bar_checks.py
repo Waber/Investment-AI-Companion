@@ -54,6 +54,47 @@ def check_names(connection):
     }
 
 
+def price_bar_structure(connection):
+    """The parts of ``price_bars`` the model and revision 0002 share.
+
+    Indexes named ``ix_price_bars_id`` and
+    ``ix_price_bars_instrument_id`` are the redundant ones. A match
+    here is the autogenerate diff for this table: empty.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(connection)
+    columns = tuple(
+        sorted(
+            (
+                column["name"],
+                str(column["type"]).upper(),
+                bool(column["nullable"]),
+            )
+            for column in inspector.get_columns("price_bars")
+        )
+    )
+    foreign_keys = tuple(
+        sorted(
+            (
+                fk.get("name"),
+                tuple(fk["constrained_columns"]),
+                (fk.get("options") or {}).get("ondelete"),
+            )
+            for fk in inspector.get_foreign_keys("price_bars")
+        )
+    )
+    indexes = tuple(
+        sorted(index["name"] for index in inspector.get_indexes("price_bars"))
+    )
+    return {
+        "columns": columns,
+        "foreign_keys": foreign_keys,
+        "indexes": indexes,
+        "checks": tuple(sorted(check_names(connection))),
+    }
+
+
 def model_check_names(model):
     """Names of the check constraints declared on the SQLAlchemy model."""
     return {

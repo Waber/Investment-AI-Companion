@@ -17,6 +17,12 @@ The candle checks are part of the table. Downgrade drops the table,
 so those checks go away with it. A null price makes a comparison
 null, and a check constraint allows null, so a missing open, high,
 low, close, or volume is still stored.
+
+``volume`` is BIGINT. PostgreSQL INTEGER stops at 2_147_483_647, and
+a session volume can be larger. The foreign key is ON DELETE CASCADE.
+There is no extra index on ``id`` or on ``instrument_id``: the primary
+key and the unique key ``(instrument_id, bar_date, source)`` already
+cover those lookups.
 """
 
 import sqlalchemy as sa
@@ -39,7 +45,7 @@ def upgrade() -> None:
         sa.Column("high_price", sa.Float(), nullable=True),
         sa.Column("low_price", sa.Float(), nullable=True),
         sa.Column("close_price", sa.Float(), nullable=True),
-        sa.Column("volume", sa.Integer(), nullable=True),
+        sa.Column("volume", sa.BigInteger(), nullable=True),
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("source", sa.String(length=64), nullable=False),
         sa.Column("retrieved_at", sa.DateTime(timezone=True), nullable=False),
@@ -47,6 +53,7 @@ def upgrade() -> None:
             ["instrument_id"],
             ["companies.id"],
             name="fk_price_bars_instrument_id",
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
@@ -80,13 +87,7 @@ def upgrade() -> None:
             name="ck_price_bars_volume_gte_zero",
         ),
     )
-    op.create_index(
-        "ix_price_bars_instrument_id",
-        "price_bars",
-        ["instrument_id"],
-    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_price_bars_instrument_id", table_name="price_bars")
     op.drop_table("price_bars")
