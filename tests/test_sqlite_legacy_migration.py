@@ -318,6 +318,10 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         )
 
     with engine.connect() as connection:
+        # create_all already built watchlist_items. Revision 0004
+        # creates that table, so the upgrade from 0002 needs it gone.
+        connection.execute(text("DROP TABLE watchlist_items"))
+        connection.commit()
         stamp(connection, "0002")
         upgrade_head(connection)
         require_company_instrument_columns(connection)

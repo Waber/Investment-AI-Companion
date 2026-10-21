@@ -108,7 +108,7 @@ def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
                 )
             )
             connection.commit()
-            downgrade_to(connection, "0002")
+            downgrade_to(connection, "0003")
             assert (
                 "watchlist_items" not in inspect(connection).get_table_names()
             )
@@ -163,7 +163,7 @@ def test_autogenerate_against_postgresql_watchlist_is_empty(postgres_engine):
             connection.execute(text("DROP TABLE watchlist_items"))
             connection.commit()
             config = _config(connection)
-            command.stamp(config, "0002")
+            command.stamp(config, "0003")
             upgrade_head(connection)
             assert_autogenerate_is_empty(connection)
             script = command.revision(

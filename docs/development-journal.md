@@ -1,5 +1,38 @@
 # Development Journal
 
+## 2026-10-21 - Re-chain the watchlist migration to 0004
+
+- Scope: pull request #87 merged, so `origin/master` is
+  `cb6ba64`. The watchlist revision moves from `0003` to
+  `0004` and revises `0003` (the companies ticker unique
+  revision). No other behavior changed. `app/ui/` was not
+  edited.
+- Decisions: the file is `0004_watchlist_items.py`. `revision`
+  and `down_revision` are the literals `0004` and `0003`.
+  The migration does not import application or script code.
+  `ScriptDirectory.get_heads()` has length 1. Watchlist
+  upgrade tests downgrade to `0003`. The ticker tests that
+  stamp `0002` and upgrade to head drop `watchlist_items`
+  first, because `create_all` already built that table and
+  revision `0004` creates it.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1612 passed, 153 deselected, coverage 96.23% (3796
+  statements, 120 miss, 1032 branches, 46 partial).
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration` -> 153 passed, 1612 deselected.
+  Upgrade, downgrade to `0003`, and upgrade again passed on
+  SQLite and PostgreSQL. No live market-data calls. GitHub
+  Actions is recorded in the pull request, not in a later
+  commit.
+- AI model: Grok 4.7. Account usage was not available as a
+  number in this session.
+- Time tracking (UTC): 2026-10-21 about 16:53 to 17:00.
+- Next: the owner reviews the updated pull request. It still
+  says Refs #32. Agents do not merge.
+
 ## 2026-10-21 - Code review on the watchlist (PR #90)
 
 - Scope: the Code Reviewer's changes on `059d28a`, on the same
