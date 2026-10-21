@@ -40,6 +40,14 @@ def test_name_is_stripped_and_a_blank_name_is_rejected():
     assert kept.name == "Acme\u200b"
     beside = CompanyCreate(name="A\u200bB", ticker="AAA")
     assert beside.name == "A\u200bB"
+    # Cc anywhere after strip is rejected. NUL and DEL survive strip,
+    # so a letter beside them is not a stored name. A format character
+    # beside a letter is still kept, above.
+    for control in ("\x00Kept", "Kept\x00", "Ke\x00pt", "Kept\x7f"):
+        with pytest.raises(ValidationError, match="control"):
+            CompanyCreate(name=control, ticker="AAA")
+        with pytest.raises(ValidationError, match="control"):
+            CompanyUpdate(name=control)
 
 
 @pytest.mark.asyncio

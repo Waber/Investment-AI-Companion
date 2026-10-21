@@ -88,8 +88,10 @@ database runs `alembic upgrade head` (revision `0001` for these
 columns, the `ck_companies_instrument_type` CHECK, and the
 `uq_companies_isin` unique index, then revision `0002` for the
 `uq_companies_ticker` unique index). `0002` stops when stored
-tickers collide after trim and uppercase, such as `aapl` and
-`AAPL `, names that stored text, and does not rewrite the rows.
+tickers collide after trim and uppercase. The trim removes spaces,
+tabs, carriage returns, and line feeds, so `aapl` and `AAPL ` are
+one collision. It names that stored text and does not rewrite the
+rows.
 A database created by an older
 startup `create_all` needs that upgrade. Adding the columns by hand
 skips the CHECK, the `uq_companies_isin` unique index, and

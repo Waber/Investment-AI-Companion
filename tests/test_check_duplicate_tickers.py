@@ -71,7 +71,9 @@ def test_script_is_quiet_when_every_ticker_is_unique(tmp_path, capsys):
     assert captured.err == ""
 
 
-def test_script_rejects_a_missing_table_and_a_missing_url(tmp_path, capsys):
+def test_script_rejects_a_missing_table_and_a_missing_url(
+    tmp_path, capsys, monkeypatch
+):
     path = tmp_path / "empty.db"
     engine = create_engine(f"sqlite:///{path}")
     with engine.begin() as connection:
@@ -81,6 +83,7 @@ def test_script_rejects_a_missing_table_and_a_missing_url(tmp_path, capsys):
     assert main(["check", f"sqlite:///{path}"]) == 2
     assert "companies table is not in this database" in capsys.readouterr().err
 
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     assert main(["check"]) == 2
     assert "Usage:" in capsys.readouterr().err
     assert main(["check", "   "]) == 2
@@ -131,6 +134,130 @@ def test_script_reports_case_and_space_collisions_without_rewriting(
             .all()
         )
         assert stored == ["aapl", "AAPL "]
+    engine.dispose()
+
+
+_BAD_URL = "postgresql://u:secret@[bad"
+_URL_LINE = "Could not read companies: the database URL is not valid.\n"
+_READ_LINE = (
+    "Could not read companies: the database is unreachable "
+    "or the table is missing.\n"
+)
+
+
+def _assert_secret_stays_hidden(captured):
+    assert "secret" not in captured.out
+    assert "secret" not in captured.err
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out
+
+
+def test_malformed_url_argument_hides_the_password(capsys, monkeypatch):
+    """The reviewer's URL exits 1 and never prints the password."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert main(["check", _BAD_URL]) == 1
+    captured = capsys.readouterr()
+    _assert_secret_stays_hidden(captured)
+    assert captured.err in (_URL_LINE, _READ_LINE)
+    assert captured.out == ""
+
+
+def test_malformed_url_environment_hides_the_password(capsys, monkeypatch):
+    """DATABASE_URL is used when the command has no URL argument."""
+    monkeypatch.setenv("DATABASE_URL", _BAD_URL)
+    assert main(["check"]) == 1
+    captured = capsys.readouterr()
+    _assert_secret_stays_hidden(captured)
+    assert captured.err in (_URL_LINE, _READ_LINE)
+    assert captured.out == ""
+
+
+def test_unparsed_url_uses_the_fixed_url_line(capsys, monkeypatch):
+    """A URL SQLAlchemy cannot parse includes the password in its text."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert main(["check", "u:secret@[bad"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == _URL_LINE
+    _assert_secret_stays_hidden(captured)
+
+
+def test_sqlalchemy_error_uses_the_fixed_read_line(monkeypatch, capsys):
+    """Driver text is not the message the operator sees."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    def explode(_url):
+        raise SQLAlchemyError("driver text includes secret")
+
+    monkeypatch.setattr(
+        "scripts.check_duplicate_tickers.create_engine", explode
+    )
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert main(["check", "sqlite:///unused.db"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == _READ_LINE
+    _assert_secret_stays_hidden(captured)
+
+
+def test_argument_wins_over_the_environment(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "wins.db"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO companies (ticker) VALUES ('AAA')")
+        )
+    engine.dispose()
+    monkeypatch.setenv("DATABASE_URL", _BAD_URL)
+    assert main(["check", f"sqlite:///{path}"]) == 0
+    captured = capsys.readouterr()
+    _assert_secret_stays_hidden(captured)
+    assert captured.out.strip() == "No duplicate tickers."
+
+
+def test_tab_cr_and_lf_collide_without_rewriting(tmp_path, capsys):
+    """Space-only TRIM would miss a tab, CR, or LF beside the symbol."""
+    path = tmp_path / "ws.db"
+    engine = create_engine(f"sqlite:///{path}")
+    stored_values = ("AAPL\t", "aapl\r", "AAPL\n")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, ticker) VALUES "
+                "(1, :tab), (2, :cr), (3, :lf)"
+            ),
+            {"tab": "AAPL\t", "cr": "aapl\r", "lf": "AAPL\n"},
+        )
+    engine.dispose()
+    url = f"sqlite:///{path}"
+    assert main(["check", url]) == 1
+    error = capsys.readouterr().err
+    for stored in stored_values:
+        assert repr(stored) in error
+    assert "did not change those rows" in error
+    engine = create_engine(url)
+    with engine.connect() as connection:
+        assert duplicate_tickers(connection) == [
+            ("AAPL", [("AAPL\t", 1), ("AAPL\n", 1), ("aapl\r", 1)])
+        ]
+        rows = (
+            connection.execute(
+                text("SELECT ticker FROM companies ORDER BY id")
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == ["AAPL\t", "aapl\r", "AAPL\n"]
     engine.dispose()
 
 

@@ -278,6 +278,55 @@ def test_case_and_space_collisions_stop_the_postgresql_upgrade(
         _drop_scratch(connection, schema)
 
 
+def test_tab_cr_and_lf_collisions_stop_the_postgresql_upgrade(
+    postgres_engine,
+):
+    """A tab, CR, or LF beside the symbol is the same ticker."""
+    schema = "company_ticker_whitespace"
+    connection = _scratch(postgres_engine, schema)
+    try:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id integer PRIMARY KEY, "
+                "name varchar(255) NOT NULL, "
+                "ticker varchar(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) VALUES "
+                "(1, 'Tab', :tab), (2, 'Cr', :cr), (3, 'Lf', :lf)"
+            ),
+            {"tab": "AAPL\t", "cr": "aapl\r", "lf": "AAPL\n"},
+        )
+        connection.commit()
+        with pytest.raises(DuplicateTickersError) as error:
+            upgrade_head(connection)
+        message = str(error.value)
+        assert repr("AAPL\t") in message
+        assert repr("aapl\r") in message
+        assert repr("AAPL\n") in message
+        assert "did not change those rows" in message
+        connection.rollback()
+        connection.execute(text(f"SET search_path TO {schema}"))
+        indexes = {
+            index["name"]
+            for index in inspect(connection).get_indexes("companies")
+        }
+        assert "uq_companies_ticker" not in indexes
+        rows = (
+            connection.execute(
+                text("SELECT ticker FROM companies ORDER BY id")
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == ["AAPL\t", "aapl\r", "AAPL\n"]
+    finally:
+        _drop_scratch(connection, schema)
+
+
 def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
     schema = "company_round_trip"
     connection = _scratch(postgres_engine, schema)

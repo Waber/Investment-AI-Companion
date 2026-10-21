@@ -237,6 +237,49 @@ def test_case_and_space_collisions_stop_the_sqlite_upgrade(tmp_path):
     engine.dispose()
 
 
+def test_tab_cr_and_lf_collisions_stop_the_sqlite_upgrade(tmp_path):
+    """A tab, CR, or LF beside the symbol is the same ticker."""
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'ws.db'}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, "
+                "name VARCHAR(255) NOT NULL, "
+                "ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) VALUES "
+                "(1, 'Tab', :tab), (2, 'Cr', :cr), (3, 'Lf', :lf)"
+            ),
+            {"tab": "AAPL\t", "cr": "aapl\r", "lf": "AAPL\n"},
+        )
+
+    with pytest.raises(DuplicateTickersError) as error:
+        with engine.connect() as connection:
+            upgrade_head(connection)
+
+    message = str(error.value)
+    assert repr("AAPL\t") in message
+    assert repr("aapl\r") in message
+    assert repr("AAPL\n") in message
+    assert "did not change those rows" in message
+    with engine.connect() as connection:
+        indexes = {index["name"] for index in inspect_indexes(connection)}
+        assert "uq_companies_ticker" not in indexes
+        rows = (
+            connection.execute(
+                text("SELECT ticker FROM companies ORDER BY id")
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == ["AAPL\t", "aapl\r", "AAPL\n"]
+    engine.dispose()
+
+
 def inspect_indexes(connection):
     from sqlalchemy import inspect
 

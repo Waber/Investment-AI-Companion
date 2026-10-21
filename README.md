@@ -160,11 +160,14 @@ process stops before it serves and names the missing columns.
   `ck_companies_instrument_type` CHECK, and the `uq_companies_isin`
   unique index) and revision `0002` (the `uq_companies_ticker`
   unique index). `0002` stops when stored tickers collide after
-  trim and uppercase, including a different case or surrounding
-  spaces such as `aapl` and `AAPL `. It names the stored text and
-  does not rewrite or delete those rows.
-  `python -m scripts.check_duplicate_tickers DATABASE_URL` reports
-  the same list before you upgrade.
+  trim and uppercase. The trim removes spaces, tabs, carriage
+  returns, and line feeds, so `aapl`, `AAPL `, and a trailing tab
+  are one collision. It names the stored text and does not rewrite
+  or delete those rows. Set `DATABASE_URL` and run
+  `python -m scripts.check_duplicate_tickers` to see that list
+  before you upgrade. Prefer the environment variable: a URL passed
+  as an argument can appear in `ps` and in shell history. An
+  argument still overrides the variable when you pass one.
 - A database created by an older startup `create_all` has `companies`
   and not those columns. Run `alembic upgrade head` before starting
   this version. Adding the columns by hand skips the CHECK, the
