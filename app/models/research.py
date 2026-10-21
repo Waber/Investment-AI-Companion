@@ -7,8 +7,13 @@ models, not the table rows.
 
 A write strips leading and trailing whitespace, then checks the
 length. Padding spaces do not count toward the maximum. A title
-or a body that is empty after stripping is rejected. Thesis-breakers
-may be empty: a new thesis does not have to list any yet.
+or a body that is empty after stripping is rejected. So is one
+made only of invisible format characters (Unicode category Cf,
+such as U+200B or U+FEFF) and whitespace, including a space that
+sits between those characters. Thesis-breakers may be empty: a
+new thesis does not have to list any yet, and a breakers value
+that is only whitespace or format characters is stored as ``""``.
+A letter with a format character beside it is kept.
 
 Unicode category Cc is a control character (for example NUL, DEL,
 and the C1 controls). A title is one line, so every Cc character
@@ -54,6 +59,22 @@ THESIS_STATUS_CHECK = "status IN ({})".format(
 )
 
 
+def _only_format_characters(value: str) -> bool:
+    """True when nothing visible is left among format characters.
+
+    Cf is an invisible format character: zero-width space (U+200B),
+    the byte-order mark (U+FEFF), and the joiners U+200C and U+200D.
+    ``str.strip`` only drops whitespace at the ends, so a normal
+    space between two of those characters is still in ``value``.
+    That space is not visible either. The value is blank when every
+    character is whitespace or category Cf. A letter with a format
+    character beside it is not blank.
+    """
+    return value != "" and all(
+        char.isspace() or unicodedata.category(char) == "Cf" for char in value
+    )
+
+
 def normalize_research_text(
     value: object,
     *,
@@ -65,15 +86,21 @@ def normalize_research_text(
 
     ``None`` and non-strings are returned unchanged so Pydantic can
     report the type error. ``str.strip`` removes Unicode whitespace,
-    which includes a newline at either end. A newline that sits in
-    the middle of a title is still a control character and is
-    rejected. The length limit is applied by the field after this
-    function returns, so it sees the stripped text.
+    which includes a newline at either end. What remains is blank
+    when it is empty, or when it is only format characters
+    (category Cf) and whitespace. A space between two zero-width
+    spaces still counts. A title or a body then raises.
+    Thesis-breakers become ``""``. A newline that sits in the
+    middle of a title is still a control character and is rejected.
+    The length limit is applied by the field after this function
+    returns, so it sees the stripped text.
     """
     if not isinstance(value, str):
         return value
     stripped = value.strip()
-    if stripped == "" and not allow_blank:
+    if stripped == "" or _only_format_characters(stripped):
+        if allow_blank:
+            return ""
         raise ValueError(field_name + " must not be blank")
     for char in stripped:
         if unicodedata.category(char) != "Cc":

@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import inspect, text
 
 from alembic import command
+from app.core.database import Base
 from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
@@ -15,6 +16,7 @@ from tests.company_migration import (
     upgrade_head,
 )
 from tests.research_migration import (
+    assert_compare_metadata_is_empty,
     assert_declared_lengths,
     exercise_migrated_research,
     research_schema,
@@ -82,4 +84,35 @@ def test_upgrade_creates_notes_and_downgrade_removes_them(postgres_engine):
             connection.rollback()
             connection.execute(text("SET search_path TO public"))
             connection.execute(text(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE"))
+            connection.commit()
+
+
+def test_autogenerate_against_postgresql_notes_is_empty(postgres_engine):
+    """Same empty ``compare_metadata`` check, on a scratch schema.
+
+    ``public`` is the schema the other PostgreSQL tests share. This
+    one builds a full model there is no reason to share, drops
+    ``notes`` and ``theses``, stamps ``0001``, and upgrades. The
+    schema is removed afterwards, including the Alembic version table.
+    """
+    schema = "notes_autogen"
+    with postgres_engine.connect() as connection:
+        connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+        connection.execute(text(f"CREATE SCHEMA {schema}"))
+        connection.execute(text(f"SET search_path TO {schema}"))
+        connection.commit()
+        try:
+            Base.metadata.create_all(bind=connection)
+            connection.execute(text("DROP TABLE theses"))
+            connection.execute(text("DROP TABLE notes"))
+            connection.commit()
+            config = _config(connection)
+            command.stamp(config, "0001")
+            upgrade_head(connection)
+            connection.execute(text(f"SET search_path TO {schema}"))
+            assert_compare_metadata_is_empty(connection)
+        finally:
+            connection.rollback()
+            connection.execute(text("SET search_path TO public"))
+            connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
             connection.commit()

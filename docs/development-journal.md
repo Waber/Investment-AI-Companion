@@ -1,5 +1,45 @@
 # Development Journal
 
+## 2026-10-21 - QA on notes and theses, blank format characters (#33)
+
+- Scope: QA on
+  [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91),
+  two items, before code review. Same branch
+  `cursor/notes-theses-backend-b69b`. Revision id `0033` is
+  unchanged. It is still re-chained later. No HTTP API.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: a title, body, or thesis-breakers value is blank
+  when every character is whitespace or Unicode category Cf
+  (U+200B, U+FEFF, and the joiners). `str.strip` only removes
+  whitespace at the ends, so a space between two format
+  characters would otherwise be stored. That value now raises
+  `ValidationError` for a title or a body, and thesis-breakers
+  become `""`. A letter with a format character beside it is
+  kept, same as `normalize_name`. The migration tests call
+  Alembic `compare_metadata` after `create_all`, a drop of
+  `notes` and `theses`, stamp `0001`, and upgrade, and assert
+  the diff is empty. That is the watchlist autogenerate check.
+  A legacy companies table would still diff, so the legacy
+  upgrade test does not use the full compare. No second
+  revision file is rendered. PostgreSQL uses the scratch schema
+  `notes_autogen`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1535 passed, 174 deselected, coverage 96.38%.
+  PostgreSQL, local 16, database `investment_test`,
+  `REQUIRE_POSTGRES=1` and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 174 passed, 1535 deselected. Scoped black, isort, and
+  flake8 passed on the Python this change owns. No live
+  market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 15:55 to 16:02.
+- Next: the owner sends PR #91 to code review. Agents do not
+  merge. After #83, #87, or the #32 migration merges, re-chain
+  `down_revision` on `0033` and leave the revision id as it is
+  at that time.
+
 ## 2026-10-21 - Notes and investment theses, backend (#33)
 
 - Scope: the backend of
