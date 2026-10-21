@@ -46,6 +46,7 @@ _POLISH = {
     "missing": "brak danych",
     "list.empty": "Brak instrumentów",
     "field.ticker": "Ticker",
+    "field.isin": "ISIN",
     "field.name": "Nazwa",
     "field.type": "Typ",
     "field.exchange": "Giełda",
@@ -144,6 +145,7 @@ _POLISH = {
         "Istnieje już spółka o tej nazwie lub tym tickerze."
     ),
     "error.duplicate_ticker": "Istnieje już spółka o tym tickerze.",
+    "error.duplicate_isin": "Istnieje już spółka o tym numerze ISIN.",
     "error.duplicate_metrics": (
         "Wskaźniki dla tej spółki, końca okresu i typu okresu już istnieją."
     ),
@@ -190,6 +192,7 @@ _ENGLISH = {
     "missing": "no data",
     "list.empty": "No instruments",
     "field.ticker": "Ticker",
+    "field.isin": "ISIN",
     "field.name": "Name",
     "field.type": "Type",
     "field.exchange": "Exchange",
@@ -288,6 +291,7 @@ _ENGLISH = {
         "A company with this name or ticker already exists."
     ),
     "error.duplicate_ticker": "A company with this ticker already exists.",
+    "error.duplicate_isin": "A company with this ISIN already exists.",
     "error.duplicate_metrics": (
         "Metrics for this company, period end, and period type "
         "already exist."

@@ -4,9 +4,9 @@ The browser posts strings. Empty optional company fields become
 ``None`` (a blank website is "no website", not the empty string).
 Empty metric numbers become ``None``, which is "no data" on the
 detail page. ``normalized_company_name`` is the one name rule for
-create and for edit. It strips invisible characters from both ends
-and rejects a name that is blank, only combining marks, or that
-still contains a control character.
+create and for edit. It reuses ``normalize_name``, and it still
+rejects a control left in the middle, a bidi control, or a name
+made only of invisible characters or marks.
 The text the user typed is kept for the
 other fields and handed to ``CompanyCreate``, ``CompanyUpdate``,
 ``FinancialMetricsCreate``, or ``FinancialMetricsUpdate``. Those
@@ -32,7 +32,7 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from app.core.utc_datetime import as_utc
-from app.models.company import CompanyCreate, CompanyUpdate
+from app.models.company import CompanyCreate, CompanyUpdate, normalize_name
 from app.models.financial_metrics import (
     FinancialMetricsCreate,
     FinancialMetricsUpdate,
@@ -42,6 +42,7 @@ from app.ui.view_models import METRIC_FIELDS
 COMPANY_FIELDS = (
     "name",
     "ticker",
+    "isin",
     "exchange",
     "currency",
     "country",
@@ -63,9 +64,9 @@ _NUMBER_KINDS = frozenset(
     }
 )
 # Metric repository messages. A company duplicate is not decided
-# here: the form looks up the stored ticker instead, so a changed
-# sentence still shows the same page. An unknown message is
-# error.constraint.
+# here and not by the sentence. The form reads
+# ``DuplicateTickerError.code`` and ``DuplicateIsinError.code``.
+# An unknown message is error.constraint.
 _VALUE_ERROR_KEYS = {
     (
         "Financial metrics for this company, period end, "
@@ -153,90 +154,104 @@ def metrics_values(row):
 
 # Bidi overrides (U+202A–U+202E) and isolates (U+2066–U+2069) can
 # reorder the letters around them. They are format characters, so
-# the edge strip would otherwise peel one off the end and keep the
-# rest. They are rejected anywhere in the original name instead.
+# ``normalize_name`` would keep one that sits beside a letter.
+# The form rejects them anywhere in the original name instead.
 _BIDI_CONTROLS = frozenset(
     chr(codepoint)
     for codepoint in (*range(0x202A, 0x202F), *range(0x2066, 0x206A))
 )
 
 
-def _name_edge(char):
-    """True for a character removed from either end of a name.
+def _control_in_the_middle(text):
+    """True when a Cc character sits between two non-controls.
 
-    Whitespace includes a newline, NBSP (U+00A0), and the ideographic
-    space (U+3000). Cf is a format character such as U+200B. Cc is a
-    control, including NUL. A mark is not removed here: a mark with
-    no base letter is rejected later, and a mark on a letter is part
-    of the name. Bidi controls are rejected before this strip.
+    ``normalize_name`` strips whitespace only. A NUL or DEL that
+    remains at either end is part of the text the model stores. A
+    control with a non-control on both sides is the form's 422,
+    including a newline between two letters.
     """
-    if char.isspace():
-        return True
-    category = unicodedata.category(char)
-    return category == "Cf" or category == "Cc"
+    first = None
+    last = None
+    for index, char in enumerate(text):
+        if unicodedata.category(char) != "Cc":
+            if first is None:
+                first = index
+            last = index
+    if first is None or last == first:
+        return False
+    for index in range(first + 1, last):
+        if unicodedata.category(text[index]) == "Cc":
+            return True
+    return False
 
 
-def normalized_company_name(value):
-    """Return the name to save, or None when the form must answer 422.
+def _has_visible_character(text):
+    """True when ``text`` has a letter, number, punctuation, or symbol.
 
-    Create and edit both call this. It is the only name rule in the
-    form layer. ``CompanyCreate`` and ``CompanyUpdate`` are not
-    changed, and ``CompanyCreate`` still accepts ``""``.
-
-    A bidi override or isolate anywhere in the original name is
-    rejected before the ends are stripped. Whitespace, format
-    characters (Cf), and controls (Cc) are then removed from both
-    ends. A control that remains anywhere, including NUL between two
-    letters, is rejected. The name is also rejected when nothing
-    visible remains: empty, only whitespace, only category C, or only
-    marks. Every M* category counts as invisible for that check: Mn
-    (U+0301), Mc (U+093E), and Me (U+20DD). A letter with one of
-    those marks is kept. A zero-width mark between two letters is
-    kept, because only the ends are stripped.
-
-    PR #75 adds ``normalize_name`` on the write model (commit
-    2c64565). After that pull request merges, align this helper with
-    that function. Until then the form layer owns the 422.
+    Whitespace, category C, and every M* mark are invisible here.
+    Mn (U+0301), Mc (U+093E), and Me (U+20DD) all count. A letter
+    with one of those marks is visible because of the letter.
     """
-    if not isinstance(value, str):
-        value = "" if value is None else str(value)
-    if any(char in _BIDI_CONTROLS for char in value):
-        return None
-    start = 0
-    end = len(value)
-    while start < end and _name_edge(value[start]):
-        start += 1
-    while end > start and _name_edge(value[end - 1]):
-        end -= 1
-    stripped = value[start:end]
-    visible = False
-    for char in stripped:
+    for char in text:
         category = unicodedata.category(char)
-        if category == "Cc":
-            return None
-        # M* covers Mn, Mc, and Me. A mark with no base letter is
-        # invisible. A mark after a letter is kept with that letter.
         if (
             char.isspace()
             or category.startswith("C")
             or category.startswith("M")
         ):
             continue
-        visible = True
-    if not visible:
+        return True
+    return False
+
+
+def normalized_company_name(value):
+    """Return the name ``normalize_name`` would store, or None.
+
+    Create and edit both call this. None means the form answers 422
+    and does not save. A returned string is exactly what
+    ``normalize_name`` returns for the same input, so the form does
+    not accept a name the write model would store differently.
+    ``CompanyCreate`` still accepts ``""`` if this helper is skipped.
+    The form does not skip it.
+
+    ``normalize_name`` strips whitespace and rejects an empty name
+    or one made only of format characters (Cf, such as U+200B). This
+    helper adds three 422 cases the model would otherwise keep:
+
+    - a bidi override or isolate anywhere in the original name
+    - a control character left in the middle after that strip
+    - a name made only of invisible characters or marks
+
+    A format character beside a letter is kept, including ZWNJ
+    (U+200C) in a Persian name. A Devanagari or Arabic letter is
+    kept. A mark with no base letter is not.
+    """
+    if not isinstance(value, str):
+        value = "" if value is None else str(value)
+    if any(char in _BIDI_CONTROLS for char in value):
         return None
-    return stripped
+    try:
+        normalized = normalize_name(value)
+    except ValueError:
+        return None
+    if _control_in_the_middle(normalized):
+        return None
+    if not _has_visible_character(normalized):
+        return None
+    return normalized
 
 
 def company_payload(values):
     """Map posted strings onto company create/update fields.
 
     The name goes through ``normalized_company_name``, the helper
-    create and edit share. A blank name stays a string (the stripped
-    text) so the write model still receives ``str``. The 422 is
-    applied in ``validate_company``. Ticker text is left as typed;
-    ``normalize_ticker`` strips and uppercases that field. The
-    company write model does not strip the name.
+    create and edit share. When that helper accepts the name, the
+    payload is the same string ``normalize_name`` would store. A
+    rejected name stays a string (the stripped text) so the write
+    model still receives ``str``. The 422 is applied in
+    ``validate_company``. Ticker text is left as typed;
+    ``normalize_ticker`` strips and uppercases that field. A blank
+    ISIN is ``None`` (unknown), not the empty string.
     """
     payload = {}
     for field in COMPANY_FIELDS:
@@ -346,8 +361,8 @@ def errors_from_validation(exc, field_order):
 def catalog_key_for_repository_error(exc):
     """Map a metrics repository ``ValueError`` to a catalog key.
 
-    Company duplicates are not in this table. The form asks the
-    database whether the ticker is already stored.
+    Company duplicates are not in this table. The form reads
+    ``code`` on ``DuplicateTickerError`` and ``DuplicateIsinError``.
     """
     return _VALUE_ERROR_KEYS.get(str(exc), "error.constraint")
 
