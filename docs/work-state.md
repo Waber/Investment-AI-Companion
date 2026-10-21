@@ -25,14 +25,16 @@
   is exactly what `normalize_name` returns. The form still rejects
   a bidi control, a control left in the middle, and a name made
   only of invisible characters or marks. The create and edit forms
-  include ISIN. A blank ISIN is null. Instrument type is not on
-  the form. Models, schema, migrations, repositories, and services
+  include ISIN. A blank ISIN is null. The detail page shows that
+  ISIN after the ticker, with the localized label, and a dash when
+  it is null. Instrument type is not on the form. Models, schema,
+  migrations, repositories, and services
   were not changed. `Secure` on the language cookie stays deferred
   (#56).
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1473 passed, 124 deselected, coverage 96.08%. Scoped black,
+  -> 1478 passed, 124 deselected, coverage 96.08%. Scoped black,
   isort, and flake8 passed. PostgreSQL was not run locally (no
   `TEST_POSTGRES_DSN`). Browser on `127.0.0.1:8000`, fake
   collector, throwaway SQLite: Hindi name stored; Polish ticker

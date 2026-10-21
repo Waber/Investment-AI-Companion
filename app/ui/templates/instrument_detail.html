@@ -25,6 +25,14 @@
   </dd>
   {% endmacro %}
   {{ text_field('ticker', instrument.ticker) }}
+  <dt>{{ t['field.isin'] }}</dt>
+  <dd data-field="isin">
+    {% if instrument.isin %}
+    {{ instrument.isin }}
+    {% else %}
+    -
+    {% endif %}
+  </dd>
   <dt>{{ t['field.type'] }}</dt>
   <dd data-field="type">{{ t['type.' ~ instrument.instrument_type] }}</dd>
   {{ text_field('exchange', instrument.exchange) }}

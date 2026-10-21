@@ -82,6 +82,7 @@ def test_company_row_becomes_an_instrument_view():
         id=7,
         name="  Demo One  ",
         ticker="DEMO_ONE",
+        isin=" US0378331005 ",
         description="[IAC-DEMO-V1] Synthetic only",
         website=" javascript:alert(1)",
         exchange=" DEMO-WSE ",
@@ -115,6 +116,8 @@ def test_company_row_becomes_an_instrument_view():
     assert view.id == 7
     assert view.instrument_type == "stock"
     assert view.name == "Demo One"
+    assert view.ticker == "DEMO_ONE"
+    assert view.isin == "US0378331005"
     assert view.exchange == "DEMO-WSE"
     assert view.is_synthetic is True
     assert view.source == "demo-v1"
@@ -137,6 +140,7 @@ def test_company_row_becomes_an_instrument_view():
         id=8,
         name="Other",
         ticker="OTHER",
+        isin=None,
         description="User notes",
         website=None,
         exchange=None,
@@ -147,6 +151,7 @@ def test_company_row_becomes_an_instrument_view():
         financial_metrics=[],
     )
     plain_view = to_instrument(plain)
+    assert plain_view.isin is None
     assert plain_view.is_synthetic is False
     assert plain_view.source is None
     assert plain_view.as_of is None
