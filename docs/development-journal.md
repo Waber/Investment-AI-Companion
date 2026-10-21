@@ -1,5 +1,53 @@
 # Development Journal
 
+## 2026-10-21 - Map duplicate codes and align the company name (#80)
+
+- Scope: the remainder of
+  [#80](https://github.com/Waber/Investment-AI-Companion/issues/80)
+  on the server-rendered `/ui` forms. Models, schema, migrations,
+  repositories, and services were not changed.
+- Decisions: a failed company save reads `DuplicateTickerError` and
+  `DuplicateIsinError` by class or by `.code` (`duplicate_ticker`,
+  `duplicate_isin`). The exception text is not read. Those two
+  codes select the existing localized field sentences and mark
+  that input. The page stays HTTP 400, which is what a duplicate
+  already was. The ticker row lookup is gone. A duplicate name
+  still has no code (the repository raises a plain `ValueError`),
+  so that case still looks for another row with `==` on the name.
+  A plain `ValueError` or a raw `IntegrityError` is the generic
+  constraint sentence, even when a ticker row is already stored.
+  The real repository turns a unique-index failure into one of
+  the two classes before the form sees it. `normalized_company_name`
+  calls `normalize_name`. A name the form accepts is stored as
+  that function would store it, including a format character
+  beside a letter (Persian ZWNJ, U+200C). The form still answers
+  422 when a bidi control appears anywhere, a control character
+  remains in the middle, or the name is only invisible characters
+  or marks. The create and edit forms now have an ISIN field so
+  the ISIN error has an input. A blank ISIN is stored as null.
+  Instrument type is still not on the form; create keeps the
+  model's STOCK default. `Secure` on the language cookie stays
+  deferred until HTTPS (#56).
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1473 passed, 124 deselected, coverage 96.08%. Scoped black,
+  isort, and flake8 passed on the Python this change owns.
+  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
+  Browser on `127.0.0.1:8000` with the fake collector and a
+  throwaway SQLite file: a Hindi name was stored and shown; a
+  second ticker showed the Polish ticker sentence on that field;
+  the same ISIN showed the Polish ISIN sentence; English showed
+  the ISIN sentence and, on edit, the ticker sentence; a Persian
+  name with ZWNJ (U+200C) was stored between the letters.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 06:46 to 07:05.
+- Next: open the pull request (Refs #80, not merged). Wait for
+  both GitHub Actions jobs. The owner reviews and merges with
+  "Rebase and merge". Agents do not merge. #80 stays open until
+  QA, Security, and Code Review approve, and until the HTTPS
+  cookie in #56.
+
 ## 2026-10-21 - Rebase the UI follow-up onto master after #75 and #78
 
 - Scope: rebase `cursor/ui-issue-80-forms-origin-5105` onto
