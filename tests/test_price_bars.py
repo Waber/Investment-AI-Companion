@@ -219,6 +219,35 @@ def test_price_model_rejects_nan_and_a_blank_source():
         PriceBarCreate(**_bar(volume=2**63))
 
 
+def test_volume_accepts_an_int_and_rejects_a_numeric_string():
+    """``"100"`` is not a volume. The field is ``StrictInt``.
+
+    An int is stored as that int. A numeric string is a validation
+    error, not a coerced 100.
+    """
+    accepted = PriceBarCreate(**_bar(volume=100))
+    assert accepted.volume == 100
+    assert type(accepted.volume) is int
+    with pytest.raises(ValidationError):
+        PriceBarCreate(**_bar(volume="100"))
+
+
+@pytest.mark.asyncio
+async def test_volume_string_is_422_and_an_int_is_stored(client):
+    instrument_id = await _company(client, ticker="DEMO_VOL_TYPE")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    stored = await client.post(path, json=_bar(volume=100))
+    assert stored.status_code == 201, stored.text
+    assert stored.json()["volume"] == 100
+    assert type(stored.json()["volume"]) is int
+    rejected = await client.post(
+        path, json=_bar(volume="100", date="2026-01-12")
+    )
+    assert rejected.status_code == 422
+    listed = await client.get(path)
+    assert [row["volume"] for row in listed.json()] == [100]
+
+
 @pytest.mark.asyncio
 async def test_sqlite_stores_a_volume_above_int32(client):
     """3_000_000_000 fits in BIGINT and in the Pydantic cap."""
