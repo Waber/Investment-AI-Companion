@@ -3,9 +3,9 @@
 ## Watchlist backend (#32): 2026-10-21
 
 - Branch `cursor/watchlist-backend-32-e406`, rebased onto
-  `origin/master` `cb6ba64`. Pull request #90 says Refs #32.
-  Not merged. The UI part of #32 stays open for the Frontend
-  Developer.
+  `origin/master` `ad44969` after #89 merged. Pull request #90
+  says Refs #32. Not merged. The UI part of #32 stays open for
+  the Frontend Developer.
 - Completed: `WatchlistItemDB` / table `watchlist_items`.
   Alembic revision `0004` revises `0003` (ticker unique) in
   `0004_watchlist_items.py`. One Alembic head.
@@ -28,10 +28,10 @@
 - Incomplete: the `/ui` watchlist page, stale-price marker,
   and PL/EN strings.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
-  SQLite CI command -> 1612 passed, 153 deselected, coverage
-  96.23% (3796 statements, 120 miss, 1032 branches, 46
+  SQLite CI command -> 1629 passed, 153 deselected, coverage
+  96.22% (3824 statements, 121 miss, 1050 branches, 47
   partial). PostgreSQL `REQUIRE_POSTGRES=1` `-m integration`
-  -> 153 passed, 1612 deselected. Upgrade, downgrade to
+  -> 153 passed, 1629 deselected. Upgrade, downgrade to
   `0003`, and upgrade again passed on SQLite and PostgreSQL.
   GitHub Actions is recorded in the pull request, not in a
   later commit. No live market-data calls.

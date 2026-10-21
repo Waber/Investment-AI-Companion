@@ -1,5 +1,31 @@
 # Development Journal
 
+## 2026-10-21 - Rebase the watchlist branch onto ad44969
+
+- Scope: pull request #89 merged, so `origin/master` is
+  `ad44969`. The watchlist branch is rebased onto that commit.
+  Revision `0004` still revises `0003`. No watchlist behavior
+  changed. `app/ui/` was not edited by this rebase.
+- Decisions: the rebase had no conflicts. #89's journal and
+  work-state entries stay below the watchlist entries. The
+  migration file is still `0004_watchlist_items.py`, with the
+  literals `0004` and `0003`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1629 passed, 153 deselected, coverage 96.22% (3824
+  statements, 121 miss, 1050 branches, 47 partial).
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration` -> 153 passed, 1629 deselected.
+  No live market-data calls. GitHub Actions is recorded in the
+  pull request, not in a later commit.
+- AI model: Grok 4.7. Account usage was not available as a
+  number in this session.
+- Time tracking (UTC): 2026-10-21 about 17:13 to 17:20.
+- Next: the owner reviews the updated pull request. It still
+  says Refs #32. Agents do not merge.
+
 ## 2026-10-21 - Re-chain the watchlist migration to 0004
 
 - Scope: pull request #87 merged, so `origin/master` is
