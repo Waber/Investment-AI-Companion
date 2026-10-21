@@ -1,6 +1,6 @@
 """Report tickers that are already stored more than once.
 
-Revision 0002 adds a unique index on ``companies.ticker``. Creating
+Revision 0003 adds a unique index on ``companies.ticker``. Creating
 that index fails, with a different message on SQLite and PostgreSQL,
 when two rows share a ticker. This check runs first, inside the
 migration and as a command, and names the tickers. It does not

@@ -23,6 +23,7 @@ from tests.company_migration import (
     stamp,
     ticker_uniqueness,
     upgrade_head,
+    upgrade_to,
 )
 
 
@@ -317,7 +318,7 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         )
 
     with engine.connect() as connection:
-        stamp(connection, "0001")
+        stamp(connection, "0002")
         upgrade_head(connection)
         require_company_instrument_columns(connection)
         assert metadata_diff(connection) == []
@@ -325,7 +326,7 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
             (("uq_companies_ticker", True, ("ticker",)),),
             (),
         )
-        downgrade_to(connection, "0001")
+        downgrade_to(connection, "0002")
         assert ticker_uniqueness(connection) == (
             (("ix_companies_ticker", True, ("ticker",)),),
             (),
@@ -376,16 +377,78 @@ def test_downgrade_keeps_an_extra_ticker_index(tmp_path):
     engine = create_db_engine(f"sqlite:///{tmp_path / 'extra.db'}")
     Base.metadata.create_all(engine)
     with engine.connect() as connection:
-        stamp(connection, "0002")
+        stamp(connection, "0003")
         connection.execute(
             text("CREATE UNIQUE INDEX extra_ticker ON companies (ticker)")
         )
         connection.commit()
-        downgrade_to(connection, "0001")
+        downgrade_to(connection, "0002")
         names = [index["name"] for index in inspect_indexes(connection)]
         assert "uq_companies_ticker" not in names
         assert "ix_companies_ticker" not in names
         assert "extra_ticker" in names
+    engine.dispose()
+
+
+def test_sqlite_ticker_upgrade_keeps_price_bars(tmp_path):
+    """``create_index`` does not rebuild ``companies``.
+
+    Foreign keys are on. A ``batch_alter_table`` rebuild would drop
+    ``companies`` and SQLite would cascade-delete ``price_bars``.
+    The bars and the metrics row are still there after revision 0003.
+    """
+    from pathlib import Path
+
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0003_companies_ticker_unique.py"
+    )
+    source = migration.read_text()
+    assert "op.batch_alter_table" not in source
+    assert "op.create_index" in source
+
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'children.db'}")
+    with engine.begin() as connection:
+        connection.execute(text(LEGACY_COMPANIES))
+        connection.execute(text(LEGACY_METRICS))
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) "
+                "VALUES (1, 'Apple', 'AAPL')"
+            )
+        )
+    with engine.connect() as connection:
+        assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
+        upgrade_to(connection, "0002")
+        connection.execute(
+            text(
+                "INSERT INTO financial_metrics (id, company_id) "
+                "VALUES (1, 1)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO price_bars ("
+                "id, instrument_id, bar_date, currency, source, "
+                "retrieved_at) VALUES ("
+                "7, 1, '2024-01-02', 'USD', 'fake', "
+                "'2024-01-02 00:00:00')"
+            )
+        )
+        connection.commit()
+        upgrade_to(connection, "0003")
+        bars = connection.execute(
+            text("SELECT id, instrument_id, source FROM price_bars")
+        ).one()
+        assert bars == (7, 1, "fake")
+        metrics = connection.execute(
+            text("SELECT id, company_id FROM financial_metrics")
+        ).one()
+        assert metrics == (1, 1)
+        names = {index["name"] for index in inspect_indexes(connection)}
+        assert "uq_companies_ticker" in names
     engine.dispose()
 
 

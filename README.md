@@ -158,12 +158,14 @@ process stops before it serves and names the missing columns.
 - An Alembic-managed database runs `alembic upgrade head`. That
   applies revision `0001` (the columns, the
   `ck_companies_instrument_type` CHECK, and the `uq_companies_isin`
-  unique index) and revision `0002` (the `uq_companies_ticker`
-  unique index). `0002` stops when stored tickers collide after
-  trim and uppercase. The trim removes spaces, tabs, carriage
-  returns, and line feeds, so `aapl`, `AAPL `, and a trailing tab
-  are one collision. It names the stored text and does not rewrite
-  or delete those rows. Set `DATABASE_URL` and run
+  unique index), revision `0002` (`price_bars`), and revision
+  `0003` (the `uq_companies_ticker` unique index). `0003` is the
+  head. `0003` stops when stored tickers collide after trim and
+  uppercase. The trim removes spaces, tabs, carriage returns, and
+  line feeds, so `aapl`, `AAPL `, and a trailing tab are one
+  collision. It names the stored text and does not rewrite or
+  delete those rows. On SQLite the index is created in place, so
+  child rows such as `price_bars` stay. Set `DATABASE_URL` and run
   `python -m scripts.check_duplicate_tickers` to see that list
   before you upgrade. Prefer the environment variable: a URL passed
   as an argument can appear in `ps` and in shell history. An

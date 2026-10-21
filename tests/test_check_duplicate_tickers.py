@@ -1,4 +1,4 @@
-"""The preflight that revision 0002 runs before it adds an index."""
+"""The preflight that revision 0003 runs before it adds an index."""
 
 from sqlalchemy import create_engine, text
 

@@ -1,12 +1,59 @@
 # Development Journal
 
+## 2026-10-21 - Code review on the ticker check, rebased onto price bars
+
+- Scope: Code Reviewer on pull request #87 at `1ba6616`.
+  Same branch `cursor/ticker-unique-and-alembic-0e9d`, rebased
+  onto `origin/master` `192c521` after #83. The ticker revision
+  is `0003` with `down_revision` `0002` (`price_bars`). Pull
+  request #90 may merge first and take `0003`. This branch keeps
+  `0003` until then so it has one Alembic head, and it is
+  re-chained to the next free number after whatever merges ahead.
+  `app/ui/forms.py` was not edited.
+- Decisions: `main` builds the engine inside the `try`.
+  `ArgumentError` and any other `SQLAlchemyError` each print one
+  fixed line and exit 1. The return is after the handler, and the
+  line does not include the URL or the driver text. `DATABASE_URL`
+  is accepted when no argument is passed. An argument wins. The
+  README recommends the environment variable because an argument
+  can appear in `ps` and in shell history. After `strip`,
+  `normalize_name` rejects Unicode category `Cc` anywhere, including
+  a leading, trailing, or middle NUL and DEL. A format character
+  beside a letter is kept. A provider name with a newline is 502
+  and is not stored. The duplicate check trims spaces, tabs,
+  carriage returns, and line feeds on both SQLite (`TRIM` with a
+  character set) and PostgreSQL (`BTRIM`) before `UPPER`. The
+  stored text is quoted and the rows are not rewritten. Revision
+  `0003` adds `uq_companies_ticker` with `op.create_index`, not a
+  `batch_alter_table` rebuild. With foreign keys on, a rebuild
+  would drop `companies` and cascade-delete `price_bars`.
+  `CompanyDB` keeps the `price_bars` relationship and the ticker
+  index.
+- Verification: no `.env`. `SECRET_KEY` comes from
+  `tests/conftest.py`. SQLite CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  : 1556 passed, 139 deselected, coverage 96.10%. PostgreSQL
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration`: 139 passed, 1556 deselected. Scoped
+  black and flake8 passed on the Python this change touches.
+  PostgreSQL 16.15. GitHub Actions for this head is recorded on
+  the pull request, not in a later docs-only commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 16:01 to 16:16.
+- Next: push with `--force-with-lease`. The owner reviews pull
+  request #87. If #90 merges first, re-chain this revision.
+  Agents do not merge.
+
 ## 2026-10-21 - QA follow-up: ticker collisions ignore case and surrounding spaces
 
 - Scope: QA on pull request #87 at `d50ce1c`, pass with findings.
-  Same branch `cursor/ticker-unique-and-alembic-0e9d`. No rebase.
-  Revision `0002` is not renumbered. Pull request #83 also adds a
-  revision `0002` and merges first. After that lands, this revision
-  becomes `0003` with `down_revision` pointing at #83's `0002`.
+  Same branch `cursor/ticker-unique-and-alembic-0e9d`. Rebased
+  onto `origin/master` `192c521` after #83 merged.
+  The ticker revision is `0003`, with `down_revision` `0002`
+  (the `price_bars` migration from #83). Pull request #90 may
+  merge first and take `0003`; this branch is re-chained after
+  that.
   `templates/`, `static/`, and `app/ui/` were not edited.
 - Decisions: the migration and
   `scripts.check_duplicate_tickers` group by
@@ -51,7 +98,7 @@
   stored on another ticker (`BRK.A` / `BRK.B`).
   `DuplicateTickerError` and `DuplicateIsinError` are unchanged
   and are still raised after the integrity handler so
-  `__context__` is `None`. Revision `0002` runs
+  `__context__` is `None`. Revision `0003` runs
   `scripts.check_duplicate_tickers` first. Repeated tickers are
   named and the rows are not changed. It then creates the unique
   index `uq_companies_ticker`. That is an index, not a

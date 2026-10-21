@@ -40,12 +40,14 @@ class CompanyDB(Base):
         String(255), nullable=False, index=True
     )  # index=True creates a database index for faster searches
     # A named unique index, not unique=True on the column.
-    # unique=True would create ix_companies_ticker. Revision 0002
+    # unique=True would create ix_companies_ticker. Revision 0003
     # creates uq_companies_ticker instead, so the model and the
     # migration use the same name. It is an index rather than a
     # UNIQUE CONSTRAINT: SQLite cannot add a constraint while
-    # financial_metrics still points at this table, and one shape
-    # has to match on PostgreSQL too. The same choice is uq_companies_isin.
+    # financial_metrics and price_bars point at this table. A
+    # rebuild with foreign keys on would cascade-delete those rows.
+    # One index shape has to match on PostgreSQL too. The same
+    # choice is uq_companies_isin.
     ticker = Column(String(20), nullable=False)
     sector = Column(String(100), nullable=True)
     industry = Column(String(100), nullable=True)
@@ -108,10 +110,10 @@ class CompanyDB(Base):
     __table_args__ = (
         # name + ticker together must be unique. Ticker alone is
         # already unique, so this pair cannot repeat either. It stays
-        # so a database created before revision 0002 still matches.
+        # so a database created before revision 0003 still matches.
         UniqueConstraint("name", "ticker", name="uq_company_name_ticker"),
         # One row per ticker. The company name may be shared
-        # (BRK.A and BRK.B). Revision 0002 creates this index.
+        # (BRK.A and BRK.B). Revision 0003 creates this index.
         Index("uq_companies_ticker", "ticker", unique=True),
         # Same unique index revision 0001 creates. Several null ISINs
         # are allowed; a present ISIN is stored once.

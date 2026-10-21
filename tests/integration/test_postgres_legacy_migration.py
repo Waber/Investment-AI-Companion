@@ -373,7 +373,7 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
             )
         )
         connection.commit()
-        stamp(connection, "0001")
+        stamp(connection, "0002")
         upgrade_head(connection)
         require_company_instrument_columns(connection)
         assert metadata_diff(connection) == []
@@ -381,7 +381,7 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
             (("uq_companies_ticker", True, ("ticker",)),),
             (),
         )
-        downgrade_to(connection, "0001")
+        downgrade_to(connection, "0002")
         assert ticker_uniqueness(connection) == (
             (("ix_companies_ticker", True, ("ticker",)),),
             (),

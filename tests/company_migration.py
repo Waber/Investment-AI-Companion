@@ -43,6 +43,10 @@ def upgrade_head(connection):
     command.upgrade(_config(connection), "head")
 
 
+def upgrade_to(connection, revision):
+    command.upgrade(_config(connection), revision)
+
+
 def downgrade_base(connection):
     command.downgrade(_config(connection), "base")
 

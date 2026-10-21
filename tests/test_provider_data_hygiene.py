@@ -638,7 +638,12 @@ async def test_failed_update_returns_fixed_500(client, monkeypatch, caplog):
 async def test_company_name_with_newline_does_not_forge_a_log_line(
     client, caplog
 ):
-    """A newline in the provider name must stay inside one log record."""
+    """A newline in the provider name is a control and is not stored.
+
+    ``normalize_name`` rejects category Cc anywhere after strip, so
+    the fetch is 502. The error log must not split into a forged
+    record.
+    """
     name = "Acme\nINFO forged-admin-login"
     client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
         {"name": name, "currency": "USD"}
@@ -648,8 +653,8 @@ async def test_company_name_with_newline_does_not_forge_a_log_line(
         created = await client.post(FETCH, json={"ticker": "ACME"})
         updated = await client.post(FETCH, json={"ticker": "ACME"})
 
-    assert created.status_code == 200
-    assert updated.status_code == 200
+    assert created.status_code == 502
+    assert updated.status_code == 502
     _assert_no_forged_log_line(caplog, "forged-admin-login")
 
 
