@@ -1,5 +1,50 @@
 # Development Journal
 
+## 2026-10-21 - Watchlist review nits (PR #90)
+
+- Scope: Security Engineer nits and QA lows on the watchlist
+  backend, same branch as issue #32. `app/ui/` was not edited.
+  `company.normalize_name` was not changed. The page, the stale
+  marker, and the PL/EN strings stay with the Frontend Developer.
+- Decisions: after `strip`, a watchlist label with a Unicode Cc
+  character (NUL included, so `A\x00B` too) or a bidi control
+  (U+202A–U+202E, U+2066–U+2069, U+200E, U+200F) is a
+  `ValidationError`, which the API returns as 422. A label made
+  only of whitespace or Cf characters (U+200B, U+FEFF, and the
+  like) is null. A Cf character next to a letter is kept. U+200E
+  and U+200F are Cf, and they are rejected rather than stored as
+  null. The rule lives on `clean_watchlist_label` in
+  `app/models/watchlist.py`. `WatchlistRepository.add` returns
+  `(row, created)`. The request that loses the unique constraint
+  is HTTP 200. A company deleted between the existence check and
+  the insert is `CompanyNotFoundError` (a `LookupError` with
+  `company_id`, the same shape as pull request #91). The API
+  returns 404 `Company not found`. Any other integrity failure
+  stays `WatchlistStorageError` and HTTP 500. Both errors are
+  raised after the handler, so `__context__` is `None` and the
+  driver text is not chained. `watchlist_stale_price_days` is
+  `Field(7, ge=1)`, so 0 and -1 are rejected. `DELETE` takes
+  `company_id: int = Path(gt=0)`, so 0 and -1 are 422. `POST`
+  sets `responses=` for 201, 200, and 404. A `text/plain` body,
+  a form body, and a body with no `Content-Type` are 422.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1529 passed, 137 deselected, coverage 96.23% (3228
+  statements, 104 miss, 858 branches, 36 partial).
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration` -> 137 passed, 1529 deselected.
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. No live market-data calls. GitHub Actions is
+  recorded in the pull request, not in a later commit.
+- AI model: Grok 4.7. Account usage was not available as a
+  number in this session.
+- Time tracking (UTC): 2026-10-21 about 15:56 to 16:05.
+- Next: the owner reviews the updated pull request. It still
+  says Refs #32. After #83 or #87 merges, rebase this branch
+  and point the migration at the new head. Agents do not merge.
+
 ## 2026-10-21 - Watchlist backend (issue #32)
 
 - Scope: the backend of

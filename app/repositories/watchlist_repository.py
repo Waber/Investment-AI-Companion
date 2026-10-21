@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.database_models import WatchlistItemDB
+from app.models.database_models import CompanyDB, WatchlistItemDB
 from app.models.watchlist import clean_watchlist_label
+from app.repositories.company_errors import CompanyNotFoundError
 
 
 class WatchlistStorageError(ValueError):
@@ -33,17 +34,23 @@ class WatchlistRepository:
 
     def add(
         self, company_id: int, label: str | None = None
-    ) -> WatchlistItemDB:
-        """Return the row for ``company_id``, inserting it when missing.
+    ) -> tuple[WatchlistItemDB, bool]:
+        """Return ``(row, created)`` for ``company_id``.
 
-        A second call does not change the stored label. When the unique
-        constraint fires, the existing row is returned. Any other
-        constraint failure is raised after this handler, so
-        ``__context__`` does not keep the SQL text.
+        ``created`` is True only when this call inserted the row. A
+        second call, including the one that loses a unique-constraint
+        race, returns the stored row and False. The label is not
+        changed.
+
+        A company that is gone when the insert runs raises
+        ``CompanyNotFoundError``. Any other constraint failure raises
+        ``WatchlistStorageError``. Both are raised after this handler,
+        so ``__context__`` does not keep the SQL text. The decision
+        uses the tables after rollback, not the driver message.
         """
         existing = self.get_by_company_id(company_id)
         if existing is not None:
-            return existing
+            return existing, False
 
         row = WatchlistItemDB(
             company_id=company_id,
@@ -52,19 +59,30 @@ class WatchlistRepository:
         )
         self.db.add(row)
         stored = None
+        missing = False
         try:
             self.db.commit()
             self.db.refresh(row)
-            return row
+            return row, True
         except IntegrityError:
             # The driver text names the constraint that fired. SQLite
             # and PostgreSQL use different names. After rollback, a row
-            # that is already stored is the idempotent result. Anything
-            # else, including a missing company, is raised below.
+            # that is already stored is the race loser. No row and no
+            # company means the company was deleted. Anything else is
+            # raised below, outside this handler.
             self.db.rollback()
             stored = self.get_by_company_id(company_id)
+            if stored is None:
+                found = (
+                    self.db.query(CompanyDB.id)
+                    .filter(CompanyDB.id == company_id)
+                    .first()
+                )
+                missing = found is None
         if stored is not None:
-            return stored
+            return stored, False
+        if missing:
+            raise CompanyNotFoundError(company_id) from None
         raise WatchlistStorageError() from None
 
     def remove(self, company_id: int) -> bool:

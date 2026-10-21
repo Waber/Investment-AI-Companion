@@ -20,6 +20,7 @@ from tests.watchlist_checks import (
     assert_missing_company_is_raised_outside_the_handler,
     assert_race_returns_the_existing_row,
     assert_remove_is_bool_and_company_delete_cascades,
+    assert_unrelated_integrity_error_is_raised_outside_the_handler,
 )
 from tests.watchlist_migration import (
     ROOT,
@@ -212,6 +213,18 @@ def test_missing_company_is_raised_outside_the_handler_on_postgresql(
         session.close()
 
 
+def test_unrelated_integrity_error_on_postgresql(
+    postgres_session_factory, monkeypatch
+):
+    session = _session(postgres_session_factory)
+    try:
+        assert_unrelated_integrity_error_is_raised_outside_the_handler(
+            monkeypatch, session
+        )
+    finally:
+        session.close()
+
+
 def test_list_orders_by_added_at_then_id_on_postgresql(
     postgres_session_factory,
 ):
@@ -273,4 +286,67 @@ async def test_watchlist_api_on_postgresql(postgres_client):
     assert deleted.status_code == 204
     listed = await postgres_client.get("/api/v1/watchlist/")
     assert listed.status_code == 200
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_nul_label_is_422_on_postgresql(postgres_client):
+    """A NUL in the label is 422, not a PostgreSQL 500.
+
+    The check runs in the write model, before the insert. PostgreSQL
+    would reject a NUL inside a string if the model let it through.
+    """
+    created_company = await postgres_client.post(
+        "/api/v1/companies/",
+        json={"name": "Nul Co", "ticker": "NULCO"},
+    )
+    assert created_company.status_code == 201
+    company_id = created_company.json()["id"]
+    response = await postgres_client.post(
+        "/api/v1/watchlist/",
+        json={"company_id": company_id, "label": "A\x00B"},
+    )
+    assert response.status_code == 422
+    assert response.status_code != 500
+    assert "IntegrityError" not in response.text
+    listed = await postgres_client.get("/api/v1/watchlist/")
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_company_deleted_before_insert_is_404_on_postgresql(
+    postgres_client, monkeypatch
+):
+    """A company deleted between the check and the insert is 404.
+
+    PostgreSQL raises a foreign-key IntegrityError. The API maps that
+    to the same not-found detail, without the driver text.
+    """
+    from app.models.database_models import CompanyDB
+    from app.repositories.watchlist_repository import WatchlistRepository
+
+    created_company = await postgres_client.post(
+        "/api/v1/companies/",
+        json={"name": "Gone Co", "ticker": "GONECO"},
+    )
+    assert created_company.status_code == 201
+    company_id = created_company.json()["id"]
+    original = WatchlistRepository.add
+
+    def delete_then_add(self, company_id, label=None):
+        company = self.db.get(CompanyDB, company_id)
+        self.db.delete(company)
+        self.db.commit()
+        return original(self, company_id, label)
+
+    monkeypatch.setattr(WatchlistRepository, "add", delete_then_add)
+    response = await postgres_client.post(
+        "/api/v1/watchlist/",
+        json={"company_id": company_id, "label": "late"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Company not found"
+    assert "IntegrityError" not in response.text
+    assert "FOREIGN" not in response.text
+    listed = await postgres_client.get("/api/v1/watchlist/")
     assert listed.json() == []
