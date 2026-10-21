@@ -267,3 +267,94 @@ def test_revision_0006_changes_float_prices_to_numeric(postgres_engine):
             assert Decimal(str(round_trip)) == Decimal("10.5")
         finally:
             _drop(connection)
+
+
+def test_oversized_legacy_prices_abort_the_postgres_upgrade(postgres_engine):
+    """1e12, 1e20, NaN, and infinity abort 0006 with the rows intact.
+
+    PostgreSQL would otherwise raise ``numeric field overflow``
+    while it alters the column. The message names the ids and the
+    version stays ``0005``.
+    """
+    with postgres_engine.connect() as connection:
+        _scratch(connection)
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.execute(
+                text(
+                    "INSERT INTO companies (id, name, ticker) "
+                    "VALUES (1, 'Apple', 'AAPL')"
+                )
+            )
+            connection.commit()
+            upgrade_to(connection, "0005")
+            connection.execute(
+                text(
+                    "INSERT INTO price_bars ("
+                    "id, instrument_id, bar_date, open_price, "
+                    "high_price, low_price, close_price, volume, "
+                    "currency, source, retrieved_at) VALUES "
+                    "(1, 1, '2024-01-02', 10.5, 10.5, 10.5, 10.5, 1, "
+                    "'USD', 'ok', '2024-01-02 00:00:00+00'), "
+                    "(2, 1, '2024-01-03', 1000000000000, "
+                    "1000000000000, 1000000000000, 1000000000000, 1, "
+                    "'USD', 'edge', '2024-01-03 00:00:00+00'), "
+                    "(3, 1, '2024-01-04', 1e20, 1e20, 1e20, 1e20, 1, "
+                    "'USD', 'huge', '2024-01-04 00:00:00+00'), "
+                    "(4, 1, '2024-01-05', 'Infinity'::float8, "
+                    "'Infinity'::float8, 'Infinity'::float8, "
+                    "'Infinity'::float8, 1, 'USD', 'inf', "
+                    "'2024-01-05 00:00:00+00'), "
+                    "(5, 1, '2024-01-06', 'NaN'::float8, 'NaN'::float8, "
+                    "'NaN'::float8, 'NaN'::float8, 1, 'USD', 'nan', "
+                    "'2024-01-06 00:00:00+00'), "
+                    "(6, 1, '2024-01-07', '-Infinity'::float8, "
+                    "'-Infinity'::float8, '-Infinity'::float8, "
+                    "'-Infinity'::float8, 1, 'USD', 'neginf', "
+                    "'2024-01-07 00:00:00+00')"
+                )
+            )
+            connection.commit()
+            before = connection.execute(
+                text(
+                    "SELECT id, open_price::text FROM price_bars "
+                    "ORDER BY id"
+                )
+            ).all()
+        except Exception:
+            _drop(connection)
+            raise
+
+    with pytest.raises(RuntimeError) as error:
+        with postgres_engine.connect() as connection:
+            connection.execute(text(f"SET search_path TO {SCHEMA}"))
+            connection.commit()
+            upgrade_to(connection, "head")
+
+    assert type(error.value).__name__ == "OversizedPricesError"
+    assert str(error.value) == (
+        "price_bars ids 2, 3, 4, 5, 6 have a price outside "
+        "Numeric(20, 8) or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
+    with postgres_engine.connect() as connection:
+        connection.execute(text(f"SET search_path TO {SCHEMA}"))
+        try:
+            assert (
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalar()
+                == "0005"
+            )
+            kind = _column_types(connection)["open_price"]
+            assert "NUMERIC" not in kind
+            after = connection.execute(
+                text(
+                    "SELECT id, open_price::text FROM price_bars "
+                    "ORDER BY id"
+                )
+            ).all()
+            assert after == before
+        finally:
+            _drop(connection)

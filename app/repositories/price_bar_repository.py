@@ -10,7 +10,7 @@ import logging
 from datetime import date
 from typing import List, Optional
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from app.models.database_models import PriceBarDB
@@ -25,6 +25,9 @@ _ALREADY_STORED = (
 # A check constraint, a foreign key, or any other failure that is
 # not a duplicate key. The driver text is not included.
 _CONSTRAINT = "Price bar could not be stored"
+# One skip warning per bar id for this process. Reading the series
+# again must not repeat the same line.
+_logged_skip_ids = set()
 
 
 class PriceBarRepository:
@@ -52,9 +55,11 @@ class PriceBarRepository:
         series is chosen from every bar of this instrument, including
         bars outside ``start`` and ``end``. The chosen source is the
         one on the bar with the latest ``retrieved_at``. If two
-        sources share that time, the source name that sorts last is
-        kept. The date window is applied only after that choice, so
-        asking for a different range cannot switch the series. A
+        sources share that time, the source name that sorts last in
+        code-point order is kept. That order does not follow the
+        database collation. The date window is applied only after
+        that choice, so asking for a different range cannot switch
+        the series. A
         window that contains none of the chosen source's bars is an
         empty list, even when another source has bars there. Pass
         ``source`` to read one named series, including an empty
@@ -86,14 +91,21 @@ class PriceBarRepository:
 
     @staticmethod
     def _default_source(query) -> Optional[str]:
-        """The one source a list uses when the caller did not name one."""
-        row = query.order_by(
-            PriceBarDB.retrieved_at.desc(),
-            PriceBarDB.source.desc(),
-        ).first()
-        if row is None:
+        """The one source a list uses when the caller did not name one.
+
+        The latest ``retrieved_at`` is chosen in SQL. Sources that
+        share that instant are ordered in Python. ``max`` compares
+        code points, which matches SQLite's byte order for these
+        names. PostgreSQL ``en_US.UTF-8`` can ignore ``[``, so
+        ``ORDER BY source`` would let ``[IAC-DEMO-V2]`` beat ``fake``.
+        """
+        latest = query.order_by(PriceBarDB.retrieved_at.desc()).first()
+        if latest is None:
             return None
-        return row.source
+        tied = query.filter(
+            PriceBarDB.retrieved_at == latest.retrieved_at
+        ).all()
+        return max(row.source for row in tied)
 
     def get_by_key(
         self, instrument_id: int, bar_date: date, source: str
@@ -166,21 +178,48 @@ class PriceBarRepository:
         # it. A ``raise`` written inside the ``except`` stores that
         # driver error on ``ValueError.__context__``, and the SQL
         # text would travel with the client error.
+        # ``IntegrityError`` is a ``StatementError``. It is caught
+        # first so a duplicate still uses the duplicate sentence.
+        # A ``ValueError`` from the column type is wrapped as
+        # ``StatementError`` and carries the SQL. That wrapper is
+        # turned into the fixed sentence outside this handler, so
+        # ``__context__`` does not keep the driver error.
         integrity_error = None
+        statement_error = False
         try:
             self.db.flush()
+            self._reload_flushed(rows)
             for row, bar in zip(rows, bars):
-                self.db.refresh(row)
                 _require_round_trip(row, bar)
             self.db.commit()
         except IntegrityError as error:
             self.db.rollback()
             integrity_error = error
+        except StatementError:
+            self.db.rollback()
+            statement_error = True
         except ValueError:
             self.db.rollback()
             raise
+        if statement_error:
+            raise ValueError(_CONSTRAINT) from None
         if integrity_error is not None:
             self._raise_after_integrity(instrument_id, inserted)
+
+    def _reload_flushed(self, rows: List[PriceBarDB]) -> None:
+        """Load every flushed row back with one ``SELECT``.
+
+        ``Session.refresh`` would run one query per row. The ids are
+        read before ``expire``. After that, touching ``row.id`` would
+        load the row by itself. The query fills the identity map, so
+        the same objects in ``rows`` then hold the stored prices.
+        """
+        if not rows:
+            return
+        ids = [row.id for row in rows]
+        for row in rows:
+            self.db.expire(row)
+        self.db.query(PriceBarDB).filter(PriceBarDB.id.in_(ids)).all()
 
     def _raise_after_integrity(
         self, instrument_id: int, bars: List[PriceBarCreate]
@@ -242,12 +281,14 @@ def _readable(row: PriceBarDB) -> bool:
         row.close_price,
     )
     if any(isinstance(price, UnreadablePrice) for price in prices):
-        logger.warning(
-            "Skipping price bar id=%s instrument_id=%s: "
-            "stored price is not a decimal",
-            row.id,
-            row.instrument_id,
-        )
+        if row.id not in _logged_skip_ids:
+            _logged_skip_ids.add(row.id)
+            logger.warning(
+                "Skipping price bar id=%s instrument_id=%s: "
+                "stored price is not a decimal",
+                row.id,
+                row.instrument_id,
+            )
         return False
     return True
 

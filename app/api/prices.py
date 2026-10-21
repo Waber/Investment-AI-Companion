@@ -35,6 +35,10 @@ router = APIRouter(prefix="/instruments", tags=["prices"])
 _NO_INSTRUMENT = "Instrument not found"
 _NO_PRICES = "No price data for this instrument"
 _PROVIDER_ERROR = "Data provider error"
+# One warning per bar id for this process. Listing the series again
+# must not repeat it. Showing the skipped bars in the response is a
+# later change.
+_logged_skip_ids = set()
 
 
 class PriceRefreshResult(BaseModel):
@@ -261,12 +265,15 @@ def _bars_or_skip(rows, instrument_id: int) -> List[PriceBar]:
         try:
             loaded.append(db_to_price(row))
         except (ValidationError, ValueError):
-            logger.warning(
-                "Skipping price bar id=%s instrument_id=%s: "
-                "stored price cannot be returned",
-                getattr(row, "id", None),
-                instrument_id,
-            )
+            bar_id = getattr(row, "id", None)
+            if bar_id not in _logged_skip_ids:
+                _logged_skip_ids.add(bar_id)
+                logger.warning(
+                    "Skipping price bar id=%s instrument_id=%s: "
+                    "stored price cannot be returned",
+                    bar_id,
+                    instrument_id,
+                )
     return loaded
 
 

@@ -106,6 +106,37 @@ async def assert_failed_post_leaves_no_row(client, ticker):
     assert rows[0]["open"] == "10.50000000"
 
 
+async def assert_same_retrieved_at_picks_fake(client, ticker):
+    """Two sources at one instant: ``fake`` wins on every engine.
+
+    The names share ``retrieved_at``. Python compares code points, so
+    ``fake`` sorts after ``[IAC-DEMO-V2]``. A database collation is
+    not asked. PostgreSQL ``en_US.UTF-8`` can ignore ``[``, and that
+    would pick the demo marker instead.
+    """
+    created_company = await client.post(
+        "/api/v1/companies/", json=_company_body(ticker)
+    )
+    assert created_company.status_code == 201, created_company.text
+    instrument_id = created_company.json()["id"]
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    when = "2026-10-03T18:00:00Z"
+    for source in ("[IAC-DEMO-V2]", "fake"):
+        created = await client.post(
+            path,
+            json=flat_price(
+                "10",
+                date="2026-02-02",
+                source=source,
+                retrieved_at=when,
+            ),
+        )
+        assert created.status_code == 201, created.text
+    listed = await client.get(path)
+    assert listed.status_code == 200, listed.text
+    assert [row["source"] for row in listed.json()] == ["fake"]
+
+
 async def assert_negative_zero_is_zero(client, ticker):
     """POST open ``-0`` returns 201 and ``0.00000000``.
 

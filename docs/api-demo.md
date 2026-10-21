@@ -72,6 +72,11 @@ minor-unit codes `GBp` (pence) and `ZAc` (South African cents) are kept
 exactly as sent: rewriting `GBp` to `GBP` would treat the amount as
 pounds.
 
+Price fields on a bar (`open`, `high`, `low`, `close`) are decimal
+strings such as `10.50000000`, not JSON numbers. Parse them with
+`Decimal` or another decimal library. Never use float math: a binary
+float cannot hold every 8-place price.
+
 `instrument_type` is `STOCK`, `ETF`, or `ETC`. Omitting it on create
 stores `STOCK`. On update, omit it to keep the stored type. JSON
 `null` is 422. A value already stored outside those three is returned
@@ -87,8 +92,10 @@ exists without `instrument_type` or `isin`. An Alembic-managed
 database runs `alembic upgrade head` (revision `0001` for these
 columns, the `ck_companies_instrument_type` CHECK, and the
 `uq_companies_isin` unique index, revision `0002` for `price_bars`,
-then revision `0003` for the `uq_companies_ticker` unique index).
-`0003` is the head. It stops when stored tickers collide after trim
+then revision `0003` for the `uq_companies_ticker` unique index,
+then the later revisions). `alembic heads` shows the current head,
+so this note does not name a revision the next migration would make
+stale. `0003` stops when stored tickers collide after trim
 and uppercase. The trim removes spaces, tabs, carriage returns, and
 line feeds, so `aapl` and `AAPL ` are one collision. It names that
 stored text and does not rewrite the rows. On SQLite the index is

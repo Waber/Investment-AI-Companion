@@ -23,6 +23,7 @@ from tests.price_round_trip import (
     assert_exact_round_trip,
     assert_failed_post_leaves_no_row,
     assert_negative_zero_is_zero,
+    assert_same_retrieved_at_picks_fake,
 )
 
 RETRIEVED = datetime(2026, 9, 30, 18, 0, tzinfo=timezone.utc)
@@ -463,12 +464,28 @@ async def test_unreadable_price_is_skipped(client, caplog):
             {"instrument_id": instrument_id},
         )
         db.commit()
+    from app.api.prices import _logged_skip_ids as api_skip_ids
+    from app.repositories.price_bar_repository import (
+        _logged_skip_ids as repository_skip_ids,
+    )
+
+    api_skip_ids.clear()
+    repository_skip_ids.clear()
     with caplog.at_level("WARNING"):
         listed = await client.get(path)
+        again = await client.get(path)
     assert listed.status_code == 200, listed.text
+    assert again.status_code == 200, again.text
     assert [row["date"] for row in listed.json()] == ["2026-01-05"]
+    assert [row["date"] for row in again.json()] == ["2026-01-05"]
     assert listed.json()[0]["open"] == "10.00000000"
-    assert "stored price" in caplog.text
+    warnings = [
+        record
+        for record in caplog.records
+        if "stored price" in record.getMessage()
+    ]
+    # Two bad bars, one warning each. The second GET adds none.
+    assert len(warnings) == 2
 
 
 @pytest.mark.asyncio
@@ -640,6 +657,11 @@ async def test_default_list_is_one_source(client):
     assert [row["source"] for row in that_day.json()] == ["zzz"]
     blank = await client.get(path, params={"source": "   "})
     assert blank.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_tied_retrieval_picks_fake_over_the_demo_marker(client):
+    await assert_same_retrieved_at_picks_fake(client, "DEMO_TIE_FAKE")
 
 
 @pytest.mark.asyncio
@@ -991,22 +1013,25 @@ def _race_repo():
     return engine, session, repo, instrument_id
 
 
-def _lie_about_open(session, read_back, only_date=None):
+def _lie_about_open(repo, read_back, only_date=None):
     """Report a different open from the one just written.
 
     The column stores an exact decimal, so a real round-trip matches.
-    Replacing the value after refresh is how the test reaches the
-    rollback. ``only_date`` limits the lie to one session, so an
-    earlier bar in the same batch can pass the check.
+    The repository reloads flushed rows in one SELECT. Replacing the
+    open after that reload is how the test reaches the rollback.
+    Patching ``Session.refresh`` would not run. ``only_date`` limits
+    the lie to one session, so an earlier bar in the same batch can
+    pass the check.
     """
-    real_refresh = session.refresh
+    real_reload = repo._reload_flushed
 
-    def refresh(instance, *args, **kwargs):
-        real_refresh(instance, *args, **kwargs)
-        if only_date is None or instance.bar_date == only_date:
-            instance.open_price = read_back
+    def reload(rows):
+        real_reload(rows)
+        for row in rows:
+            if only_date is None or row.bar_date == only_date:
+                row.open_price = read_back
 
-    session.refresh = refresh
+    repo._reload_flushed = reload
 
 
 def _stored_price_rows(session):
@@ -1067,7 +1092,7 @@ def test_create_rolls_back_when_the_read_back_differs(read_back):
     engine, session, repo, instrument_id = _sqlite_price_repo()
     try:
         repo.create(instrument_id, PriceBarCreate(**_bar()))
-        _lie_about_open(session, read_back)
+        _lie_about_open(repo, read_back)
         with pytest.raises(
             ValueError, match="^Price bar could not be stored$"
         ):
@@ -1087,6 +1112,17 @@ def test_create_rolls_back_when_the_read_back_differs(read_back):
         engine.dispose()
 
 
+def test_upsert_many_of_no_bars_changes_nothing():
+    """An empty batch reloads no rows and leaves the table alone."""
+    engine, session, repo, instrument_id = _sqlite_price_repo()
+    try:
+        assert repo.upsert_many(instrument_id, []) == []
+        assert _stored_price_rows(session) == []
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_upsert_many_rolls_back_the_whole_batch_on_a_mismatch():
     """One bad read-back drops the whole batch.
 
@@ -1098,7 +1134,7 @@ def test_upsert_many_rolls_back_the_whole_batch_on_a_mismatch():
     engine, session, repo, instrument_id = _sqlite_price_repo()
     try:
         repo.create(instrument_id, PriceBarCreate(**_bar()))
-        _lie_about_open(session, Decimal("1.00000000"), date(2026, 1, 7))
+        _lie_about_open(repo, Decimal("1.00000000"), date(2026, 1, 7))
         updated = PriceBarCreate(
             **_bar(open="20", high="20", low="20", close="20")
         )
@@ -1131,6 +1167,69 @@ def test_upsert_many_rolls_back_the_whole_batch_on_a_mismatch():
         assert kept.high_price == Decimal("12.00000000")
         assert kept.low_price == Decimal("9.00000000")
         assert kept.close_price == Decimal("11.00000000")
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def _unvalidated_oversized_bar(**overrides):
+    """A bar the model would reject, built without running validators.
+
+    ``model_construct`` is how a value past ``Numeric(20, 8)`` reaches
+    the column type. The four prices are equal so a candle check is
+    not the failure.
+    """
+    values = {
+        "date": date(2026, 1, 8),
+        "open": Decimal("1000000000000"),
+        "high": Decimal("1000000000000"),
+        "low": Decimal("1000000000000"),
+        "close": Decimal("1000000000000"),
+        "volume": 100,
+        "currency": "PLN",
+        "source": "oversized",
+        "retrieved_at": datetime(2026, 10, 4, 18, 0, tzinfo=timezone.utc),
+    }
+    values.update(overrides)
+    return PriceBarCreate.model_construct(**values)
+
+
+def test_unvalidated_price_rolls_back_without_sql_in_the_message():
+    """A bind error is a fixed ValueError, and the new row is gone.
+
+    ``process_bind_param`` raises ``ValueError``. SQLAlchemy wraps
+    that as ``StatementError``, which carries the SQL and the
+    parameters. The repository rolls back and does not repeat either.
+    """
+    engine, session, repo, instrument_id = _sqlite_price_repo()
+    try:
+        repo.create(instrument_id, PriceBarCreate(**_bar()))
+        bad = _unvalidated_oversized_bar()
+        with pytest.raises(
+            ValueError, match="^Price bar could not be stored$"
+        ) as created:
+            repo.create(instrument_id, bad)
+        assert created.value.__context__ is None
+        assert created.value.__cause__ is None
+        assert "INSERT" not in str(created.value)
+        assert "1000000000000" not in str(created.value)
+        rows = _stored_price_rows(session)
+        assert [row.bar_date for row in rows] == [date(2026, 1, 5)]
+
+        with pytest.raises(
+            ValueError, match="^Price bar could not be stored$"
+        ) as upserted:
+            repo.upsert_many(
+                instrument_id,
+                [_unvalidated_oversized_bar(date=date(2026, 1, 9))],
+            )
+        assert upserted.value.__context__ is None
+        assert upserted.value.__cause__ is None
+        assert "INSERT" not in str(upserted.value)
+        assert "1000000000000" not in str(upserted.value)
+        rows = _stored_price_rows(session)
+        assert [row.bar_date for row in rows] == [date(2026, 1, 5)]
+        assert rows[0].open_price == Decimal("10.00000000")
     finally:
         session.close()
         engine.dispose()

@@ -25,11 +25,18 @@ theses). ``0004`` is the watchlist. ``0003`` is the unique ticker
 index. The literals below are frozen on purpose: a migration does
 not import the application.
 
-PostgreSQL rounds each stored float half away from zero to 8 places
-while it changes the type. SQLite rewrites each stored float to the
-canonical 8-place string after the rebuild. A null price stays null.
-Downgrade returns the four columns to FLOAT and restores the check
-text from revision 0002.
+PostgreSQL ``ROUND`` is half away from zero. The application
+quantizes half-even. On a legacy row those two rules differ by at
+most one unit in the last place, ``1e-8``. A stored float keeps
+about 15 significant digits, so the conversion cannot recover
+digits the float never held.
+
+SQLite rewrites each stored float to the canonical 8-place string
+after the rebuild. A null price stays null. A price whose absolute
+value is at least ``1e12``, or a price that is not finite, does not
+fit ``NUMERIC(20, 8)``. Upgrade names those ``price_bars`` ids and
+stops before it changes a row. Downgrade returns the four columns
+to FLOAT and restores the check text from revision 0002.
 """
 
 from decimal import ROUND_HALF_EVEN, Decimal
@@ -43,6 +50,8 @@ down_revision = "0005"
 branch_labels = None
 depends_on = None
 
+# Twelve digits before the point is the numeric limit. 1e12 does not fit.
+_PRICE_ABS_LIMIT = "1000000000000"
 _PRICE_COLUMNS = ("open_price", "high_price", "low_price", "close_price")
 _NUMERIC = sa.Numeric(20, 8)
 _QUANTUM = Decimal("0.00000001")
@@ -56,8 +65,17 @@ _OHLC_CHECKS = (
 )
 
 
+class OversizedPricesError(RuntimeError):
+    """A legacy price does not fit ``NUMERIC(20, 8)``.
+
+    The message lists ``price_bars`` ids. The upgrade has not
+    rewritten those rows.
+    """
+
+
 def upgrade() -> None:
     bind = op.get_bind()
+    _reject_oversized(bind)
     if bind.dialect.name == "postgresql":
         _alter_postgres(_NUMERIC, sa.Float(), "ROUND({name}::numeric, 8)")
         return
@@ -71,6 +89,45 @@ def downgrade() -> None:
         _alter_postgres(sa.Float(), _NUMERIC, "{name}::double precision")
         return
     _rebuild_sqlite(sa.Text(), sa.Float(), _plain_sql)
+
+
+def _reject_oversized(bind) -> None:
+    """Abort before any rewrite when a price cannot be stored exactly.
+
+    PostgreSQL would raise ``numeric field overflow`` during the
+    type change. SQLite would store ``1e12`` and ``1e20`` as text
+    the API then skips, and a value at ``1e20`` can come back as
+    ``1.0e+20``, which ``Decimal.quantize`` rejects. NaN and
+    infinity are not prices. SQLite's driver writes NaN as NULL, so
+    ``column != column`` is there for a NaN that is already stored.
+    PostgreSQL casts to float and names NaN and infinity as well.
+    ``abs`` of NULL is unknown, so a missing price is not selected.
+    """
+    parts = []
+    for name in _PRICE_COLUMNS:
+        parts.append(f"abs({name}) >= {_PRICE_ABS_LIMIT}")
+        if bind.dialect.name == "postgresql":
+            parts.append(
+                f"{name}::float8 IN ("
+                "'NaN'::float8, 'Infinity'::float8, '-Infinity'::float8)"
+            )
+        else:
+            parts.append(f"{name} != {name}")
+    rows = bind.execute(
+        sa.text(
+            "SELECT id FROM price_bars WHERE "
+            + " OR ".join(parts)
+            + " ORDER BY id"
+        )
+    ).fetchall()
+    if not rows:
+        return
+    listed = ", ".join(str(row.id) for row in rows)
+    raise OversizedPricesError(
+        f"price_bars ids {listed} have a price outside Numeric(20, 8) "
+        "or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
 
 
 def _alter_postgres(new_type, old_type, using: str) -> None:

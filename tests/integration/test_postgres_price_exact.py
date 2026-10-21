@@ -12,6 +12,7 @@ from tests.price_round_trip import (
     assert_exact_round_trip,
     assert_failed_post_leaves_no_row,
     assert_negative_zero_is_zero,
+    assert_same_retrieved_at_picks_fake,
 )
 
 pytestmark = pytest.mark.integration
@@ -49,3 +50,11 @@ async def test_postgres_failed_price_post_leaves_no_row(postgres_client):
 @pytest.mark.asyncio
 async def test_postgres_negative_zero_is_zero(postgres_client):
     await assert_negative_zero_is_zero(postgres_client, "DEMO_NEG0_PG")
+
+
+@pytest.mark.asyncio
+async def test_postgres_tied_retrieval_picks_fake_over_demo(postgres_client):
+    """Same instant as SQLite: ``fake`` beats ``[IAC-DEMO-V2]``."""
+    await assert_same_retrieved_at_picks_fake(
+        postgres_client, "DEMO_TIE_FAKE_PG"
+    )
