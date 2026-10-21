@@ -210,7 +210,11 @@ def _column_types(connection):
 
 
 def test_revision_0006_changes_float_prices_to_numeric(postgres_engine):
-    """A float stored at 0002 is numeric after 0006, on PostgreSQL."""
+    """A float stored at 0002 is numeric after 0006, on PostgreSQL.
+
+    Downgrade stops at 0005, the parent revision. That undoes the
+    price type change and leaves notes, theses, and the watchlist.
+    """
     with postgres_engine.connect() as connection:
         _scratch(connection)
         try:
@@ -247,7 +251,7 @@ def test_revision_0006_changes_float_prices_to_numeric(postgres_engine):
             check_sql = dict(price_bar_structure(connection)["check_sql"])
             for name in CANDLE_CHECK_NAMES:
                 assert "CAST" not in check_sql[name]
-            downgrade_to(connection, "0002")
+            downgrade_to(connection, "0005")
             restored = _column_types(connection)["open_price"]
             assert "NUMERIC" not in restored
             again = connection.execute(

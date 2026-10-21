@@ -1,10 +1,48 @@
 # Development Journal
 
+## 2026-10-21 - Re-chain price bars onto revision 0005
+
+- Scope: #91 has merged. `origin/master` is `1223be6`, whose
+  single head was `0005` (`0003` ticker unique, `0004`
+  watchlist, `0005` notes and theses). This rebases
+  `cursor/price-bar-followups-85-5c38` onto that master and
+  points the price migration at `0005`. No price behavior
+  change. `templates/`, `static/`, and `app/ui/` were not
+  edited.
+- Decisions: `0006_price_bar_numeric.py` keeps revision id
+  `0006`. `down_revision` is `0005`, and the header says
+  `Revises: 0005`. The docstring no longer says the parent is
+  temporarily `0003`. One Alembic head. The price round-trip
+  downgrades to `0005`, which undoes only this revision.
+  Legacy and stamp tests that build the model with
+  `create_all` and then upgrade still drop `notes`, `theses`,
+  and `watchlist_items` where `0004` or `0005` would create
+  those tables again. `database_models.py` keeps the price,
+  research, and watchlist imports.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. No live market-data calls. Scoped black, isort, and
+  flake8 passed on the Python this change touches. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1708 passed, 212 deselected, coverage 96.28%
+  (4285 statements, 132 miss, 1174 branches, 55 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 212 passed, 1708 deselected. Upgrade, downgrade to
+  `0005`, and upgrade again passed on both engines. The
+  Actions run id is recorded on the pull request after both
+  jobs are green. This commit is the re-chain, not a CI note.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-21 about 17:41 to 17:49.
+- Next: both GitHub Actions jobs on this head. The pull
+  request is ready for review. Agents do not merge.
+
 ## 2026-10-21 - Negative zero, price rollback, SQLite check pin
 
 - Scope: QA approved PR #94 at `36d171b` on content. Three small
-  items on the same branch, one commit. Revision `0006` still
-  revises `0003`. The re-chain to `0005` waits until #91 merges.
+  items on the same branch, one commit. Revision `0006` revised
+  `0003` at this commit. The re-chain entry above points it at
+  `0005`.
   `templates/`, `static/`, and `app/ui/` were not edited.
 - Decisions: `Decimal('-0')` compares equal to zero and still has a
   sign. `quantize` keeps that sign. SQLite then stores
@@ -39,9 +77,7 @@
   the behavior change, not a CI note.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 17:31 to 17:40.
-- Next: both GitHub Actions jobs on this head, then the owner
-  reviews PR #94. Agents do not merge. After #90 and #91 merge,
-  set `down_revision` to `0005`.
+- Next: the re-chain entry above. Agents do not merge.
 
 ## 2026-10-21 - Rebase price bars onto master as revision 0006
 

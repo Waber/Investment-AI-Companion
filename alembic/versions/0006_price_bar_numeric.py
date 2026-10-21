@@ -1,7 +1,7 @@
 """store OHLC prices exactly
 
 Revision ID: 0006
-Revises: 0003
+Revises: 0005
 Create Date: 2026-10-21
 
 ``open_price``, ``high_price``, ``low_price``, and ``close_price``
@@ -20,12 +20,10 @@ again on the numeric columns. On SQLite they compare
 candle such as low 9 and open 10. The API model is the exact check.
 This rebuilds ``price_bars`` only. It does not rebuild ``companies``.
 
-This revision is ``0006`` and it revises ``0003`` (the unique
-ticker index). Pull requests #90 and #91 add ``0004`` and ``0005``
-and merge before this file. The final re-chain sets
-``down_revision`` to ``0005``. Until those merge, the parent stays
-``0003`` so this branch has one Alembic head. The literals below
-are frozen on purpose: a migration does not import the application.
+This revision is ``0006`` and it revises ``0005`` (notes and
+theses). ``0004`` is the watchlist. ``0003`` is the unique ticker
+index. The literals below are frozen on purpose: a migration does
+not import the application.
 
 PostgreSQL rounds each stored float half away from zero to 8 places
 while it changes the type. SQLite rewrites each stored float to the
@@ -41,7 +39,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0006"
-down_revision = "0003"
+down_revision = "0005"
 branch_labels = None
 depends_on = None
 

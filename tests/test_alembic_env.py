@@ -19,11 +19,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_alembic_script_has_one_head():
-    """One head: 0006 revises 0003, and 0003 revises 0002.
+    """One head: 0006 revises 0005.
 
-    Pull requests #90 and #91 add 0004 and 0005 and merge first.
-    The final re-chain points 0006 at 0005. Until then the parent
-    is 0003, so an upgrade still has a single head.
+    0005 is notes and theses, 0004 is the watchlist, and 0003 is
+    the unique ticker index. 0003 revises 0002.
     """
     config = Config(str(ROOT / "alembic.ini"))
     heads = ScriptDirectory.from_config(config).get_heads()

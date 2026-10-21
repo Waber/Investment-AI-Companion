@@ -1,6 +1,37 @@
 # Current Work State
 
+## Re-chain price bars onto 0005 (PR #94): 2026-10-21
+
+- Branch `cursor/price-bar-followups-85-5c38`, rebased onto
+  `origin/master` `1223be6` (#91). PR #94 says Closes #85.
+  Not merged. Ready for review. No price behavior change.
+- Completed: revision `0006` in `0006_price_bar_numeric.py`
+  revises `0005`. The header says `Revises: 0005`. One Alembic
+  head. Upgrade, downgrade to `0005`, and upgrade again passed
+  on SQLite and PostgreSQL. `database_models.py` keeps the
+  price, research, and watchlist imports. `templates/`,
+  `static/`, and `app/ui/` were not edited.
+- Incomplete: none for the chain. The owner merges with
+  "Rebase and merge". Agents do not merge.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1708 passed, 212 deselected, coverage 96.28%
+  (4285 statements, 132 miss, 1174 branches, 55 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `-m integration` -> 212 passed, 1708 deselected.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. The Actions run id goes on the pull request, not in a
+  later docs-only commit.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: both GitHub Actions jobs on this head (SQLite
+  and PostgreSQL). The pull request is ready for review.
+
 ## QA follow-up on price bars (PR #94): 2026-10-21
+
+Superseded by the re-chain section above. #91 has merged, and
+`0006` now revises `0005`.
 
 - Branch `cursor/price-bar-followups-85-5c38`. QA approved the
   content at `36d171b`. This section is the small follow-up on
