@@ -12,6 +12,7 @@ and its provenance (source and retrieval time).
 
 import logging
 from datetime import date
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -247,18 +248,34 @@ def refresh_prices(
     )
 
 
+def _decimal_price(value):
+    """Turn a collector float into a Decimal the price model accepts.
+
+    Collector bars use ``float`` because that is what the provider
+    libraries return. ``Decimal(str(value))`` keeps the short decimal
+    Python prints, so ``0.1`` stays ``0.1``. ``Decimal(value)`` would
+    keep the binary expansion instead. ``None`` stays ``None``. The
+    price model then rounds to Numeric(20, 8).
+    """
+    if value is None or isinstance(value, Decimal):
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return Decimal(str(value))
+
+
 def _bar_from_collector(bar: CollectedPriceBar, currency: str, provenance):
     """Map one collector bar onto the stored shape.
 
     A missing OHLC or volume stays ``None``. It is not replaced
-    with zero.
+    with zero. Prices are decimals. Volume stays an int.
     """
     return PriceBarCreate(
         date=bar.day,
-        open=bar.open,
-        high=bar.high,
-        low=bar.low,
-        close=bar.close,
+        open=_decimal_price(bar.open),
+        high=_decimal_price(bar.high),
+        low=_decimal_price(bar.low),
+        close=_decimal_price(bar.close),
         volume=bar.volume,
         currency=currency,
         source=provenance.source,

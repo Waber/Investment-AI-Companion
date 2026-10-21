@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -278,10 +279,15 @@ class PriceBarDB(Base):
         nullable=False,
     )
     bar_date = Column(Date, nullable=False)
-    open_price = Column(Float, nullable=True)
-    high_price = Column(Float, nullable=True)
-    low_price = Column(Float, nullable=True)
-    close_price = Column(Float, nullable=True)
+    # Numeric(20, 8), not Float. Twelve digits before the decimal
+    # point and eight after cover a share price without turning it
+    # into a binary fraction. PostgreSQL stores that exact decimal.
+    # SQLite's numeric affinity still keeps the value as a real; the
+    # application reads it back as Decimal rounded to this scale.
+    open_price = Column(Numeric(20, 8), nullable=True)
+    high_price = Column(Numeric(20, 8), nullable=True)
+    low_price = Column(Numeric(20, 8), nullable=True)
+    close_price = Column(Numeric(20, 8), nullable=True)
     # BigInteger, not Integer. PostgreSQL INTEGER is int4 and rejects
     # a volume above 2_147_483_647. A busy session can be larger.
     # The Pydantic model caps the value at the signed 64-bit maximum.

@@ -1,10 +1,14 @@
 """Revision 0002 adds price_bars on top of a legacy companies table.
 
+Revision 0003 changes the OHLC columns from FLOAT to NUMERIC(20, 8).
+
 The application engine is not used. SQLite is enough to see that
 upgrade creates the table and the candle checks, and that downgrade
 removes the table without dropping the company row. PostgreSQL runs
 the same checks in the integration suite.
 """
+
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import inspect, text
@@ -16,7 +20,9 @@ from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_base,
+    downgrade_to,
     upgrade_head,
+    upgrade_to,
 )
 from tests.price_bar_checks import (
     CANDLE_CHECK_NAMES,
@@ -77,6 +83,68 @@ def test_upgrade_creates_price_bars_and_downgrade_drops_them(tmp_path):
         engine.dispose()
 
 
+# A float bar stored by revision 0002. 10.5 is exact in binary.
+_FLOAT_BAR_SQL = (
+    "INSERT INTO price_bars ("
+    "instrument_id, bar_date, open_price, high_price, low_price, "
+    "close_price, volume, currency, source, retrieved_at"
+    ") VALUES (1, '2024-01-02', 10.5, 11.0, 9.25, 10.75, 100, "
+    "'USD', 'fake', '2024-01-02 00:00:00+00')"
+)
+
+
+def _column_types(connection):
+    return {
+        column["name"]: str(column["type"]).upper()
+        for column in inspect(connection).get_columns("price_bars")
+    }
+
+
+def test_revision_0003_changes_float_prices_to_numeric(tmp_path):
+    """A float stored at 0002 is a decimal after 0003.
+
+    Downgrade returns the column to FLOAT and keeps the value.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
+    with engine.begin() as connection:
+        connection.execute(text(LEGACY_COMPANIES))
+        connection.execute(text(LEGACY_METRICS))
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) "
+                "VALUES (1, 'Apple', 'AAPL')"
+            )
+        )
+    with engine.connect() as connection:
+        upgrade_to(connection, "0002")
+        assert _column_types(connection)["open_price"].startswith("FLOAT")
+        connection.execute(text(_FLOAT_BAR_SQL))
+        connection.commit()
+        upgrade_to(connection, "head")
+        kinds = _column_types(connection)
+        assert kinds["open_price"].startswith("NUMERIC")
+        assert check_names(connection) == set(CANDLE_CHECK_NAMES)
+        stored = connection.execute(
+            text(
+                "SELECT open_price, high_price, low_price, close_price "
+                "FROM price_bars"
+            )
+        ).one()
+        assert [Decimal(str(value)) for value in stored] == [
+            Decimal("10.5"),
+            Decimal("11"),
+            Decimal("9.25"),
+            Decimal("10.75"),
+        ]
+        downgrade_to(connection, "0002")
+        assert _column_types(connection)["open_price"].startswith("FLOAT")
+        again = connection.execute(
+            text("SELECT open_price FROM price_bars")
+        ).scalar()
+        assert Decimal(str(again)) == Decimal("10.5")
+    engine.dispose()
+
+
 def test_migrated_sqlite_price_bars_match_the_model(tmp_path):
     """Revision 0002 and ``PriceBarDB`` describe the same table.
 
@@ -102,6 +170,10 @@ def test_migrated_sqlite_price_bars_match_the_model(tmp_path):
     created.dispose()
 
     assert from_migration == from_model
+    kinds = {name: kind for name, kind, _nullable in from_model["columns"]}
+    for name in ("open_price", "high_price", "low_price", "close_price"):
+        assert kinds[name].startswith("NUMERIC")
+        assert "20" in kinds[name] and "8" in kinds[name]
     index_names = set(from_model["indexes"])
     assert "ix_price_bars_id" not in index_names
     assert "ix_price_bars_instrument_id" not in index_names

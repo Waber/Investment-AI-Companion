@@ -6,11 +6,13 @@ covered by the tests that load ``fixtures/demo-v2.json``.
 """
 
 import copy
+from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
 from scripts import seed_demo as seed
+from scripts.seed_demo import _json_price
 
 
 def _fixture():
@@ -300,6 +302,13 @@ def test_price_json_normalizes_a_naive_retrieval_clock():
         )
     )
     assert naive["retrieved_at"] == "2026-09-30T18:00:00Z"
+    assert naive["open"] == "1.00000000"
+    assert naive["high"] == "2.00000000"
+    assert naive["low"] == "0.50000000"
+    assert naive["close"] == "1.50000000"
+    # The database returns Decimal. A missing price stays null.
+    assert _json_price(Decimal("10.50")) == "10.50000000"
+    assert _json_price(None) is None
     aware = SqliteSeedClient._price_json(
         SimpleNamespace(
             id=1,

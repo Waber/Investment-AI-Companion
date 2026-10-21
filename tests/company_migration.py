@@ -44,6 +44,7 @@ def upgrade_head(connection):
 
 
 def upgrade_to(connection, revision):
+    """Upgrade this connection to one revision, for example ``0002``."""
     command.upgrade(_config(connection), revision)
 
 
@@ -52,6 +53,7 @@ def downgrade_base(connection):
 
 
 def downgrade_to(connection, revision):
+    """Downgrade this connection to one revision, for example ``0002``."""
     command.downgrade(_config(connection), revision)
 
 

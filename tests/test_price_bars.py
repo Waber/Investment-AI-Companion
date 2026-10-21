@@ -5,15 +5,17 @@ bars in memory. Nothing in this file calls a market-data provider.
 """
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
 from app.api.data_collection import get_collector
+from app.api.prices import _bar_from_collector, _decimal_price
 from app.data_collectors.base import PriceBar as CollectedPriceBar
 from app.data_collectors.base import Provenance, ProviderError, Sourced
 from app.data_collectors.fake import FakeCollector
-from app.models.price_bar import PriceBarCreate
+from app.models.price_bar import PriceBar, PriceBarCreate
 
 RETRIEVED = datetime(2026, 9, 30, 18, 0, tzinfo=timezone.utc)
 
@@ -246,6 +248,131 @@ async def test_volume_string_is_422_and_an_int_is_stored(client):
     assert rejected.status_code == 422
     listed = await client.get(path)
     assert [row["volume"] for row in listed.json()] == [100]
+
+
+def test_ohlc_is_decimal_and_json_is_fixed_point():
+    """Prices are Decimal. JSON is a fixed-point string.
+
+    FastAPI uses Pydantic's JSON mode, which encodes Decimal as a
+    string. The string has 8 digits after the decimal point, so
+    ``0.00000001`` is not written as ``1E-8``. A value that does not
+    fit Numeric(20, 8) is rejected. Half-even rounds the 9th digit.
+    """
+    bar = PriceBarCreate(
+        **_bar(open=10.5, high="12.00", low=Decimal("9"), close=10)
+    )
+    assert type(bar.open) is Decimal
+    assert bar.open == Decimal("10.50000000")
+    assert bar.high == Decimal("12.00000000")
+    assert bar.low == Decimal("9.00000000")
+    assert bar.close == Decimal("10.00000000")
+    dumped = bar.model_dump(mode="json")
+    assert dumped["open"] == "10.50000000"
+    assert dumped["close"] == "10.00000000"
+    tiny = PriceBarCreate(
+        **_bar(
+            open=0.00000001,
+            high=0.00000001,
+            low=0.00000001,
+            close=0.00000001,
+        )
+    )
+    assert tiny.model_dump(mode="json")["close"] == "0.00000001"
+    assert "E" not in tiny.model_dump(mode="json")["close"]
+    # Input accepts a JSON number or a numeric string. The response
+    # encoding, checked above, is the fixed-point string.
+    schema = PriceBar.model_json_schema()["properties"]["open"]
+    kinds = {item.get("type") for item in schema["anyOf"]}
+    assert kinds == {"string", "number", "null"}
+    rounded = PriceBarCreate(
+        **_bar(
+            open="1.234567895",
+            high="1.234567895",
+            low="1.234567895",
+            close="1.234567895",
+        )
+    )
+    assert rounded.open == Decimal("1.23456790")
+    with pytest.raises(ValidationError):
+        PriceBarCreate(**_bar(open="1000000000000"))
+    with pytest.raises(ValidationError):
+        PriceBarCreate(**_bar(close="NaN"))
+
+
+def test_collector_float_becomes_a_decimal_price():
+    """The ingest path converts a provider float before it is stored.
+
+    ``0.1`` stays ``0.1``. It is not the binary expansion of that float.
+    """
+    bar = CollectedPriceBar(date(2026, 1, 2), 0.1, 0.2, 0.05, 0.15, 8)
+    provenance = Provenance(
+        source="stub",
+        retrieved_at=RETRIEVED,
+        as_of=bar.day,
+        synthetic=True,
+    )
+    created = _bar_from_collector(bar, "USD", provenance)
+    assert type(created.open) is Decimal
+    assert created.open == Decimal("0.10000000")
+    assert created.model_dump(mode="json")["open"] == "0.10000000"
+    assert created.volume == 8
+    assert created.model_dump(mode="json")["volume"] == 8
+    assert _decimal_price(None) is None
+    assert _decimal_price(Decimal("1.25")) == Decimal("1.25")
+    # A bool or a string is left for the price model to reject.
+    assert _decimal_price(True) is True
+    assert _decimal_price("10") == "10"
+
+
+@pytest.mark.asyncio
+async def test_http_prices_are_decimal_strings(client):
+    """A stored bar comes back as 8-place strings, not JSON numbers."""
+    instrument_id = await _company(client, ticker="DEMO_DECIMAL")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    created = await client.post(
+        path,
+        json=_bar(open=10.5, high=12, low=9.25, close=10.75),
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["open"] == "10.50000000"
+    assert body["high"] == "12.00000000"
+    assert body["low"] == "9.25000000"
+    assert body["close"] == "10.75000000"
+    for name in ("open", "high", "low", "close"):
+        assert type(body[name]) is str
+    as_text = await client.post(
+        path,
+        json=_bar(
+            date="2026-01-12",
+            open="10.50",
+            high="12",
+            low="9.25",
+            close="10.75",
+        ),
+    )
+    assert as_text.status_code == 201, as_text.text
+    assert as_text.json()["open"] == "10.50000000"
+
+
+@pytest.mark.asyncio
+async def test_refresh_stores_collector_floats_as_decimal_strings(client):
+    instrument_id = await _company(client, ticker="DEMO_DEC_REFRESH")
+    stub = _StubCollector(
+        [CollectedPriceBar(date(2026, 1, 2), 10.5, 11.0, 9.25, 10.75, 3)]
+    )
+    _use(client, stub)
+    refreshed = await client.post(
+        f"/api/v1/instruments/{instrument_id}/prices/refresh"
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    listed = await client.get(f"/api/v1/instruments/{instrument_id}/prices")
+    row = listed.json()[0]
+    assert row["open"] == "10.50000000"
+    assert row["high"] == "11.00000000"
+    assert row["low"] == "9.25000000"
+    assert row["close"] == "10.75000000"
+    assert row["volume"] == 3
 
 
 @pytest.mark.asyncio
