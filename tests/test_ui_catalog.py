@@ -23,6 +23,12 @@ def test_required_phrases_are_in_the_catalogs():
     assert CATALOGS["en"]["filter.type"] == "Type"
     assert CATALOGS["pl"]["type.stock"] == "akcja"
     assert CATALOGS["en"]["type.stock"] == "stock"
+    assert CATALOGS["pl"]["type.etf"] == "ETF"
+    assert CATALOGS["en"]["type.etf"] == "ETF"
+    assert CATALOGS["pl"]["type.etc"] == "ETC"
+    assert CATALOGS["en"]["type.etc"] == "ETC"
+    assert CATALOGS["pl"]["error.instrument_type"].startswith("Typ musi")
+    assert CATALOGS["en"]["error.instrument_type"].startswith("Type must")
     assert CATALOGS["pl"]["nav.skip"] == "Przejdź do treści"
     assert CATALOGS["en"]["nav.skip"] == "Skip to main content"
 

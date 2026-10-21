@@ -305,6 +305,50 @@
   It says Refs #27 and stays unmerged. Agents do not merge. The
   Frontend Developer still owns the `/ui` badge for
   `[IAC-DEMO-V2]`.
+## 2026-10-21 - Instrument type on the company forms (#34, part)
+
+- Scope: the instrument-type control from
+  [#34](https://github.com/Waber/Investment-AI-Companion/issues/34).
+  Create and edit under `/ui` gain a select. The list and the
+  detail page show the stored type. Models, schema, migrations,
+  repositories, services, collectors, scoring, and AI adapters
+  were not changed. ETF/ETC attribute columns and `source=manual`
+  stay blocked on #28.
+- Decisions: the option values are `InstrumentType`
+  (`STOCK`, `ETF`, `ETC`). The visible words are the existing
+  catalog keys `type.stock`, `type.etf`, and `type.etc`
+  ("akcja" / "stock", and the abbreviations ETF and ETC). The
+  label is the same `field.type` string the detail page uses,
+  tied to the select with `for` and `id`. A blank post omits
+  the key. Create then uses the `CompanyCreate` default
+  `STOCK`. Update leaves the stored column, because
+  `CompanyUpdate` rejects an explicit null. An unknown value
+  is a 422 on that select (`aria-invalid`, the localized
+  sentence, and the posted text kept as an extra option so a
+  resubmit does not silently become STOCK). Jinja escapes that
+  text. `to_instrument` maps the column to the lowercase
+  catalog id the list filter already compares. A missing or
+  unknown stored value is `None`, and the template shows the
+  missing-data sentence instead of calling the row a stock.
+  The same-origin check is the existing router dependency.
+  No new disclaimer copy.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1494 passed, 124 deselected, coverage 96.10%. Scoped
+  black, isort, and flake8 passed on the touched Python.
+  PostgreSQL was not run locally. In the browser on
+  `127.0.0.1:8765`: the Polish create form labeled the select
+  "Typ" with "akcja" selected; saving ETF showed ETF on the
+  detail page; the English edit form kept ETF selected under
+  "Type"; changing it to ETC showed ETC on the list and in
+  the type filter.
+- AI model: Grok 4.7. Account usage was not readable as a
+  percentage in this session.
+- Time tracking (UTC): 2026-10-21 about 15:26 to 15:35.
+- Next: open the pull request against master. It says Refs
+  #34 and stays unmerged. The owner reviews it. Agents do
+  not merge.
 
 ## 2026-10-21 - Demo source comes from the marker token
 

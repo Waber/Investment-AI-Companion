@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from app.ui.view_models import (
     EXTERNAL_LINK_REL,
+    catalog_instrument_type,
     http_website_href,
     to_instrument,
     website_view,
@@ -77,6 +78,34 @@ def test_website_rejects_format_characters_and_del():
         assert view.text == value
 
 
+def test_catalog_instrument_type_reads_the_stored_enum():
+    """The page id is the column, lowercased. Unknown is not a stock."""
+    assert catalog_instrument_type("STOCK") == "stock"
+    assert catalog_instrument_type(" etf ") == "etf"
+    assert catalog_instrument_type("Etc") == "etc"
+    assert catalog_instrument_type(None) is None
+    assert catalog_instrument_type("EQUITY") is None
+    assert catalog_instrument_type("BOND") is None
+    etf = to_instrument(
+        Row(
+            id=3,
+            name="Fund",
+            ticker="FUND",
+            isin=None,
+            description="notes",
+            website=None,
+            exchange=None,
+            currency="USD",
+            country=None,
+            sector=None,
+            industry=None,
+            instrument_type="ETF",
+            financial_metrics=[],
+        )
+    )
+    assert etf.instrument_type == "etf"
+
+
 def test_company_row_becomes_an_instrument_view():
     company = Row(
         id=7,
@@ -90,6 +119,7 @@ def test_company_row_becomes_an_instrument_view():
         country="Poland",
         sector=None,
         industry="  ",
+        instrument_type="STOCK",
         financial_metrics=[
             Row(
                 id=11,
@@ -151,6 +181,7 @@ def test_company_row_becomes_an_instrument_view():
         financial_metrics=[],
     )
     plain_view = to_instrument(plain)
+    assert plain_view.instrument_type is None
     assert plain_view.isin is None
     assert plain_view.is_synthetic is False
     assert plain_view.source is None

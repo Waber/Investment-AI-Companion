@@ -33,6 +33,7 @@ from app.repositories.financial_metrics_repository import (
 )
 from app.ui.form_fields import (
     COMPANY_FIELDS,
+    INSTRUMENT_TYPE_CHOICES,
     blank_company,
     blank_metrics,
     catalog_key_for_repository_error,
@@ -64,6 +65,7 @@ def posted_company(
     name: str = Form(""),
     ticker: str = Form(""),
     isin: str = Form(""),
+    instrument_type: str = Form(""),
     exchange: str = Form(""),
     currency: str = Form(""),
     country: str = Form(""),
@@ -77,6 +79,7 @@ def posted_company(
         "name": name,
         "ticker": ticker,
         "isin": isin,
+        "instrument_type": instrument_type,
         "exchange": exchange,
         "currency": currency,
         "country": country,
@@ -212,6 +215,7 @@ def _company_page(
             ),
             company_fields=COMPANY_FIELDS,
             field_label_key=field_label_key,
+            instrument_type_choices=INSTRUMENT_TYPE_CHOICES,
         )
     )
 

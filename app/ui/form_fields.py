@@ -32,17 +32,26 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from app.core.utc_datetime import as_utc
-from app.models.company import CompanyCreate, CompanyUpdate, normalize_name
+from app.models.company import (
+    CompanyCreate,
+    CompanyUpdate,
+    InstrumentType,
+    normalize_name,
+)
 from app.models.financial_metrics import (
     FinancialMetricsCreate,
     FinancialMetricsUpdate,
 )
 from app.ui.view_models import METRIC_FIELDS
 
+# The option values are the enum the write models already accept.
+# The visible words are the ``type.*`` catalog entries.
+INSTRUMENT_TYPE_CHOICES = tuple(member.value for member in InstrumentType)
 COMPANY_FIELDS = (
     "name",
     "ticker",
     "isin",
+    "instrument_type",
     "exchange",
     "currency",
     "country",
@@ -78,9 +87,15 @@ _VALUE_ERROR_KEYS = {
 
 
 def field_label_key(field):
-    """Catalog key for one form field's label."""
+    """Catalog key for one form field's label.
+
+    The type control posts ``instrument_type``. Its label is the
+    same ``field.type`` string the detail page already uses.
+    """
     if field in METRIC_FIELDS:
         return "metric." + field
+    if field == "instrument_type":
+        return "field.type"
     return "field." + field
 
 
@@ -244,6 +259,14 @@ def company_payload(values):
         if field == "name":
             normalized = normalized_company_name(raw)
             payload[field] = raw.strip() if normalized is None else normalized
+        elif field == "instrument_type":
+            # A blank select is omitted. Create then uses the model
+            # default (STOCK). Update leaves the stored column,
+            # because CompanyUpdate rejects an explicit null.
+            # A non-blank value is validated by that same model.
+            text = raw.strip()
+            if text:
+                payload[field] = text
         elif field in _OPTIONAL_COMPANY and raw.strip() == "":
             payload[field] = None
         else:
@@ -288,6 +311,8 @@ def catalog_key_for(field, kind, message):
         return "error.too_long"
     if kind in {"string_too_short", "too_short"}:
         return "error.too_short"
+    if field == "instrument_type" and kind == "value_error":
+        return "error.instrument_type"
     if field == "ticker" or kind == "string_pattern_mismatch":
         return "error.ticker"
     if field == "currency" or (

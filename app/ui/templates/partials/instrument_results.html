@@ -29,7 +29,13 @@
           <span class="badge">{{ t['badge.synthetic'] }}</span>
           {% endif %}
         </td>
-        <td>{{ t['type.' ~ instrument.instrument_type] }}</td>
+        <td>
+          {% if instrument.instrument_type %}
+          {{ t['type.' ~ instrument.instrument_type] }}
+          {% else %}
+          <span class="missing">{{ t['missing'] }}</span>
+          {% endif %}
+        </td>
         <td>{{ instrument.exchange if instrument.exchange else t['missing'] }}</td>
         <td>{{ instrument.currency if instrument.currency else t['missing'] }}</td>
         <td>{{ instrument.source if instrument.source else t['missing'] }}</td>

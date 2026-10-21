@@ -197,7 +197,8 @@ form.stacked-form {
   gap: 0.25rem;
 }
 
-textarea {
+textarea,
+.stacked-form select {
   font: inherit;
   padding: 0.35rem 0.5rem;
   width: 100%;

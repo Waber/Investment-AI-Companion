@@ -12,6 +12,17 @@
     <label for="field-{{ field }}">{{ t[field_label_key(field)] }}</label>
     {% if field == 'description' %}
     <textarea id="field-{{ field }}" name="{{ field }}" rows="6"{% if described_by[field] %} aria-describedby="{{ described_by[field] }}"{% endif %}{% if field in invalid_fields %} aria-invalid="true"{% endif %}>{{ values[field] }}</textarea>
+    {% elif field == 'instrument_type' %}
+    {# Values are the enum. Labels are the catalog. An unknown post
+       stays selected so the 422 page shows what was sent. #}
+    <select id="field-{{ field }}" name="{{ field }}"{% if described_by[field] %} aria-describedby="{{ described_by[field] }}"{% endif %}{% if field in invalid_fields %} aria-invalid="true"{% endif %}>
+      {% for code in instrument_type_choices %}
+      <option value="{{ code }}"{% if (values[field]|trim)|upper == code or (not values[field]|trim and code == 'STOCK') %} selected{% endif %}>{{ t['type.' ~ code|lower] }}</option>
+      {% endfor %}
+      {% if values[field]|trim and (values[field]|trim)|upper not in instrument_type_choices %}
+      <option value="{{ values[field] }}" selected>{{ values[field] }}</option>
+      {% endif %}
+    </select>
     {% else %}
     <input id="field-{{ field }}" name="{{ field }}" type="text" value="{{ values[field] }}"{% if described_by[field] %} aria-describedby="{{ described_by[field] }}"{% endif %}{% if field in invalid_fields %} aria-invalid="true"{% endif %}>
     {% endif %}
