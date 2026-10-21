@@ -2,7 +2,7 @@
 
 ## QA round 1 on price bars (PR #83): 2026-10-21
 
-- Branch `cursor/pricebar-demo-v2-203d`.
+- Branch `cursor/pricebar-demo-v2-203d`. Code head `03952d9`.
   [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83)
   says Refs #27. Not merged. The issue stays open.
 - Completed on top of `93c676c`: `PriceBarCreate` checks the
@@ -30,13 +30,17 @@
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
   with `REQUIRE_POSTGRES=1`: 131 passed, 1503 deselected.
   Scoped black, isort, and flake8 passed. No live market-data
-  calls. GitHub Actions for this commit has not run yet.
+  calls. GitHub Actions on `03952d9` succeeded
+  ([run 39563380255](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563380255)):
+  SQLite job 119099695642 (1503 passed, 131 deselected, coverage
+  96.30%) and PostgreSQL job 119099695294 (131 passed, 1503
+  deselected).
 - Active agents: none. Blockers: none for this pull request.
   Account usage was not available in this session.
-- Next action: commit and push `cursor/pricebar-demo-v2-203d`
-  (a new commit, not a rewrite), then record both GitHub Actions
-  jobs. The owner reviews PR #83 and rebase-merges. Agents do
-  not merge.
+- Next action: the owner reviews PR #83 and merges it with
+  "Rebase and merge". Agents do not merge. The Frontend
+  Developer still owns the `/ui` badge for `[IAC-DEMO-V2]`.
+  ETF and ETC attributes stay on #28.
 
 
 ## Price bars and demo-v2 (#27): 2026-10-21
