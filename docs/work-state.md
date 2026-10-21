@@ -2,11 +2,19 @@
 
 ## Duplicate codes and company-name alignment (#80, remainder): 2026-10-21
 
-- Branch `cursor/ui-duplicate-codes-name-align-fec9`, based on
-  `origin/master` `6d45f01`.
+- Base: `origin/master` `6d45f01` is the merge of
+  [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81)
+  (Refs #80), merged 2026-10-21.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is merged as `f7e90bf`.
+  [PR #78](https://github.com/Waber/Investment-AI-Companion/pull/78)
+  is merged as `d772409`. The work-state section below is the
+  text #81 put on master. It still says PR #81 is not merged.
+  That sentence was already stale when `6d45f01` landed.
+- Branch `cursor/ui-duplicate-codes-name-align-fec9`.
   [PR #82](https://github.com/Waber/Investment-AI-Companion/pull/82)
-  says Refs #80. Not merged. GitHub Actions for this head is
-  not recorded yet.
+  says Refs #80. Not merged. This docs commit marks it ready
+  for review. GitHub Actions on this head is not recorded yet.
 - Completed: company create and edit map `DuplicateTickerError.code`
   (`duplicate_ticker`) and `DuplicateIsinError.code`
   (`duplicate_isin`) to the localized field sentences. The branch
@@ -32,9 +40,10 @@
   error on edit; Persian ZWNJ stored as U+200C.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: wait for both GitHub Actions jobs and record the
-  run. The owner reviews PR #82 and merges with "Rebase and
-  merge". Agents do not merge.
+- Next action: both GitHub Actions jobs on this docs head, then
+  the owner reviews PR #82 and merges with "Rebase and merge".
+  Agents do not merge. #80 stays open until QA, Security, and
+  Code Review approve, and until the HTTPS cookie in #56.
 
 ## UI forms follow-up (#80, part): 2026-10-20
 
