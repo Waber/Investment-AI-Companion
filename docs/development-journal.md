@@ -6,6 +6,14 @@
   [#80](https://github.com/Waber/Investment-AI-Companion/issues/80)
   on the server-rendered `/ui` forms. Models, schema, migrations,
   repositories, and services were not changed.
+- Base: master `6d45f01` is the merge of
+  [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81).
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is merged as `f7e90bf` and
+  [PR #78](https://github.com/Waber/Investment-AI-Companion/pull/78)
+  is merged as `d772409`. The work-state #81 committed on master
+  still says PR #81 is not merged. That line is stale. This
+  entry records the three merges, then the state of PR #82.
 - Decisions: a failed company save reads `DuplicateTickerError` and
   `DuplicateIsinError` by class or by `.code` (`duplicate_ticker`,
   `duplicate_isin`). The exception text is not read. Those two
@@ -43,12 +51,13 @@
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 06:46 to 07:05.
 - Pull request: [PR #82](https://github.com/Waber/Investment-AI-Companion/pull/82)
-  (Refs #80), opened on 2026-10-21. Not merged. GitHub Actions
-  on this head is not recorded yet.
-- Next: wait for both GitHub Actions jobs, then record the run.
-  The owner reviews and merges with "Rebase and merge". Agents
-  do not merge. #80 stays open until QA, Security, and Code
-  Review approve, and until the HTTPS cookie in #56.
+  (Refs #80), opened on 2026-10-21. Not merged. This docs commit
+  marks it ready for review. GitHub Actions on this head is not
+  recorded yet.
+- Next: both GitHub Actions jobs on this docs head. The owner
+  reviews and merges with "Rebase and merge". Agents do not
+  merge. #80 stays open until QA, Security, and Code Review
+  approve, and until the HTTPS cookie in #56.
 
 ## 2026-10-21 - Rebase the UI follow-up onto master after #75 and #78
 
