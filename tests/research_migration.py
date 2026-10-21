@@ -8,6 +8,9 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import DataError, IntegrityError
 
+from alembic.autogenerate import compare_metadata
+from alembic.runtime.migration import MigrationContext
+from app.core.database import Base
 from app.models.research import (
     NOTE_BODY_MAX,
     THESIS_BODY_MAX,
@@ -81,6 +84,22 @@ def research_schema(connection):
         "theses_indexes": _indexes(inspector, "theses"),
         "theses_checks": _checks(inspector, "theses"),
     }
+
+
+def assert_compare_metadata_is_empty(connection):
+    """Alembic autogenerate wants no changes after the upgrade.
+
+    ``compare_metadata`` is what ``alembic revision --autogenerate``
+    reads. An empty list means the upgraded tables already match the
+    models, including ``notes`` and ``theses``. The caller passes a
+    connection whose other tables also match the models. A legacy
+    companies table would still show diffs, so this check runs after
+    ``create_all``, a drop of the research tables, and the upgrade
+    that creates them again.
+    """
+    context = MigrationContext.configure(connection)
+    diff = compare_metadata(context, Base.metadata)
+    assert diff == []
 
 
 def assert_declared_lengths(connection):

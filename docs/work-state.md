@@ -3,9 +3,19 @@
 ## Notes and investment theses, backend (#33): 2026-10-21
 
 - Branch `cursor/notes-theses-backend-b69b`, based on
-  `origin/master` `a21d912`. The pull request says Refs #33.
-  Not merged. No HTTP API. `templates/`, `static/`, and
-  `app/ui/` were not edited.
+  `origin/master` `a21d912`.
+  [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91)
+  says Refs #33. Not merged. No HTTP API. `templates/`,
+  `static/`, and `app/ui/` were not edited.
+- QA before code review: a title, body, or thesis-breakers
+  made only of Unicode Cf (U+200B, U+FEFF, joiners) plus
+  whitespace is blank. A blank title or body raises
+  `ValidationError`. Blank thesis-breakers become `""`. A
+  letter beside a format character is kept. SQLite and
+  PostgreSQL migration tests run Alembic `compare_metadata`
+  after upgrade on a full schema (create_all, drop `notes`
+  and `theses`, stamp `0001`, upgrade) and assert the diff
+  is empty. Revision id `0033` was not renamed.
 - Completed: `app.models.research` exports `NOTE_BODY_MAX`
   (10000), `THESIS_TITLE_MAX` (200), `THESIS_BODY_MAX` (10000),
   `THESIS_BREAKERS_MAX` (5000), `ThesisStatus`
@@ -28,19 +38,19 @@
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1529 passed, 168 deselected, coverage 96.37%.
+  -> 1535 passed, 174 deselected, coverage 96.38%.
   Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
   `investment_test`, `REQUIRE_POSTGRES=1`,
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 168 passed, 1529 deselected. Scoped black, isort, and
-  flake8 passed. No live market-data calls. GitHub Actions on
-  this head is not recorded yet.
+  -> 174 passed, 1535 deselected. Scoped black, isort, and
+  flake8 passed. No live market-data calls.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: the owner reviews the pull request. The Frontend
-  Developer uses the interface in the pull request body. Agents
-  do not merge. Re-chain revision `0033` after #83, #87, or the
-  #32 migration merges.
+- Next action: the owner sends PR #91 to code review. The
+  Frontend Developer uses the interface in the pull request
+  body. Agents do not merge. Re-chain revision `0033` after
+  #83, #87, or the #32 migration merges. Leave the revision
+  id as it is at re-chain time.
 
 ## Watchlist backend (#32): 2026-10-21
 

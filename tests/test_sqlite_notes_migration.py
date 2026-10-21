@@ -15,6 +15,7 @@ from tests.company_migration import (
     upgrade_head,
 )
 from tests.research_migration import (
+    assert_compare_metadata_is_empty,
     assert_declared_lengths,
     exercise_migrated_research,
     research_schema,
@@ -55,4 +56,27 @@ def test_upgrade_creates_notes_and_downgrade_removes_them(tmp_path):
         }
         assert "instrument_type" not in columns
         assert "isin" not in columns
+    engine.dispose()
+
+
+def test_autogenerate_against_sqlite_notes_is_empty(tmp_path):
+    """create_all, then let revision 0033 rebuild notes and theses.
+
+    ``compare_metadata`` is empty only when every table matches the
+    models. A legacy companies table would still show diffs, so this
+    database is built with ``create_all``. Dropping the research
+    tables and stamping ``0001`` makes the upgrade create them the
+    way a real deploy would. An empty diff means that upgrade already
+    matches ``NoteDB`` and ``ThesisDB``.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'full.db'}")
+    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE theses"))
+        connection.execute(text("DROP TABLE notes"))
+    with engine.connect() as connection:
+        config = _config(connection)
+        command.stamp(config, "0001")
+        upgrade_head(connection)
+        assert_compare_metadata_is_empty(connection)
     engine.dispose()

@@ -461,6 +461,41 @@ class ResearchBehavior:
             == ""
         )
 
+    @pytest.mark.parametrize(
+        "value",
+        ["\u200b", "\ufeff", " \u200b \ufeff ", "\n\u200c\t", "\u200d"],
+    )
+    def test_format_characters_alone_count_as_blank(self, value):
+        """Cf plus whitespace is blank. A letter beside Cf is kept."""
+        with pytest.raises(ValidationError) as note_error:
+            NoteCreate(body=value)
+        assert note_error.value.errors()[0]["loc"] == ("body",)
+        with pytest.raises(ValidationError) as title_error:
+            ThesisCreate(title=value, body="drivers")
+        assert title_error.value.errors()[0]["loc"] == ("title",)
+        with pytest.raises(ValidationError) as body_error:
+            ThesisCreate(title="Growth", body=value)
+        assert body_error.value.errors()[0]["loc"] == ("body",)
+        assert (
+            ThesisCreate(
+                title="Growth",
+                body="drivers",
+                thesis_breakers=value,
+            ).thesis_breakers
+            == ""
+        )
+        with pytest.raises(ValidationError):
+            NoteUpdate(body=value)
+        with pytest.raises(ValidationError):
+            ThesisUpdate(title=value)
+        with pytest.raises(ValidationError):
+            ThesisUpdate(body=value)
+        assert ThesisUpdate(thesis_breakers=value).thesis_breakers == ""
+
+        kept = "a\u200bb"
+        assert NoteCreate(body=" " + kept + " ").body == kept
+        assert ThesisCreate(title=" " + kept + " ", body="b").title == kept
+
     def test_non_string_text_is_rejected_by_the_field_type(self):
         with pytest.raises(ValidationError):
             NoteCreate(body=123)
