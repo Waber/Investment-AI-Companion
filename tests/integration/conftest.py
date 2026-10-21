@@ -173,8 +173,8 @@ def empty_application_tables(engine):
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE financial_metrics, companies "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE watchlist_items, price_bars, "
+                "financial_metrics, companies RESTART IDENTITY CASCADE"
             )
         )
 

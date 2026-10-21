@@ -330,6 +330,7 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
         import app.models.company
         import app.models.financial_metrics
         import app.models.historical_data
+        import app.models.watchlist
         """)
     completed = subprocess.run(
         [sys.executable, "-c", script],

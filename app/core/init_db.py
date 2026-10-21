@@ -48,8 +48,10 @@ def init_db():
     Initialize the database by creating all tables.
     This function should be called when the application starts for the first time.
     """
-    # Create all tables defined in our models
-    # This will create the 'companies' and 'financial_metrics' tables
+    # Create all tables defined in our models.
+    # This creates companies, financial_metrics, price_bars, and
+    # watchlist_items when they are missing. It does not add columns
+    # to an old table.
     Base.metadata.create_all(bind=engine)
     require_company_instrument_columns(engine)
     print("Database tables created successfully!")  # logs instead of print?

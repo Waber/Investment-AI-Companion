@@ -347,6 +347,12 @@ class Settings(BaseSettings):
             )
         return self
 
+    # How many days old a watchlist price may be before the page marks
+    # it stale. The page itself is a later change. Seven days is the
+    # US2.1 proposal. The name is the environment variable, because
+    # settings are case-sensitive.
+    watchlist_stale_price_days: int = 7
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
