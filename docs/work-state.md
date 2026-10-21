@@ -1,5 +1,27 @@
 # Current Work State
 
+## Rebase onto master after PR #78: 2026-10-21
+
+- Branch `cursor/instrument-type-isin-1db6`, rebased onto
+  `origin/master` `d772409`.
+  [PR #75](https://github.com/Waber/Investment-AI-Companion/pull/75)
+  is approved. Not merged. The body says Closes #16 and Refs #26.
+- Completed: `CompanyCreate` and `CompanyUpdate` keep
+  `name` `min_length=1` and `max_length=255`, and `ticker`
+  `max_length=TICKER_MAX_LENGTH` with `pattern=TICKER_PATTERN`.
+  `normalize_name`, ISIN, `instrument_type`, and the `isascii`
+  currency check remain. Journal and work-state keep both the
+  collector entries and the instrument-type entries.
+- Tests: every rebased commit passed SQLite and PostgreSQL
+  locally (`REQUIRE_POSTGRES=1`). Tip before this note,
+  `9d4c0e9`: SQLite 1458 passed, 124 deselected, coverage
+  95.90%. PostgreSQL 124 passed, 1458 deselected.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: push with `--force-with-lease`, wait for both
+  GitHub Actions jobs, then the owner merges PR #75 with
+  "Rebase and merge". Agents do not merge.
+
 ## Code review round 1 on #75: 2026-10-20
 
 - Branch `cursor/instrument-type-isin-1db6`, based on
