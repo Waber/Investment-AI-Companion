@@ -100,6 +100,40 @@ def assert_race_returns_the_existing_row(monkeypatch, session):
     assert stored_for_company == 1
 
 
+def assert_race_keeps_earlier_pending_work(monkeypatch, session):
+    """The unique-constraint loser does not roll back the session.
+
+    A company flushed before the racing insert is still stored after
+    ``add`` returns. A full ``rollback`` would have removed it.
+    """
+    company = add_company(session, "Race", "RACE2")
+    repo = WatchlistRepository(session)
+    repo.add(company.id, "keep")
+
+    pending = CompanyDB(name="Pending Co", ticker="PEND")
+    session.add(pending)
+    session.flush()
+    pending_id = pending.id
+
+    original = repo.get_by_company_id
+    calls = {"count": 0}
+
+    def hide_the_first_lookup(company_id):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return original(company_id)
+
+    monkeypatch.setattr(repo, "get_by_company_id", hide_the_first_lookup)
+    second, created = repo.add(company.id, "other")
+
+    assert created is False
+    assert second.label == "keep"
+    assert session.get(CompanyDB, pending_id).name == "Pending Co"
+    session.commit()
+    assert session.get(CompanyDB, pending_id).ticker == "PEND"
+
+
 def assert_missing_company_is_raised_outside_the_handler(session):
     """A foreign-key failure does not chain the driver error.
 
@@ -137,10 +171,16 @@ def assert_unrelated_integrity_error_is_raised_outside_the_handler(
     company = add_company(session, "Stuck", "STUCK")
     repo = WatchlistRepository(session)
 
-    def fail_commit():
-        raise IntegrityError("INSERT", {}, Exception("constraint"))
+    original_flush = session.flush
+    calls = {"count": 0}
 
-    monkeypatch.setattr(session, "commit", fail_commit)
+    def fail_the_insert(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise IntegrityError("INSERT", {}, Exception("constraint"))
+        return original_flush(*args, **kwargs)
+
+    monkeypatch.setattr(session, "flush", fail_the_insert)
 
     with pytest.raises(WatchlistStorageError) as caught:
         repo.add(company.id, "x")

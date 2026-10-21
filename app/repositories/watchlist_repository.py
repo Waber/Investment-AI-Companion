@@ -46,7 +46,13 @@ class WatchlistRepository:
         ``CompanyNotFoundError``. Any other constraint failure raises
         ``WatchlistStorageError``. Both are raised after this handler,
         so ``__context__`` does not keep the SQL text. The decision
-        uses the tables after rollback, not the driver message.
+        uses the tables after the savepoint rolls back, not the
+        driver message.
+
+        The insert runs inside ``begin_nested`` (a SAVEPOINT). A
+        unique-constraint failure undoes only that insert. Earlier
+        pending work in this session stays, and this method does not
+        commit it. A successful insert still commits the session.
         """
         existing = self.get_by_company_id(company_id)
         if existing is not None:
@@ -57,20 +63,21 @@ class WatchlistRepository:
             label=clean_watchlist_label(label),
             added_at=datetime.now(timezone.utc),
         )
-        self.db.add(row)
         stored = None
         missing = False
         try:
-            self.db.commit()
-            self.db.refresh(row)
-            return row, True
+            # The savepoint, not the whole session. A full rollback
+            # would drop rows the caller had already flushed.
+            with self.db.begin_nested():
+                self.db.add(row)
+                self.db.flush()
         except IntegrityError:
             # The driver text names the constraint that fired. SQLite
-            # and PostgreSQL use different names. After rollback, a row
-            # that is already stored is the race loser. No row and no
-            # company means the company was deleted. Anything else is
-            # raised below, outside this handler.
-            self.db.rollback()
+            # and PostgreSQL use different names. The savepoint is
+            # already rolled back. A row that is already stored is the
+            # race loser. No row and no company means the company was
+            # deleted. Anything else is raised below, outside this
+            # handler.
             stored = self.get_by_company_id(company_id)
             if stored is None:
                 found = (
@@ -79,6 +86,10 @@ class WatchlistRepository:
                     .first()
                 )
                 missing = found is None
+        else:
+            self.db.commit()
+            self.db.refresh(row)
+            return row, True
         if stored is not None:
             return stored, False
         if missing:

@@ -1,5 +1,50 @@
 # Development Journal
 
+## 2026-10-21 - Code review on the watchlist (PR #90)
+
+- Scope: the Code Reviewer's changes on `059d28a`, on the same
+  branch. Rebased onto `origin/master` `192c521` after pull
+  request #83 merged the price bars revision. `app/ui/` was not
+  edited. `company.normalize_name` was not changed.
+- Decisions: Alembic revision `0003` (`0003_watchlist_items.py`)
+  revises `0002`. `ScriptDirectory.get_heads()` has length 1.
+  The integration `TRUNCATE` lists `watchlist_items` and
+  `price_bars`. `WatchlistRepository.add` inserts inside
+  `begin_nested`, a SAVEPOINT, so a unique-constraint failure
+  undoes only that insert. Earlier flushed work in the session
+  stays. A successful insert still commits. The POST docstring
+  and the OpenAPI 200 response say a repeat keeps the original
+  label. `Settings.WATCHLIST_STALE_PRICE_DAYS` is `Field(7, ge=1)`.
+  The field name is the environment variable, same as the other
+  settings. Labels also reject U+061C, U+206A–U+206F, and the tag
+  characters U+E0000–U+E007F. That set stays in
+  `app/models/watchlist.py`. `app/ui/form_fields.py` keeps its
+  smaller bidi set, so company-name checks stay as they are.
+  One shared constant would either reject more names on the form
+  or require an `app/ui/` edit for the smaller set. `POST
+  /api/v1/watchlist` without a slash is 307. The HTTP errors in
+  `app/api/watchlist.py` are raised with nothing chained, so they
+  no longer use `from None`. The repository still raises after
+  its handler. Open pull request #87 has its own unmerged
+  revision `0003`. Whichever of #90 and #87 merges second has to
+  re-chain.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1584 passed, 148 deselected, coverage 96.44% (3714
+  statements, 112 miss, 1008 branches, 40 partial).
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration` -> 148 passed, 1584 deselected.
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. No live market-data calls. GitHub Actions is
+  recorded in the pull request, not in a later commit.
+- AI model: Grok 4.7. Account usage was not available as a
+  number in this session.
+- Time tracking (UTC): 2026-10-21 about 16:08 to 16:20.
+- Next: the owner reviews the updated pull request. It still
+  says Refs #32. Agents do not merge.
+
 ## 2026-10-21 - Watchlist review nits (PR #90)
 
 - Scope: Security Engineer nits and QA lows on the watchlist

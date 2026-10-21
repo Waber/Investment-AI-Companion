@@ -1,4 +1,4 @@
-"""Revision 0002 on SQLite: up, down, up, and an empty autogenerate."""
+"""Revision 0003 on SQLite: up, down, up, and an empty autogenerate."""
 
 from pathlib import Path
 
@@ -7,6 +7,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app.core.database import Base, create_db_engine
 from tests.company_migration import upgrade_head
 from tests.watchlist_migration import (
@@ -21,10 +23,18 @@ from tests.watchlist_migration import (
 )
 
 
-def test_upgrade_downgrade_upgrade_on_sqlite(tmp_path):
-    """Head creates the table, 0001 drops it, and head creates it again.
+def test_alembic_has_a_single_head():
+    """Price bars and the watchlist are one chain, not two heads."""
+    script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert heads[0] == "0003"
 
-    The company row survives both directions. Downgrade removes the
+
+def test_upgrade_downgrade_upgrade_on_sqlite(tmp_path):
+    """Head creates the table, 0002 drops it, and head creates it again.
+
+    The company row and ``price_bars`` survive. Downgrade removes the
     watchlist rows with the table.
     """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
@@ -78,8 +88,9 @@ def test_upgrade_downgrade_upgrade_on_sqlite(tmp_path):
         )
         connection.commit()
 
-        downgrade_to(connection, "0001")
+        downgrade_to(connection, "0002")
         assert "watchlist_items" not in inspect(connection).get_table_names()
+        assert "price_bars" in inspect(connection).get_table_names()
         assert (
             connection.execute(
                 text("SELECT ticker FROM companies WHERE id = 1")
@@ -124,7 +135,7 @@ def test_migrated_sqlite_watchlist_matches_the_model(tmp_path):
 
 
 def test_autogenerate_against_sqlite_watchlist_is_empty(tmp_path):
-    """create_all, then let revision 0002 rebuild watchlist_items.
+    """create_all, then let revision 0003 rebuild watchlist_items.
 
     Autogenerate against that database has nothing left to do. A
     rendered revision is only ``pass`` in upgrade and downgrade.
@@ -137,7 +148,7 @@ def test_autogenerate_against_sqlite_watchlist_is_empty(tmp_path):
     try:
         with engine.connect() as connection:
             config = _config(connection)
-            command.stamp(config, "0001")
+            command.stamp(config, "0002")
             upgrade_head(connection)
             assert_autogenerate_is_empty(connection)
             script = command.revision(

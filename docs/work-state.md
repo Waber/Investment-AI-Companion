@@ -2,51 +2,43 @@
 
 ## Watchlist backend (#32): 2026-10-21
 
-- Branch `cursor/watchlist-backend-32-e406`, based on
-  `origin/master` `a21d912`. Pull request #90 says Refs #32.
+- Branch `cursor/watchlist-backend-32-e406`, rebased onto
+  `origin/master` `192c521`. Pull request #90 says Refs #32.
   Not merged. The UI part of #32 stays open for the Frontend
   Developer.
-- Completed: `WatchlistItemDB` / table `watchlist_items` with
-  `id`, `company_id` foreign key to `companies.id` `ON DELETE
-  CASCADE`, `added_at` as `UTCDateTime`, nullable `label` (80
-  characters), and `UNIQUE(company_id)`.
-  `CompanyDB.watchlist_item` uses `passive_deletes` and
-  `uselist=False`. Alembic revision `0002` revises `0001`.
-  The model and the migration match. `WatchlistItem` and
-  `WatchlistItemCreate`. `clean_watchlist_label` rejects Cc
-  (including NUL) and bidi controls U+202A–U+202E,
-  U+2066–U+2069, U+200E, and U+200F with a validation error
-  (HTTP 422). Whitespace-only and Cf-only labels (U+200B,
-  U+FEFF) are null. A Cf character beside a letter is kept.
-  `company.normalize_name` and `app/ui/` were not changed.
-  `WatchlistRepository.add` returns `(row, created)`. A race
-  loser is HTTP 200. A company deleted between the check and
-  the insert is `CompanyNotFoundError` and HTTP 404. Any other
-  integrity error is `WatchlistStorageError`, raised after the
-  handler so `__context__` is `None`. `remove` returns bool.
-  `list_items` orders by `added_at` then `id`.
-  `Settings.watchlist_stale_price_days` is `Field(7, ge=1)`.
-  `GET` and `POST /api/v1/watchlist/`, and
-  `DELETE /api/v1/watchlist/{company_id}` with
-  `Path(gt=0)`. POST documents 201, 200, and 404. A non-JSON
-  content type is 422. `templates/` and `static/` were not
-  edited.
+- Completed: `WatchlistItemDB` / table `watchlist_items`.
+  Alembic revision `0003` revises `0002` (price bars) in
+  `0003_watchlist_items.py`. One Alembic head.
+  `CompanyDB.watchlist_item` and `CompanyDB.price_bars` are
+  both kept. The integration `TRUNCATE` lists
+  `watchlist_items` and `price_bars`. `clean_watchlist_label`
+  rejects Cc and the hidden format controls U+202A–U+202E,
+  U+2066–U+2069, U+200E, U+200F, U+061C, U+206A–U+206F, and
+  U+E0000–U+E007F. Other Cf-only labels are null. The constant
+  stays in `app/models/watchlist.py`. `app/ui/form_fields.py`
+  keeps its own smaller bidi set. `WatchlistRepository.add`
+  returns `(row, created)` and inserts inside `begin_nested`.
+  A race loser is HTTP 200 and does not drop earlier pending
+  work. A missing company is `CompanyNotFoundError` and HTTP
+  404. `Settings.WATCHLIST_STALE_PRICE_DAYS` is `Field(7, ge=1)`
+  and the environment variable has that name. POST documents
+  201, 200, and 404, and says a repeat keeps the original
+  label. A missing trailing slash is 307. `templates/`,
+  `static/`, and `app/ui/` were not edited.
 - Incomplete: the `/ui` watchlist page, stale-price marker,
-  and PL/EN strings. Revision `0002` collides with the
-  revision number in open pull requests #83 and #87. Rebase
-  onto whichever merges first and set `down_revision` to that
-  head, then give this file the next free number. The slug
-  stays `watchlist_items`.
+  and PL/EN strings. Open pull request #87 also has an
+  unmerged revision `0003`. The second of #90 and #87 to
+  merge must re-chain.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
-  SQLite CI command -> 1529 passed, 137 deselected, coverage
-  96.23% (3228 statements, 104 miss, 858 branches, 36 partial).
-  PostgreSQL `REQUIRE_POSTGRES=1` `-m integration` -> 137
-  passed, 1529 deselected. Scoped black, isort, and flake8
-  passed. GitHub Actions is recorded in the pull request, not
-  in a later commit. No live market-data calls.
-- Active agents: none. Blockers: the migration number waits
-  on #83 or #87. Account usage was not available as a number
-  in this session.
+  SQLite CI command -> 1584 passed, 148 deselected, coverage
+  96.44% (3714 statements, 112 miss, 1008 branches, 40
+  partial). PostgreSQL `REQUIRE_POSTGRES=1` `-m integration`
+  -> 148 passed, 1584 deselected. Scoped black, isort, and
+  flake8 passed. GitHub Actions is recorded in the pull
+  request, not in a later commit. No live market-data calls.
+- Active agents: none. Blockers: none on this branch until
+  #87 merges with its own `0003`. Account usage was not
+  available as a number in this session.
 - Next action: the owner reviews the updated pull request.
   Agents do not merge. The Frontend Developer builds the page
   on these names.
