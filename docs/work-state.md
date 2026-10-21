@@ -1,5 +1,39 @@
 # Current Work State
 
+## Ticker uniqueness, shared names, Alembic (#79, #8, #86): 2026-10-21
+
+- Branch `cursor/ticker-unique-and-alembic-0e9d`, from
+  `origin/master` `6d45f01`. Not merged. The pull request says
+  Closes #79, Refs #8, and Refs #86.
+- Completed: `normalize_name` rejects a stripped name with no
+  character outside whitespace and Unicode category C*. Create
+  and update allow the same name on a different ticker. Revision
+  `0002` checks for duplicate tickers, then adds unique index
+  `uq_companies_ticker`. The model matches. Autogenerate is empty.
+  Upgrade, downgrade, and upgrade again were run on SQLite and
+  PostgreSQL. A supplied Alembic connection does not read
+  `settings.DATABASE_URL`. Autogenerate imports `UTCDateTime`.
+  README and `docs/api-demo.md` spell out why columns must not be
+  added by hand. Migration tests call
+  `require_company_instrument_columns` after `upgrade_head`.
+  `templates/`, `static/`, and `app/ui/` were not edited. `/ui`
+  now saves a shared name because it uses the repository.
+- Incomplete: #8's `0001_baseline.py` for instruments, prices, and
+  ETF/ETC attributes. Those tables are not on master. `init_db`
+  still uses `create_all` (#10). #86's bidi ban, combining-mark
+  ban, and moving the form helper onto `normalize_name` are not
+  in this pull request. Money columns stay `Float`.
+- Tests: no `.env`. SQLite CI command on this code: 1481 passed,
+  127 deselected, coverage 95.96%. PostgreSQL `-m integration`
+  with `REQUIRE_POSTGRES=1`: 127 passed, 1481 deselected.
+  PostgreSQL 16.15. Earlier commits on this branch also passed
+  both locally (1465/124 and 1467/124). GitHub Actions is
+  recorded on the pull request.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews the pull request and merges with
+  "Rebase and merge". Agents do not merge.
+
 ## Code review round 1 on price bars (PR #83): 2026-10-21
 
 - Branch `cursor/pricebar-demo-v2-203d`, parent `e346725`.

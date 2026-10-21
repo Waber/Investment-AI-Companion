@@ -1,5 +1,59 @@
 # Development Journal
 
+## 2026-10-21 - Ticker uniqueness, shared name rule, and Alembic follow-ups
+
+- Scope: issues #79 and #8 together, with the `normalize_name`
+  hardening from #86 and two Code Reviewer notes from #75.
+  Branch `cursor/ticker-unique-and-alembic-0e9d` from
+  `origin/master` `6d45f01`. `templates/`, `static/`, and
+  `app/ui/` were not edited.
+- Decisions: after `strip`, a company name must contain one
+  character that is not whitespace and not Unicode category C*
+  (`Cc`, `Cf`, `Co`, `Cn`, `Cs`). `'\u200b \u200b'`, a lone NUL,
+  and U+E000 are rejected. A letter with a format character
+  beside it is kept. Create and update share one duplicate rule:
+  ticker and a present ISIN are unique, and the same name may be
+  stored on another ticker (`BRK.A` / `BRK.B`).
+  `DuplicateTickerError` and `DuplicateIsinError` are unchanged
+  and are still raised after the integrity handler so
+  `__context__` is `None`. Revision `0002` runs
+  `scripts.check_duplicate_tickers` first. Repeated tickers are
+  named and the rows are not changed. It then creates the unique
+  index `uq_companies_ticker`. That is an index, not a
+  `UNIQUE CONSTRAINT`, because SQLite cannot add a constraint
+  while `financial_metrics` points at `companies`. The model uses
+  the same index, and autogenerate is empty on SQLite and
+  PostgreSQL. Money columns stay `Float`. Demo and seed tickers
+  already match the write pattern, so there is no ticker-cleanup
+  migration. `0001_baseline.py` for instruments, prices, and
+  ETF/ETC attributes is not written: those tables are not on
+  master. README and `docs/api-demo.md` no longer say to add the
+  columns by hand. That would skip the CHECK, `uq_companies_isin`,
+  and `alembic stamp head`. Migration tests call
+  `require_company_instrument_columns` after `upgrade_head`.
+- UI impact, not edited here: `/ui` create and edit call the
+  repository, so saving a shared name with a different ticker now
+  succeeds. The form still has a name-duplicate branch for an
+  error raised while another row has that name.
+- Verification: no `.env`, `DATABASE_URL` unset except the test
+  harness. `SECRET_KEY` comes from `tests/conftest.py`. SQLite CI
+  command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  on this commit's code: 1481 passed, 127 deselected, coverage
+  95.96%. PostgreSQL `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration`: 127 passed, 1481 deselected. The name
+  commit was 1465 passed / 124 deselected / 96.06% and 124
+  PostgreSQL passed. The name-rule commit was 1467 passed / 124
+  deselected / 95.97% and 124 PostgreSQL passed. Scoped black,
+  isort, and flake8 passed on the Python this change adds.
+  PostgreSQL 16.15. GitHub Actions is recorded on the pull
+  request, not in a later docs-only commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 08:06 to 08:30.
+- Next: the owner reviews the pull request. It says Closes #79,
+  Refs #8, and Refs #86. Agents do not merge.
+
 ## 2026-10-21 - Code review round 1 on price bars (PR #83)
 
 - Scope: the review on `e346725`. Volume is BIGINT so a session

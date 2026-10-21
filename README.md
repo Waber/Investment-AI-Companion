@@ -155,14 +155,23 @@ columns to a `companies` table that is already there. `instrument_type`
 and `isin` are revision `0001`. If those columns are absent, the
 process stops before it serves and names the missing columns.
 
-- An Alembic-managed database runs `alembic upgrade head`.
+- An Alembic-managed database runs `alembic upgrade head`. That
+  applies revision `0001` (the columns, the
+  `ck_companies_instrument_type` CHECK, and the `uq_companies_isin`
+  unique index) and revision `0002` (the `uq_companies_ticker`
+  unique index). `0002` stops if a ticker is already stored more
+  than once and names those tickers. It does not delete rows.
+  `python -m scripts.check_duplicate_tickers DATABASE_URL` reports
+  the same list before you upgrade.
 - A database created by an older startup `create_all` has `companies`
-  and not those columns. Run that same upgrade, or add the columns,
-  before starting this version.
+  and not those columns. Run `alembic upgrade head` before starting
+  this version. Adding the columns by hand skips the CHECK, the
+  `uq_companies_isin` unique index, and `alembic stamp head`, so the
+  next upgrade and the application disagree about the schema.
 - A database that this version's `create_all` just built already has
-  the columns. Record that with `alembic stamp head`. Do not run
-  `alembic upgrade head` on it: the upgrade alters a table that
-  already has the columns and fails.
+  the columns and `uq_companies_ticker`. Record that with
+  `alembic stamp head`. Do not run `alembic upgrade head` on it: the
+  upgrade alters a table that already has the columns and fails.
 
 4. Start the API on loopback:
 

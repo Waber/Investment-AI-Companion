@@ -1,4 +1,4 @@
-"""Apply revision 0001 to a connection that already has companies.
+"""Apply the company revisions to a connection that already has companies.
 
 The application engine is not used. Callers pass the connection that
 should change, including a PostgreSQL connection whose search_path
@@ -45,6 +45,56 @@ def upgrade_head(connection):
 
 def downgrade_base(connection):
     command.downgrade(_config(connection), "base")
+
+
+def downgrade_to(connection, revision):
+    command.downgrade(_config(connection), revision)
+
+
+def stamp(connection, revision):
+    command.stamp(_config(connection), revision)
+
+
+def metadata_diff(connection):
+    """Operations autogenerate would apply to match ``Base.metadata``.
+
+    An empty list means the live schema and the models agree.
+    """
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+    from app.core.database import Base
+
+    context = MigrationContext.configure(connection)
+    return compare_metadata(context, Base.metadata)
+
+
+def ticker_uniqueness(connection):
+    """Unique indexes and ticker-only unique constraints on companies.
+
+    Indexes are the first tuple. Constraints are the second. A
+    PostgreSQL unique constraint also appears as an index with
+    ``duplicates_constraint`` set; that index is still listed here.
+    """
+    inspector = inspect(connection)
+    indexes = tuple(
+        sorted(
+            (
+                index["name"],
+                bool(index["unique"]),
+                tuple(index["column_names"]),
+            )
+            for index in inspector.get_indexes("companies")
+            if index["column_names"] == ["ticker"]
+        )
+    )
+    constraints = tuple(
+        sorted(
+            (item["name"], tuple(item["column_names"] or []))
+            for item in inspector.get_unique_constraints("companies")
+            if list(item.get("column_names") or []) == ["ticker"]
+        )
+    )
+    return indexes, constraints
 
 
 # create_all and revision 0001 both report one unique index named

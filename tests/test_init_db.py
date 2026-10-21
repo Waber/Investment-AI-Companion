@@ -1,5 +1,9 @@
 """init_db and seed_sample_data against a private in-memory SQLite engine."""
 
+import json
+import re
+from pathlib import Path
+
 import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -74,6 +78,10 @@ def test_init_db_rejects_a_companies_table_without_the_new_columns(
     assert "alembic upgrade head" in message
     assert "alembic stamp head" in message
     assert "not `alembic upgrade head`" in message
+    assert "ck_companies_instrument_type" in message
+    assert "uq_companies_isin" in message
+    assert "or the columns added" not in message
+    assert "or add the columns" not in message
 
 
 @pytest.mark.parametrize("present", ["instrument_type", "isin"])
@@ -117,6 +125,37 @@ def test_seed_sample_data_inserts_companies_and_apple_metrics(session, capsys):
     assert {row.period_type for row in metrics} == {"annual"}
     assert sorted(row.period_end.year for row in metrics) == [2022, 2023]
     assert "Sample data seeded successfully!" in capsys.readouterr().out
+
+
+def test_known_tickers_match_the_write_pattern():
+    """Seed and demo tickers already match the PR #61 pattern.
+
+    No cleanup migration is added. A ticker outside this pattern is
+    not in the repository's sample data.
+    """
+    from app.models.company import TICKER_PATTERN
+
+    pattern = re.compile(TICKER_PATTERN)
+    for ticker in ("AAPL", "MSFT", "TSLA"):
+        assert pattern.fullmatch(ticker)
+    fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1] / "fixtures" / "demo-v1.json"
+        ).read_text()
+    )
+    for item in fixture["companies"]:
+        assert pattern.fullmatch(item["company"]["ticker"])
+
+
+def test_operator_docs_do_not_offer_adding_columns_by_hand():
+    root = Path(__file__).resolve().parents[1]
+    for relative in ("README.md", "docs/api-demo.md"):
+        text = (root / relative).read_text()
+        assert "or add the columns" not in text
+        assert "or the columns added" not in text
+        assert "ck_companies_instrument_type" in text
+        assert "uq_companies_isin" in text
+        assert "alembic stamp head" in text
 
 
 def test_seed_sample_data_skips_when_data_exists(session, capsys):
