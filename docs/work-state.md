@@ -3,12 +3,12 @@
 ## Watchlist backend (#32): 2026-10-21
 
 - Branch `cursor/watchlist-backend-32-e406`, rebased onto
-  `origin/master` `192c521`. Pull request #90 says Refs #32.
+  `origin/master` `cb6ba64`. Pull request #90 says Refs #32.
   Not merged. The UI part of #32 stays open for the Frontend
   Developer.
 - Completed: `WatchlistItemDB` / table `watchlist_items`.
-  Alembic revision `0003` revises `0002` (price bars) in
-  `0003_watchlist_items.py`. One Alembic head.
+  Alembic revision `0004` revises `0003` (ticker unique) in
+  `0004_watchlist_items.py`. One Alembic head.
   `CompanyDB.watchlist_item` and `CompanyDB.price_bars` are
   both kept. The integration `TRUNCATE` lists
   `watchlist_items` and `price_bars`. `clean_watchlist_label`
@@ -26,18 +26,16 @@
   label. A missing trailing slash is 307. `templates/`,
   `static/`, and `app/ui/` were not edited.
 - Incomplete: the `/ui` watchlist page, stale-price marker,
-  and PL/EN strings. Open pull request #87 also has an
-  unmerged revision `0003`. The second of #90 and #87 to
-  merge must re-chain.
+  and PL/EN strings.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
-  SQLite CI command -> 1584 passed, 148 deselected, coverage
-  96.44% (3714 statements, 112 miss, 1008 branches, 40
+  SQLite CI command -> 1612 passed, 153 deselected, coverage
+  96.23% (3796 statements, 120 miss, 1032 branches, 46
   partial). PostgreSQL `REQUIRE_POSTGRES=1` `-m integration`
-  -> 148 passed, 1584 deselected. Scoped black, isort, and
-  flake8 passed. GitHub Actions is recorded in the pull
-  request, not in a later commit. No live market-data calls.
-- Active agents: none. Blockers: none on this branch until
-  #87 merges with its own `0003`. Account usage was not
+  -> 153 passed, 1612 deselected. Upgrade, downgrade to
+  `0003`, and upgrade again passed on SQLite and PostgreSQL.
+  GitHub Actions is recorded in the pull request, not in a
+  later commit. No live market-data calls.
+- Active agents: none. Blockers: none. Account usage was not
   available as a number in this session.
 - Next action: the owner reviews the updated pull request.
   Agents do not merge. The Frontend Developer builds the page

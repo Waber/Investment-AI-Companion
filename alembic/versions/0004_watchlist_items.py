@@ -1,29 +1,31 @@
 """add the watchlist_items table
 
-Revision ID: 0003
-Revises: 0002
+Revision ID: 0004
+Revises: 0003
 Create Date: 2026-10-21
 
 Creates ``watchlist_items``. It does not copy ``companies`` and it
 does not rename that table. ``company_id`` points at ``companies.id``
 with ON DELETE CASCADE. One company has at most one row.
 
-This revises ``0002``, the price bars revision. The file used to be
-``0002`` as well, which made a second Alembic head after that
-revision merged. The slug stays ``watchlist_items``.
+This revises ``0003``, the companies ticker unique revision. The
+file used to be ``0003`` as well. After that revision merged, this
+one moved to ``0004`` so Alembic has a single head. The slug stays
+``watchlist_items``. Revision ids in this file are literals. It
+does not import application or script code.
 
 A database that ``create_all`` already built has this table. Stamp
 that database (``alembic stamp head``). Running ``upgrade`` there
 would try to create the table again. A database that stopped at
-revision ``0002`` can upgrade.
+revision ``0003`` can upgrade.
 """
 
 import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0003"
-down_revision = "0002"
+revision = "0004"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 
