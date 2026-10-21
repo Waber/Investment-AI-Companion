@@ -94,8 +94,8 @@ def assert_compare_metadata_is_empty(connection):
     models, including ``notes`` and ``theses``. The caller passes a
     connection whose other tables also match the models. A legacy
     companies table would still show diffs, so this check runs after
-    ``create_all``, a drop of the research tables, and the upgrade
-    that creates them again.
+    ``create_all``, a drop of the research tables, a stamp of the
+    parent revision, and the upgrade that creates them again.
     """
     context = MigrationContext.configure(connection)
     diff = compare_metadata(context, Base.metadata)

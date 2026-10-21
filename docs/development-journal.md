@@ -1,5 +1,51 @@
 # Development Journal
 
+## 2026-10-21 - Code review on notes and theses (#33)
+
+- Scope: code review of
+  [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91)
+  at `7b9fb07`. Same branch. No HTTP API. `templates/`,
+  `static/`, and `app/ui/` were not edited. The branch was
+  rebased onto `origin/master` `192c521` (price bars, revision
+  `0002`).
+- Decisions: `Note` and `Thesis` are output models. They do not
+  strip text or apply `max_length`, so one stored NUL or a
+  201-character title does not fail `list_for_company`. Write
+  models still validate. Revision `0033` copies the lengths and
+  the status CHECK as literals (`String(10000)`, `String(200)`,
+  `String(5000)`, `String(6)`, `status IN ('active', 'closed')`).
+  It does not import `app.models.research`. The revision id stays
+  `0033`. Price bars had merged, so `down_revision` is `0002`.
+  Leaving it on `0001` made two Alembic heads. Open revisions
+  after this still need another link; the id is not renamed.
+  A title strips format characters at the edges and rejects bidi
+  controls (U+202A–E, U+2066–9, U+200E, U+200F, U+061C) and
+  categories Zl and Zp. A multi-line field turns `\\r\\n` and
+  `\\r` into `\\n` before the length check. `created_at` and
+  `updated_at` are NOT NULL. Inserts use the server default.
+  Updates set `updated_at` in the repository in UTC. The columns
+  have no `onupdate`. `update`, `delete`, and `set_status` roll
+  back on `SQLAlchemyError` and raise `ResearchStorageError`
+  after the handler, with no driver text. There is no shared
+  storage error on this branch. `ThesisStatus` is a `StrEnum`,
+  so `str(ThesisStatus.ACTIVE)` is `active`. Create and update
+  models use `extra='forbid'`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1586 passed, 189 deselected, coverage 96.59%.
+  PostgreSQL, local 16, database `investment_test`,
+  `REQUIRE_POSTGRES=1` and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 189 passed, 1586 deselected. Scoped black, isort, and
+  flake8 passed on the Python this change owns. No live
+  market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 16:08 to 16:20.
+- Next: the owner sends PR #91 back to code review. Agents do
+  not merge. If another revision merges first, point
+  `down_revision` at that head and leave the id `0033`.
+
 ## 2026-10-21 - QA on notes and theses, blank format characters (#33)
 
 - Scope: QA on

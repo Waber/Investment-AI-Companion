@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.models.database_models import (
     CompanyDB,
@@ -31,6 +31,7 @@ from app.models.research import (
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.note_repository import NoteRepository
+from app.repositories.research_store import ResearchStorageError
 from app.repositories.thesis_repository import ThesisRepository
 
 _OLD = datetime(2020, 1, 1, tzinfo=timezone.utc)
@@ -64,6 +65,9 @@ class ResearchBehavior:
         assert THESIS_BREAKERS_MAX == 5000
         assert ThesisStatus.ACTIVE == "active"
         assert ThesisStatus.CLOSED == "closed"
+        # StrEnum: str() is the stored value, not "ThesisStatus.ACTIVE".
+        assert str(ThesisStatus.ACTIVE) == "active"
+        assert str(ThesisStatus.CLOSED) == "closed"
         assert not issubclass(CompanyNotFoundError, ValueError)
 
     def test_column_lengths_and_check_use_the_constants(self):
@@ -408,16 +412,20 @@ class ResearchBehavior:
                 thesis_breakers="a" + char + "b",
             )
 
-    @pytest.mark.parametrize("char", ["\n", "\r", "\t"])
-    def test_multiline_fields_keep_line_breaks(self, char):
-        assert NoteCreate(body="a" + char + "b").body == "a" + char + "b"
+    @pytest.mark.parametrize(
+        ("char", "stored"),
+        [("\n", "\n"), ("\r", "\n"), ("\t", "\t")],
+    )
+    def test_multiline_fields_keep_line_breaks(self, char, stored):
+        """A line break is kept. CR and CRLF are stored as LF."""
+        assert NoteCreate(body="a" + char + "b").body == "a" + stored + "b"
         thesis = ThesisCreate(
             title="title",
             body="a" + char + "b",
             thesis_breakers="c" + char + "d",
         )
-        assert thesis.body == "a" + char + "b"
-        assert thesis.thesis_breakers == "c" + char + "d"
+        assert thesis.body == "a" + stored + "b"
+        assert thesis.thesis_breakers == "c" + stored + "d"
 
     @pytest.mark.parametrize("char", ["\n", "\r", "\t", "\x00", "\x7f"])
     def test_title_rejects_every_control(self, char):
@@ -546,3 +554,227 @@ class ResearchBehavior:
             ).thesis_breakers
             == "k" * THESIS_BREAKERS_MAX
         )
+
+    def test_write_models_reject_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            NoteCreate(body="hello", company_id=1)
+        with pytest.raises(ValidationError):
+            NoteUpdate(missing="x")
+        with pytest.raises(ValidationError):
+            ThesisCreate(title="T", body="B", extra=True)
+        with pytest.raises(ValidationError):
+            ThesisUpdate(nope="x")
+
+    def test_title_strips_edge_format_characters_and_rejects_bidi(self):
+        """A title follows normalize_name, plus the title-only rules.
+
+        Format characters at the edges are removed. One between
+        letters stays. Bidi controls and line or paragraph
+        separators are rejected even at an edge, where a strip
+        would otherwise hide them. A body does not strip format
+        characters and may keep a line separator.
+        """
+        assert (
+            ThesisCreate(title="\u200bHello\ufeff", body="b").title == "Hello"
+        )
+        assert ThesisCreate(title=" \u200b Hello \u200d ", body="b").title == (
+            "Hello"
+        )
+        assert ThesisCreate(title=" a\u200bb ", body="b").title == "a\u200bb"
+        assert ThesisUpdate(title="\u200cKept\u200d").title == "Kept"
+        assert NoteCreate(body="\u200bHello\ufeff").body == "\u200bHello\ufeff"
+        for mark in (
+            "\u202a",
+            "\u202e",
+            "\u2066",
+            "\u2069",
+            "\u200e",
+            "\u200f",
+            "\u061c",
+        ):
+            with pytest.raises(ValidationError) as caught:
+                ThesisCreate(title="Hello" + mark, body="b")
+            assert caught.value.errors()[0]["loc"] == ("title",)
+            with pytest.raises(ValidationError):
+                ThesisUpdate(title=mark + "Hello")
+        for separator in ("\u2028", "\u2029"):
+            with pytest.raises(ValidationError) as caught:
+                ThesisCreate(title="Hello" + separator, body="b")
+            assert caught.value.errors()[0]["loc"] == ("title",)
+        # Zl in the middle of a body is not a title, so it is kept.
+        # strip() would remove one that sits at either end.
+        assert NoteCreate(body="Hel\u2028lo").body == "Hel\u2028lo"
+
+    def test_multiline_newlines_count_as_one_before_the_length_check(self):
+        """CRLF and a lone CR become LF, then the max length applies.
+
+        The strings start and end with a letter so ``strip`` does
+        not remove the newlines under test. Exactly the maximum
+        passes. One newline more fails.
+        """
+        exact_note = "a" + ("\r\n" * (NOTE_BODY_MAX - 2)) + "z"
+        assert NoteCreate(body=exact_note).body == (
+            "a" + ("\n" * (NOTE_BODY_MAX - 2)) + "z"
+        )
+        assert NoteUpdate(body=exact_note).body == (
+            "a" + ("\n" * (NOTE_BODY_MAX - 2)) + "z"
+        )
+        with pytest.raises(ValidationError):
+            NoteCreate(body="a" + ("\r\n" * (NOTE_BODY_MAX - 1)) + "z")
+        exact_cr = "a" + ("\r" * (NOTE_BODY_MAX - 2)) + "z"
+        assert NoteCreate(body=exact_cr).body == (
+            "a" + ("\n" * (NOTE_BODY_MAX - 2)) + "z"
+        )
+        with pytest.raises(ValidationError):
+            NoteCreate(body="a" + ("\r" * (NOTE_BODY_MAX - 1)) + "z")
+        assert NoteCreate(body="a\r\nb").body == "a\nb"
+        assert NoteCreate(body="a\rb").body == "a\nb"
+
+        exact_body = "a" + ("\r\n" * (THESIS_BODY_MAX - 2)) + "z"
+        stored_body = ThesisCreate(title="T", body=exact_body).body
+        assert stored_body == "a" + ("\n" * (THESIS_BODY_MAX - 2)) + "z"
+        assert len(stored_body) == THESIS_BODY_MAX
+        with pytest.raises(ValidationError):
+            ThesisCreate(
+                title="T",
+                body="a" + ("\r\n" * (THESIS_BODY_MAX - 1)) + "z",
+            )
+        exact_breakers = "a" + ("\r\n" * (THESIS_BREAKERS_MAX - 2)) + "z"
+        stored_breakers = ThesisCreate(
+            title="T",
+            body="B",
+            thesis_breakers=exact_breakers,
+        ).thesis_breakers
+        assert stored_breakers == (
+            "a" + ("\n" * (THESIS_BREAKERS_MAX - 2)) + "z"
+        )
+        assert len(stored_breakers) == THESIS_BREAKERS_MAX
+        with pytest.raises(ValidationError):
+            ThesisCreate(
+                title="T",
+                body="B",
+                thesis_breakers="a"
+                + ("\r\n" * (THESIS_BREAKERS_MAX - 1))
+                + "z",
+            )
+        with pytest.raises(ValidationError):
+            ThesisCreate(title="a\rb", body="b")
+
+    def test_timestamps_are_required_and_updates_use_one_utc_clock(
+        self, session, monkeypatch
+    ):
+        """Insert uses the server default. Update uses one UTC clock.
+
+        The columns are NOT NULL and have no ``onupdate``. If the
+        database also wrote ``updated_at``, it would not equal this
+        frozen instant.
+        """
+        for column in (
+            NoteDB.__table__.c.created_at,
+            NoteDB.__table__.c.updated_at,
+            ThesisDB.__table__.c.created_at,
+            ThesisDB.__table__.c.updated_at,
+        ):
+            assert column.nullable is False
+        assert NoteDB.__table__.c.updated_at.onupdate is None
+        assert ThesisDB.__table__.c.updated_at.onupdate is None
+
+        frozen = datetime(2030, 5, 4, 3, 2, 1, tzinfo=timezone.utc)
+
+        class _Clock:
+            @staticmethod
+            def now(tz=None):
+                return frozen
+
+        monkeypatch.setattr(
+            "app.repositories.note_repository.datetime",
+            _Clock,
+        )
+        monkeypatch.setattr(
+            "app.repositories.thesis_repository.datetime",
+            _Clock,
+        )
+        company = _company(session, "CLOCK")
+        notes = NoteRepository(session)
+        note = notes.create(company.id, NoteCreate(body="n"))
+        assert note.created_at is not None
+        assert note.created_at.utcoffset() == timedelta(0)
+        assert note.updated_at.utcoffset() == timedelta(0)
+        changed = notes.update(company.id, note.id, NoteUpdate(body="n2"))
+        assert changed.updated_at == frozen
+        assert changed.created_at != frozen
+
+        theses = ThesisRepository(session)
+        thesis = theses.create(company.id, ThesisCreate(title="T", body="B"))
+        closed = theses.set_status(
+            company.id,
+            thesis.id,
+            ThesisStatus.CLOSED,
+        )
+        assert closed.updated_at == frozen
+        assert closed.created_at != frozen
+        edited = theses.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(title="T2"),
+        )
+        assert edited.updated_at == frozen
+
+    def test_failed_change_rolls_back_without_driver_text(
+        self, session, monkeypatch
+    ):
+        """Update, delete, and set_status share one rollback path.
+
+        ``commit`` raises a driver error. The repositories roll the
+        session back and raise ``ResearchStorageError`` after the
+        handler, so ``__cause__`` and ``__context__`` are empty. The
+        stored rows are unchanged and the session can read them.
+        """
+        company = _company(session, "STORE")
+        notes = NoteRepository(session)
+        theses = ThesisRepository(session)
+        note = notes.create(company.id, NoteCreate(body="kept"))
+        thesis = theses.create(company.id, ThesisCreate(title="T", body="B"))
+
+        def fail_commit():
+            raise OperationalError("UPDATE", {}, Exception("disk"))
+
+        monkeypatch.setattr(session, "commit", fail_commit)
+
+        def assert_storage(call):
+            with pytest.raises(ResearchStorageError) as caught:
+                call()
+            assert str(caught.value) == "Note or thesis could not be stored"
+            assert "disk" not in str(caught.value)
+            assert caught.value.__cause__ is None
+            assert caught.value.__context__ is None
+
+        assert_storage(
+            lambda: notes.update(
+                company.id,
+                note.id,
+                NoteUpdate(body="changed"),
+            )
+        )
+        assert_storage(lambda: notes.delete(company.id, note.id))
+        assert_storage(
+            lambda: theses.update(
+                company.id,
+                thesis.id,
+                ThesisUpdate(body="changed"),
+            )
+        )
+        assert_storage(
+            lambda: theses.set_status(
+                company.id,
+                thesis.id,
+                ThesisStatus.CLOSED,
+            )
+        )
+        assert_storage(lambda: theses.delete(company.id, thesis.id))
+
+        monkeypatch.undo()
+        assert notes.get(company.id, note.id).body == "kept"
+        loaded = theses.get(company.id, thesis.id)
+        assert loaded.body == "B"
+        assert loaded.status is ThesisStatus.ACTIVE

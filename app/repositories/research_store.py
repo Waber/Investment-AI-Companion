@@ -7,11 +7,26 @@ both databases. A raw ``IntegrityError`` would otherwise become an
 HTTP 500 once an API exists.
 """
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.database_models import CompanyDB
 from app.repositories.company_errors import CompanyNotFoundError
+
+
+class ResearchStorageError(ValueError):
+    """A note or thesis update, delete, or status change was rolled back.
+
+    The message is fixed. It does not include driver text, which
+    differs between SQLite and PostgreSQL. There is no shared
+    storage error in this tree. The watchlist's
+    ``WatchlistStorageError`` lives on another branch, so this
+    class is the one for notes and theses. ``create`` does not use
+    it: a missing company is ``CompanyNotFoundError``.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Note or thesis could not be stored")
 
 
 def missing_company(db: Session, company_id: int) -> bool:
@@ -49,3 +64,22 @@ def commit_company_scoped(db: Session, company_id: int) -> None:
             raise
     if missing:
         raise CompanyNotFoundError(company_id) from None
+
+
+def commit_research_change(db: Session) -> None:
+    """Commit an update, delete, or status change.
+
+    ``SQLAlchemyError`` covers a locked database, a broken
+    connection, and a CHECK failure. The session is rolled back
+    so the next call can use it. The typed error is raised after
+    this handler. Raising it inside the ``except`` would keep the
+    driver text on ``__context__``.
+    """
+    failed = False
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        failed = True
+    if failed:
+        raise ResearchStorageError() from None

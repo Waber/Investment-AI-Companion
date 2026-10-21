@@ -8,12 +8,11 @@ Creates ``notes`` and ``theses``. Both reference ``companies.id``
 with ON DELETE CASCADE, so deleting a company removes its research.
 This revision does not rebuild ``companies``.
 
-``0033`` is the issue number, not the next integer after ``0001``.
-Open pull requests #83 and #87 each add a revision named ``0002``,
-and the watchlist work for #32 adds one too. This file's
-``down_revision`` is master's current head (``0001``). After those
-merge, point ``down_revision`` at the new head. The revision id
-stays ``0033`` so it does not collide with those ``0002`` files.
+``0033`` is the issue number. It is not renamed when the chain
+changes. ``down_revision`` is ``0002``, the price-bar revision
+that is now master's head. A later revision from an open pull
+request still has to be linked here after it merges. The
+revision id stays ``0033``.
 
 SQLite and PostgreSQL both receive the same CREATE TABLE. The
 status CHECK is in the table definition, which SQLite accepts.
@@ -25,21 +24,17 @@ import sqlalchemy as sa
 
 from alembic import op
 from app.core.utc_datetime import UTCDateTime
-from app.models.research import (
-    NOTE_BODY_MAX,
-    THESIS_BODY_MAX,
-    THESIS_BREAKERS_MAX,
-    THESIS_STATUS_CHECK,
-    THESIS_TITLE_MAX,
-    ThesisStatus,
-)
+
+# Lengths and the status CHECK are copied here on purpose.
+# Importing them from ``app.models.research`` would rewrite this
+# revision when those constants change. 10000 is the note body
+# and the thesis body. 200 is the title. 5000 is thesis-breakers.
+# 6 is the length of ``active`` and of ``closed``.
 
 revision = "0033"
-down_revision = "0001"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
-
-_STATUS_LENGTH = max(len(item.value) for item in ThesisStatus)
 
 
 def upgrade() -> None:
@@ -47,9 +42,19 @@ def upgrade() -> None:
         "notes",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("body", sa.String(length=NOTE_BODY_MAX), nullable=False),
-        sa.Column("created_at", UTCDateTime(), server_default=sa.func.now()),
-        sa.Column("updated_at", UTCDateTime(), server_default=sa.func.now()),
+        sa.Column("body", sa.String(length=10000), nullable=False),
+        sa.Column(
+            "created_at",
+            UTCDateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            UTCDateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],
@@ -62,23 +67,36 @@ def upgrade() -> None:
         "theses",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("title", sa.String(length=THESIS_TITLE_MAX), nullable=False),
-        sa.Column("body", sa.String(length=THESIS_BODY_MAX), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("body", sa.String(length=10000), nullable=False),
         sa.Column(
             "thesis_breakers",
-            sa.String(length=THESIS_BREAKERS_MAX),
+            sa.String(length=5000),
             nullable=False,
             server_default=sa.text("''"),
         ),
         sa.Column(
             "status",
-            sa.String(length=_STATUS_LENGTH),
+            sa.String(length=6),
             nullable=False,
             server_default=sa.text("'active'"),
         ),
-        sa.Column("created_at", UTCDateTime(), server_default=sa.func.now()),
-        sa.Column("updated_at", UTCDateTime(), server_default=sa.func.now()),
-        sa.CheckConstraint(THESIS_STATUS_CHECK, name="ck_theses_status"),
+        sa.Column(
+            "created_at",
+            UTCDateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            UTCDateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.CheckConstraint(
+            "status IN ('active', 'closed')",
+            name="ck_theses_status",
+        ),
         sa.ForeignKeyConstraint(
             ["company_id"],
             ["companies.id"],

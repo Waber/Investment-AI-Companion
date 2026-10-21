@@ -388,11 +388,18 @@ class NoteDB(Base):
         index=True,
     )
     body = Column(String(NOTE_BODY_MAX), nullable=False)
-    created_at = Column(UTCDateTime(), server_default=func.now())
+    # The database fills both clocks on insert. An update sets
+    # ``updated_at`` in the repository, in UTC. There is no
+    # ``onupdate`` here: that would be a second clock.
+    created_at = Column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
     updated_at = Column(
         UTCDateTime(),
+        nullable=False,
         server_default=func.now(),
-        onupdate=func.now(),
     )
 
     company = relationship("CompanyDB", back_populates="notes")
@@ -436,11 +443,17 @@ class ThesisDB(Base):
         default=ThesisStatus.ACTIVE.value,
         server_default=text("'active'"),
     )
-    created_at = Column(UTCDateTime(), server_default=func.now())
+    # Same clocks as ``NoteDB``. Insert uses the server default.
+    # The repository sets ``updated_at`` when a field changes.
+    created_at = Column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
     updated_at = Column(
         UTCDateTime(),
+        nullable=False,
         server_default=func.now(),
-        onupdate=func.now(),
     )
 
     company = relationship("CompanyDB", back_populates="theses")

@@ -2,55 +2,46 @@
 
 ## Notes and investment theses, backend (#33): 2026-10-21
 
-- Branch `cursor/notes-theses-backend-b69b`, based on
-  `origin/master` `a21d912`.
+- Branch `cursor/notes-theses-backend-b69b`, rebased onto
+  `origin/master` `192c521`.
   [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91)
   says Refs #33. Not merged. No HTTP API. `templates/`,
   `static/`, and `app/ui/` were not edited.
-- QA before code review: a title, body, or thesis-breakers
-  made only of Unicode Cf (U+200B, U+FEFF, joiners) plus
-  whitespace is blank. A blank title or body raises
-  `ValidationError`. Blank thesis-breakers become `""`. A
-  letter beside a format character is kept. SQLite and
-  PostgreSQL migration tests run Alembic `compare_metadata`
-  after upgrade on a full schema (create_all, drop `notes`
-  and `theses`, stamp `0001`, upgrade) and assert the diff
-  is empty. Revision id `0033` was not renamed.
-- Completed: `app.models.research` exports `NOTE_BODY_MAX`
-  (10000), `THESIS_TITLE_MAX` (200), `THESIS_BODY_MAX` (10000),
-  `THESIS_BREAKERS_MAX` (5000), `ThesisStatus`
-  (`active` / `closed`), and `Note`, `NoteCreate`, `NoteUpdate`,
-  `Thesis`, `ThesisCreate`, `ThesisUpdate`. `NoteDB` (`notes`)
-  and `ThesisDB` (`theses`) use `company_id` ON DELETE CASCADE,
-  indexed. Alembic revision `0033` revises `0001`.
-  `NoteRepository` and `ThesisRepository` scope every method by
-  company. `create` raises
-  `app.repositories.company_errors.CompanyNotFoundError`.
-  `list_for_company` orders by `updated_at` desc, then `id`
-  desc. Thesis list takes an optional status.
-  `set_status` closes or reopens. Wrong-company access returns
-  None or False and does not change the row.
-- Incomplete: the `/ui` forms and any HTTP API. Those belong to
-  the Frontend Developer. `down_revision` is `0001`. Open PRs
-  #83 and #87 each add a revision named `0002`, and the #32
-  watchlist migration will add one too. Re-chain `0033` after
-  those merge. The revision id stays `0033`.
+- Code review: read models do not re-validate stored text.
+  Revision `0033` freezes lengths and the status CHECK as
+  literals and does not import `app.models.research`. The id
+  stays `0033`. `down_revision` is `0002` because price bars
+  merged; two Alembic heads were the alternative. A title
+  strips edge Cf and rejects bidi controls and Zl/Zp.
+  Multi-line text stores CR as LF before the length check.
+  Timestamps are NOT NULL. Updates use the repository UTC
+  clock and the columns have no `onupdate`. A failed update,
+  delete, or `set_status` rolls back and raises
+  `ResearchStorageError` with no driver text. `ThesisStatus`
+  is a `StrEnum`. Create and update models forbid extra fields.
+- Completed: `app.models.research` exports the constants,
+  `ThesisStatus` (`active` / `closed`), and the Pydantic
+  models. `NoteDB` and `ThesisDB` use `company_id` ON DELETE
+  CASCADE, indexed. Repositories scope every method by
+  company. `create` raises `CompanyNotFoundError`.
+- Incomplete: the `/ui` forms and any HTTP API. Those belong
+  to the Frontend Developer. If another revision merges
+  first, point `down_revision` at that head. Leave the id
+  `0033`.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1535 passed, 174 deselected, coverage 96.38%.
+  -> 1586 passed, 189 deselected, coverage 96.59%.
   Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
   `investment_test`, `REQUIRE_POSTGRES=1`,
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 174 passed, 1535 deselected. Scoped black, isort, and
+  -> 189 passed, 1586 deselected. Scoped black, isort, and
   flake8 passed. No live market-data calls.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: the owner sends PR #91 to code review. The
-  Frontend Developer uses the interface in the pull request
-  body. Agents do not merge. Re-chain revision `0033` after
-  #83, #87, or the #32 migration merges. Leave the revision
-  id as it is at re-chain time.
+- Next action: the owner sends PR #91 back to code review.
+  Agents do not merge. The Frontend Developer uses the
+  interface in the pull request body.
 
 ## Watchlist backend (#32): 2026-10-21
 
