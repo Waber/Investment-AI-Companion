@@ -40,6 +40,7 @@ from app.ui.form_fields import (
     company_values,
     described_by,
     field_label_key,
+    instrument_type_for_payload,
     metrics_values,
     validate_company,
     validate_metrics,
@@ -407,6 +408,25 @@ def _company_save_failed(
     )
 
 
+def _values_keeping_stored_type(values, row):
+    """Put the stored type back when an edit post left it blank.
+
+    The select treats an empty value as STOCK. A failed edit that
+    omitted the type would show STOCK, and the next submit would
+    overwrite an ETF. Spaces count as omitted. A real posted value
+    stays in the form, including ``etf`` and a string that still
+    contains a control character.
+    """
+    if (
+        instrument_type_for_payload(values.get("instrument_type", ""))
+        is not None
+    ):
+        return values
+    shown = dict(values)
+    shown["instrument_type"] = company_values(row)["instrument_type"]
+    return shown
+
+
 def _save_company(db, model, *, update, company_id):
     """Return the saved row, or raise ValueError / IntegrityError."""
     repo = CompanyRepository(db)
@@ -496,7 +516,13 @@ def update_company(
         "updated_at": row.updated_at,
     }
     if model is None:
-        return _company_invalid(request, values, errors, form_error, **page)
+        return _company_invalid(
+            request,
+            _values_keeping_stored_type(values, row),
+            errors,
+            form_error,
+            **page,
+        )
     try:
         saved = _save_company(db, model, update=True, company_id=row.id)
     except (ValueError, IntegrityError) as error:
@@ -504,7 +530,7 @@ def update_company(
             request,
             db,
             model,
-            values,
+            _values_keeping_stored_type(values, row),
             exclude_id=row.id,
             error=error,
             **page,

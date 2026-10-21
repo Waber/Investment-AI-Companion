@@ -239,6 +239,29 @@ def normalized_company_name(value):
     return normalized
 
 
+def instrument_type_for_payload(value):
+    """Return the type to validate, or None when the field is omitted.
+
+    None means the key stays out of the payload. Create then uses
+    the ``CompanyCreate`` default (STOCK). Update leaves the stored
+    column, because ``CompanyUpdate`` rejects an explicit null.
+    Spaces count as omitted. A control character is returned
+    unchanged: ``normalize_instrument_type`` rejects newline and
+    DEL before ``strip``, and ``str.strip`` would hide a trailing
+    newline and store ETF.
+    Any other text is stripped. The model still uppercases it, so
+    ``etf`` and `` ETF `` become ETF.
+    """
+    if not isinstance(value, str):
+        value = "" if value is None else str(value)
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return value
+    text = value.strip()
+    if not text:
+        return None
+    return text
+
+
 def company_payload(values):
     """Map posted strings onto company create/update fields.
 
@@ -249,7 +272,8 @@ def company_payload(values):
     model still receives ``str``. The 422 is applied in
     ``validate_company``. Ticker text is left as typed;
     ``normalize_ticker`` strips and uppercases that field. A blank
-    ISIN is ``None`` (unknown), not the empty string.
+    ISIN is ``None`` (unknown), not the empty string. The instrument
+    type goes through ``instrument_type_for_payload``.
     """
     payload = {}
     for field in COMPANY_FIELDS:
@@ -260,13 +284,9 @@ def company_payload(values):
             normalized = normalized_company_name(raw)
             payload[field] = raw.strip() if normalized is None else normalized
         elif field == "instrument_type":
-            # A blank select is omitted. Create then uses the model
-            # default (STOCK). Update leaves the stored column,
-            # because CompanyUpdate rejects an explicit null.
-            # A non-blank value is validated by that same model.
-            text = raw.strip()
-            if text:
-                payload[field] = text
+            typed = instrument_type_for_payload(raw)
+            if typed is not None:
+                payload[field] = typed
         elif field in _OPTIONAL_COMPANY and raw.strip() == "":
             payload[field] = None
         else:

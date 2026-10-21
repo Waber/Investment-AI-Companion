@@ -305,6 +305,45 @@
   It says Refs #27 and stays unmerged. Agents do not merge. The
   Frontend Developer still owns the `/ui` badge for
   `[IAC-DEMO-V2]`.
+
+## 2026-10-21 - QA fixes for the instrument-type select (#34, part)
+
+- Scope: QA on PR #89 at `ce730e8`, same branch
+  `cursor/ui-instrument-type-select`. Rebased onto
+  `origin/master` `a21d912`. PR #87 is still open, so
+  `docs/development-journal.md` and `docs/work-state.md`
+  had nothing to merge. Frontend only. Models, schema,
+  migrations, repositories, services, collectors, scoring,
+  and AI adapters were not changed.
+- Decisions: a failed edit that omits `instrument_type`,
+  or posts only spaces, copies the stored column into the
+  values before the form is rendered again. The select
+  then keeps ETF selected, so fixing the ticker does not
+  store STOCK. A posted type, including an unknown one,
+  stays as sent. `instrument_type_for_payload` returns a
+  control character unchanged, before `strip`, matching
+  `normalize_instrument_type`. `ETF` plus a newline is
+  422 and inserts no row. `etf` and ` ETF ` still store
+  ETF. Spaces are omitted: create uses STOCK, and an edit
+  leaves the column. The list and the detail page no
+  longer have a missing-data branch for the type. The
+  CHECK constraint and the STOCK default make that cell
+  unreachable, and coverage stayed above the 80% gate.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1500 passed, 124 deselected, coverage 96.07%. Scoped
+  black, isort, and flake8 passed on the touched Python.
+  PostgreSQL was not run locally. The two bug tests failed
+  before the fix: the edit 422 selected STOCK, and
+  `ETF\n` answered 303.
+- AI model: Grok 4.7. Account usage was not readable as a
+  percentage in this session.
+- Time tracking (UTC): 2026-10-21 about 15:50 to 15:58.
+- Next: this commit is pushed to PR #89 with
+  `--force-with-lease`. Wait for both GitHub Actions jobs.
+  The owner reviews. Agents do not merge.
+
 ## 2026-10-21 - Instrument type on the company forms (#34, part)
 
 - Scope: the instrument-type control from

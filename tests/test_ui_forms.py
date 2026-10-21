@@ -1678,6 +1678,136 @@ async def test_edit_can_change_the_stored_type(client):
 
 
 @pytest.mark.asyncio
+async def test_edit_error_without_a_type_does_not_select_stock(client):
+    """A failed edit that omits the type must not offer STOCK next.
+
+    The select treats a blank value as the create default. Resubmitting
+    that page would store STOCK over an ETF. The 422 page has to show
+    the type already on the row, and the following save has to keep it.
+    """
+    company_id, _data = await _create(
+        client, name="Kept ETF", ticker="KEPTETF", instrument_type="ETF"
+    )
+    failed = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "Kept ETF", "ticker": ""},
+    )
+    assert failed.status_code == 422
+    selected = re.findall(r'<option value="([^"]+)" selected>', failed.text)
+    assert selected == ["ETF"]
+    saved = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Kept ETF",
+            "ticker": "KEPTETF",
+            "instrument_type": selected[0],
+        },
+    )
+    assert saved.status_code == 303
+    assert _stored_instrument_type(client, company_id) == "ETF"
+
+
+@pytest.mark.asyncio
+async def test_edit_error_keeps_a_posted_type(client):
+    """A failed edit that posted a type shows that type, not the stored one."""
+    company_id, _data = await _create(
+        client, name="Posted Type", ticker="POSTTYP", instrument_type="ETF"
+    )
+    failed = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Posted Type",
+            "ticker": "",
+            "instrument_type": "EQUITY",
+        },
+    )
+    assert failed.status_code == 422
+    assert 'value="EQUITY" selected' in failed.text
+    assert '<option value="ETF" selected>' not in failed.text
+    assert _stored_instrument_type(client, company_id) == "ETF"
+
+
+@pytest.mark.asyncio
+async def test_form_rejects_an_instrument_type_control_character(client):
+    """A trailing newline is invalid, the same as on the write model.
+
+    ``str.strip`` would hide it and store ETF. The form has to reject
+    the control character before that strip, and insert no row.
+    """
+    response = await _post(
+        client,
+        "/ui/companies",
+        {
+            "name": "Control Type",
+            "ticker": "CTRLTY",
+            "instrument_type": "ETF\n",
+        },
+    )
+    assert response.status_code == 422
+    assert 'id="field-instrument_type-error"' in response.text
+    assert _counts(client) == (0, 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("posted", "ticker"),
+    [("etf", "FOLD1"), (" ETF ", "FOLD2")],
+)
+async def test_form_normalises_instrument_type_case_and_space(
+    client, posted, ticker
+):
+    """The form stores the enum. Case and surrounding spaces fold away."""
+    company_id, _data = await _create(
+        client,
+        name="Folded Type",
+        ticker=ticker,
+        instrument_type=posted,
+    )
+    assert _stored_instrument_type(client, company_id) == "ETF"
+
+
+@pytest.mark.asyncio
+async def test_whitespace_instrument_type_is_treated_as_omitted(client):
+    """Spaces are a blank select, not a type named with whitespace.
+
+    Create then uses the model default STOCK. An edit that posts only
+    spaces leaves the stored type alone.
+    """
+    company_id, _data = await _create(
+        client,
+        name="Space Type",
+        ticker="SPCTYP",
+        instrument_type="   ",
+    )
+    assert _stored_instrument_type(client, company_id) == "STOCK"
+    changed = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Space Type",
+            "ticker": "SPCTYP",
+            "instrument_type": "ETF",
+        },
+    )
+    assert changed.status_code == 303
+    assert _stored_instrument_type(client, company_id) == "ETF"
+    kept = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Space Type kept",
+            "ticker": "SPCTYP",
+            "instrument_type": "   ",
+        },
+    )
+    assert kept.status_code == 303
+    assert _stored_instrument_type(client, company_id) == "ETF"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("language", ["pl", "en"])
 async def test_unknown_instrument_type_is_422_on_the_select(client, language):
     if language == "en":
