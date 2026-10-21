@@ -35,13 +35,19 @@
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`:
   131 passed, 1503 deselected. Scoped black, isort, and flake8
   passed on the Python this change owns. No live market-data
-  call. GitHub Actions is not recorded in this entry yet.
+  call. GitHub Actions on `03952d9` succeeded
+  ([run 39563380255](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563380255)):
+  SQLite job 119099695642, 1503 passed, 131 deselected, coverage
+  96.30%. PostgreSQL job 119099695294, 131 passed, 1503
+  deselected.
 - AI model: Grok 4.7. Account usage was not available in this
   session, so no usage percent was recorded.
-- Time tracking (UTC): 2026-10-21 about 07:32 to 07:38.
-- Next: push this commit on `cursor/pricebar-demo-v2-203d` and
-  wait for both GitHub Actions jobs. PR #83 still says Refs #27
-  and stays unmerged. Agents do not merge.
+- Time tracking (UTC): 2026-10-21 about 07:32 to 07:41.
+- Next: the owner reviews
+  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83).
+  It says Refs #27 and stays unmerged. Agents do not merge. The
+  Frontend Developer still owns the `/ui` badge for
+  `[IAC-DEMO-V2]`.
 
 
 ## 2026-10-21 - Price bars and the demo-v2 fixture (Refs #27)
