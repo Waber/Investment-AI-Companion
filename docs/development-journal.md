@@ -1,5 +1,50 @@
 # Development Journal
 
+## 2026-10-21 - Notes and investment theses, backend (#33)
+
+- Scope: the backend of
+  [#33](https://github.com/Waber/Investment-AI-Companion/issues/33).
+  Notes and investment theses for one company: SQLAlchemy tables,
+  Pydantic models, repositories, and Alembic revision `0033`.
+  No HTTP API. `templates/`, `static/`, and `app/ui/` were not
+  edited. The UI stays with the Frontend Developer. The pull
+  request says Refs #33.
+- Decisions: constants, `ThesisStatus`, and the Pydantic models
+  live in `app.models.research`. Tables `notes` and `theses` are
+  in `app.models.database_models`. Both foreign keys are
+  `ON DELETE CASCADE` and indexed on `company_id`. Every
+  repository read and write includes `company_id`, so another
+  company's id looks missing. `create` checks that the company
+  exists and raises `CompanyNotFoundError` (`LookupError`, not
+  `ValueError`) instead of `IntegrityError`, including when
+  SQLite foreign keys are off. Text is stripped before the
+  length check. A title rejects every Unicode Cc character. A
+  body and thesis-breakers allow newline, carriage return, and
+  tab only. Thesis-breakers may be empty. Status is `active` or
+  `closed`, with a CHECK constraint. `updated_at` moves when a
+  field changes. An empty update, or `set_status` to the status
+  already stored, leaves `updated_at` alone. Revision id `0033`
+  follows master's head `0001`. It is not named `0002`, because
+  open PRs #83 and #87 each add a revision with that id, and the
+  #32 watchlist migration will add one too. `down_revision`
+  will be re-chained after those merge.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1529 passed, 168 deselected, coverage 96.37%.
+  PostgreSQL, local 16, database `investment_test`,
+  `REQUIRE_POSTGRES=1` and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 168 passed, 1529 deselected. Scoped black, isort, and
+  flake8 passed on the Python this change owns. No live
+  market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 15:27 to 15:48.
+- Next: the owner reviews the pull request. The Frontend
+  Developer can build the `/ui` forms on the interface in the
+  pull request body. Agents do not merge. After #83, #87, or
+  the #32 migration merges, re-chain `down_revision` on `0033`.
+
 ## 2026-10-21 - Rebase the watchlist branch onto ad44969
 
 - Scope: pull request #89 merged, so `origin/master` is

@@ -328,8 +328,10 @@ def test_project_imports_do_not_emit_targeted_deprecations(tmp_path):
         import app.api.data_collection
         import app.core.database
         import app.models.company
+        import app.models.database_models
         import app.models.financial_metrics
         import app.models.historical_data
+        import app.models.research
         import app.models.watchlist
         """)
     completed = subprocess.run(
