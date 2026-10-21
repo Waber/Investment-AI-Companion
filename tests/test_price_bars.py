@@ -281,6 +281,80 @@ async def test_default_list_is_one_source(client):
 
 
 @pytest.mark.asyncio
+async def test_default_source_is_chosen_before_the_date_filter(client):
+    """A date window must not switch the default source.
+
+    The newest retrieval is a ``fake`` bar in 2026. Inside 2024 the
+    demo bar was retrieved later than the ``fake`` bar on that same
+    day. Choosing the source after the date filter would return the
+    demo series. The source is chosen from every bar first, so the
+    2024 window stays on ``fake``. A window that has only the demo
+    series is empty.
+    """
+    instrument_id = await _company(client, ticker="DEMO_SRC_RANGE")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    latest = await client.post(
+        path,
+        json=_bar(
+            date="2026-01-05",
+            source="fake",
+            retrieved_at="2026-10-02T18:00:00Z",
+        ),
+    )
+    assert latest.status_code == 201, latest.text
+    demo = await client.post(
+        path,
+        json=_bar(
+            date="2024-06-03",
+            source="[IAC-DEMO-V2]",
+            retrieved_at="2026-10-01T18:00:00Z",
+        ),
+    )
+    assert demo.status_code == 201, demo.text
+    older_fake = await client.post(
+        path,
+        json=_bar(
+            date="2024-06-03",
+            source="fake",
+            retrieved_at="2024-01-01T18:00:00Z",
+        ),
+    )
+    assert older_fake.status_code == 201, older_fake.text
+    only_demo = await client.post(
+        path,
+        json=_bar(
+            date="2023-01-02",
+            source="[IAC-DEMO-V2]",
+            retrieved_at="2023-01-02T18:00:00Z",
+        ),
+    )
+    assert only_demo.status_code == 201, only_demo.text
+
+    window = await client.get(
+        path, params={"from": "2024-01-01", "to": "2024-12-31"}
+    )
+    assert window.status_code == 200
+    assert [row["source"] for row in window.json()] == ["fake"]
+    assert [row["date"] for row in window.json()] == ["2024-06-03"]
+
+    named = await client.get(
+        path,
+        params={
+            "from": "2024-01-01",
+            "to": "2024-12-31",
+            "source": "[IAC-DEMO-V2]",
+        },
+    )
+    assert [row["source"] for row in named.json()] == ["[IAC-DEMO-V2]"]
+
+    demo_only_window = await client.get(
+        path, params={"from": "2023-01-01", "to": "2023-12-31"}
+    )
+    assert demo_only_window.status_code == 200
+    assert demo_only_window.json() == []
+
+
+@pytest.mark.asyncio
 async def test_collector_validation_error_is_a_fixed_502(client):
     """A ValidationError raised by the collector is not a 422.
 

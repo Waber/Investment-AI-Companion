@@ -129,12 +129,16 @@ zero. The numbers are a closed-form curve, not a market.
 `GET /api/v1/instruments/{id}/prices?from=&to=` reads the stored bars.
 `from` and `to` are inclusive. One session can be stored under two
 sources, for example the fixture marker and a later `fake` refresh.
-When `source` is omitted, the list is one series: the source with
-the latest `retrieved_at` in that date range. If two sources share
-that time, the source name that sorts last is used, so `fake` wins
-a tie with `[IAC-DEMO-V2]`. Pass `source` to read the other series.
-The seeder asks for `source=[IAC-DEMO-V2]`, so a newer refresh does
-not hide the fixture rows it skips.
+When `source` is omitted, the list is still one series. That source
+is chosen from every bar of the instrument, not from the date window:
+the bar with the latest `retrieved_at` wins, and if two sources share
+that time the source name that sorts last is kept, so `fake` wins a
+tie with `[IAC-DEMO-V2]`. The `from` and `to` filters run after that
+choice. A window that only contains the other source returns `[]`.
+After a refresh the default source is `fake`, because those bars were
+retrieved later. Pass `source=[IAC-DEMO-V2]` to get the demo series.
+The seeder asks for that source, so a newer refresh does not hide the
+fixture rows it skips.
 `POST /api/v1/instruments/{id}/prices/refresh`
 upserts bars from the configured collector. With `DATA_COLLECTOR=fake`
 a second refresh does not insert a second copy of the same session.
@@ -142,9 +146,9 @@ The currency on a refreshed bar is the currency stored on the
 instrument, because a collector bar has no currency of its own. The
 source and the retrieval time come from the collector's provenance.
 
-The `/ui` synthetic badge still matches `[IAC-DEMO-V1]` only. Rows
-seeded from demo-v2 are marked in the database, and the badge for
-that marker is a frontend change.
+The `/ui` synthetic badge matches a description that starts with
+`[IAC-DEMO-`, so a demo-v2 row shows it. `[IAC-DEMO-V1]` is not a
+separate check. The token rule is in the section above.
 
 Seed demo-v2 without the one-command demo:
 

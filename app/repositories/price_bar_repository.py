@@ -44,24 +44,33 @@ class PriceBarRepository:
 
         The unique key includes ``source``, so one session can be
         stored twice (a seeded bar and a later refresh). The default
-        list is still one series. When ``source`` is omitted, the
-        source kept is the one with the latest ``retrieved_at`` inside
-        the date range. If two sources share that time, the source
-        name that sorts last is kept. Pass ``source`` to read one
-        named series, including an empty result.
+        list is still one series. When ``source`` is omitted, that
+        series is chosen from every bar of this instrument, including
+        bars outside ``start`` and ``end``. The chosen source is the
+        one on the bar with the latest ``retrieved_at``. If two
+        sources share that time, the source name that sorts last is
+        kept. The date window is applied only after that choice, so
+        asking for a different range cannot switch the series. A
+        window that contains none of the chosen source's bars is an
+        empty list, even when another source has bars there. Pass
+        ``source`` to read one named series, including an empty
+        result.
         """
-        query = self.db.query(PriceBarDB).filter(
+        # The source decision sees the whole instrument. Filtering by
+        # date first would let one window pick "fake" and another
+        # pick the demo marker.
+        bars = self.db.query(PriceBarDB).filter(
             PriceBarDB.instrument_id == instrument_id
         )
+        if source is None:
+            source = self._default_source(bars)
+            if source is None:
+                return []
+        query = bars.filter(PriceBarDB.source == source)
         if start is not None:
             query = query.filter(PriceBarDB.bar_date >= start)
         if end is not None:
             query = query.filter(PriceBarDB.bar_date <= end)
-        if source is None:
-            source = self._default_source(query)
-            if source is None:
-                return []
-        query = query.filter(PriceBarDB.source == source)
         return query.order_by(
             PriceBarDB.bar_date.asc(),
             PriceBarDB.source.asc(),

@@ -97,9 +97,10 @@ def list_prices(
         None,
         description=(
             "Provenance source to return. When omitted, one source "
-            "is chosen: the latest retrieved_at in the date range. "
-            "If two sources share that time, the source name that "
-            "sorts last is used."
+            "is chosen from every bar of this instrument: the latest "
+            "retrieved_at, including bars outside from and to. If two "
+            "sources share that time, the source name that sorts last "
+            "is used. The date window is applied after that choice."
         ),
     ),
     db: Session = Depends(get_db),
@@ -112,8 +113,9 @@ def list_prices(
     fits in one response on this local app.
 
     One session can be stored under two sources. The default response
-    is still a single series, chosen as the ``source`` parameter
-    describes. Pass ``source`` to read the other series.
+    is still a single series. That series is chosen from every stored
+    bar, then ``from`` and ``to`` keep the sessions inside the window.
+    Pass ``source`` to read the other series.
     """
     _require_instrument(db, instrument_id)
     if start is not None and end is not None and start > end:
