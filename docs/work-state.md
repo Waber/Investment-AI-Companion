@@ -1,5 +1,47 @@
 # Current Work State
 
+## Watchlist backend (#32): 2026-10-21
+
+- Branch `cursor/watchlist-backend-32-e406`, based on
+  `origin/master` `a21d912`. The pull request says Refs #32.
+  Not merged. The UI part of #32 stays open for the Frontend
+  Developer.
+- Completed: `WatchlistItemDB` / table `watchlist_items` with
+  `id`, `company_id` foreign key to `companies.id` `ON DELETE
+  CASCADE`, `added_at` as `UTCDateTime`, nullable `label` (80
+  characters), and `UNIQUE(company_id)`.
+  `CompanyDB.watchlist_item` uses `passive_deletes` and
+  `uselist=False`. Alembic revision `0002` revises `0001`.
+  The model and the migration match: autogenerate is empty,
+  and upgrade / downgrade to `0001` / upgrade was run on
+  SQLite and PostgreSQL. `WatchlistItem` and
+  `WatchlistItemCreate`. `WatchlistRepository.add` is
+  idempotent, including a race, and a non-duplicate constraint
+  error is raised after the handler so `__context__` is
+  `None`. `remove` returns bool. `list_items` orders by
+  `added_at` then `id`. `Settings.watchlist_stale_price_days`
+  is 7. `GET` and `POST /api/v1/watchlist/`, and
+  `DELETE /api/v1/watchlist/{company_id}`. An unknown company
+  is 404. `templates/`, `static/`, and `app/ui/` were not
+  edited.
+- Incomplete: the `/ui` watchlist page, stale-price marker,
+  and PL/EN strings. Revision `0002` collides with the
+  revision number in open pull requests #83 and #87. Rebase
+  onto whichever merges first and set `down_revision` to that
+  head, then give this file the next free number. The slug
+  stays `watchlist_items`.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  SQLite CI command -> 1500 passed, 134 deselected, coverage
+  96.19%. PostgreSQL `REQUIRE_POSTGRES=1` `-m integration` ->
+  134 passed, 1500 deselected. Scoped black, isort, and
+  flake8 passed. GitHub Actions is recorded in the pull
+  request. No live market-data calls.
+- Active agents: none. Blockers: the migration number waits
+  on #83 or #87. Account usage was not available as a number
+  in this session.
+- Next action: the owner reviews the pull request. Agents do
+  not merge. The Frontend Developer builds the page on these
+  names.
 ## Code review and rebase onto price bars (PR #87): 2026-10-21
 
 - Branch `cursor/ticker-unique-and-alembic-0e9d`, rebased onto

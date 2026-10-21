@@ -1,5 +1,52 @@
 # Development Journal
 
+## 2026-10-21 - Watchlist backend (issue #32)
+
+- Scope: the backend of
+  [#32](https://github.com/Waber/Investment-AI-Companion/issues/32).
+  `WatchlistItemDB` stores one row per company. The read model is
+  `WatchlistItem` and the write model is `WatchlistItemCreate`.
+  `WatchlistRepository` adds, removes, and lists those rows.
+  `Settings.watchlist_stale_price_days` defaults to 7. The HTTP
+  routes are `GET` and `POST /api/v1/watchlist/` and
+  `DELETE /api/v1/watchlist/{company_id}`. The page, the stale
+  marker, and the PL/EN strings stay with the Frontend Developer.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: `company_id` references `companies.id` with
+  `ON DELETE CASCADE`. `CompanyDB.watchlist_item` sets
+  `passive_deletes` and `uselist=False`, because the unique
+  constraint allows one row. `added_at` uses `UTCDateTime`.
+  `label` is a nullable string of at most 80 characters; a blank
+  label is stored as null. Adding a company that is already
+  listed returns that row and does not change the label. If two
+  adds pass the first lookup together, the unique constraint
+  fires, the loser rolls back, and the stored row is returned.
+  Any other constraint failure is `WatchlistStorageError`, raised
+  after the handler so `__context__` is `None`. An unknown
+  company is HTTP 404. The first add is 201 and a repeat is 200.
+  Revision `0002` revises `0001`, which is master's head. Pull
+  requests #83 and #87 also add a revision `0002`. This one must
+  be rebased and re-chained after whichever of those merges
+  first. The filename slug stays `watchlist_items`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1500 passed, 134 deselected, coverage 96.19% (3201
+  statements, 104 miss, 846 branches, 36 partial).
+  `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
+  with `-m integration` -> 134 passed, 1500 deselected.
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. No live market-data calls. GitHub Actions is
+  recorded in the pull request, not in a later commit.
+- AI model: Grok 4.7. Account usage was not available as a
+  number in this session. The user resumed after a reset.
+- Time tracking (UTC): 2026-10-21 about 15:27 to 15:45.
+- Next: the owner reviews the pull request. It says Refs #32
+  and stays open, because the watchlist page is still the
+  Frontend Developer's work. After #83 or #87 merges, rebase
+  this branch and point the migration at the new head. Agents
+  do not merge.
 ## 2026-10-21 - Code review on the ticker check, rebased onto price bars
 
 - Scope: Code Reviewer on pull request #87 at `1ba6616`.
