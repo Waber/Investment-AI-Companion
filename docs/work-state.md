@@ -2,8 +2,8 @@
 
 ## UI forms follow-up (#80, part): 2026-10-20
 
-- Branch `cursor/ui-issue-80-forms-origin-5105`, based on
-  `origin/master` `9d26948`.
+- Branch `cursor/ui-issue-80-forms-origin-5105`, rebased onto
+  `origin/master` `f7e90bf` (#75 and #78).
   [PR #81](https://github.com/Waber/Investment-AI-Companion/pull/81)
   says Refs #80. Not merged.
 - Completed: one form-layer helper, `normalized_company_name`, used
@@ -30,32 +30,32 @@
   checked. `Secure` on the language
   cookie is deferred until HTTPS (#56). Models, schema,
   migrations, repositories, and the API were not changed.
-- Incomplete: map `duplicate_ticker` and `duplicate_isin` from
-  `error.code`. #75 is not merged. The form still decides a
+- Incomplete, and not part of this pull request: map
+  `duplicate_ticker` and `duplicate_isin` from `error.code`.
+  Those classes are on master in
+  `app.repositories.company_errors`. The form still decides a
   duplicate by a row lookup. TODO in
-  `app/ui/forms.py` `_company_save_failed`. After #75 merges,
-  align `normalized_company_name` with `normalize_name` from that
-  pull request (commit `2c64565`). That model helper strips
-  whitespace and rejects a Cf-only name. It keeps a format
-  character beside a letter.
+  `app/ui/forms.py` `_company_save_failed`. Aligning
+  `normalized_company_name` with `normalize_name` is the same
+  separate pull request. That model helper strips whitespace
+  and rejects a Cf-only name. It keeps a format character
+  beside a letter.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1370 passed, 121 deselected, coverage 96.01% after the
-  POST-form return path. The HTMX filter commit before it was
-  1368 passed, coverage 95.97%. Scoped black, isort, and flake8
-  passed. PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  GitHub Actions on `6533438` succeeded
-  ([run 39495703430](https://github.com/Waber/Investment-AI-Companion/actions/runs/39495703430)):
-  PostgreSQL job 118880080085 and SQLite job 118880080581.
-- Active agents: none. Blockers: #75 is not on master, so the
-  `error.code` mapping is not in this branch. Account usage was
-  not available in this session.
-- Next action: the owner reviews the pull request and merges it
-  with "Rebase and merge". After #75 lands, rebase this branch,
-  align the name helper with `normalize_name`, and switch the
-  duplicate check to the exception class or `.code`. Agents do
-  not merge.
+  -> 1465 passed, 124 deselected, coverage 96.05% on the
+  rebased tip. Each rebased code commit passed the same command
+  (1459 through 1465 passed, coverage 95.96% to 96.05%). Scoped
+  black, isort, and flake8 passed on this branch's Python.
+  PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
+  GitHub Actions for the rebased head is not recorded yet.
+- Active agents: none. Blockers: none for this pull request.
+  The `error.code` mapping and the name-helper alignment are a
+  separate pull request. Account usage was not available in
+  this session.
+- Next action: push with `--force-with-lease` and wait for both
+  GitHub Actions jobs. The owner then reviews PR #81 and merges
+  it with "Rebase and merge". Agents do not merge.
 
 ## Rebase onto master after PR #78: 2026-10-21
 

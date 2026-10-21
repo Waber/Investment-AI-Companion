@@ -1,5 +1,37 @@
 # Development Journal
 
+## 2026-10-21 - Rebase the UI follow-up onto master after #75 and #78
+
+- Scope: rebase `cursor/ui-issue-80-forms-origin-5105` onto
+  `origin/master` `f7e90bf` (PR #75 and PR #78 merged). No new
+  form behavior. The duplicate-code mapping and aligning
+  `normalized_company_name` with `normalize_name` stay out of
+  this pull request.
+- Decisions: the only conflicts were the tops of
+  `docs/development-journal.md` and `docs/work-state.md` on the
+  first docs commit. Both histories stay. This branch's notes
+  stay first. `DuplicateTickerError`, `DuplicateIsinError`,
+  `normalize_name`, `instrument_type`, and ISIN come from master
+  and were not edited. The form still finds a duplicate by a
+  row lookup. `CompanyCreate.instrument_type` defaults to
+  STOCK, so the existing form, which does not send a type,
+  still validates.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  on the tip: 1465 passed, 124 deselected, coverage 96.05%.
+  The same command passed on each rebased code commit (1459
+  through 1465 passed, coverage 95.96% to 96.05%). Scoped black,
+  isort, and flake8 passed on the Python this branch owns.
+  Whole-tree isort and flake8 still report the pre-existing
+  findings on master. PostgreSQL was not run locally.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 06:33 to 06:42.
+- Next: push with `--force-with-lease` and wait for GitHub
+  Actions. The owner reviews PR #81. It still says Refs #80 and
+  stays unmerged. The duplicate `error.code` mapping and the
+  name-helper alignment are a separate pull request.
+
 ## 2026-10-20 - QA on the language return path (PR #81)
 
 - Scope: two medium UX findings on
