@@ -37,22 +37,35 @@ DESCRIPTION_MAX_LENGTH = 5000
 _TICKER_RE = re.compile(TICKER_PATTERN)
 
 
+def _is_name_filler(char: str) -> bool:
+    """True for whitespace and Unicode category ``C*``.
+
+    Category C is "other": controls (``Cc``, including NUL), format
+    (``Cf``, including U+200B), private use (``Co``, including
+    U+E000), surrogates (``Cs``), and unassigned code points (``Cn``).
+    A reader does not see a name made only of those characters.
+    """
+    if char.isspace():
+        return True
+    return unicodedata.category(char).startswith("C")
+
+
 def normalize_name(value: object) -> object:
     """Strip a company name. Reject one with no visible character.
 
-    ``None`` and non-strings are left for the field type. Spaces are
-    removed first. A name that is then empty, or made only of format
-    characters (Unicode category ``Cf``, such as U+200B, U+FEFF,
-    U+200C, and U+200D), is rejected. A real letter with a format
-    character beside it is kept. The read model does not use this,
-    so a blank name already stored can still be listed.
+    ``None`` and non-strings are left for the field type. Spaces at
+    the ends are removed first. The name is then rejected when every
+    remaining character is whitespace or Unicode category ``C*``
+    (``Cc``, ``Cf``, ``Co``, ``Cn``, ``Cs``). ``'\\u200b \\u200b'``,
+    a lone NUL, and U+E000 are rejected. A real letter with a format
+    character beside it, such as ``'A\\u200bB'``, is kept. The read
+    model does not use this, so a blank name already stored can
+    still be listed.
     """
     if value is None or not isinstance(value, str):
         return value
     stripped = value.strip()
-    if stripped and any(
-        unicodedata.category(char) != "Cf" for char in stripped
-    ):
+    if stripped and any(not _is_name_filler(char) for char in stripped):
         return stripped
     raise ValueError("name must contain a visible character")
 
