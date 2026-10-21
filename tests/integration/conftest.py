@@ -173,7 +173,7 @@ def empty_application_tables(engine):
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE watchlist_items, price_bars, "
+                "TRUNCATE TABLE notes, theses, watchlist_items, price_bars, "
                 "financial_metrics, companies RESTART IDENTITY CASCADE"
             )
         )
@@ -213,7 +213,7 @@ def postgres_engine():
 
 @pytest.fixture()
 def postgres_session_factory(postgres_engine):
-    """A session factory and an empty pair of application tables."""
+    """A session factory and empty application tables."""
     factory = sessionmaker(
         autocommit=False, autoflush=False, bind=postgres_engine
     )

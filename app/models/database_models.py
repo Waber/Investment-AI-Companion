@@ -11,12 +11,21 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utc_datetime import UTCDateTime
+from app.models.research import (
+    NOTE_BODY_MAX,
+    THESIS_BODY_MAX,
+    THESIS_BREAKERS_MAX,
+    THESIS_STATUS_CHECK,
+    THESIS_TITLE_MAX,
+    ThesisStatus,
+)
 from app.models.watchlist import WATCHLIST_LABEL_MAX_LENGTH
 
 
@@ -116,6 +125,21 @@ class CompanyDB(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         uselist=False,
+    )
+    # The database removes notes and theses when the company row is
+    # deleted (ON DELETE CASCADE). passive_deletes="all" tells
+    # SQLAlchemy not to blank company_id on those rows first.
+    # Financial metrics above do not use a database cascade; the
+    # relationship deletes them in the session instead.
+    notes = relationship(
+        "NoteDB",
+        back_populates="company",
+        passive_deletes="all",
+    )
+    theses = relationship(
+        "ThesisDB",
+        back_populates="company",
+        passive_deletes="all",
     )
 
     # Database constraints
@@ -337,4 +361,90 @@ class WatchlistItemDB(Base):
             "company_id",
             name="uq_watchlist_items_company_id",
         ),
+    )
+
+
+class NoteDB(Base):
+    """One free-text note attached to a company.
+
+    ``company_id`` is indexed because the list for a company is the
+    common read. Deleting the company deletes the note in the
+    database. The repository still checks that the company exists
+    on create, because a SQLite connection can have foreign keys
+    turned off.
+    """
+
+    __tablename__ = "notes"
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(
+        Integer,
+        ForeignKey(
+            "companies.id",
+            name="fk_notes_company_id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+    body = Column(String(NOTE_BODY_MAX), nullable=False)
+    created_at = Column(UTCDateTime(), server_default=func.now())
+    updated_at = Column(
+        UTCDateTime(),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    company = relationship("CompanyDB", back_populates="notes")
+
+
+class ThesisDB(Base):
+    """One investment thesis attached to a company.
+
+    ``status`` is a short string plus a CHECK, not a PostgreSQL ENUM.
+    SQLite has no ENUM type, and one column type has to work on both
+    databases. ``thesis_breakers`` is an empty string when the thesis
+    has none yet; it is not NULL.
+    """
+
+    __tablename__ = "theses"
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(
+        Integer,
+        ForeignKey(
+            "companies.id",
+            name="fk_theses_company_id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+    title = Column(String(THESIS_TITLE_MAX), nullable=False)
+    body = Column(String(THESIS_BODY_MAX), nullable=False)
+    thesis_breakers = Column(
+        String(THESIS_BREAKERS_MAX),
+        nullable=False,
+        default="",
+        server_default=text("''"),
+    )
+    # 'active' and 'closed' are both 6 characters. The CHECK below
+    # is what limits the value; the length only sizes the column.
+    status = Column(
+        String(max(len(item.value) for item in ThesisStatus)),
+        nullable=False,
+        default=ThesisStatus.ACTIVE.value,
+        server_default=text("'active'"),
+    )
+    created_at = Column(UTCDateTime(), server_default=func.now())
+    updated_at = Column(
+        UTCDateTime(),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    company = relationship("CompanyDB", back_populates="theses")
+
+    __table_args__ = (
+        CheckConstraint(THESIS_STATUS_CHECK, name="ck_theses_status"),
     )

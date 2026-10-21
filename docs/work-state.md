@@ -1,5 +1,47 @@
 # Current Work State
 
+## Notes and investment theses, backend (#33): 2026-10-21
+
+- Branch `cursor/notes-theses-backend-b69b`, based on
+  `origin/master` `a21d912`. The pull request says Refs #33.
+  Not merged. No HTTP API. `templates/`, `static/`, and
+  `app/ui/` were not edited.
+- Completed: `app.models.research` exports `NOTE_BODY_MAX`
+  (10000), `THESIS_TITLE_MAX` (200), `THESIS_BODY_MAX` (10000),
+  `THESIS_BREAKERS_MAX` (5000), `ThesisStatus`
+  (`active` / `closed`), and `Note`, `NoteCreate`, `NoteUpdate`,
+  `Thesis`, `ThesisCreate`, `ThesisUpdate`. `NoteDB` (`notes`)
+  and `ThesisDB` (`theses`) use `company_id` ON DELETE CASCADE,
+  indexed. Alembic revision `0033` revises `0001`.
+  `NoteRepository` and `ThesisRepository` scope every method by
+  company. `create` raises
+  `app.repositories.company_errors.CompanyNotFoundError`.
+  `list_for_company` orders by `updated_at` desc, then `id`
+  desc. Thesis list takes an optional status.
+  `set_status` closes or reopens. Wrong-company access returns
+  None or False and does not change the row.
+- Incomplete: the `/ui` forms and any HTTP API. Those belong to
+  the Frontend Developer. `down_revision` is `0001`. Open PRs
+  #83 and #87 each add a revision named `0002`, and the #32
+  watchlist migration will add one too. Re-chain `0033` after
+  those merge. The revision id stays `0033`.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1529 passed, 168 deselected, coverage 96.37%.
+  Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
+  `investment_test`, `REQUIRE_POSTGRES=1`,
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 168 passed, 1529 deselected. Scoped black, isort, and
+  flake8 passed. No live market-data calls. GitHub Actions on
+  this head is not recorded yet.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the owner reviews the pull request. The Frontend
+  Developer uses the interface in the pull request body. Agents
+  do not merge. Re-chain revision `0033` after #83, #87, or the
+  #32 migration merges.
+
 ## Watchlist backend (#32): 2026-10-21
 
 - Branch `cursor/watchlist-backend-32-e406`, rebased onto
