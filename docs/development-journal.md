@@ -23,13 +23,18 @@
   -> 1468 passed, 124 deselected, coverage 96.07%. Scoped black,
   isort, and flake8 passed on `app/ui/view_models.py`,
   `tests/test_ui_view_models.py`, and `tests/test_ui_pages.py`.
-  PostgreSQL was not run locally. GitHub Actions is not recorded
-  yet.
+  PostgreSQL was not run locally. GitHub Actions on `c85f287`
+  succeeded
+  ([run 39565019024](https://github.com/Waber/Investment-AI-Companion/actions/runs/39565019024)).
+  SQLite job `119105110715`: 1468 passed, 124 deselected,
+  coverage 96.07%. PostgreSQL job `119105110896`: 124 passed,
+  1468 deselected.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 07:48 to 07:56.
-- Next: wait for both GitHub Actions jobs. The owner sends PR
-  #84 to the Code Reviewer. Agents do not merge. PR #83 can
-  merge before or after this one.
+- Next: the owner sends
+  [PR #84](https://github.com/Waber/Investment-AI-Companion/pull/84)
+  to the Code Reviewer. Agents do not merge. PR #83 can merge
+  before or after this one.
 
 ## 2026-10-21 - Synthetic badge matches any [IAC-DEMO- prefix
 
