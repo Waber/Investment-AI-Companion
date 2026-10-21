@@ -23,6 +23,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.database_models import CompanyDB
+from app.repositories.company_errors import (
+    DuplicateIsinError,
+    DuplicateTickerError,
+)
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
@@ -59,6 +63,7 @@ _METRIC_HINTS["period_type"] = "hint-period_type"
 def posted_company(
     name: str = Form(""),
     ticker: str = Form(""),
+    isin: str = Form(""),
     exchange: str = Form(""),
     currency: str = Form(""),
     country: str = Form(""),
@@ -71,6 +76,7 @@ def posted_company(
     return {
         "name": name,
         "ticker": ticker,
+        "isin": isin,
         "exchange": exchange,
         "currency": currency,
         "country": country,
@@ -315,6 +321,11 @@ def _company_conflict(
     invalid_fields,
     updated_at=None,
 ):
+    # One field carries the sentence next to its input, the same way
+    # a 422 shows ``errors[field]``. The summary still quotes ``key``.
+    errors = {}
+    if len(invalid_fields) == 1:
+        errors[invalid_fields[0]] = key
     return _company_page(
         request,
         title_key=title_key,
@@ -322,45 +333,66 @@ def _company_conflict(
         values=values,
         cancel_href=cancel_href,
         updated_at=updated_at,
+        errors=errors,
         form_error=key,
         invalid_fields=invalid_fields,
         status_code=400,
     )
 
 
-def _row_with_value(db, column, value, exclude_id):
-    """True when a different company already stores ``value`` in ``column``.
+def _duplicate_field(error):
+    """Return ``(catalog key, field)`` for a ticker or ISIN collision.
 
-    The comparison is ``==``, which is how
-    ``CompanyRepository`` compares a name and a ticker. The ticker on
-    ``model`` is already stripped and uppercased by the write model.
+    Branch on the class or on ``code``. ``DuplicateTickerError.code``
+    is ``duplicate_ticker`` and ``DuplicateIsinError.code`` is
+    ``duplicate_isin``. A plain ``ValueError`` can carry the same
+    sentence; this function does not read the message.
     """
-    query = db.query(CompanyDB.id).filter(column == value)
+    code = getattr(error, "code", None)
+    if isinstance(error, DuplicateTickerError) or code == "duplicate_ticker":
+        return "error.duplicate_ticker", "ticker"
+    if isinstance(error, DuplicateIsinError) or code == "duplicate_isin":
+        return "error.duplicate_isin", "isin"
+    return None
+
+
+def _other_row_has_name(db, name, exclude_id):
+    """True when a different company already stores this name.
+
+    The comparison is ``==``, which is how the repository compares a
+    name. Ticker and ISIN collisions are not looked up here: those
+    exceptions carry ``code``. A duplicate name is still a plain
+    ``ValueError`` with no code.
+    """
+    query = db.query(CompanyDB.id).filter(CompanyDB.name == name)
     if exclude_id is not None:
         query = query.filter(CompanyDB.id != exclude_id)
     return query.first() is not None
 
 
-def _company_save_failed(request, db, model, values, *, exclude_id, **page):
-    """Choose the page from the stored row, not from the exception text.
+def _company_save_failed(
+    request, db, model, values, *, exclude_id, error, **page
+):
+    """Choose the page from the exception code, not from its text.
 
     Create and update both land here after ``ValueError`` or
-    ``IntegrityError``. A sentence such as "already exists" is not
-    read. Another row with this ticker selects the ticker message.
-    Another row with this name selects the name message. Anything
-    else is the generic constraint message.
+    ``IntegrityError``. The session is rolled back first so a failed
+    insert does not stay pending, and so a later name lookup can run.
 
-    TODO(#75): map ``DuplicateTickerError.code`` (``duplicate_ticker``)
-    and ``DuplicateIsinError.code`` (``duplicate_isin``) once those
-    ``ValueError`` subclasses exist in
-    ``app.repositories.company_errors``. This row lookup stays until
-    that pull request is on master. Do not match the exception text.
+    ``duplicate_ticker`` and ``duplicate_isin`` select those fields
+    even when this transaction cannot see the other row (the other
+    insert won the race and is not visible as a stored row yet).
+    A duplicate name has no code, so that case still looks for
+    another row with this name. Anything else, including a sentence
+    that says "already exists" on a plain ``ValueError``, is the
+    generic constraint message.
     """
     db.rollback()
-    if _row_with_value(db, CompanyDB.ticker, model.ticker, exclude_id):
-        key = "error.duplicate_ticker"
-        invalid = ("ticker",)
-    elif _row_with_value(db, CompanyDB.name, model.name, exclude_id):
+    mapped = _duplicate_field(error)
+    if mapped is not None:
+        key, field = mapped
+        invalid = (field,)
+    elif _other_row_has_name(db, model.name, exclude_id):
         key = "error.duplicate_company"
         invalid = ("name",)
     else:
@@ -416,9 +448,9 @@ def create_company(
     }
     try:
         row = _save_company(db, model, update=False, company_id=None)
-    except (ValueError, IntegrityError):
+    except (ValueError, IntegrityError) as error:
         return _company_save_failed(
-            request, db, model, values, exclude_id=None, **page
+            request, db, model, values, exclude_id=None, error=error, **page
         )
     return _see_other(f"/ui/instruments/{row.id}")
 
@@ -463,9 +495,15 @@ def update_company(
         return _company_invalid(request, values, errors, form_error, **page)
     try:
         saved = _save_company(db, model, update=True, company_id=row.id)
-    except (ValueError, IntegrityError):
+    except (ValueError, IntegrityError) as error:
         return _company_save_failed(
-            request, db, model, values, exclude_id=row.id, **page
+            request,
+            db,
+            model,
+            values,
+            exclude_id=row.id,
+            error=error,
+            **page,
         )
     if saved is None:
         return _not_found(request)

@@ -13,7 +13,12 @@ from urllib.parse import urlsplit
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.models.company import normalize_name
 from app.models.database_models import CompanyDB, FinancialMetricsDB
+from app.repositories.company_errors import (
+    DuplicateIsinError,
+    DuplicateTickerError,
+)
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
@@ -223,18 +228,31 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
             catalog_key_for_repository_error(ValueError(message))
             == "error.constraint"
         )
+    # Accepted names are stored exactly as normalize_name stores
+    # them. A format character beside a letter is kept. Controls
+    # that remain only at the ends are kept too.
+    accepted_names = (
+        "  Kept\n",
+        "\u00a0Kept\u3000",
+        "\u200bKept\u200b",
+        "\u200b Kept",
+        "\x00Kept\x7f",
+        "A\u200bB",
+        "e\u0301",
+        "A\u093e",
+        "A\u20dd",
+        "  भारतीय स्टेट बैंक  ",
+        "مصرف الراجحي",
+        "همراه\u200cاول",
+    )
+    for accepted in accepted_names:
+        assert normalized_company_name(accepted) == normalize_name(accepted)
     assert normalized_company_name("  Kept\n") == "Kept"
-    assert normalized_company_name("\u00a0Kept\u3000") == "Kept"
-    assert normalized_company_name("\u200bKept\u200b") == "Kept"
-    assert normalized_company_name("\u200b Kept") == "Kept"
-    assert normalized_company_name("\x00Kept\x7f") == "Kept"
-    assert normalized_company_name("A\u200bB") == "A\u200bB"
-    assert normalized_company_name("e\u0301") == "e\u0301"
+    assert normalized_company_name("\u200bKept\u200b") == "\u200bKept\u200b"
     assert unicodedata.category("\u0301") == "Mn"
     assert unicodedata.category("\u093e") == "Mc"
     assert unicodedata.category("\u20dd") == "Me"
-    assert normalized_company_name("A\u093e") == "A\u093e"
-    assert normalized_company_name("A\u20dd") == "A\u20dd"
+    assert unicodedata.category("\u200c") == "Cf"
     assert normalized_company_name(None) is None
     for invisible in (
         "",
@@ -270,7 +288,9 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
             assert rejected is None
             assert field_errors["name"] == "error.required"
     kept = company_payload({"name": " \u200bKept\u200b "})
-    assert kept["name"] == "Kept"
+    assert kept["name"] == normalize_name(" \u200bKept\u200b ")
+    assert kept["name"] == "\u200bKept\u200b"
+    assert kept["isin"] is None
 
 
 @pytest.mark.asyncio
@@ -583,18 +603,47 @@ _DUPLICATE_MESSAGES = (
     "Company name or ticker already exists",
     "A company with this ticker already exists",
 )
+_TICKER_PL = "Istnieje już spółka o tym tickerze."
+_TICKER_EN = "A company with this ticker already exists."
+_ISIN_PL = "Istnieje już spółka o tym numerze ISIN."
+_ISIN_EN = "A company with this ISIN already exists."
+_CONSTRAINT_PL = "naruszają regułę unikalności"
+_APPLE_ISIN = "US0378331005"
+_OTHER_ISIN = "DE0007164600"
+
+
+def _stored_column(client, company_id, column):
+    session = client.app.state.testing_session_local()
+    try:
+        return getattr(session.get(CompanyDB, company_id), column)
+    finally:
+        session.close()
+
+
+def _assert_field_message(html, field, message):
+    """The sentence is the field error, and that input is invalid."""
+    assert message in html
+    assert f'id="field-{field}-error"' in html
+    assert f'href="#field-{field}"' in html
+    parsed = _parse_form(html)
+    invalid = [
+        control.get("name")
+        for control in parsed.controls
+        if control.get("aria-invalid") == "true"
+    ]
+    assert invalid == [field]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("message", _DUPLICATE_MESSAGES)
-async def test_duplicate_ticker_follows_the_stored_row_not_the_message(
+async def test_plain_value_error_is_not_read_as_a_duplicate_code(
     client, monkeypatch, message
 ):
-    """Create and update ignore the repository sentence.
+    """The sentence is not a code, even when the ticker row exists.
 
-    #75 raises a different ValueError for the same ticker collision.
-    The page looks for another row with that ticker, compared with
-    ``==`` after the write model uppercases it.
+    Create and update used to look the ticker up. A plain
+    ``ValueError`` now stays the generic constraint page. The
+    repository text is not copied into the HTML.
     """
     await _create(client, name="First Co", ticker="FIRST")
 
@@ -608,8 +657,9 @@ async def test_duplicate_ticker_follows_the_stored_row_not_the_message(
         {"name": "Other Co", "ticker": " first "},
     )
     assert created.status_code == 400
-    assert "Istnieje już spółka o tym tickerze." in created.text
+    assert _TICKER_PL not in created.text
     assert message not in created.text
+    assert _CONSTRAINT_PL in created.text
     assert _counts(client) == (1, 0)
 
     monkeypatch.undo()
@@ -625,19 +675,22 @@ async def test_duplicate_ticker_follows_the_stored_row_not_the_message(
         {"name": "Second Co", "ticker": "first"},
     )
     assert updated.status_code == 400
-    assert "Istnieje już spółka o tym tickerze." in updated.text
+    assert _TICKER_PL not in updated.text
     assert message not in updated.text
+    assert _CONSTRAINT_PL in updated.text
     assert _counts(client) == (2, 0)
 
 
 @pytest.mark.asyncio
-async def test_company_create_integrity_error_is_an_inline_duplicate(
+async def test_company_create_integrity_error_is_not_matched_by_text(
     client, monkeypatch
 ):
-    """IntegrityError from create is the ticker page when the row exists.
+    """A raw IntegrityError is the generic page, not the ticker field.
 
-    The repository re-raises the ticker unique failure. The form does
-    not read that message. It looks up the stored ticker.
+    The repository turns a unique-index failure into
+    ``DuplicateTickerError`` before the form sees it. A driver
+    sentence that names the ticker column is not read, and the form
+    does not look the ticker up.
     """
     await _create(client, name="First Co", ticker="FIRST")
 
@@ -655,8 +708,9 @@ async def test_company_create_integrity_error_is_an_inline_duplicate(
         {"name": "Other Co", "ticker": "FIRST"},
     )
     assert response.status_code == 400
-    assert "Istnieje już spółka o tym tickerze." in response.text
-    assert 'aria-invalid="true"' in response.text
+    assert _TICKER_PL not in response.text
+    assert "UNIQUE constraint failed" not in response.text
+    assert _CONSTRAINT_PL in response.text
     assert _counts(client) == (1, 0)
 
 
@@ -664,7 +718,7 @@ async def test_company_create_integrity_error_is_an_inline_duplicate(
 async def test_same_message_without_a_stored_ticker_is_not_a_duplicate(
     client, monkeypatch
 ):
-    """The #75 sentence alone does not select the ticker error."""
+    """The duplicate sentence alone does not select the ticker error."""
 
     def reject_create(self, company):
         raise ValueError("A company with this ticker already exists")
@@ -676,8 +730,161 @@ async def test_same_message_without_a_stored_ticker_is_not_a_duplicate(
         {"name": "Lonely Co", "ticker": "LONE"},
     )
     assert response.status_code == 400
-    assert "Istnieje już spółka o tym tickerze." not in response.text
-    assert "naruszają regułę unikalności" in response.text
+    assert _TICKER_PL not in response.text
+    assert _CONSTRAINT_PL in response.text
+    assert _counts(client) == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_ticker_and_isin_field_errors_in_both_languages(
+    client,
+):
+    """A real collision marks that field, in Polish and in English.
+
+    The form posts the ISIN. The repository raises
+    ``DuplicateTickerError`` or ``DuplicateIsinError``. The page
+    uses ``code``, not the English sentence, and not a second query.
+    """
+    await _create(
+        client,
+        name="First Co",
+        ticker="FIRST",
+        isin=_APPLE_ISIN,
+    )
+    polish_ticker = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Other Co", "ticker": "first", "isin": _OTHER_ISIN},
+    )
+    assert polish_ticker.status_code == 400
+    _assert_field_message(polish_ticker.text, "ticker", _TICKER_PL)
+    assert _ISIN_PL not in polish_ticker.text
+    assert _counts(client) == (1, 0)
+
+    client.cookies.set("ui_lang", "en")
+    english_ticker = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Other Co", "ticker": "FIRST", "isin": _OTHER_ISIN},
+    )
+    assert english_ticker.status_code == 400
+    _assert_field_message(english_ticker.text, "ticker", _TICKER_EN)
+    assert _TICKER_PL not in english_ticker.text
+    client.cookies.clear()
+
+    second_id, _data = await _create(
+        client,
+        name="Second Co",
+        ticker="SECOND",
+        isin=_OTHER_ISIN,
+    )
+    polish_isin = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Third Co", "ticker": "THIRD", "isin": "us0378331005"},
+    )
+    assert polish_isin.status_code == 400
+    _assert_field_message(polish_isin.text, "isin", _ISIN_PL)
+    assert _TICKER_PL not in polish_isin.text
+    assert 'value="us0378331005"' in polish_isin.text
+    assert _counts(client) == (2, 0)
+
+    client.cookies.set("ui_lang", "en")
+    english_isin = await _post(
+        client,
+        f"/ui/companies/{second_id}/edit",
+        {
+            "name": "Second Co",
+            "ticker": "SECOND",
+            "isin": _APPLE_ISIN,
+        },
+    )
+    assert english_isin.status_code == 400
+    _assert_field_message(english_isin.text, "isin", _ISIN_EN)
+    assert _stored_column(client, second_id, "isin") == _OTHER_ISIN
+    client.cookies.clear()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error_type", "field", "message"),
+    [
+        (DuplicateTickerError, "ticker", _TICKER_PL),
+        (DuplicateIsinError, "isin", _ISIN_PL),
+    ],
+)
+async def test_duplicate_code_without_a_stored_row_is_that_field(
+    client, monkeypatch, error_type, field, message
+):
+    """The code wins when the other row is not visible yet.
+
+    A race can raise the duplicate exception after this session has
+    looked and found nothing. The page still marks the field. The
+    exception text is not shown.
+    """
+
+    def reject_create(self, company):
+        raise error_type()
+
+    monkeypatch.setattr(CompanyRepository, "create", reject_create)
+    created = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Race Co", "ticker": "RACE", "isin": _APPLE_ISIN},
+    )
+    assert created.status_code == 400
+    _assert_field_message(created.text, field, message)
+    assert "already exists" not in created.text
+    assert _counts(client) == (0, 0)
+
+    monkeypatch.undo()
+    company_id, _data = await _create(client, name="Kept Co", ticker="KEPTCO")
+
+    def reject_update(self, company_id, company_update):
+        raise error_type()
+
+    monkeypatch.setattr(CompanyRepository, "update", reject_update)
+    updated = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "Kept Co", "ticker": "KEPTCO", "isin": _OTHER_ISIN},
+    )
+    assert updated.status_code == 400
+    _assert_field_message(updated.text, field, message)
+    assert "already exists" not in updated.text
+    assert _counts(client) == (1, 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "field", "message"),
+    [
+        ("duplicate_ticker", "ticker", _TICKER_PL),
+        ("duplicate_isin", "isin", _ISIN_PL),
+    ],
+)
+async def test_duplicate_code_attribute_maps_without_the_class(
+    client, monkeypatch, code, field, message
+):
+    """``code`` selects the field. The class and the text do not."""
+
+    class Coded(ValueError):
+        def __init__(self):
+            super().__init__("already exists in the driver text")
+            self.code = code
+
+    def reject_create(self, company):
+        raise Coded()
+
+    monkeypatch.setattr(CompanyRepository, "create", reject_create)
+    response = await _post(
+        client,
+        "/ui/companies",
+        {"name": "Coded Co", "ticker": "CODED", "isin": _APPLE_ISIN},
+    )
+    assert response.status_code == 400
+    _assert_field_message(response.text, field, message)
+    assert "driver text" not in response.text
     assert _counts(client) == (0, 0)
 
 
@@ -730,36 +937,54 @@ async def test_blank_company_name_is_422_in_both_languages(client, name):
 
 
 @pytest.mark.asyncio
-async def test_surrounding_space_is_stripped_from_the_stored_name(client):
-    """The form strips the name. The write model does not.
+async def test_stored_name_matches_normalize_name(client):
+    """Whitespace ends are stripped. A format character beside a letter stays.
 
-    Ends may also be a zero-width mark (Cf) or a control such as NUL.
-    Those are removed before the name is stored. A NUL between two
-    letters is a 422 instead, covered below.
+    ``normalize_name`` does not peel Cf or Cc off the ends. The form
+    stores that same string. A NUL between two letters is a 422,
+    covered below.
     """
-    company_id, _data = await _create(
-        client, name="\ufeff\x00  Kept Name  \u200b\n", ticker="KEPTNM"
-    )
-    session = client.app.state.testing_session_local()
-    try:
-        stored = session.get(CompanyDB, company_id).name
-    finally:
-        session.close()
-    assert stored == "Kept Name"
+    raw = "\n  Kept Name\u3000"
+    assert normalize_name(raw) == "Kept Name"
+    company_id, _data = await _create(client, name=raw, ticker="KEPTNM")
+    assert _stored_column(client, company_id, "name") == "Kept Name"
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert "Kept Name" in detail.text
+    edited = "\u200bEdited Name\u200b"
+    assert normalize_name(edited) == edited
     updated = await _post(
         client,
         f"/ui/companies/{company_id}/edit",
-        {"name": "\n  Edited Name\u3000", "ticker": "KEPTNM"},
+        {"name": edited, "ticker": "KEPTNM"},
     )
     assert updated.status_code == 303
-    session = client.app.state.testing_session_local()
-    try:
-        stored = session.get(CompanyDB, company_id).name
-    finally:
-        session.close()
-    assert stored == "Edited Name"
+    assert _stored_column(client, company_id, "name") == edited
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raw", "ticker"),
+    [
+        ("  भारतीय स्टेट बैंक  ", "HINDI"),
+        ("مصرف الراجحي", "ARABIC"),
+        ("  همراه\u200cاول  ", "PERSIAN"),
+    ],
+)
+async def test_names_in_other_scripts_match_normalize_name(
+    client, raw, ticker
+):
+    """Hindi, Arabic, and Persian with ZWNJ are stored like the model.
+
+    ZWNJ (U+200C) is a format character. The form keeps it between
+    the Persian letters instead of stripping it or rejecting the name.
+    """
+    expected = normalize_name(raw)
+    assert normalized_company_name(raw) == expected
+    assert expected
+    company_id, _data = await _create(client, name=raw, ticker=ticker)
+    assert _stored_column(client, company_id, "name") == expected
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert expected in detail.text
 
 
 @pytest.mark.asyncio
