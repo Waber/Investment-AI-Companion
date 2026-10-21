@@ -27,13 +27,17 @@
   isort, and flake8 passed on `app/ui/view_models.py`,
   `tests/test_ui_pages.py`, and `tests/test_ui_forms.py`.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
-  GitHub Actions is not recorded yet.
+  GitHub Actions on `d6cd957` succeeded
+  ([run 39563358213](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563358213)).
+  SQLite job `119099622496`: 1466 passed, 124 deselected,
+  coverage 96.05%. PostgreSQL job `119099622586`: 124 passed,
+  1466 deselected.
 - AI model: Grok 4.7. Account usage was not available in this session.
-- Time tracking (UTC): 2026-10-21 about 07:32 to 07:38.
-- Next: open the pull request against master and wait for both
-  GitHub Actions jobs. The owner reviews and merges with
-  "Rebase and merge". Agents do not merge. PR #83 can merge
-  before or after this one.
+- Time tracking (UTC): 2026-10-21 about 07:32 to 07:41.
+- Next: the owner reviews
+  [PR #84](https://github.com/Waber/Investment-AI-Companion/pull/84)
+  and merges with "Rebase and merge". Agents do not merge.
+  PR #83 can merge before or after this one.
 
 ## 2026-10-21 - Map duplicate codes and align the company name (#80)
 
