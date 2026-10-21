@@ -17,6 +17,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utc_datetime import UTCDateTime
+from app.models.watchlist import WATCHLIST_LABEL_MAX_LENGTH
 
 
 class CompanyDB(Base):
@@ -104,6 +105,17 @@ class CompanyDB(Base):
         back_populates="company",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    # One watchlist row per company. Deleting the company deletes that
+    # row. passive_deletes leaves the DELETE to the database: the
+    # foreign key is ON DELETE CASCADE, so the session does not load
+    # the watchlist row just to remove it.
+    watchlist_item = relationship(
+        "WatchlistItemDB",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
     )
 
     # Database constraints
@@ -286,5 +298,43 @@ class PriceBarDB(Base):
         CheckConstraint(
             "volume >= 0",
             name="ck_price_bars_volume_gte_zero",
+        ),
+    )
+
+
+class WatchlistItemDB(Base):
+    """One company on the single v1 watchlist.
+
+    ``company_id`` is unique, so adding the same company again is the
+    same row. ``added_at`` is an aware UTC instant. ``label`` is an
+    optional short note. The foreign key uses ON DELETE CASCADE, and
+    ``CompanyDB.watchlist_item`` sets ``passive_deletes`` so a company
+    delete does not load this row first.
+    """
+
+    __tablename__ = "watchlist_items"
+
+    # No index=True. The primary key is already an index, and a second
+    # one would be ix_watchlist_items_id. Lookups use company_id, which
+    # the unique constraint indexes.
+    id = Column(Integer, primary_key=True)
+    company_id = Column(
+        Integer,
+        ForeignKey(
+            "companies.id",
+            name="fk_watchlist_items_company_id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    added_at = Column(UTCDateTime(), nullable=False)
+    label = Column(String(WATCHLIST_LABEL_MAX_LENGTH), nullable=True)
+
+    company = relationship("CompanyDB", back_populates="watchlist_item")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            name="uq_watchlist_items_company_id",
         ),
     )

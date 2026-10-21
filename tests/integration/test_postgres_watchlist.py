@@ -1,0 +1,276 @@
+"""Watchlist revision and repository behavior on PostgreSQL.
+
+The public schema stays on create_all. Migration checks use their own
+schema and drop it when they finish.
+"""
+
+from pathlib import Path
+
+import pytest
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
+
+from alembic import command
+from app.core.database import Base
+from tests.company_migration import upgrade_head
+from tests.watchlist_checks import (
+    assert_add_is_idempotent_and_keeps_the_first_label,
+    assert_company_update_leaves_the_watchlist_row,
+    assert_list_orders_by_added_at_then_id,
+    assert_missing_company_is_raised_outside_the_handler,
+    assert_race_returns_the_existing_row,
+    assert_remove_is_bool_and_company_delete_cascades,
+)
+from tests.watchlist_migration import (
+    ROOT,
+    _config,
+    assert_autogenerate_is_empty,
+    assert_rendered_revision_is_empty,
+    downgrade_to,
+    prepare_legacy,
+    watchlist_diffs,
+    watchlist_structure,
+)
+
+pytestmark = pytest.mark.integration
+
+SCHEMA = "watchlist_migration"
+
+
+def _scratch(connection, schema):
+    connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+    connection.execute(text(f"CREATE SCHEMA {schema}"))
+    connection.execute(text(f"SET search_path TO {schema}"))
+    connection.commit()
+
+
+def _drop_scratch(connection, schema):
+    connection.rollback()
+    connection.execute(text("SET search_path TO public"))
+    connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+    connection.commit()
+
+
+def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
+    with postgres_engine.connect() as connection:
+        _scratch(connection, SCHEMA)
+        try:
+            prepare_legacy(connection)
+            connection.commit()
+            upgrade_head(connection)
+            assert "watchlist_items" in inspect(connection).get_table_names()
+            connection.execute(
+                text(
+                    "INSERT INTO watchlist_items "
+                    "(company_id, added_at, label) "
+                    "VALUES (1, '2024-01-02 00:00:00+00', 'core')"
+                )
+            )
+            connection.commit()
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    text(
+                        "INSERT INTO watchlist_items (company_id, added_at) "
+                        "VALUES (1, '2024-02-02 00:00:00+00')"
+                    )
+                )
+            connection.rollback()
+            connection.execute(text(f"SET search_path TO {SCHEMA}"))
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    text(
+                        "INSERT INTO watchlist_items (company_id, added_at) "
+                        "VALUES (999, '2024-02-02 00:00:00+00')"
+                    )
+                )
+            connection.rollback()
+            connection.execute(text(f"SET search_path TO {SCHEMA}"))
+            connection.execute(text("DELETE FROM companies WHERE id = 1"))
+            connection.commit()
+            remaining = connection.execute(
+                text("SELECT COUNT(*) FROM watchlist_items")
+            ).scalar()
+            assert remaining == 0
+
+            connection.execute(
+                text(
+                    "INSERT INTO companies "
+                    "(id, name, ticker, instrument_type) "
+                    "VALUES (1, 'Apple', 'AAPL', 'STOCK')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO watchlist_items (company_id, added_at) "
+                    "VALUES (1, '2024-03-01 00:00:00+00')"
+                )
+            )
+            connection.commit()
+            downgrade_to(connection, "0001")
+            assert (
+                "watchlist_items" not in inspect(connection).get_table_names()
+            )
+            assert (
+                connection.execute(
+                    text("SELECT ticker FROM companies WHERE id = 1")
+                ).scalar()
+                == "AAPL"
+            )
+            upgrade_head(connection)
+            assert "watchlist_items" in inspect(connection).get_table_names()
+            assert (
+                connection.execute(
+                    text("SELECT COUNT(*) FROM watchlist_items")
+                ).scalar()
+                == 0
+            )
+            assert watchlist_diffs(connection) == []
+        finally:
+            _drop_scratch(connection, SCHEMA)
+
+
+def test_migrated_postgresql_watchlist_matches_the_model(postgres_engine):
+    schema = "watchlist_migration_match"
+    with postgres_engine.connect() as public:
+        public.execute(text("SET search_path TO public"))
+        from_model = watchlist_structure(public)
+
+    with postgres_engine.connect() as connection:
+        _scratch(connection, schema)
+        try:
+            prepare_legacy(connection)
+            connection.commit()
+            upgrade_head(connection)
+            from_migration = watchlist_structure(connection)
+            assert from_migration == from_model
+            ondelete = from_model["foreign_keys"][0][4]
+            assert ondelete is not None
+            assert ondelete.upper() == "CASCADE"
+        finally:
+            _drop_scratch(connection, schema)
+
+
+def test_autogenerate_against_postgresql_watchlist_is_empty(postgres_engine):
+    schema = "watchlist_autogen"
+    written = None
+    with postgres_engine.connect() as connection:
+        _scratch(connection, schema)
+        try:
+            Base.metadata.create_all(bind=connection)
+            connection.execute(text("DROP TABLE watchlist_items"))
+            connection.commit()
+            config = _config(connection)
+            command.stamp(config, "0001")
+            upgrade_head(connection)
+            assert_autogenerate_is_empty(connection)
+            script = command.revision(
+                config,
+                message="empty check",
+                autogenerate=True,
+                rev_id="9996",
+            )
+            written = Path(script.path)
+            source = written.read_text()
+        finally:
+            if written is not None and written.exists():
+                written.unlink()
+            _drop_scratch(connection, schema)
+
+    assert_rendered_revision_is_empty(source)
+    assert not (ROOT / "alembic" / "versions" / "9996_empty_check.py").exists()
+
+
+def _session(postgres_session_factory):
+    return postgres_session_factory()
+
+
+def test_add_is_idempotent_on_postgresql(postgres_session_factory):
+    session = _session(postgres_session_factory)
+    try:
+        assert_add_is_idempotent_and_keeps_the_first_label(session)
+    finally:
+        session.close()
+
+
+def test_race_returns_the_existing_row_on_postgresql(
+    postgres_session_factory, monkeypatch
+):
+    session = _session(postgres_session_factory)
+    try:
+        assert_race_returns_the_existing_row(monkeypatch, session)
+    finally:
+        session.close()
+
+
+def test_missing_company_is_raised_outside_the_handler_on_postgresql(
+    postgres_session_factory,
+):
+    session = _session(postgres_session_factory)
+    try:
+        assert_missing_company_is_raised_outside_the_handler(session)
+    finally:
+        session.close()
+
+
+def test_list_orders_by_added_at_then_id_on_postgresql(
+    postgres_session_factory,
+):
+    session = _session(postgres_session_factory)
+    try:
+        assert_list_orders_by_added_at_then_id(session)
+    finally:
+        session.close()
+
+
+def test_remove_and_cascade_on_postgresql(postgres_session_factory):
+    session = _session(postgres_session_factory)
+    try:
+        assert_remove_is_bool_and_company_delete_cascades(session)
+    finally:
+        session.close()
+
+
+def test_company_update_leaves_the_watchlist_row_on_postgresql(
+    postgres_session_factory,
+):
+    session = _session(postgres_session_factory)
+    try:
+        assert_company_update_leaves_the_watchlist_row(session)
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_watchlist_api_on_postgresql(postgres_client):
+    missing = await postgres_client.post(
+        "/api/v1/watchlist/", json={"company_id": 999}
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Company not found"
+
+    created_company = await postgres_client.post(
+        "/api/v1/companies/",
+        json={"name": "Pg Co", "ticker": "PGCO"},
+    )
+    assert created_company.status_code == 201
+    company_id = created_company.json()["id"]
+
+    created = await postgres_client.post(
+        "/api/v1/watchlist/",
+        json={"company_id": company_id, "label": "  core  "},
+    )
+    assert created.status_code == 201
+    assert created.json()["label"] == "core"
+    again = await postgres_client.post(
+        "/api/v1/watchlist/",
+        json={"company_id": company_id, "label": "other"},
+    )
+    assert again.status_code == 200
+    assert again.json()["id"] == created.json()["id"]
+    assert again.json()["label"] == "core"
+
+    deleted = await postgres_client.delete(f"/api/v1/companies/{company_id}")
+    assert deleted.status_code == 204
+    listed = await postgres_client.get("/api/v1/watchlist/")
+    assert listed.status_code == 200
+    assert listed.json() == []
