@@ -94,3 +94,7 @@ def test_autogenerate_imports_utc_datetime(tmp_path):
     assert "from app.core.utc_datetime import UTCDateTime" in source
     assert "UTCDateTime(timezone=True)" in source
     assert "app.core.utc_datetime.UTCDateTime" not in source
+    # PriceAmount is not imported in a migration. The column is the
+    # numeric type Alembic already knows how to render.
+    assert "sa.Numeric(20, 8)" in source
+    assert "PriceAmount" not in source

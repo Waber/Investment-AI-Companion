@@ -270,3 +270,76 @@ def test_upgraded_sqlite_rejects_each_candle_violation(
             == "AAPL"
         )
     engine.dispose()
+
+
+def _legacy_company(connection):
+    connection.execute(text(LEGACY_COMPANIES))
+    connection.execute(text(LEGACY_METRICS))
+    connection.execute(
+        text(
+            "INSERT INTO companies (id, name, ticker) "
+            "VALUES (1, 'Apple', 'AAPL')"
+        )
+    )
+
+
+def test_oversized_legacy_prices_abort_the_sqlite_upgrade(tmp_path):
+    """A price outside Numeric(20, 8) stops 0006 before any rewrite.
+
+    SQLite would otherwise store 1e12 and 1e20 as text the API then
+    skips, and ``1e20`` can become ``1.0e+20``, which ``quantize``
+    cannot parse. ``sqlite3`` writes NaN as NULL, so this row set is
+    1e12, 1e20, and infinity. The good bar is not in the message.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'oversized.db'}")
+    with engine.begin() as connection:
+        _legacy_company(connection)
+    with engine.connect() as connection:
+        upgrade_to(connection, "0005")
+        connection.execute(
+            text(
+                "INSERT INTO price_bars ("
+                "id, instrument_id, bar_date, open_price, high_price, "
+                "low_price, close_price, volume, currency, source, "
+                "retrieved_at) VALUES "
+                "(1, 1, '2024-01-02', 10.5, 10.5, 10.5, 10.5, 1, "
+                "'USD', 'ok', '2024-01-02 00:00:00'), "
+                "(2, 1, '2024-01-03', 1000000000000, 1000000000000, "
+                "1000000000000, 1000000000000, 1, 'USD', 'edge', "
+                "'2024-01-03 00:00:00'), "
+                "(3, 1, '2024-01-04', 1e20, 1e20, 1e20, 1e20, 1, "
+                "'USD', 'huge', '2024-01-04 00:00:00'), "
+                "(4, 1, '2024-01-05', 1e999, 1e999, 1e999, 1e999, 1, "
+                "'USD', 'inf', '2024-01-05 00:00:00')"
+            )
+        )
+        connection.commit()
+        before = connection.execute(
+            text("SELECT id, open_price FROM price_bars ORDER BY id")
+        ).all()
+
+    with pytest.raises(RuntimeError) as error:
+        with engine.connect() as connection:
+            upgrade_to(connection, "head")
+
+    assert type(error.value).__name__ == "OversizedPricesError"
+    message = str(error.value)
+    assert message == (
+        "price_bars ids 2, 3, 4 have a price outside Numeric(20, 8) "
+        "or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
+    with engine.connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar()
+            == "0005"
+        )
+        kind = _column_types(connection)["open_price"]
+        assert kind.startswith("FLOAT")
+        after = connection.execute(
+            text("SELECT id, open_price FROM price_bars ORDER BY id")
+        ).all()
+        assert after == before
+    engine.dispose()

@@ -6,6 +6,7 @@ from alembic import context
 from app.core.config import settings
 from app.core.utc_datetime import UTCDateTime
 from app.models.database_models import Base
+from app.models.price_amount import PriceAmount
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -33,19 +34,26 @@ target_metadata = Base.metadata
 
 
 def render_item(type_, obj, autogen_context):
-    """Teach autogenerate how to write a ``UTCDateTime`` column.
+    """Teach autogenerate how to write custom column types.
 
-    Without this hook the generated file contains
+    Without the ``UTCDateTime`` branch the generated file contains
     ``app.core.utc_datetime.UTCDateTime(timezone=True)``. Running
     that file raises ``NameError`` because the name ``app`` is not
     imported there. The short class name is valid once the import
     below is in the migration.
+
+    ``PriceAmount`` would be written the same way, as
+    ``app.models.price_amount.PriceAmount()``, and that name is not
+    imported either. The column is ``NUMERIC(20, 8)`` in a migration.
+    Alembic already imports ``sqlalchemy as sa``.
     """
     if type_ == "type" and isinstance(obj, UTCDateTime):
         autogen_context.imports.add(
             "from app.core.utc_datetime import UTCDateTime"
         )
         return "UTCDateTime(timezone=True)"
+    if type_ == "type" and isinstance(obj, PriceAmount):
+        return "sa.Numeric(20, 8)"
     return False
 
 

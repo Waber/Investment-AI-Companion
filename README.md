@@ -159,8 +159,10 @@ process stops before it serves and names the missing columns.
   applies revision `0001` (the columns, the
   `ck_companies_instrument_type` CHECK, and the `uq_companies_isin`
   unique index), revision `0002` (`price_bars`), and revision
-  `0003` (the `uq_companies_ticker` unique index). `0003` is the
-  head. `0003` stops when stored tickers collide after trim and
+  `0003` (the `uq_companies_ticker` unique index), then the later
+  revisions. `alembic heads` shows the current head, so this note
+  does not name a revision the next migration would make stale.
+  `0003` stops when stored tickers collide after trim and
   uppercase. The trim removes spaces, tabs, carriage returns, and
   line feeds, so `aapl`, `AAPL `, and a trailing tab are one
   collision. It names the stored text and does not rewrite or

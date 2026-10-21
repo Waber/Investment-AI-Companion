@@ -1,5 +1,55 @@
 # Development Journal
 
+## 2026-10-21 - Review fixes on price bars (PR #94)
+
+- Scope: code review on #94 at `dc7d9b8` requested changes. The
+  fixes stay on `cursor/price-bar-followups-85-5c38`. Revision
+  `0006` still revises `0005`. The pull request stays ready.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: `upgrade()` checks `price_bars` before it changes a
+  column. Any OHLC value with `abs >= 1e12`, or a value that is
+  not finite, raises `OversizedPricesError` and names the ids.
+  Nothing is rewritten. SQLite's driver stores NaN as NULL, so
+  that engine's test uses `1e12`, `1e20`, and infinity.
+  PostgreSQL also inserts NaN and negative infinity. The default
+  source still uses the latest `retrieved_at`. Sources that share
+  that instant are ordered with Python `max`, which compares
+  code points, so `fake` beats `[IAC-DEMO-V2]` on every collation.
+  A `ValueError` from the price column arrives as
+  `StatementError`. `IntegrityError` is still handled first.
+  The other statement errors roll back and raise
+  `Price bar could not be stored` outside the handler, so the
+  message has no SQL and no parameters. `upsert_many` reloads
+  the flushed rows with one `SELECT ... WHERE id IN (...)`.
+  The rollback tests patch that reload. A skip warning is logged
+  once per bar id per process, in the repository and in the API.
+  Putting skipped bars in the response stays a follow-up.
+  Autogenerate renders `PriceAmount` as `sa.Numeric(20, 8)`.
+  README and `docs/api-demo.md` say to run `alembic heads`
+  instead of naming `0003` as the head. The API demo says to
+  parse price strings with `Decimal`, not float math. The
+  migration docstring notes that PostgreSQL `ROUND` is half away
+  from zero while the app uses half-even (at most `1e-8` on a
+  legacy row), and that a float keeps about 15 significant
+  digits. `docs/work-state.md` keeps this section only. The
+  older snapshots are already in this journal.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. No live market-data calls. Scoped black, isort, and
+  flake8 passed on the Python this change touches. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1712 passed, 214 deselected, coverage 96.34%
+  (4306 statements, 131 miss, 1184 branches, 54 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 214 passed, 1712 deselected. The Actions run id is
+  recorded on the pull request after both jobs are green. This
+  commit is the review fix, not a CI note.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-21 about 18:06 to 18:22.
+- Next: both GitHub Actions jobs on this head. The pull request
+  stays ready for review. Agents do not merge.
+
 ## 2026-10-21 - Re-chain price bars onto revision 0005
 
 - Scope: #91 has merged. `origin/master` is `1223be6`, whose
