@@ -35,7 +35,9 @@ def require_company_instrument_columns(db_engine) -> None:
         + " and ".join(missing)
         + ". An Alembic-managed database runs `alembic upgrade head`. "
         "A database created by an older startup create_all needs that "
-        "upgrade, or the columns added. "
+        "upgrade. Adding the columns by hand skips the "
+        "ck_companies_instrument_type CHECK, the uq_companies_isin "
+        "unique index, and `alembic stamp head`. "
         "A fresh create_all database already has the columns: "
         "run `alembic stamp head`, not `alembic upgrade head`."
     )

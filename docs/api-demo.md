@@ -84,11 +84,17 @@ stored.
 An existing database does not gain these columns by itself. Startup
 creates missing tables and then refuses to serve when `companies`
 exists without `instrument_type` or `isin`. An Alembic-managed
-database runs `alembic upgrade head`. A database created by an older
-startup `create_all` needs that upgrade, or the columns added. A
-fresh `create_all` database already has the columns: run
-`alembic stamp head`, not `alembic upgrade head`.
+database runs `alembic upgrade head` (revision `0001` for these
+columns, the `ck_companies_instrument_type` CHECK, and the
+`uq_companies_isin` unique index, then revision `0002` for the
+`uq_companies_ticker` unique index). A database created by an older
+startup `create_all` needs that upgrade. Adding the columns by hand
+skips the CHECK, the `uq_companies_isin` unique index, and
+`alembic stamp head`. A fresh `create_all` database already has the
+columns: run `alembic stamp head`, not `alembic upgrade head`.
 
+The same company name may be stored on two tickers, on create and on
+update. `BRK.A` and `BRK.B` can both be named Berkshire Hathaway.
 A duplicate ticker or ISIN is 400. `detail` stays a plain string.
 `code` is an extra field for form mapping (`duplicate_ticker` or
 `duplicate_isin`). Create and update use the same sentence. The

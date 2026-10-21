@@ -515,6 +515,9 @@ def test_old_companies_table_fails_fast_on_postgresql(postgres_engine):
         assert "isin" in message
         assert "alembic upgrade head" in message
         assert "alembic stamp head" in message
+        assert "ck_companies_instrument_type" in message
+        assert "uq_companies_isin" in message
+        assert "or the columns added" not in message
     finally:
         with postgres_engine.begin() as connection:
             connection.execute(text("DROP TABLE companies"))

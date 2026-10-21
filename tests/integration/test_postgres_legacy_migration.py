@@ -5,15 +5,22 @@ when it finishes, including the Alembic version table.
 """
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from app.core.database import Base
+from app.core.init_db import require_company_instrument_columns
+from scripts.check_duplicate_tickers import DuplicateTickersError
 from tests.company_migration import (
     EXPECTED_ISIN_UNIQUENESS,
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_base,
+    downgrade_to,
     isin_uniqueness,
+    metadata_diff,
+    stamp,
+    ticker_uniqueness,
     upgrade_head,
 )
 
@@ -46,6 +53,7 @@ def test_upgrade_sets_stock_on_postgresql(postgres_engine):
             connection.commit()
 
             upgrade_head(connection)
+            require_company_instrument_columns(connection)
             stored = connection.execute(
                 text(
                     "SELECT instrument_type, isin "
@@ -139,6 +147,7 @@ def test_model_and_migration_use_the_same_isin_uniqueness(postgres_engine):
     with postgres_engine.connect() as public:
         public.execute(text("SET search_path TO public"))
         from_model = isin_uniqueness(public)
+        ticker_from_model = ticker_uniqueness(public)
 
     with postgres_engine.connect() as connection:
         connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
@@ -152,8 +161,134 @@ def test_model_and_migration_use_the_same_isin_uniqueness(postgres_engine):
             upgrade_head(connection)
             from_migration = isin_uniqueness(connection)
             assert from_model == from_migration == EXPECTED_ISIN_UNIQUENESS
+            assert ticker_uniqueness(connection) == ticker_from_model
+            assert ticker_from_model == (
+                (("uq_companies_ticker", True, ("ticker",)),),
+                (),
+            )
         finally:
             connection.rollback()
             connection.execute(text("SET search_path TO public"))
             connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
             connection.commit()
+
+
+def _scratch(postgres_engine, schema):
+    connection = postgres_engine.connect()
+    connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+    connection.execute(text(f"CREATE SCHEMA {schema}"))
+    connection.execute(text(f"SET search_path TO {schema}"))
+    connection.commit()
+    return connection
+
+
+def _drop_scratch(connection, schema):
+    connection.rollback()
+    connection.execute(text("SET search_path TO public"))
+    connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+    connection.commit()
+    connection.close()
+
+
+def test_duplicate_tickers_stop_the_upgrade_on_postgresql(postgres_engine):
+    schema = "company_duplicate_tickers"
+    connection = _scratch(postgres_engine, schema)
+    try:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id integer PRIMARY KEY, "
+                "name varchar(255) NOT NULL, "
+                "ticker varchar(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) VALUES "
+                "(1, 'One', 'DUP'), (2, 'Two', 'DUP')"
+            )
+        )
+        connection.commit()
+        with pytest.raises(DuplicateTickersError) as error:
+            upgrade_head(connection)
+        assert "DUP (2 rows)" in str(error.value)
+        connection.rollback()
+        connection.execute(text(f"SET search_path TO {schema}"))
+        indexes = {
+            index["name"]
+            for index in inspect(connection).get_indexes("companies")
+        }
+        assert "uq_companies_ticker" not in indexes
+        rows = (
+            connection.execute(
+                text("SELECT ticker FROM companies ORDER BY id")
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == ["DUP", "DUP"]
+    finally:
+        _drop_scratch(connection, schema)
+
+
+def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
+    schema = "company_round_trip"
+    connection = _scratch(postgres_engine, schema)
+    try:
+        connection.execute(text(LEGACY_COMPANIES))
+        connection.execute(text(LEGACY_METRICS))
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) "
+                "VALUES (1, 'Apple', 'AAPL')"
+            )
+        )
+        connection.commit()
+        upgrade_head(connection)
+        require_company_instrument_columns(connection)
+        assert ticker_uniqueness(connection)[1] == ()
+        downgrade_base(connection)
+        upgrade_head(connection)
+        require_company_instrument_columns(connection)
+        stored = connection.execute(
+            text("SELECT ticker, instrument_type FROM companies WHERE id = 1")
+        ).one()
+        assert stored.ticker == "AAPL"
+        assert stored.instrument_type == "STOCK"
+        assert ("uq_companies_ticker", True, ("ticker",)) in ticker_uniqueness(
+            connection
+        )[0]
+    finally:
+        _drop_scratch(connection, schema)
+
+
+def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
+    schema = "company_ticker_rename"
+    connection = _scratch(postgres_engine, schema)
+    try:
+        Base.metadata.create_all(bind=connection)
+        connection.commit()
+        assert metadata_diff(connection) == []
+        connection.execute(text("DROP INDEX uq_companies_ticker"))
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX ix_companies_ticker "
+                "ON companies (ticker)"
+            )
+        )
+        connection.commit()
+        stamp(connection, "0001")
+        upgrade_head(connection)
+        require_company_instrument_columns(connection)
+        assert metadata_diff(connection) == []
+        assert ticker_uniqueness(connection) == (
+            (("uq_companies_ticker", True, ("ticker",)),),
+            (),
+        )
+        downgrade_to(connection, "0001")
+        assert ticker_uniqueness(connection) == (
+            (("ix_companies_ticker", True, ("ticker",)),),
+            (),
+        )
+    finally:
+        _drop_scratch(connection, schema)

@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from app.core.config import settings
+from app.core.utc_datetime import UTCDateTime
 from app.models.database_models import Base
 
 # this is the Alembic Config object, which provides
@@ -29,6 +30,23 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+
+def render_item(type_, obj, autogen_context):
+    """Teach autogenerate how to write a ``UTCDateTime`` column.
+
+    Without this hook the generated file contains
+    ``app.core.utc_datetime.UTCDateTime(timezone=True)``. Running
+    that file raises ``NameError`` because the name ``app`` is not
+    imported there. The short class name is valid once the import
+    below is in the migration.
+    """
+    if type_ == "type" and isinstance(obj, UTCDateTime):
+        autogen_context.imports.add(
+            "from app.core.utc_datetime import UTCDateTime"
+        )
+        return "UTCDateTime(timezone=True)"
+    return False
 
 
 def get_url():
@@ -57,6 +75,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_item=render_item,
     )
 
     with context.begin_transaction():
@@ -77,7 +96,9 @@ def run_migrations_online() -> None:
     connection = config.attributes.get("connection")
     if connection is not None:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            render_item=render_item,
         )
         with context.begin_transaction():
             context.run_migrations()
@@ -95,7 +116,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            render_item=render_item,
         )
 
         with context.begin_transaction():
