@@ -241,8 +241,10 @@ def catalog_instrument_type(value):
     ``CompanyDB.instrument_type`` is ``STOCK``, ``ETF``, or ``ETC``.
     The templates look up ``type.`` plus ``stock``, ``etf``, or
     ``etc``, and the list filter compares those same ids. A missing
-    value, or one outside the three names, is ``None`` so the page
-    can show "no data" instead of calling the row a stock.
+    value, or one outside the three names, is ``None``. A stored
+    row cannot be null: the column has a CHECK constraint and a
+    STOCK default, so the list and the detail page always print
+    one of those three words.
     ``InstrumentType`` is a ``str`` enum, so a member is accepted
     here too.
     """

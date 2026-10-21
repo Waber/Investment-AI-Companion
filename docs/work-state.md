@@ -214,11 +214,14 @@
   "Rebase and merge". Agents do not merge. The Frontend
   Developer still owns the `/ui` badge for `[IAC-DEMO-V2]`.
   ETF and ETC attributes stay on #28.
+
 ## Instrument type on the company forms (#34, part): 2026-10-21
 
 - Branch `cursor/ui-instrument-type-select`, based on
-  `origin/master` `a21d912`. Not merged. Refs #34. Does not
-  close the issue.
+  `origin/master` `a21d912`. PR #87 has not merged, so the
+  rebase had no doc conflict. Not merged. Refs #34. Does
+  not close the issue.
+  [PR #89](https://github.com/Waber/Investment-AI-Companion/pull/89).
 - Completed: an instrument-type select on the company create
   and edit forms. Options are the existing `InstrumentType`
   values. Labels are PL/EN catalog strings, Polish by
@@ -229,7 +232,14 @@
   `CompanyDB.instrument_type` and maps `STOCK`/`ETF`/`ETC`
   to `stock`/`etf`/`etc`. The list and the detail page show
   that label. A cross-origin create that posts a type is
-  still HTML 403. Models, schema, migrations, repositories,
+  still HTML 403. QA on `ce730e8`: a failed edit that omits
+  the type puts the stored type back into the re-rendered
+  values, so an ETF does not become STOCK when the ticker
+  is fixed. A control character is rejected before `strip`
+  (`ETF\n` is 422 and inserts nothing). `etf` and ` ETF `
+  store ETF. Spaces are omitted. The unreachable missing-data
+  branch for the type was removed from the detail page and
+  the list. Models, schema, migrations, repositories,
   services, collectors, scoring, and AI adapters were not
   changed.
 - Incomplete, and not part of this pull request: ETF/ETC
@@ -240,16 +250,15 @@
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1494 passed, 124 deselected, coverage 96.10%. Scoped
+  -> 1500 passed, 124 deselected, coverage 96.07%. Scoped
   black, isort, and flake8 passed. PostgreSQL was not run
-  locally. Browser check on `127.0.0.1:8765` covered create
-  (ETF), English edit, and the list after a change to ETC.
+  locally. The two bug tests failed before the fix.
 - Active agents: none. Blockers: none for this pull request.
   Account usage was not readable as a percentage in this
   session.
-- Next action: push the branch and open the pull request
-  against master. Wait for both GitHub Actions jobs. The
-  owner reviews. Agents do not merge.
+- Next action: PR #89 carries the QA commit. Wait for both
+  GitHub Actions jobs, then the owner reviews. Agents do
+  not merge.
 
 ## Synthetic badge source token: 2026-10-21
 
