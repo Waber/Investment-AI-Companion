@@ -14,7 +14,8 @@ What that does, in order:
 3. Checks that ``127.0.0.1`` and the chosen port are free. A second
    launch must not delete the live demo file and then fail to bind.
 4. Deletes that file unless ``--keep`` was passed, then seeds the
-   ``demo-v1`` fixture. Seeding again skips rows that are already there.
+   ``demo-v2`` fixture (stocks, ETFs, ETCs, and price bars). Seeding
+   again skips rows that are already there.
 5. Builds settings in code for that SQLite file, ``DATA_COLLECTOR=fake``,
    and loopback hosts. A ``DATABASE_URL`` in ``.env`` or in the shell is
    not used. A new ``SECRET_KEY`` is generated for this process even
@@ -370,7 +371,7 @@ def remove_database_files(path: Path) -> None:
 
 
 def seed_demo_database(plan: DemoPlan, *, reset: bool) -> dict:
-    """Create tables and seed ``demo-v1`` into this plan's file.
+    """Create tables and seed ``demo-v2`` into this plan's file.
 
     The guard runs again here so a caller cannot skip it. ``reset``
     deletes the file first, which is how a second run stays free of
@@ -382,9 +383,11 @@ def seed_demo_database(plan: DemoPlan, *, reset: bool) -> dict:
     if reset:
         remove_database_files(plan.database_path)
     plan.demo_dir.mkdir(parents=True, exist_ok=True)
-    from scripts.seed_demo import seed_sqlite_database
+    from scripts.seed_demo import load_demo_v2, seed_sqlite_database
 
-    return seed_sqlite_database(plan.database_url, apply=True)
+    return seed_sqlite_database(
+        plan.database_url, apply=True, fixture=load_demo_v2()
+    )
 
 
 def demo_asgi_app(plan: DemoPlan):
@@ -420,20 +423,26 @@ def format_status(plan: DemoPlan, summary: dict) -> str:
     """Text for the console. The secret is not included."""
     companies = summary["companies"]
     metrics = summary["metrics"]
+    prices = summary.get("prices") or {
+        "created": 0,
+        "skipped": 0,
+    }
     lines = [
         "Offline demo",
         f"Database: {plan.database_path}",
         "Collector: fake",
         (
-            f"Seeded {companies['created']} companies and "
-            f"{metrics['created']} metrics."
+            f"Seeded {companies['created']} companies, "
+            f"{metrics['created']} metrics, and "
+            f"{prices['created']} prices."
         ),
     ]
-    if companies["skipped"] or metrics["skipped"]:
+    if companies["skipped"] or metrics["skipped"] or prices["skipped"]:
         lines.append(
             "Already present: "
-            f"{companies['skipped']} companies and "
-            f"{metrics['skipped']} metrics."
+            f"{companies['skipped']} companies, "
+            f"{metrics['skipped']} metrics, and "
+            f"{prices['skipped']} prices."
         )
     lines.append(f"Open http://{plan.host}:{plan.port}{plan.open_path}")
     return "\n".join(lines) + "\n"
@@ -472,7 +481,7 @@ def _parse_args(argv: list[str] | None):
     parser = argparse.ArgumentParser(
         description=(
             "Start the offline demo: a fresh SQLite file under demo/, "
-            "the demo-v1 fixture, the fake collector, and a loopback server."
+            "the demo-v2 fixture, the fake collector, and a loopback server."
         )
     )
     mode = parser.add_mutually_exclusive_group()

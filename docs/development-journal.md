@@ -151,6 +151,66 @@
   merge. #80 stays open until QA, Security, and Code Review
   approve, and until the HTTPS cookie in #56.
 
+## 2026-10-21 - Price bars and the demo-v2 fixture (Refs #27)
+
+- Scope: store daily-or-weekly session prices with provenance, query
+  them by an inclusive date range, refresh them from the configured
+  collector, and seed `fixtures/demo-v2.json` through the existing
+  D2 command. Backend only. `templates/`, `static/`, and `app/ui/`
+  were not edited. ETF and ETC attribute columns stay on #28.
+  Issue #27 stays open: this pull request says Refs #27. A code
+  reviewer's approval is one of the issue's acceptance checks, and
+  the `/ui` synthetic badge still matches only `[IAC-DEMO-V1]`.
+- Decisions: `PriceBarDB.instrument_id` points at `companies.id`.
+  The companies table was not renamed. The API path is
+  `/api/v1/instruments/{id}/prices`, which is the name in the
+  issue. The unique key is instrument, session date, and source,
+  so a seeded `[IAC-DEMO-V2]` bar and a later `fake` refresh of
+  the same date both remain. A second refresh of the same source
+  updates that row. OHLC and volume stay null when the provider
+  omits them. They are never stored as zero. A high below the low
+  is rejected. The list has no pages: one response is the whole
+  range. `from` after `to` is 422. A missing instrument is 404.
+  An instrument with no bars is 200 and `[]`. Refresh uses
+  `get_collector()`. Provider failures are HTTP 502 with a fixed
+  sentence. The log records the exception class and the ticker,
+  not the provider's text. The collector's bars have no currency,
+  so refresh stores the instrument's currency, or `USD` when that
+  field is null. `POST` of one bar exists so the HTTP seeder can
+  insert. A duplicate key is 400 with a fixed sentence. The
+  seeder never updates or deletes. Alembic `0002` creates
+  `price_bars` after `0001`. `create_all` databases should be
+  stamped, not upgraded. The fixture is weekly Mondays from
+  2022-10-03 through 2026-09-28 (about four years). `DEMO_PL_EMPTY`
+  has no prices. `DEMO_JP_STABLE` ends on 2024-09-30, so it is
+  stale against `as_of` 2026-09-30. Currencies include PLN, USD,
+  EUR, and JPY. Every company description and every fixture price
+  source is `[IAC-DEMO-V2]`. Descriptions say the series is
+  synthetic and not market data. They do not say buy or sell.
+  `seed_demo` still defaults to demo-v1. `scripts/run_demo.py`
+  loads demo-v2. The fake collector still reads demo-v1, so a
+  refresh of `DEMO_ETF_GPW` or `DEMO_ETC_SILVER` finds no series.
+  `DEMO_ETF_WORLD` and `DEMO_ETC_GOLD` are in the fake profiles.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  SQLite CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1491 passed, 124 deselected, coverage 96.26%
+  (3503 statements, 111 miss, 940 branches, 39 partial).
+  PostgreSQL, `REQUIRE_POSTGRES=1` and
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  the CI flags plus `-m integration`: 124 passed, 1491 deselected.
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. Tests use the in-memory client, `FakeCollector`,
+  and stubs. No live market-data call. GitHub Actions is not
+  recorded in this entry yet.
+- AI model: Grok 4.7. Account usage was not available in this
+  session, so no usage percent was recorded.
+- Time tracking (UTC): 2026-10-21 about 06:46 to 07:10.
+- Next: push the branch, open the pull request with Refs #27,
+  and wait for both GitHub Actions jobs. The owner reviews.
+  Agents do not merge. The Frontend Developer still owns the
+  `/ui` badge for `[IAC-DEMO-V2]`.
+
 ## 2026-10-21 - Rebase the UI follow-up onto master after #75 and #78
 
 - Scope: rebase `cursor/ui-issue-80-forms-origin-5105` onto

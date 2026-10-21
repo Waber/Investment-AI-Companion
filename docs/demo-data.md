@@ -5,10 +5,14 @@
 > Provision a local API with the [IDE startup guide](ide-startup.md) first;
 > the old demo runtime is not guaranteed to survive cleanup.
 
-The versioned source is [demo-v1.json](../fixtures/demo-v1.json), not a download
-of real securities or financial statements. All names, tickers, exchanges, and
+The versioned sources are [demo-v1.json](../fixtures/demo-v1.json) and
+[demo-v2.json](../fixtures/demo-v2.json), not a download of real
+securities or financial statements. All names, tickers, exchanges, and
 amounts are invented. No data-provider keys or investment decisions are involved.
-This fixture is for API and UI testing; it is not a real portfolio.
+These fixtures are for API and UI testing; they are not a real portfolio.
+`demo-v1` is the older company-and-metrics file. `python -m scripts.run_demo`
+seeds `demo-v2`. `python -m scripts.seed_demo --fixture demo-v1` still
+seeds the older file.
 
 ## One command
 
@@ -20,8 +24,9 @@ python -m scripts.run_demo
 ```
 
 That creates a fresh SQLite file at `demo/investment_demo.db`
-(git-ignored), seeds this `demo-v1` fixture, selects the fake
-collector, and serves [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
+(git-ignored), seeds the `demo-v2` fixture (stocks, ETFs, ETCs, and
+weekly prices), selects the fake collector, and serves
+[http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
 The host is `127.0.0.1`. The command does not read `DATABASE_URL` from
 `.env` or from the shell, and it refuses any database that is not that
 SQLite file, including a `demo/` directory that is a symlink. It always
@@ -99,8 +104,49 @@ one quarterly record ending March 31, 2026: **six companies and 20 metric rows**
 The sixth company deliberately has no metrics. Annual and quarterly records
 should not be compared as equal-length periods. Monetary figures use each
 company's currency, not a common currency; there is no FX conversion. Optional
-ratios not supplied by this fixture remain null, not zero. This app currently
-models companies, not separate bond/ETF/ETC instrument types.
+ratios not supplied by this fixture remain null, not zero. The v1
+file does not set `instrument_type`. A company created from it is
+stored as `STOCK`.
+
+## demo-v2
+
+[demo-v2.json](../fixtures/demo-v2.json) is what `python -m scripts.run_demo`
+loads. The marker is `[IAC-DEMO-V2]`, on every company description and
+on every price `source`. The six v1 companies are stocks. Two synthetic
+ETFs (`DEMO_ETF_WORLD`, `DEMO_ETF_GPW`) and two synthetic ETCs
+(`DEMO_ETC_GOLD`, `DEMO_ETC_SILVER`) are added. ETF and ETC attribute
+columns (TER, issuer, and the rest) are issue #28 and are not in this
+file.
+
+Prices are weekly session dates (Mondays) from 2022-10-03 through
+2026-09-28, in the instrument's own currency. There is no FX
+conversion. `DEMO_PL_EMPTY` has no price bars, which is the missing
+series. `DEMO_JP_STABLE` stops on 2024-09-30 and its `retrieved_at`
+is that day, so the series is stale against the fixture `as_of` of
+2026-09-30. A missing open, high, low, close, or volume is null, not
+zero. The numbers are a closed-form curve, not a market.
+
+`GET /api/v1/instruments/{id}/prices?from=&to=` reads the stored bars.
+`from` and `to` are inclusive. `POST /api/v1/instruments/{id}/prices/refresh`
+upserts bars from the configured collector. With `DATA_COLLECTOR=fake`
+a second refresh does not insert a second copy of the same session.
+The currency on a refreshed bar is the currency stored on the
+instrument, because a collector bar has no currency of its own. The
+source and the retrieval time come from the collector's provenance.
+
+The `/ui` synthetic badge still matches `[IAC-DEMO-V1]` only. Rows
+seeded from demo-v2 are marked in the database, and the badge for
+that marker is a frontend change.
+
+Seed demo-v2 without the one-command demo:
+
+```bash
+python -m scripts.seed_demo --database-url "sqlite:///demo/investment_demo.db" --fixture demo-v2 --apply
+```
+
+A second `--apply` skips companies, metrics, and prices that are
+already stored. It does not update them. The price skip key is the
+instrument, the session date, and the source.
 
 ## Preview And Apply
 
@@ -129,9 +175,13 @@ fixture: that legacy seed uses a different dataset and skips nonempty databases.
 
 - The client creates only missing records; it never updates or deletes records.
 - Companies match by reserved ticker. Existing fixture companies must retain
-  the description prefix `[IAC-DEMO-V1]`; otherwise the client reports a
-  collision before writing. This avoids attaching fixture metrics to unrelated
-  companies using the same ticker. Leave that prefix when editing descriptions.
+  the description prefix of the fixture being applied (`[IAC-DEMO-V1]` or
+  `[IAC-DEMO-V2]`); otherwise the client reports a collision before writing.
+  This avoids attaching fixture metrics to unrelated companies using the
+  same ticker. Leave that prefix when editing descriptions.
+- demo-v2 prices match by instrument, session date, and source. A price
+  whose source is not `[IAC-DEMO-V2]` is not a fixture row and is left
+  in place.
 - Existing company fields and metric values are preserved. Financial rows
   match by company, period type, and UTC-equivalent period-end timestamp.
 - A second run fills only missing fixture rows; it does not restore edited

@@ -86,6 +86,47 @@
   Agents do not merge. #80 stays open until QA, Security, and
   Code Review approve, and until the HTTPS cookie in #56.
 
+## Price bars and demo-v2 (#27): 2026-10-21
+
+- Branch `cursor/pricebar-demo-v2-203d`, based on `origin/master`
+  `6d45f01`. Pull request not opened yet at the time of this
+  note. The body will say Refs #27. The issue stays open.
+- Completed: `price_bars` table (Alembic `0002`), `PriceBar`
+  models, repository range query and upsert, `GET` and `POST`
+  `/api/v1/instruments/{id}/prices`, and `POST .../prices/refresh`.
+  `fixtures/demo-v2.json` (10 companies, 20 metrics, 1777 weekly
+  bars). `seed_demo --fixture demo-v2` and `scripts/run_demo.py`
+  load it. Every seeded company description and every fixture
+  price source is `[IAC-DEMO-V2]`. The fixture test checks a
+  missing series (`DEMO_PL_EMPTY`), a stale series
+  (`DEMO_JP_STABLE`), and mixed currencies. Refreshing twice from
+  `FakeCollector` does not insert a second bar for the same
+  instrument, date, and source. `docs/demo-data.md` and
+  `docs/RUN_DEMO.md` describe the split: `run_demo` is demo-v2,
+  and the manual `seed_demo` steps stay demo-v1 unless
+  `--fixture demo-v2`.
+- Incomplete, and not in this change: ETF/ETC attribute columns
+  (#28). The `/ui` synthetic badge still matches only
+  `[IAC-DEMO-V1]` (`app/ui/view_models.py`). That file was not
+  edited. The Frontend Developer owns `templates/`, `static/`,
+  and `app/ui/`. Code Reviewer approval of #27 is still open.
+  The fake collector still serves demo-v1 price profiles.
+  `scripts/smoke_demo.py` was not changed. It is a generic CRUD
+  smoke. The in-process `run_demo` smoke covers demo-v2 prices.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. SQLite
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1491 passed, 124 deselected, coverage 96.26%. PostgreSQL
+  with `REQUIRE_POSTGRES=1`: 124 passed, 1491 deselected.
+  Scoped black, isort, and flake8 passed. GitHub Actions has
+  not run yet. No live market-data calls.
+- Active agents: none. Blockers: none for this pull request.
+  Account usage was not available in this session.
+- Next action: commit, push `cursor/pricebar-demo-v2-203d`, open
+  the pull request to `master` with Refs #27, then record both
+  GitHub Actions jobs. The owner reviews and rebase-merges.
+  Agents do not merge.
+
 ## UI forms follow-up (#80, part): 2026-10-20
 
 - Branch `cursor/ui-issue-80-forms-origin-5105`, rebased onto
