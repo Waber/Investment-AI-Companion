@@ -384,6 +384,23 @@ async def test_default_source_is_chosen_before_the_date_filter(client):
 
 
 @pytest.mark.asyncio
+async def test_unknown_source_is_an_empty_list(client):
+    """An unknown source is not a 404. The instrument exists.
+
+    The filter matches no rows, so the list is empty.
+    """
+    instrument_id = await _company(client, ticker="DEMO_UNKNOWN_SRC")
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    created = await client.post(path, json=_bar())
+    assert created.status_code == 201, created.text
+    missing = await client.get(path, params={"source": "not-a-source"})
+    assert missing.status_code == 200
+    assert missing.json() == []
+    stored = await client.get(path)
+    assert len(stored.json()) == 1
+
+
+@pytest.mark.asyncio
 async def test_collector_validation_error_is_a_fixed_502(client):
     """A ValidationError raised by the collector is not a 422.
 
