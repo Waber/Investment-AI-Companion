@@ -24,11 +24,11 @@ from tests.watchlist_migration import (
 
 
 def test_alembic_has_a_single_head():
-    """Notes continue the watchlist. One head, revision 0005."""
+    """Prices continue the notes revision. One head, revision 0006."""
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
     heads = script.get_heads()
     assert len(heads) == 1
-    assert heads[0] == "0005"
+    assert heads[0] == "0006"
 
 
 def test_upgrade_downgrade_upgrade_on_sqlite(tmp_path):
