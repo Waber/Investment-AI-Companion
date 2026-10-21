@@ -198,22 +198,23 @@ class CompanyRepository:
                 update_data["instrument_type"]
             )
 
-        # Handle special case for name and ticker uniqueness
-        if "name" in update_data or "ticker" in update_data:
-            new_name = update_data.get("name", db_company.name)
+        # The same name may be stored on two tickers (BRK.A and
+        # BRK.B). When the ticker or the ISIN is part of this update,
+        # create and update share ``_duplicate_error``. A name is not
+        # part of that check. Leaving both fields out does not look
+        # them up again.
+        if "ticker" in update_data or "isin" in update_data:
             new_ticker = update_data.get("ticker", db_company.ticker)
-            other = self._other_company_with_name_or_ticker(
-                company_id, new_name, new_ticker
+            new_isin = (
+                update_data["isin"]
+                if "isin" in update_data
+                else db_company.isin
             )
-            if other is not None:
-                if other.ticker == new_ticker:
-                    raise DuplicateTickerError()
-                raise ValueError("Company name or ticker already exists")
-
-        if update_data.get("isin") is not None:
-            taken = self.get_by_isin(update_data["isin"])
-            if taken is not None and taken.id != company_id:
-                raise DuplicateIsinError()
+            duplicate = _duplicate_error(
+                self, new_ticker, new_isin, exclude_id=company_id
+            )
+            if duplicate is not None:
+                raise duplicate
 
         # Update fields
         for field, value in update_data.items():
@@ -250,17 +251,6 @@ class CompanyRepository:
             raise duplicate from None
         raise ValueError("Update failed due to constraint violation") from None
 
-    def _other_company_with_name_or_ticker(self, company_id, name, ticker):
-        """Another row that already uses this name or this ticker."""
-        return (
-            self.db.query(CompanyDB)
-            .filter(
-                CompanyDB.id != company_id,
-                (CompanyDB.name == name) | (CompanyDB.ticker == ticker),
-            )
-            .first()
-        )
-
     def delete(self, company_id: int) -> bool:
         """
         Delete a company by ID.
@@ -283,20 +273,14 @@ class CompanyRepository:
     def is_unique(
         self, name: str, ticker: str, exclude_id: Optional[int] = None
     ) -> bool:
-        """
-        Check if company name and ticker are unique.
+        """Return True when ``ticker`` is not already stored.
 
-        Args:
-            name: Company name to check
-            ticker: Ticker symbol to check
-            exclude_id: Company ID to exclude from uniqueness check (for updates)
-
-        Returns:
-            bool: True if unique, False otherwise
+        ``name`` is accepted so older callers keep the same arguments.
+        It is not compared to stored rows. Two companies may share a
+        name when their tickers differ. ``exclude_id`` skips the row
+        being updated, so a company is not a duplicate of itself.
         """
-        query = self.db.query(CompanyDB).filter(
-            (CompanyDB.name == name) | (CompanyDB.ticker == ticker)
-        )
+        query = self.db.query(CompanyDB).filter(CompanyDB.ticker == ticker)
 
         if exclude_id:
             query = query.filter(CompanyDB.id != exclude_id)

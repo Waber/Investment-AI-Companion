@@ -582,15 +582,20 @@ async def test_duplicate_name_or_ticker_is_an_inline_400(client):
     )
     assert same_name.status_code == 303
     second_id = int(_location(same_name).rsplit("/", 1)[-1])
-    conflict = await _post(
+    shared_name = await _post(
         client,
         f"/ui/companies/{second_id}/edit",
         {"name": "First Co", "ticker": "SECOND"},
     )
-    assert conflict.status_code == 400
-    assert (
-        "Istnieje już spółka o tej nazwie lub tym tickerze." in conflict.text
-    )
+    assert shared_name.status_code == 303
+    assert _location(shared_name) == f"/ui/instruments/{second_id}"
+    session = client.app.state.testing_session_local()
+    try:
+        stored = session.get(CompanyDB, second_id)
+        assert stored.name == "First Co"
+        assert stored.ticker == "SECOND"
+    finally:
+        session.close()
     ticker_conflict = await _post(
         client,
         f"/ui/companies/{second_id}/edit",

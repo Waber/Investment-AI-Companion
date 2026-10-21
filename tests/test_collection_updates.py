@@ -179,21 +179,30 @@ async def test_missing_provider_data_preserves_entire_database(
 
 
 @pytest.mark.asyncio
-async def test_duplicate_name_refresh_preserves_records_and_allows_retry(
+async def test_refresh_may_reuse_another_companys_name(
     client, records, collector
 ):
-    companies, _ = records
-    collector.result["name"] = companies[1]["name"]
-    before = database_snapshot(client)
+    """Fetching ORIG may store the same name OTHER already has.
+
+    The ticker stays ORIG. The other row is not changed. A later
+    refresh can still replace that shared name.
+    """
+    companies, metrics = records
+    original, other = companies
+    collector.result["name"] = other["name"]
 
     response = await client.post(COLLECTION_URL, json={"ticker": "orig"})
 
-    assert response.status_code == 400, response.text
-    assert response.json()["detail"] == "Company name or ticker already exists"
-    assert collector.calls == ["ORIG"]
-    await assert_readback(client, *records)
-    assert database_snapshot(client) == before
+    assert response.status_code == 200, response.text
+    fetched = await client.get(f"/api/v1/companies/{original['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["name"] == other["name"]
+    assert fetched.json()["ticker"] == "ORIG"
+    unchanged = await client.get(f"/api/v1/companies/{other['id']}")
+    assert unchanged.json() == other
+    await assert_readback(client, [fetched.json(), other], metrics)
 
     collector.result = dict(PROVIDER_FIELDS)
+    before = database_snapshot(client)
     await assert_refresh(client, records, before)
     assert collector.calls == ["ORIG", "ORIG"]
