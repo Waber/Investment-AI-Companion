@@ -21,7 +21,12 @@ from app.core.utc_datetime import as_utc
 # comparison in ``to_instrument`` is case-sensitive and does not
 # strip the stored description.
 DEMO_MARKER = "[IAC-DEMO-"
-DEMO_SOURCE = "demo-v1"
+# Used when the marker has no short version token. A real token
+# becomes ``demo-`` plus that token, such as ``demo-v2``.
+DEMO_SOURCE = "demo"
+# ``V1`` and ``V2`` are two characters. Sixteen is enough for a
+# version word and too short for a pasted sentence.
+_DEMO_TOKEN_MAX_LENGTH = 16
 # Every current row is a company. #26 introduces stock, ETF, and ETC.
 COMPANY_INSTRUMENT_TYPE = "stock"
 # Required on every external website link the view-model approves.
@@ -201,6 +206,27 @@ def _period_view(row):
     )
 
 
+def demo_source_label(description):
+    """Return the source label for one synthetic description.
+
+    ``description`` already starts with ``[IAC-DEMO-``. The token
+    is the text from there to the next ``]``. It is kept only when
+    it is 1 to 16 ASCII letters or digits. The label is ``demo-``
+    plus that token in lowercase, so ``[IAC-DEMO-V2]`` is
+    ``demo-v2``. A missing ``]``, a space, a hyphen, or a longer
+    token uses the neutral label ``demo``.
+    """
+    marker_length = len(DEMO_MARKER)
+    rest = description[marker_length:]
+    end = rest.find("]")
+    if end < 1 or end > _DEMO_TOKEN_MAX_LENGTH:
+        return DEMO_SOURCE
+    token = rest[:end]
+    if not token.isascii() or not token.isalnum():
+        return DEMO_SOURCE
+    return "demo-" + token.lower()
+
+
 def to_instrument(company):
     """Map one company row and its metrics to an instrument view."""
     description = company.description
@@ -238,7 +264,7 @@ def to_instrument(company):
         industry=_text(company.industry),
         description=_text(description),
         website=website_view(company.website),
-        source=DEMO_SOURCE if is_synthetic else None,
+        source=demo_source_label(description) if is_synthetic else None,
         is_synthetic=is_synthetic,
         as_of=latest,
         annual=annual,

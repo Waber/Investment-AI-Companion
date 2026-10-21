@@ -1,5 +1,36 @@
 # Development Journal
 
+## 2026-10-21 - Demo source comes from the marker token
+
+- Scope: QA on PR #84, one low finding, before code review.
+  `DEMO_SOURCE` was the literal `demo-v1`, so a V2 row showed
+  that label. The badge check is unchanged: `to_instrument`
+  still uses a case-sensitive `startswith` on
+  `company.description`, with no strip. The source is now the
+  token between `[IAC-DEMO-` and the next `]`, lowercased, and
+  only when that token is 1 to 16 ASCII letters or digits.
+  `[IAC-DEMO-V2]` shows `demo-v2`. A missing bracket, a space,
+  a hyphen, or a longer token shows the neutral `demo` and
+  still has the badge. Models and fixtures were not changed.
+- Decisions: a person can type `[IAC-DEMO-` into a description
+  and get the badge. That is a misleading label on a
+  hand-written row. It does not bypass the seeder, and it is
+  acceptable for the local demo. The note is in
+  `docs/demo-data.md`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1468 passed, 124 deselected, coverage 96.07%. Scoped black,
+  isort, and flake8 passed on `app/ui/view_models.py`,
+  `tests/test_ui_view_models.py`, and `tests/test_ui_pages.py`.
+  PostgreSQL was not run locally. GitHub Actions is not recorded
+  yet.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 07:48 to 07:56.
+- Next: wait for both GitHub Actions jobs. The owner sends PR
+  #84 to the Code Reviewer. Agents do not merge. PR #83 can
+  merge before or after this one.
+
 ## 2026-10-21 - Synthetic badge matches any [IAC-DEMO- prefix
 
 - Scope: the `/ui` synthetic-data badge. `to_instrument` still

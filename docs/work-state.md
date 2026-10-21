@@ -1,39 +1,38 @@
 # Current Work State
 
-## Synthetic badge prefix: 2026-10-21
+## Synthetic badge source token: 2026-10-21
 
 - Branch `cursor/ui-demo-badge-prefix-dc6c`, based on
   `origin/master` `6d45f01`.
   [PR #84](https://github.com/Waber/Investment-AI-Companion/pull/84)
-  is ready for review. Independent of
+  is the same pull request. QA asked for this low fix before
+  code review. Independent of
   [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83).
   Either pull request can merge first. Not merged.
-- Completed: `DEMO_MARKER` in `app/ui/view_models.py` is
-  `[IAC-DEMO-`. `to_instrument` still checks
-  `company.description` with a case-sensitive `startswith` and
-  does not strip. V1, V2, and a hypothetical V3 show the
-  synthetic badge on `/ui` and on the detail page. An ordinary
-  company does not. A lookalike without the bracketed prefix
-  does not. A leading space and a different letter case stay
-  unmarked. The source text stays `demo-v1` when the row is
-  synthetic. Models, the schema, migrations, repositories, the
-  API, and fixtures were not changed.
-- Incomplete: none for this pull request. PostgreSQL was not
-  run locally.
+- Completed: the badge check is unchanged. The source is the
+  token between `[IAC-DEMO-` and the next `]`, lowercased, when
+  that token is 1 to 16 ASCII letters or digits.
+  `[IAC-DEMO-V1]` is `demo-v1`, V2 is `demo-v2`, and V3 is
+  `demo-v3`. A malformed token falls back to `demo` and still
+  shows the badge. Typing `[IAC-DEMO-` into a description shows
+  the badge. That is a misleading label, not a bypass of the
+  seeder, and it is acceptable for the local demo. The note is
+  in `docs/demo-data.md`. Models and fixtures were not changed.
+- Incomplete: GitHub Actions for this commit is not recorded
+  yet. PostgreSQL was not run locally.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1466 passed, 124 deselected, coverage 96.05%. Scoped
-  black, isort, and flake8 passed on the Python this change
-  touches. GitHub Actions
-  [run 39563358213](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563358213)
-  on `d6cd957` succeeded. SQLite job `119099622496`: 1466
-  passed, 124 deselected, coverage 96.05%. PostgreSQL job
-  `119099622586`: 124 passed, 1466 deselected.
+  -> 1468 passed, 124 deselected, coverage 96.07%. Scoped
+  black, isort, and flake8 passed on the touched Python. The
+  earlier head `d6cd957` remains
+  [run 39563358213](https://github.com/Waber/Investment-AI-Companion/actions/runs/39563358213),
+  1466 passed, coverage 96.05%.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: the owner reviews PR #84 and merges with
-  "Rebase and merge". Agents do not merge.
+- Next action: push and wait for both GitHub Actions jobs.
+  Then the owner sends PR #84 to the Code Reviewer. Agents do
+  not merge.
 
 ## Duplicate codes and company-name alignment (#80, remainder): 2026-10-21
 
