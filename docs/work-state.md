@@ -1,5 +1,39 @@
 # Current Work State
 
+## Duplicate codes and company-name alignment (#80, remainder): 2026-10-21
+
+- Branch `cursor/ui-duplicate-codes-name-align-fec9`, based on
+  `origin/master` `6d45f01`. Pull request not opened yet.
+  Refs #80. Not merged.
+- Completed: company create and edit map `DuplicateTickerError.code`
+  (`duplicate_ticker`) and `DuplicateIsinError.code`
+  (`duplicate_isin`) to the localized field sentences. The branch
+  is the class or `.code`, never the message text. The ticker row
+  lookup and the TODO in `_company_save_failed` are gone. A
+  duplicate name is still a plain `ValueError` with no code, so
+  that case still looks up another row. A name the form accepts
+  is exactly what `normalize_name` returns. The form still rejects
+  a bidi control, a control left in the middle, and a name made
+  only of invisible characters or marks. The create and edit forms
+  include ISIN. A blank ISIN is null. Instrument type is not on
+  the form. Models, schema, migrations, repositories, and services
+  were not changed. `Secure` on the language cookie stays deferred
+  (#56).
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
+  command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1473 passed, 124 deselected, coverage 96.08%. Scoped black,
+  isort, and flake8 passed. PostgreSQL was not run locally (no
+  `TEST_POSTGRES_DSN`). Browser on `127.0.0.1:8000`, fake
+  collector, throwaway SQLite: Hindi name stored; Polish ticker
+  and ISIN field errors; English ISIN error and English ticker
+  error on edit; Persian ZWNJ stored as U+200C.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: commit, push, open the pull request (Refs #80),
+  and wait for both GitHub Actions jobs. The owner reviews and
+  merges with "Rebase and merge". Agents do not merge.
+
 ## UI forms follow-up (#80, part): 2026-10-20
 
 - Branch `cursor/ui-issue-80-forms-origin-5105`, rebased onto
