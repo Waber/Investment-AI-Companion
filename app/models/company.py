@@ -51,13 +51,16 @@ def _is_name_filler(char: str) -> bool:
 
 
 def normalize_name(value: object) -> object:
-    """Strip a company name. Reject one with no visible character.
+    """Strip a company name. Reject blanks and control characters.
 
     ``None`` and non-strings are left for the field type. Spaces at
     the ends are removed first. The name is then rejected when every
     remaining character is whitespace or Unicode category ``C*``
     (``Cc``, ``Cf``, ``Co``, ``Cn``, ``Cs``). ``'\\u200b \\u200b'``,
-    a lone NUL, and U+E000 are rejected. A real letter with a format
+    a lone NUL, and U+E000 are rejected. A control (``Cc``, including
+    NUL and DEL) anywhere in what remains is also rejected.
+    ``strip`` does not remove those, so ``'Kept\\x00'`` and
+    ``'\\x00Kept\\x7f'`` are not stored. A real letter with a format
     character beside it, such as ``'A\\u200bB'``, is kept. The read
     model does not use this, so a blank name already stored can
     still be listed.
@@ -65,9 +68,11 @@ def normalize_name(value: object) -> object:
     if value is None or not isinstance(value, str):
         return value
     stripped = value.strip()
-    if stripped and any(not _is_name_filler(char) for char in stripped):
-        return stripped
-    raise ValueError("name must contain a visible character")
+    if not stripped or not any(not _is_name_filler(char) for char in stripped):
+        raise ValueError("name must contain a visible character")
+    if any(unicodedata.category(char) == "Cc" for char in stripped):
+        raise ValueError("name must not contain control characters")
+    return stripped
 
 
 def normalize_ticker(value: object) -> object:

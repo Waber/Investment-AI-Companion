@@ -22,10 +22,10 @@
 - Verification: no `.env`. `SECRET_KEY` comes from
   `tests/conftest.py`. SQLite CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  : 1485 passed, 128 deselected, coverage 95.94%. PostgreSQL
+  : 1503 passed, 128 deselected, coverage 95.96%. PostgreSQL
   `REQUIRE_POSTGRES=1` and
   `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`
-  with `-m integration`: 128 passed, 1485 deselected. Scoped
+  with `-m integration`: 128 passed, 1503 deselected. Scoped
   black, isort, and flake8 passed on the Python this change
   touches. PostgreSQL 16.15. GitHub Actions for this commit is
   recorded on the pull request when it finishes, not in a later

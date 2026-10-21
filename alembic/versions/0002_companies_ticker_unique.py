@@ -11,7 +11,8 @@ uniqueness with the index ``ix_companies_ticker``. An older
 ``(name, ticker)`` constraint can hold one ticker twice when the
 names differ. This revision stops in that case. It also stops
 when two stored tickers match after trim and uppercase, such as
-``aapl`` and ``AAPL ``. The message quotes the stored text. The
+``aapl`` and ``AAPL ``. The trim also removes tabs, carriage
+returns, and line feeds. The message quotes the stored text. The
 rows are not rewritten.
 
 It then leaves one unique index, ``uq_companies_ticker``. SQLite

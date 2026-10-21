@@ -230,8 +230,9 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         )
     # Accepted names are stored exactly as normalize_name stores
     # them. A format character beside a letter is kept, including
-    # at an edge. A Cc character is not: NUL and DEL survive
-    # strip(), and the form rejects them below.
+    # at an edge. A Cc character is rejected by normalize_name:
+    # NUL and DEL survive strip(), and the form also rejects them
+    # below.
     accepted_names = (
         "  Kept\n",
         "\u00a0Kept\u3000",
@@ -254,7 +255,8 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     assert unicodedata.category("\u20dd") == "Me"
     assert unicodedata.category("\u200c") == "Cf"
     assert normalized_company_name(None) is None
-    assert normalize_name("\x00Kept\x7f") == "\x00Kept\x7f"
+    with pytest.raises(ValueError, match="control"):
+        normalize_name("\x00Kept\x7f")
     for invisible in (
         "",
         "   ",
@@ -1179,9 +1181,8 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
 async def test_edge_controls_are_422_on_edit(client):
     """NUL or DEL at either end is 422 when the name is edited.
 
-    ``normalize_name`` keeps those controls because ``strip`` removes
-    whitespace only. Sending the name on would make PostgreSQL raise
-    a driver error, including on the name lookup after a failed save.
+    ``normalize_name`` rejects those controls. ``strip`` removes
+    whitespace only, so the characters would otherwise be stored.
     The stored name stays unchanged.
     """
     company_id, _data = await _create(
