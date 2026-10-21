@@ -23,18 +23,22 @@
   duplicate name is still a plain `ValueError` with no code, so
   that case still looks up another row. A name the form accepts
   is exactly what `normalize_name` returns. The form still rejects
-  a bidi control, a control left in the middle, and a name made
-  only of invisible characters or marks. The create and edit forms
+  a bidi control, any Cc character left after ``normalize_name``
+  (including NUL or DEL at either end), and a name made only of
+  invisible characters or marks. The create and edit forms
   include ISIN. A blank ISIN is null. The detail page shows that
-  ISIN after the ticker, with the localized label, and a dash when
-  it is null. Instrument type is not on the form. Models, schema,
-  migrations, repositories, and services
-  were not changed. `Secure` on the language cookie stays deferred
+  ISIN after the ticker, with the localized label, and the same
+  missing-data sentence as the other fields when it is null.
+  A duplicate of both ticker and ISIN marks only the ticker.
+  Invisible Cf characters at the edges stay for a follow-up.
+  Instrument type is not on the form. Models, schema,
+  migrations, repositories, and services were not changed.
+  `Secure` on the language cookie stays deferred
   (#56).
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
   command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1478 passed, 124 deselected, coverage 96.08%. Scoped black,
+  -> 1480 passed, 124 deselected, coverage 96.06%. Scoped black,
   isort, and flake8 passed. PostgreSQL was not run locally (no
   `TEST_POSTGRES_DSN`). Browser on `127.0.0.1:8000`, fake
   collector, throwaway SQLite: Hindi name stored; Polish ticker
