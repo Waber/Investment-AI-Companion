@@ -214,6 +214,42 @@
   "Rebase and merge". Agents do not merge. The Frontend
   Developer still owns the `/ui` badge for `[IAC-DEMO-V2]`.
   ETF and ETC attributes stay on #28.
+## Instrument type on the company forms (#34, part): 2026-10-21
+
+- Branch `cursor/ui-instrument-type-select`, based on
+  `origin/master` `a21d912`. Not merged. Refs #34. Does not
+  close the issue.
+- Completed: an instrument-type select on the company create
+  and edit forms. Options are the existing `InstrumentType`
+  values. Labels are PL/EN catalog strings, Polish by
+  default. Edit preselects the stored type. An unknown value
+  is HTML 422 on that field with `aria-invalid`. A blank
+  post uses the create default `STOCK` and leaves an edited
+  row's type unchanged. `to_instrument` reads
+  `CompanyDB.instrument_type` and maps `STOCK`/`ETF`/`ETC`
+  to `stock`/`etf`/`etc`. The list and the detail page show
+  that label. A cross-origin create that posts a type is
+  still HTML 403. Models, schema, migrations, repositories,
+  services, collectors, scoring, and AI adapters were not
+  changed.
+- Incomplete, and not part of this pull request: ETF/ETC
+  attribute forms (#28), a `source=manual` column, a
+  synthetic marker that survives a description edit, and
+  cascades past financial metrics. Open PR #83 (price bars)
+  is not a dependency of this select.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1494 passed, 124 deselected, coverage 96.10%. Scoped
+  black, isort, and flake8 passed. PostgreSQL was not run
+  locally. Browser check on `127.0.0.1:8765` covered create
+  (ETF), English edit, and the list after a change to ETC.
+- Active agents: none. Blockers: none for this pull request.
+  Account usage was not readable as a percentage in this
+  session.
+- Next action: push the branch and open the pull request
+  against master. Wait for both GitHub Actions jobs. The
+  owner reviews. Agents do not merge.
 
 ## Synthetic badge source token: 2026-10-21
 

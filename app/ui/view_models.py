@@ -3,8 +3,10 @@
 Templates bind to these objects. They do not read ``CompanyDB``.
 Issue #26 can swap the query that loads rows; the field names here
 already match an instrument (type, source, synthetic flag, as-of).
-Until that model exists, every company is presented as a stock, and
-a description that starts with the ``[IAC-DEMO-`` prefix is synthetic.
+A description that starts with the ``[IAC-DEMO-`` prefix is
+synthetic. The type on the page is the stored ``instrument_type``
+(``STOCK``, ``ETF``, or ``ETC``), shown through the catalog ids
+``stock``, ``etf``, and ``etc``.
 """
 
 import math
@@ -27,8 +29,14 @@ DEMO_SOURCE = "demo"
 # ``V1`` and ``V2`` are two characters. Sixteen is enough for a
 # version word and too short for a pasted sentence.
 _DEMO_TOKEN_MAX_LENGTH = 16
-# Every current row is a company. #26 introduces stock, ETF, and ETC.
-COMPANY_INSTRUMENT_TYPE = "stock"
+# The column stores the enum in uppercase. The pages and the list
+# filter use the lowercase catalog id (``type.stock``, and the same
+# for ETF and ETC). Anything else is missing data, not a stock.
+_CATALOG_INSTRUMENT_TYPES = {
+    "STOCK": "stock",
+    "ETF": "etf",
+    "ETC": "etc",
+}
 # Required on every external website link the view-model approves.
 EXTERNAL_LINK_REL = "noopener noreferrer"
 _LINK_SCHEMES = {"http", "https"}
@@ -96,7 +104,7 @@ class InstrumentView:
     """One instrument, as the templates render it."""
 
     id: int
-    instrument_type: str
+    instrument_type: str | None
     ticker: str | None
     isin: str | None
     name: str | None
@@ -227,6 +235,22 @@ def demo_source_label(description):
     return "demo-" + token.lower()
 
 
+def catalog_instrument_type(value):
+    """Return the catalog id for a stored instrument type.
+
+    ``CompanyDB.instrument_type`` is ``STOCK``, ``ETF``, or ``ETC``.
+    The templates look up ``type.`` plus ``stock``, ``etf``, or
+    ``etc``, and the list filter compares those same ids. A missing
+    value, or one outside the three names, is ``None`` so the page
+    can show "no data" instead of calling the row a stock.
+    ``InstrumentType`` is a ``str`` enum, so a member is accepted
+    here too.
+    """
+    if not isinstance(value, str):
+        return None
+    return _CATALOG_INSTRUMENT_TYPES.get(value.strip().upper())
+
+
 def to_instrument(company):
     """Map one company row and its metrics to an instrument view."""
     description = company.description
@@ -253,7 +277,9 @@ def to_instrument(company):
     other.sort(key=lambda item: item.period_end, reverse=True)
     return InstrumentView(
         id=company.id,
-        instrument_type=COMPANY_INSTRUMENT_TYPE,
+        instrument_type=catalog_instrument_type(
+            getattr(company, "instrument_type", None)
+        ),
         ticker=_text(company.ticker),
         isin=_text(company.isin),
         name=_text(company.name),

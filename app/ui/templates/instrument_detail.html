@@ -27,7 +27,13 @@
   {{ text_field('ticker', instrument.ticker) }}
   {{ text_field('isin', instrument.isin) }}
   <dt>{{ t['field.type'] }}</dt>
-  <dd data-field="type">{{ t['type.' ~ instrument.instrument_type] }}</dd>
+  <dd data-field="type">
+    {% if instrument.instrument_type %}
+    {{ t['type.' ~ instrument.instrument_type] }}
+    {% else %}
+    <span class="missing">{{ t['missing'] }}</span>
+    {% endif %}
+  </dd>
   {{ text_field('exchange', instrument.exchange) }}
   {{ text_field('currency', instrument.currency) }}
   {{ text_field('country', instrument.country) }}

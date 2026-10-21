@@ -1547,10 +1547,185 @@ async def test_bad_metrics_ids_and_cross_company_links_are_404(client):
     assert _metrics_for(client, first) == [("annual", 8.0, None)]
 
 
+def _stored_instrument_type(client, company_id):
+    session = client.app.state.testing_session_local()
+    try:
+        row = session.query(CompanyDB).filter(CompanyDB.id == company_id).one()
+        return row.instrument_type
+    finally:
+        session.close()
+
+
+def _type_text(html):
+    """The detail page's type cell, without the surrounding tags."""
+    match = re.search(r'data-field="type">\s*([^<]+)', html)
+    assert match is not None
+    return match.group(1).strip()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "language, code, label",
+    [
+        ("pl", "STOCK", "akcja"),
+        ("en", "STOCK", "stock"),
+        ("pl", "ETF", "ETF"),
+        ("en", "ETF", "ETF"),
+        ("pl", "ETC", "ETC"),
+        ("en", "ETC", "ETC"),
+    ],
+)
+async def test_instrument_type_round_trip_in_both_languages(
+    client, language, code, label
+):
+    """Create and edit post the enum. The pages show the catalog word."""
+    if language == "en":
+        client.cookies.set("ui_lang", "en")
+    type_label = "Typ" if language == "pl" else "Type"
+    form = await client.get("/ui/companies/new")
+    assert form.status_code == 200
+    assert f'<label for="field-instrument_type">{type_label}</label>' in (
+        form.text
+    )
+    assert '<option value="STOCK" selected>' in form.text
+    if code == "STOCK":
+        assert f'<option value="STOCK" selected>{label}</option>' in form.text
+    else:
+        assert f'<option value="{code}">{label}</option>' in form.text
+    _assert_labeled(form.text)
+
+    company_id, _data = await _create(
+        client,
+        name="Typed Co",
+        ticker=f"TYP{code}",
+        instrument_type=code,
+    )
+    assert _stored_instrument_type(client, company_id) == code
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert detail.status_code == 200
+    assert _type_text(detail.text) == label
+    listing = await client.get("/ui")
+    assert f'data-ticker="TYP{code}"' in listing.text
+    assert label in listing.text
+    assert f'<option value="{code.lower()}">{label}</option>' in listing.text
+
+    edit = await client.get(f"/ui/companies/{company_id}/edit")
+    assert edit.status_code == 200
+    assert f'<option value="{code}" selected>{label}</option>' in edit.text
+    assert f'<label for="field-instrument_type">{type_label}</label>' in (
+        edit.text
+    )
+    _assert_labeled(edit.text)
+    renamed = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Typed Co renamed",
+            "ticker": f"TYP{code}",
+            "instrument_type": code,
+        },
+    )
+    assert renamed.status_code == 303
+    after = await client.get(f"/ui/instruments/{company_id}")
+    assert "Typed Co renamed" in after.text
+    assert _type_text(after.text) == label
+    assert _stored_instrument_type(client, company_id) == code
+
+
+@pytest.mark.asyncio
+async def test_create_without_a_type_stores_the_model_default(client):
+    """A blank type is omitted, so CompanyCreate stores STOCK."""
+    form = await client.get("/ui/companies/new")
+    assert '<option value="STOCK" selected>akcja</option>' in form.text
+    company_id, _data = await _create(
+        client, name="Default Type", ticker="DEFTYP"
+    )
+    assert _stored_instrument_type(client, company_id) == "STOCK"
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert _type_text(detail.text) == "akcja"
+    client.cookies.set("ui_lang", "en")
+    english = await client.get(f"/ui/instruments/{company_id}")
+    assert _type_text(english.text) == "stock"
+
+
+@pytest.mark.asyncio
+async def test_edit_can_change_the_stored_type(client):
+    company_id, _data = await _create(
+        client, name="Switch Type", ticker="SWITCH", instrument_type="ETF"
+    )
+    edit = await client.get(f"/ui/companies/{company_id}/edit")
+    assert '<option value="ETF" selected>ETF</option>' in edit.text
+    saved = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {
+            "name": "Switch Type",
+            "ticker": "SWITCH",
+            "instrument_type": "ETC",
+        },
+    )
+    assert saved.status_code == 303
+    assert _stored_instrument_type(client, company_id) == "ETC"
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert _type_text(detail.text) == "ETC"
+    kept = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "Switch Type kept", "ticker": "SWITCH"},
+    )
+    assert kept.status_code == 303
+    assert _stored_instrument_type(client, company_id) == "ETC"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", ["pl", "en"])
+async def test_unknown_instrument_type_is_422_on_the_select(client, language):
+    if language == "en":
+        client.cookies.set("ui_lang", "en")
+    sentence = CATALOGS[language]["error.instrument_type"]
+    response = await _post(
+        client,
+        "/ui/companies",
+        {
+            "name": "Bad Type",
+            "ticker": "BADTYP",
+            "instrument_type": "EQUITY",
+        },
+    )
+    assert response.status_code == 422
+    assert 'id="field-instrument_type"' in response.text
+    assert 'name="instrument_type"' in response.text
+    assert 'aria-invalid="true"' in response.text
+    assert 'id="field-instrument_type-error"' in response.text
+    assert sentence in response.text
+    assert 'value="EQUITY" selected' in response.text
+    _assert_labeled(response.text)
+    assert _counts(client) == (0, 0)
+
+    hostile = await _post(
+        client,
+        "/ui/companies",
+        {
+            "name": "Bad Type",
+            "ticker": "BADTYP",
+            "instrument_type": _SCRIPT,
+        },
+    )
+    assert hostile.status_code == 422
+    assert "<script>" not in hostile.text
+    assert "&lt;script&gt;" in hostile.text
+    assert 'aria-invalid="true"' in hostile.text
+    assert _counts(client) == (0, 0)
+
+
 @pytest.mark.asyncio
 async def test_origin_check_blocks_cross_site_posts(client):
     before = _counts(client)
-    data = {"name": "Evil Co", "ticker": "EVILCO"}
+    data = {
+        "name": "Evil Co",
+        "ticker": "EVILCO",
+        "instrument_type": "ETF",
+    }
     cross = await _post(
         client, "/ui/companies", data, origin="http://evil.example"
     )
