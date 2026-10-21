@@ -37,17 +37,19 @@ def session():
         engine.dispose()
 
 
-def test_revision_0033_is_the_only_head_and_follows_0002():
-    """0033 sits on the price-bar revision. The id stays 0033.
+def test_revision_0005_is_the_only_head_and_follows_0004():
+    """0005 sits on the watchlist revision.
 
-    Master's head is 0002. This branch does not rename 0033 to
-    the next integer. A later migration from another pull request
-    has to be linked by ``down_revision`` after it merges.
+    Master's head is 0004. This file is the next revision, so
+    ``upgrade head`` has one place to go. ``get_current_head`` is
+    empty when two heads exist, and the length check fails first.
     """
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_current_head() == "0033"
-    revision = script.get_revision("0033")
-    assert revision.down_revision == "0002"
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert heads[0] == "0005"
+    revision = script.get_revision("0005")
+    assert revision.down_revision == "0004"
 
 
 def test_sqlite_loads_a_stored_row_the_write_models_would_reject(session):

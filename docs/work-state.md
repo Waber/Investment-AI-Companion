@@ -3,43 +3,42 @@
 ## Notes and investment theses, backend (#33): 2026-10-21
 
 - Branch `cursor/notes-theses-backend-b69b`, rebased onto
-  `origin/master` `192c521`.
+  `origin/master` `cb9e47c`.
   [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91)
   says Refs #33. Not merged. No HTTP API. `templates/`,
   `static/`, and `app/ui/` were not edited.
-- Code review: read models do not re-validate stored text.
-  Revision `0033` freezes lengths and the status CHECK as
-  literals and does not import `app.models.research`. The id
-  stays `0033`. `down_revision` is `0002` because price bars
-  merged; two Alembic heads were the alternative. A title
-  strips edge Cf and rejects bidi controls and Zl/Zp.
+- Revision `0005` in `0005_notes_and_theses.py` revises `0004`.
+  One Alembic head. Lengths, the status CHECK, and
+  `DateTime(timezone=True)` are literals. The file does not
+  import application or script code. `CompanyNotFoundError` is
+  the class on master. `ResearchStorageError` is a
+  `RuntimeError`. Read models do not re-validate stored text.
+  A title strips edge Cf and rejects bidi controls and Zl/Zp.
   Multi-line text stores CR as LF before the length check.
   Timestamps are NOT NULL. Updates use the repository UTC
-  clock and the columns have no `onupdate`. A failed update,
-  delete, or `set_status` rolls back and raises
-  `ResearchStorageError` with no driver text. `ThesisStatus`
-  is a `StrEnum`. Create and update models forbid extra fields.
+  clock and the columns have no `onupdate`. `ThesisStatus` is
+  a `StrEnum`. Create and update models forbid extra fields.
 - Completed: `app.models.research` exports the constants,
   `ThesisStatus` (`active` / `closed`), and the Pydantic
   models. `NoteDB` and `ThesisDB` use `company_id` ON DELETE
   CASCADE, indexed. Repositories scope every method by
   company. `create` raises `CompanyNotFoundError`.
 - Incomplete: the `/ui` forms and any HTTP API. Those belong
-  to the Frontend Developer. If another revision merges
-  first, point `down_revision` at that head. Leave the id
-  `0033`.
+  to the Frontend Developer.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1586 passed, 189 deselected, coverage 96.59%.
+  -> 1687 passed, 208 deselected, coverage 96.49% (4128
+  statements, 121 miss, 1118 branches, 47 partial).
   Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
   `investment_test`, `REQUIRE_POSTGRES=1`,
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 189 passed, 1586 deselected. Scoped black, isort, and
-  flake8 passed. No live market-data calls.
+  -> 208 passed, 1687 deselected. Scoped black, isort, and
+  flake8 passed. No live market-data calls. GitHub Actions is
+  recorded in the pull request, not in a later commit.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: the owner sends PR #91 back to code review.
+- Next action: the owner reviews the re-chained PR #91.
   Agents do not merge. The Frontend Developer uses the
   interface in the pull request body.
 
