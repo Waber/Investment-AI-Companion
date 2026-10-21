@@ -1,6 +1,6 @@
 """Revision 0002 adds price_bars on top of a legacy companies table.
 
-Revision 0003 changes the OHLC columns from FLOAT to TEXT. The text
+Revision 0006 changes the OHLC columns from FLOAT to TEXT. The text
 is the canonical 8-place price string. PostgreSQL uses NUMERIC(20, 8)
 instead, in the integration suite.
 
@@ -101,8 +101,8 @@ def _column_types(connection):
     }
 
 
-def test_revision_0003_stores_sqlite_prices_as_text(tmp_path):
-    """A float stored at 0002 is the canonical string after 0003.
+def test_revision_0006_stores_sqlite_prices_as_text(tmp_path):
+    """A float stored at 0002 is the canonical string after 0006.
 
     Upgrade, downgrade, and upgrade again. The second upgrade still
     stores the 8-place string. ``companies`` is not rebuilt.

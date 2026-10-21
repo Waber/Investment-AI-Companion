@@ -2,10 +2,11 @@
 
 ## QA round 1 on price bars (PR #94): 2026-10-21
 
-- Branch `cursor/price-bar-followups-85-5c38`, based on
-  `origin/master` `192c521`. PR #94 says Closes #85. Not merged.
-  QA round 1 on `8360ef8` was not approved. This section is the
-  fix on that same branch.
+- Branch `cursor/price-bar-followups-85-5c38`, rebased onto
+  `origin/master` `ad44969` (#89). PR #94 says Closes #85.
+  Not merged. QA round 1 on `8360ef8` was not approved. This
+  section is that fix, rebased, with the price migration numbered
+  `0006`.
 - Completed: OHLC uses a `TypeDecorator`. PostgreSQL stays
   `Numeric(20, 8)`. SQLite stores the canonical 8-place string as
   TEXT and parses it back to the same `Decimal`. The API returns
@@ -13,23 +14,25 @@
   skipped, so a read does not return 500. A write checks the
   round-trip before commit and rolls back on mismatch. SQLite
   OHLC checks use `CAST(column AS REAL)`. PostgreSQL checks compare
-  numeric columns. Revision `0003` still revises `0002` and still
-  rebuilds only `price_bars`. `1e400` is HTTP 422. The OpenAPI
+  numeric columns. Revision `0006` (`0006_price_bar_numeric.py`)
+  revises `0003` and still rebuilds only `price_bars`. `1e400`
+  is HTTP 422. The OpenAPI
   volume maximum is the integer `9223372036854775807`. After a
   fake refresh the default series is 252 `fake` bars, and
   `[IAC-DEMO-V2]` is the named source. `docs/demo-data.md` no
   longer says SQLite drops precision. `templates/`, `static/`,
   and `app/ui/` were not edited.
-- Incomplete: open pull requests #87, #90, and #91 also add Alembic
-  revisions. This `0003` is re-chained if one of them merges first
-  and takes that number. The re-chain is not part of this fix.
+- Incomplete: #90 is revision `0004` and #91 is revision `0005`.
+  They merge before this file. The final re-chain sets
+  `down_revision` from `0003` to `0005`. That re-chain is not
+  part of this fix. #87 is already on master as `0003`.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1542 passed, 137 deselected, coverage 95.88%
-  (3728 statements, 130 miss, 1034 branches, 50 partial).
+  -> 1587 passed, 142 deselected, coverage 95.69%
+  (3838 statements, 139 miss, 1076 branches, 57 partial).
   Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
-  `-m integration` -> 137 passed, 1542 deselected.
+  `-m integration` -> 142 passed, 1587 deselected.
   Scoped black, isort, and flake8 passed. No live market-data
   calls. The Actions run id goes on the pull request, not in a
   later docs-only commit.
@@ -37,8 +40,8 @@
   available in this session.
 - Next action: both GitHub Actions jobs on this head (SQLite and
   PostgreSQL), then the owner reviews PR #94 again and merges
-  with "Rebase and merge". Agents do not merge. Re-chain revision
-  `0003` if #87, #90, or #91 merges first.
+  with "Rebase and merge". Agents do not merge. After #90 and
+  #91 merge, set `down_revision` to `0005`.
 
 ## Price bar follow-ups (#85): 2026-10-21
 
@@ -54,15 +57,15 @@ this section described numeric affinity before that fix.
   `volume` is `StrictInt`: `100` is stored and `"100"` is rejected.
   An unknown `source` filter is 200 and `[]`. OHLC is `Decimal`
   in the Pydantic models and `Numeric(20, 8)` in the database.
-  Revision `0003` revises `0002`. FastAPI returns each price as a
+  Revision `0006` revises `0003`. FastAPI returns each price as a
   fixed-point JSON string with 8 decimal places. A collector float
   is converted with `Decimal(str(value))` on the way in.
   `docs/demo-data.md` records the source rule and that the `/ui`
   badge matches any `[IAC-DEMO-` prefix. `templates/`, `static/`,
   and `app/ui/` were not edited.
-- Incomplete: none for #85. Open pull requests #87, #90, and #91
-  also add Alembic revisions. This `0003` is re-chained if one of
-  them merges first and takes that number. SQLite stores the
+- Incomplete: none for #85. #90 (`0004`) and #91 (`0005`) merge
+  first. The final re-chain sets this migration's `down_revision`
+  to `0005`. SQLite stores the
   numeric column with real affinity, so a price with more
   significant digits than a binary float can hold is exact on
   PostgreSQL only.
@@ -78,8 +81,8 @@ this section described numeric affinity before that fix.
   available in this session.
 - Next action: both GitHub Actions jobs on this head, then the
   owner reviews and merges with "Rebase and merge". Agents do
-  not merge. Re-chain revision `0003` if #87, #90, or #91 merges
-  first.
+  not merge. After #90 and #91 merge, set `down_revision` to
+  `0005`.
 
 ## Notes and investment theses, backend (#33): 2026-10-21
 
