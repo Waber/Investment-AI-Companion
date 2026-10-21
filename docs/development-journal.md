@@ -1,5 +1,23 @@
 # Development Journal
 
+## 2026-10-23 - Rebase and refresh of the handoff guide (PR #88)
+
+- Scope: rebased `docs/handoff-external-agent` onto `master`
+  `5d1eac6` (after #94). The only conflict was the top of this
+  journal; both sides were kept. `docs/HANDOFF.md` sections 2 and
+  3 were rewritten: #83, #87, #89, #90, #91, and #94 are merged,
+  the migration chain is `0001` to `0006`, and the open pull
+  requests are #97 and #98. The queue now starts with #96, then
+  #33 UI and API, the #86 `/ui` remainder, #95, and #34.
+- Decisions: the owner asked to merge #88, #97, and #98 in that
+  order and to resolve the conflicts. Docs only.
+- Verification: documentation only; tests not run locally. Both
+  GitHub Actions jobs run on the pushed head before the merge.
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-10-23, about 10 minutes.
+- Next: rebase and merge #97, then #98.
+
 ## 2026-10-21 - Review delta on price bars (PR #94)
 
 - Scope: code review on #94 at `82e0b20` requested small changes.
@@ -1132,6 +1150,25 @@ that fix.
 - Next: open the pull request against master. It says Refs
   #34 and stays unmerged. The owner reviews it. Agents do
   not merge.
+
+## 2026-10-21 - Handoff guide for an external coding agent
+
+- Scope: documentation only. Added `docs/HANDOFF.md` so a coding
+  agent outside Grok Bot (Claude Code, Codex, Cursor IDE) can pull
+  `master` and continue. It lists the read order, setup and test
+  commands, the Git workflow, the state of open pull requests, and
+  a prioritized queue with done criteria. README links it next to
+  the Run the demo link. No code, schema, or tests changed.
+- Decisions: the Grok Bot team stopped because the Cursor usage
+  limit was reached. The guide is based on `master` `a21d912`.
+  Watchlist rows show the latest close from the default price-bar
+  source (#27/#83); the stale rule uses that bar's date, and a dash
+  is shown when there is no bar.
+- Verification: documentation only; tests not run.
+- AI model: Grok Bot. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 13:20 to 13:35.
+- Next: the first item in the `docs/HANDOFF.md` queue (rebase
+  PR #83 onto `master`).
 
 ## 2026-10-21 - Demo source comes from the marker token
 
