@@ -108,18 +108,40 @@ class PriceBarBase(BaseModel):
         return as_utc(value)
 
     @model_validator(mode="after")
-    def _high_not_below_low(self) -> "PriceBarBase":
-        if (
-            self.high is not None
-            and self.low is not None
-            and self.high < self.low
-        ):
-            raise ValueError("high must be greater than or equal to low")
+    def _candle_bounds(self) -> "PriceBarBase":
+        """Reject a bar that cannot be a candle.
+
+        A missing price is skipped. The comparisons use only the
+        values that are present: high is at least the open and the
+        close, low is at most the open and the close, and high is at
+        least the low. Equal prices are a valid session (a flat bar).
+        Volume is checked on its own field, above.
+        """
+        if self.high is not None and self.open is not None:
+            if self.high < self.open:
+                raise ValueError("high must be greater than or equal to open")
+        if self.high is not None and self.close is not None:
+            if self.high < self.close:
+                raise ValueError("high must be greater than or equal to close")
+        if self.low is not None and self.open is not None:
+            if self.low > self.open:
+                raise ValueError("low must be less than or equal to open")
+        if self.low is not None and self.close is not None:
+            if self.low > self.close:
+                raise ValueError("low must be less than or equal to close")
+        if self.high is not None and self.low is not None:
+            if self.high < self.low:
+                raise ValueError("high must be greater than or equal to low")
         return self
 
 
 class PriceBarCreate(PriceBarBase):
-    """One bar to insert. The instrument id is the URL, not the body."""
+    """One bar to insert. The instrument id is the URL, not the body.
+
+    The candle rules (high, low, open, close, and volume) are on
+    ``PriceBarBase``, so this write model rejects a broken bar before
+    it reaches the database.
+    """
 
 
 class PriceBar(PriceBarBase):

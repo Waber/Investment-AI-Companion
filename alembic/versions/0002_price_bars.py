@@ -12,6 +12,11 @@ that database (``alembic stamp head``). Running ``upgrade`` there
 would try to create the table again. A database that only has the
 legacy companies table, or that stopped at revision 0001, can
 upgrade.
+
+The candle checks are part of the table. Downgrade drops the table,
+so those checks go away with it. A null price makes a comparison
+null, and a check constraint allows null, so a missing open, high,
+low, close, or volume is still stored.
 """
 
 import sqlalchemy as sa
@@ -49,6 +54,30 @@ def upgrade() -> None:
             "bar_date",
             "source",
             name="uq_price_bars_instrument_date_source",
+        ),
+        sa.CheckConstraint(
+            "high_price >= open_price",
+            name="ck_price_bars_high_gte_open",
+        ),
+        sa.CheckConstraint(
+            "high_price >= close_price",
+            name="ck_price_bars_high_gte_close",
+        ),
+        sa.CheckConstraint(
+            "low_price <= open_price",
+            name="ck_price_bars_low_lte_open",
+        ),
+        sa.CheckConstraint(
+            "low_price <= close_price",
+            name="ck_price_bars_low_lte_close",
+        ),
+        sa.CheckConstraint(
+            "high_price >= low_price",
+            name="ck_price_bars_high_gte_low",
+        ),
+        sa.CheckConstraint(
+            "volume >= 0",
+            name="ck_price_bars_volume_gte_zero",
         ),
     )
     op.create_index(
