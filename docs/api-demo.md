@@ -86,12 +86,13 @@ creates missing tables and then refuses to serve when `companies`
 exists without `instrument_type` or `isin`. An Alembic-managed
 database runs `alembic upgrade head` (revision `0001` for these
 columns, the `ck_companies_instrument_type` CHECK, and the
-`uq_companies_isin` unique index, then revision `0002` for the
-`uq_companies_ticker` unique index). `0002` stops when stored
-tickers collide after trim and uppercase. The trim removes spaces,
-tabs, carriage returns, and line feeds, so `aapl` and `AAPL ` are
-one collision. It names that stored text and does not rewrite the
-rows.
+`uq_companies_isin` unique index, revision `0002` for `price_bars`,
+then revision `0003` for the `uq_companies_ticker` unique index).
+`0003` is the head. It stops when stored tickers collide after trim
+and uppercase. The trim removes spaces, tabs, carriage returns, and
+line feeds, so `aapl` and `AAPL ` are one collision. It names that
+stored text and does not rewrite the rows. On SQLite the index is
+created in place, so `price_bars` rows stay.
 A database created by an older
 startup `create_all` needs that upgrade. Adding the columns by hand
 skips the CHECK, the `uq_companies_isin` unique index, and

@@ -1,13 +1,40 @@
 # Current Work State
 
+## Code review and rebase onto price bars (PR #87): 2026-10-21
+
+- Branch `cursor/ticker-unique-and-alembic-0e9d`, rebased onto
+  `origin/master` `192c521`. Not merged. Alembic head is `0003`.
+  `0003_companies_ticker_unique.py` has `down_revision` `0002`
+  (`price_bars`). Pull request #90 may take `0003` first. This
+  branch stays on `0003` until then, then it is re-chained to the
+  next free number.
+- Completed: database URL errors exit 1 with a fixed line and do
+  not echo the URL. `DATABASE_URL` is the preferred input.
+  `normalize_name` rejects category `Cc` anywhere after strip.
+  The preflight trims space, tab, CR, and LF on SQLite and
+  PostgreSQL. The ticker index is `op.create_index`. A SQLite
+  upgrade with foreign keys on keeps `price_bars` and
+  `financial_metrics` rows. `CompanyDB` keeps `price_bars` and
+  `uq_companies_ticker`. `app/ui/forms.py` was not edited.
+- Incomplete: #8's instrument baseline and the rest of #86.
+  Re-chaining waits until another revision takes `0003`.
+- Tests: no `.env`. SQLite CI command: 1556 passed, 139
+  deselected, coverage 96.10%. PostgreSQL `-m integration` with
+  `REQUIRE_POSTGRES=1`: 139 passed, 1556 deselected. PostgreSQL
+  16.15. GitHub Actions for this head is not in this file.
+- Active agents: none. Blockers: none for this head. Account
+  usage was not available in this session.
+- Next action: push with `--force-with-lease` and confirm both
+  GitHub Actions jobs on the new head. The owner reviews pull
+  request #87. Agents do not merge.
+
 ## QA follow-up on the ticker preflight (PR #87): 2026-10-21
 
-- Branch `cursor/ticker-unique-and-alembic-0e9d`. Not rebased.
-  Revision stays `0002`. Pull request #83 also adds a revision
-  `0002` and merges first. After that lands, rebase onto
-  `origin/master` and renumber this revision to `0003` with
-  `down_revision` pointing at #83's `0002`. That renumber is not
-  in this commit.
+- Branch `cursor/ticker-unique-and-alembic-0e9d`, rebased onto
+  `origin/master` `192c521`. The ticker revision is `0003` with
+  `down_revision` `0002` (`price_bars`). Pull request #90 may
+  take `0003` first. This branch is re-chained to the next free
+  number after whatever merges ahead of it.
 - Completed: the migration and `scripts.check_duplicate_tickers`
   group by `UPPER(TRIM(ticker))`. `aapl` and `AAPL ` fail the
   preflight. The message quotes the stored rows. Nothing is
@@ -15,19 +42,14 @@
   exits 1. `ScriptDirectory.get_heads()` is asserted to have
   length 1. SQLite and PostgreSQL both cover the collision.
 - Incomplete: #8's instrument baseline and the rest of #86, as
-  in the section below. The `0002` to `0003` renumber waits for
-  #83.
-- Tests: no `.env`. SQLite CI command: 1485 passed, 128
-  deselected, coverage 95.94%. PostgreSQL `-m integration` with
-  `REQUIRE_POSTGRES=1`: 128 passed, 1485 deselected. PostgreSQL
-  16.15. GitHub Actions for this commit is not recorded in this
-  file.
-- Active agents: none. Blockers: do not renumber while #83's
-  `0002` is still open. Account usage was not available in this
+  in the section below. Pull request #90 may take revision
+  `0003`; re-chain this branch after that.
+- Tests: no `.env`. The counts for the rebased head are in the
+  section above once that run is recorded.
+- Active agents: none. Blockers: none until another pull request
+  takes revision `0003`. Account usage was not available in this
   session.
-- Next action: push this commit without rewriting history. The
-  owner reviews pull request #87. After #83 merges, rebase and
-  renumber to `0003`. Agents do not merge.
+- Next action: see the section above. Agents do not merge.
 
 ## Ticker uniqueness, shared names, Alembic (#79, #8, #86): 2026-10-21
 
@@ -37,7 +59,7 @@
 - Completed: `normalize_name` rejects a stripped name with no
   character outside whitespace and Unicode category C*. Create
   and update allow the same name on a different ticker. Revision
-  `0002` checks for duplicate tickers, then adds unique index
+  `0003` checks for duplicate tickers, then adds unique index
   `uq_companies_ticker`. The model matches. Autogenerate is empty.
   Upgrade, downgrade, and upgrade again were run on SQLite and
   PostgreSQL. A supplied Alembic connection does not read

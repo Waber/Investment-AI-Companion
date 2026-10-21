@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_alembic_script_has_one_head():
-    """Revision 0002 continues 0001. A second head would fork upgrades."""
+    """Revision 0003 continues 0002. A second head would fork upgrades."""
     config = Config(str(ROOT / "alembic.ini"))
     heads = ScriptDirectory.from_config(config).get_heads()
     assert len(heads) == 1
