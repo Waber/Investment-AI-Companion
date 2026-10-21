@@ -16,6 +16,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictInt,
     field_validator,
     model_validator,
 )
@@ -47,10 +48,16 @@ class PriceBarBase(BaseModel):
     high: Optional[float] = Field(None, description="Highest price")
     low: Optional[float] = Field(None, description="Lowest price")
     close: Optional[float] = Field(None, description="Closing price")
-    volume: Optional[int] = Field(
+    # StrictInt, not int. Pydantic would otherwise turn the string
+    # "100" into the number 100. A volume is a count, so that
+    # coercion is rejected. JSON null stays null.
+    volume: Optional[StrictInt] = Field(
         None,
         le=VOLUME_MAX,
-        description="Volume for the session, or null when unknown",
+        description=(
+            "Volume for the session, or null when unknown. "
+            'A string such as "100" is rejected, not turned into 100.'
+        ),
     )
     currency: str = Field(
         ...,
