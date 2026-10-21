@@ -89,8 +89,9 @@
 ## Price bars and demo-v2 (#27): 2026-10-21
 
 - Branch `cursor/pricebar-demo-v2-203d`, based on `origin/master`
-  `6d45f01`. Pull request not opened yet at the time of this
-  note. The body will say Refs #27. The issue stays open.
+  `6d45f01`. Head `533e2bd`.
+  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83)
+  says Refs #27. Not merged. The issue stays open.
 - Completed: `price_bars` table (Alembic `0002`), `PriceBar`
   models, repository range query and upsert, `GET` and `POST`
   `/api/v1/instruments/{id}/prices`, and `POST .../prices/refresh`.
@@ -118,14 +119,18 @@
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
   -> 1491 passed, 124 deselected, coverage 96.26%. PostgreSQL
   with `REQUIRE_POSTGRES=1`: 124 passed, 1491 deselected.
-  Scoped black, isort, and flake8 passed. GitHub Actions has
-  not run yet. No live market-data calls.
+  Scoped black, isort, and flake8 passed. No live market-data
+  calls. GitHub Actions on `533e2bd` succeeded
+  ([run 39560060518](https://github.com/Waber/Investment-AI-Companion/actions/runs/39560060518)):
+  SQLite job 119088883697 (1491 passed, 124 deselected, coverage
+  96.26%) and PostgreSQL job 119088883999 (124 passed, 1491
+  deselected).
 - Active agents: none. Blockers: none for this pull request.
   Account usage was not available in this session.
-- Next action: commit, push `cursor/pricebar-demo-v2-203d`, open
-  the pull request to `master` with Refs #27, then record both
-  GitHub Actions jobs. The owner reviews and rebase-merges.
-  Agents do not merge.
+- Next action: the owner reviews PR #83 and merges it with
+  "Rebase and merge". Agents do not merge. The Frontend
+  Developer still owns the `/ui` badge for `[IAC-DEMO-V2]`.
+  ETF and ETC attributes stay on #28.
 
 ## UI forms follow-up (#80, part): 2026-10-20
 

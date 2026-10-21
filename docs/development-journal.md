@@ -201,15 +201,20 @@
   the CI flags plus `-m integration`: 124 passed, 1491 deselected.
   Scoped black, isort, and flake8 passed on the Python this
   change owns. Tests use the in-memory client, `FakeCollector`,
-  and stubs. No live market-data call. GitHub Actions is not
-  recorded in this entry yet.
+  and stubs. No live market-data call. GitHub Actions on
+  `533e2bd` succeeded
+  ([run 39560060518](https://github.com/Waber/Investment-AI-Companion/actions/runs/39560060518)):
+  SQLite job 119088883697, 1491 passed, 124 deselected, coverage
+  96.26%. PostgreSQL job 119088883999, 124 passed, 1491
+  deselected.
 - AI model: Grok 4.7. Account usage was not available in this
   session, so no usage percent was recorded.
-- Time tracking (UTC): 2026-10-21 about 06:46 to 07:10.
-- Next: push the branch, open the pull request with Refs #27,
-  and wait for both GitHub Actions jobs. The owner reviews.
-  Agents do not merge. The Frontend Developer still owns the
-  `/ui` badge for `[IAC-DEMO-V2]`.
+- Time tracking (UTC): 2026-10-21 about 06:46 to 07:13.
+- Next: the owner reviews
+  [PR #83](https://github.com/Waber/Investment-AI-Companion/pull/83).
+  It says Refs #27 and stays unmerged. Agents do not merge. The
+  Frontend Developer still owns the `/ui` badge for
+  `[IAC-DEMO-V2]`.
 
 ## 2026-10-21 - Rebase the UI follow-up onto master after #75 and #78
 
