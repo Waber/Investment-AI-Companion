@@ -89,8 +89,6 @@ class InstrumentView:
     id: int
     instrument_type: str
     ticker: str | None
-    # The company's ISIN. None when the row has none. The detail
-    # page prints a dash for that empty value.
     isin: str | None
     name: str | None
     exchange: str | None

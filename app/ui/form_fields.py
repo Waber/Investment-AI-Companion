@@ -162,29 +162,6 @@ _BIDI_CONTROLS = frozenset(
 )
 
 
-def _control_in_the_middle(text):
-    """True when a Cc character sits between two non-controls.
-
-    ``normalize_name`` strips whitespace only. A NUL or DEL that
-    remains at either end is part of the text the model stores. A
-    control with a non-control on both sides is the form's 422,
-    including a newline between two letters.
-    """
-    first = None
-    last = None
-    for index, char in enumerate(text):
-        if unicodedata.category(char) != "Cc":
-            if first is None:
-                first = index
-            last = index
-    if first is None or last == first:
-        return False
-    for index in range(first + 1, last):
-        if unicodedata.category(text[index]) == "Cc":
-            return True
-    return False
-
-
 def _has_visible_character(text):
     """True when ``text`` has a letter, number, punctuation, or symbol.
 
@@ -215,16 +192,22 @@ def normalized_company_name(value):
     The form does not skip it.
 
     ``normalize_name`` strips whitespace and rejects an empty name
-    or one made only of format characters (Cf, such as U+200B). This
-    helper adds three 422 cases the model would otherwise keep:
+    or one made only of format characters (Cf, such as U+200B). It
+    keeps a control character (category Cc). NUL and DEL are Cc,
+    and ``strip`` does not remove them, so a name like
+    ``"\\x00Kept\\x7f"`` would be stored. PostgreSQL then raises a
+    driver error, including when the failed save looks the name up.
+    This helper adds three 422 cases the model would otherwise keep:
 
     - a bidi override or isolate anywhere in the original name
-    - a control character left in the middle after that strip
+    - any Cc character left after that strip, at either end or in
+      the middle
     - a name made only of invisible characters or marks
 
     A format character beside a letter is kept, including ZWNJ
-    (U+200C) in a Persian name. A Devanagari or Arabic letter is
-    kept. A mark with no base letter is not.
+    (U+200C) in a Persian name and a format character at an edge.
+    A Devanagari or Arabic letter is kept. A mark with no base
+    letter is not.
     """
     if not isinstance(value, str):
         value = "" if value is None else str(value)
@@ -234,7 +217,7 @@ def normalized_company_name(value):
         normalized = normalize_name(value)
     except ValueError:
         return None
-    if _control_in_the_middle(normalized):
+    if any(unicodedata.category(char) == "Cc" for char in normalized):
         return None
     if not _has_visible_character(normalized):
         return None

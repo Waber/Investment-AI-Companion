@@ -36,13 +36,20 @@
   QA on PR #82: the detail page, where a save redirects, shows
   that ISIN after the ticker. The label is the localized field
   name. A null ISIN is a dash.
+  Code review on PR #82: any Cc character left after
+  ``normalize_name`` (NUL or DEL at either end, or a control in
+  the middle) is 422 on create and on edit, so PostgreSQL never
+  sees that name. A save that repeats both the ticker and the
+  ISIN marks only the ticker. An empty ISIN on the detail page
+  uses the same missing-data sentence as the other fields.
+  Invisible Cf characters at the edges stay for a follow-up.
   Instrument type is still not on the form; create keeps the
   model's STOCK default. `Secure` on the language cookie stays
   deferred until HTTPS (#56).
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1478 passed, 124 deselected, coverage 96.08%. Scoped black,
+  -> 1480 passed, 124 deselected, coverage 96.06%. Scoped black,
   isort, and flake8 passed on the Python this change owns.
   PostgreSQL was not run locally (no `TEST_POSTGRES_DSN`).
   Browser on `127.0.0.1:8000` with the fake collector and a
@@ -54,7 +61,10 @@
   the detail-page fix, a save with US0378331005 landed on the
   detail page and showed that ISIN in EN and PL. A blank ISIN
   showed a dash in both languages. The list still showed both
-  tickers.
+  tickers. After the code-review fix, a blank ISIN showed
+  "brak danych" and "no data", and an edit whose name had NUL
+  and DEL stayed on the form with the required-field sentence.
+  The stored name did not change.
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 06:46 to 07:05.
 - Pull request: [PR #82](https://github.com/Waber/Investment-AI-Companion/pull/82)

@@ -229,14 +229,14 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
             == "error.constraint"
         )
     # Accepted names are stored exactly as normalize_name stores
-    # them. A format character beside a letter is kept. Controls
-    # that remain only at the ends are kept too.
+    # them. A format character beside a letter is kept, including
+    # at an edge. A Cc character is not: NUL and DEL survive
+    # strip(), and the form rejects them below.
     accepted_names = (
         "  Kept\n",
         "\u00a0Kept\u3000",
         "\u200bKept\u200b",
         "\u200b Kept",
-        "\x00Kept\x7f",
         "A\u200bB",
         "e\u0301",
         "A\u093e",
@@ -254,6 +254,7 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     assert unicodedata.category("\u20dd") == "Me"
     assert unicodedata.category("\u200c") == "Cf"
     assert normalized_company_name(None) is None
+    assert normalize_name("\x00Kept\x7f") == "\x00Kept\x7f"
     for invisible in (
         "",
         "   ",
@@ -279,6 +280,7 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         "A\u2067B",
         "Ke\x00pt",
         "Na\nme",
+        "\x00Kept\x7f",
     ):
         assert normalized_company_name(invisible) is None
         for update in (False, True):
@@ -655,8 +657,8 @@ def _dd_text(html, code):
     [
         ("pl", _APPLE_ISIN, _APPLE_ISIN),
         ("en", _APPLE_ISIN, _APPLE_ISIN),
-        ("pl", None, "-"),
-        ("en", None, "-"),
+        ("pl", None, CATALOGS["pl"]["missing"]),
+        ("en", None, CATALOGS["en"]["missing"]),
     ],
 )
 async def test_instrument_detail_shows_the_company_isin(
@@ -665,8 +667,8 @@ async def test_instrument_detail_shows_the_company_isin(
     """The detail page lists the ISIN after the ticker.
 
     The label is the catalog string for that language. A company
-    with no ISIN shows a dash. That field does not reuse the
-    missing-data sentence the other empty fields use.
+    with no ISIN uses the same missing-data sentence as the other
+    empty fields.
     """
     client.cookies.set("ui_lang", language)
     fields = {"name": "Shown Co", "ticker": "SHOWN"}
@@ -690,7 +692,10 @@ async def test_instrument_detail_shows_the_company_isin(
         html,
         flags=re.DOTALL,
     ).group(1)
-    assert CATALOGS[language]["missing"] not in isin_markup
+    if isin is None:
+        assert 'class="missing"' in isin_markup
+    else:
+        assert CATALOGS[language]["missing"] not in isin_markup
 
 
 @pytest.mark.asyncio
@@ -891,6 +896,48 @@ async def test_duplicate_ticker_and_isin_field_errors_in_both_languages(
 
 
 @pytest.mark.asyncio
+async def test_duplicate_of_both_ticker_and_isin_marks_only_the_ticker(
+    client,
+):
+    """Both collisions mark the ticker, and the ISIN input stays valid.
+
+    The repository checks the ticker first and raises
+    ``DuplicateTickerError``. It does not also raise
+    ``DuplicateIsinError``, so the page has ``field-ticker-error``
+    and ``aria-invalid`` on that input only.
+    """
+    await _create(
+        client,
+        name="First Co",
+        ticker="FIRST",
+        isin=_APPLE_ISIN,
+    )
+    response = await _post(
+        client,
+        "/ui/companies",
+        {
+            "name": "Other Co",
+            "ticker": "first",
+            "isin": _APPLE_ISIN,
+        },
+    )
+    assert response.status_code == 400
+    _assert_field_message(response.text, "ticker", _TICKER_PL)
+    assert 'id="field-ticker-error"' in response.text
+    assert 'id="field-isin-error"' not in response.text
+    assert _ISIN_PL not in response.text
+    parsed = _parse_form(response.text)
+    isin_invalid = [
+        control
+        for control in parsed.controls
+        if control.get("name") == "isin"
+        and control.get("aria-invalid") == "true"
+    ]
+    assert isin_invalid == []
+    assert _counts(client) == (1, 0)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("error_type", "field", "message"),
     [
@@ -1084,6 +1131,7 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
     """
     for name in (
         "Ke\x00pt",
+        "\x00Kept\x7f",
         "Na\nme",
         "\u0301",
         "\u0301\u0308",
@@ -1120,6 +1168,30 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
     assert "This field is required." in edited.text
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert "A\u093e\u20dd" in detail.text
+
+
+@pytest.mark.asyncio
+async def test_edge_controls_are_422_on_edit(client):
+    """NUL or DEL at either end is 422 when the name is edited.
+
+    ``normalize_name`` keeps those controls because ``strip`` removes
+    whitespace only. Sending the name on would make PostgreSQL raise
+    a driver error, including on the name lookup after a failed save.
+    The stored name stays unchanged.
+    """
+    company_id, _data = await _create(
+        client, name="Kept Name", ticker="EDGECC"
+    )
+    edited = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "\x00Kept\x7f", "ticker": "EDGECC"},
+    )
+    assert edited.status_code == 422
+    assert "To pole jest wymagane." in edited.text
+    assert 'id="field-name-error"' in edited.text
+    assert _stored_column(client, company_id, "name") == "Kept Name"
+    assert _counts(client) == (1, 0)
 
 
 @pytest.mark.asyncio
