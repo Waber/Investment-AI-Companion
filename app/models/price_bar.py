@@ -6,16 +6,25 @@ that is saved: the same day plus the instrument, the currency, and
 the provenance (source and retrieval time). The two types are easy
 to mix up because they share the name. Import this one when the
 value is going into the database or out through the API.
+
+OHLC prices are ``Decimal``, stored in ``Numeric(20, 8)``. FastAPI
+asks Pydantic for JSON mode, and Pydantic encodes a ``Decimal`` as a
+string. A very small value would otherwise become ``1E-8``.
+``price_to_json`` writes fixed-point with 8 digits after the decimal
+point, so the wire value matches the column. A JSON number on input
+is still accepted and then rounded half-even to that scale.
 """
 
 from datetime import date as DateType
 from datetime import datetime
-from typing import Optional
+from decimal import ROUND_HALF_EVEN, Decimal
+from typing import Annotated, Optional
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PlainSerializer,
     StrictInt,
     field_validator,
     model_validator,
@@ -31,6 +40,40 @@ SOURCE_MAX_LENGTH = 64
 # Signed 64-bit maximum. PostgreSQL BIGINT stores this value.
 # A larger volume is rejected here so it never becomes a database error.
 VOLUME_MAX = 2**63 - 1
+# Numeric(20, 8): 12 digits before the decimal point, 8 after.
+# 10**12 does not fit. Half-even matches the rounding SQLAlchemy
+# applies when it reads the column back.
+PRICE_PRECISION = 20
+PRICE_SCALE = 8
+_PRICE_QUANTUM = Decimal("0.00000001")
+_PRICE_LIMIT = Decimal(10) ** (PRICE_PRECISION - PRICE_SCALE)
+# Shown on each OHLC field. Input may be a JSON number or a numeric
+# string. FastAPI's response is the fixed-point string from
+# price_to_json, because Pydantic's JSON mode encodes Decimal as text.
+_PRICE_JSON = (
+    "A stored price is a JSON string with 8 decimal places, "
+    "matching Numeric(20, 8). A JSON number or a numeric string "
+    "is accepted on input. Null when unknown."
+)
+
+
+def price_to_json(value: Decimal) -> str:
+    """Fixed-point string for one price.
+
+    ``format(Decimal('0.00000001'), 'f')`` is ``0.00000001``.
+    Pydantic's default JSON encoding of that value is ``1E-8``.
+    The column scale is 8, so the string always has 8 digits after
+    the decimal point.
+    """
+    quantized = value.quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_EVEN)
+    return format(quantized, "f")
+
+
+# return_type=str tells the JSON schema this field is a string.
+Price = Annotated[
+    Decimal,
+    PlainSerializer(price_to_json, return_type=str, when_used="json"),
+]
 
 
 class PriceBarBase(BaseModel):
@@ -44,10 +87,18 @@ class PriceBarBase(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
     date: DateType = Field(..., description="Session date of this bar")
-    open: Optional[float] = Field(None, description="Opening price")
-    high: Optional[float] = Field(None, description="Highest price")
-    low: Optional[float] = Field(None, description="Lowest price")
-    close: Optional[float] = Field(None, description="Closing price")
+    open: Optional[Price] = Field(
+        None, description="Opening price. " + _PRICE_JSON
+    )
+    high: Optional[Price] = Field(
+        None, description="Highest price. " + _PRICE_JSON
+    )
+    low: Optional[Price] = Field(
+        None, description="Lowest price. " + _PRICE_JSON
+    )
+    close: Optional[Price] = Field(
+        None, description="Closing price. " + _PRICE_JSON
+    )
     # StrictInt, not int. Pydantic would otherwise turn the string
     # "100" into the number 100. A volume is a count, so that
     # coercion is rejected. JSON null stays null.
@@ -85,6 +136,25 @@ class PriceBarBase(BaseModel):
         if isinstance(value, bool):
             raise ValueError("boolean is not a number")
         return value
+
+    @field_validator("open", "high", "low", "close")
+    @classmethod
+    def _quantize_price(cls, value: Optional[Decimal]) -> Optional[Decimal]:
+        """Fit one price into Numeric(20, 8).
+
+        Extra digits are rounded half-even, the same rule the column
+        uses when the value is read back. A result with 13 digits
+        before the decimal point does not fit the precision, so it is
+        rejected here. PostgreSQL would otherwise raise, and SQLite
+        would store it.
+        """
+        if value is None:
+            return None
+        # Non-finite values are already rejected by allow_inf_nan.
+        quantized = value.quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_EVEN)
+        if abs(quantized) >= _PRICE_LIMIT:
+            raise ValueError("price exceeds Numeric(20, 8)")
+        return quantized
 
     @field_validator("volume")
     @classmethod

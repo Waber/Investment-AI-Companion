@@ -4,6 +4,8 @@ The public schema stays on create_all. This test uses its own schema
 and drops it, including the Alembic version table.
 """
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +15,9 @@ from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_base,
+    downgrade_to,
     upgrade_head,
+    upgrade_to,
 )
 from tests.price_bar_checks import (
     CANDLE_CHECK_NAMES,
@@ -68,6 +72,14 @@ def test_migrated_postgres_price_bars_match_the_model(postgres_engine):
                 for name, kind, nullable in from_migration["columns"]
             )
             assert volume["volume"][0] == "BIGINT"
+            for name in (
+                "open_price",
+                "high_price",
+                "low_price",
+                "close_price",
+            ):
+                assert volume[name][0].startswith("NUMERIC")
+                assert "20" in volume[name][0] and "8" in volume[name][0]
             assert "ix_price_bars_id" not in from_migration["indexes"]
             assert (
                 "ix_price_bars_instrument_id" not in from_migration["indexes"]
@@ -177,5 +189,67 @@ def test_upgraded_postgres_rejects_each_candle_violation(
                 ).scalar()
                 == "AAPL"
             )
+        finally:
+            _drop(connection)
+
+
+_FLOAT_BAR_SQL = (
+    "INSERT INTO price_bars ("
+    "instrument_id, bar_date, open_price, high_price, low_price, "
+    "close_price, volume, currency, source, retrieved_at"
+    ") VALUES (1, '2024-01-02', 10.5, 11.0, 9.25, 10.75, 100, "
+    "'USD', 'fake', '2024-01-02 00:00:00+00')"
+)
+
+
+def _column_types(connection):
+    return {
+        column["name"]: str(column["type"]).upper()
+        for column in inspect(connection).get_columns("price_bars")
+    }
+
+
+def test_revision_0003_changes_float_prices_to_numeric(postgres_engine):
+    """A float stored at 0002 is numeric after 0003, on PostgreSQL."""
+    with postgres_engine.connect() as connection:
+        _scratch(connection)
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.execute(
+                text(
+                    "INSERT INTO companies (id, name, ticker) "
+                    "VALUES (1, 'Apple', 'AAPL')"
+                )
+            )
+            connection.commit()
+            upgrade_to(connection, "0002")
+            restored_before = _column_types(connection)["open_price"]
+            assert "FLOAT" in restored_before or "DOUBLE" in restored_before
+            connection.execute(text(_FLOAT_BAR_SQL))
+            connection.commit()
+            upgrade_to(connection, "head")
+            kind = _column_types(connection)["open_price"]
+            assert kind.startswith("NUMERIC")
+            assert "20" in kind and "8" in kind
+            stored = connection.execute(
+                text(
+                    "SELECT open_price, high_price, low_price, close_price "
+                    "FROM price_bars"
+                )
+            ).one()
+            assert [Decimal(str(value)) for value in stored] == [
+                Decimal("10.5"),
+                Decimal("11"),
+                Decimal("9.25"),
+                Decimal("10.75"),
+            ]
+            downgrade_to(connection, "0002")
+            restored = _column_types(connection)["open_price"]
+            assert "NUMERIC" not in restored
+            again = connection.execute(
+                text("SELECT open_price FROM price_bars")
+            ).scalar()
+            assert Decimal(str(again)) == Decimal("10.5")
         finally:
             _drop(connection)

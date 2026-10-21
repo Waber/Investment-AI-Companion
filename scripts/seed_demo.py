@@ -813,15 +813,34 @@ class SqliteSeedClient:
             "id": row.id,
             "instrument_id": row.instrument_id,
             "date": row.bar_date.isoformat(),
-            "open": row.open_price,
-            "high": row.high_price,
-            "low": row.low_price,
-            "close": row.close_price,
+            "open": _json_price(row.open_price),
+            "high": _json_price(row.high_price),
+            "low": _json_price(row.low_price),
+            "close": _json_price(row.close_price),
             "volume": row.volume,
             "currency": row.currency,
             "source": row.source,
             "retrieved_at": retrieved.isoformat().replace("+00:00", "Z"),
         }
+
+
+def _json_price(value):
+    """The same fixed-point string the HTTP price API returns.
+
+    A float from an older row and a Decimal from Numeric(20, 8) both
+    become 8 digits after the decimal point. Null stays null.
+    """
+    from decimal import Decimal
+
+    from app.models.price_bar import price_to_json
+
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return price_to_json(value)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return price_to_json(Decimal(str(value)))
 
 
 def _sqlite_file_url(database_url):
