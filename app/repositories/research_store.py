@@ -14,15 +14,16 @@ from app.models.database_models import CompanyDB
 from app.repositories.company_errors import CompanyNotFoundError
 
 
-class ResearchStorageError(ValueError):
+class ResearchStorageError(RuntimeError):
     """A note or thesis update, delete, or status change was rolled back.
 
     The message is fixed. It does not include driver text, which
-    differs between SQLite and PostgreSQL. There is no shared
-    storage error in this tree. The watchlist's
-    ``WatchlistStorageError`` lives on another branch, so this
-    class is the one for notes and theses. ``create`` does not use
-    it: a missing company is ``CompanyNotFoundError``.
+    differs between SQLite and PostgreSQL. This is a
+    ``RuntimeError``, not a ``ValueError``. ``WatchlistStorageError``
+    is a ``ValueError``, and an ``except ValueError`` that already
+    handles that class must not swallow a failed note or thesis
+    write. ``create`` does not use this error: a missing company is
+    ``CompanyNotFoundError``.
     """
 
     def __init__(self) -> None:

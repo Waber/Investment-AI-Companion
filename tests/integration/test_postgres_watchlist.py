@@ -160,6 +160,10 @@ def test_autogenerate_against_postgresql_watchlist_is_empty(postgres_engine):
         _scratch(connection, schema)
         try:
             Base.metadata.create_all(bind=connection)
+            # create_all already built these. Revision 0004 recreates
+            # the watchlist. Revision 0005 recreates notes and theses.
+            connection.execute(text("DROP TABLE theses"))
+            connection.execute(text("DROP TABLE notes"))
             connection.execute(text("DROP TABLE watchlist_items"))
             connection.commit()
             config = _config(connection)

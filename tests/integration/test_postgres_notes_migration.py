@@ -1,4 +1,4 @@
-"""Revision 0033 on PostgreSQL, in a schema the other tests do not use.
+"""Revision 0005 on PostgreSQL, in a schema the other tests do not use.
 
 The public schema stays on create_all. This test drops its own schema
 when it finishes, including the Alembic version table.
@@ -49,37 +49,20 @@ def test_upgrade_creates_notes_and_downgrade_removes_them(postgres_engine):
             exercise_migrated_research(connection)
             connection.execute(text(f"SET search_path TO {SCHEMA}"))
 
-            command.downgrade(_config(connection), "0001")
+            command.downgrade(_config(connection), "0004")
             connection.execute(text(f"SET search_path TO {SCHEMA}"))
             tables = set(inspect(connection).get_table_names())
             assert "notes" not in tables
             assert "theses" not in tables
-            columns = set(
-                connection.execute(
-                    text(
-                        "SELECT column_name FROM information_schema.columns "
-                        "WHERE table_schema = :schema "
-                        "AND table_name = 'companies'"
-                    ),
-                    {"schema": SCHEMA},
-                ).scalars()
-            )
-            assert "instrument_type" in columns
+            assert "price_bars" in tables
+            assert "watchlist_items" in tables
 
-            command.downgrade(_config(connection), "base")
+            upgrade_head(connection)
             connection.execute(text(f"SET search_path TO {SCHEMA}"))
-            columns = set(
-                connection.execute(
-                    text(
-                        "SELECT column_name FROM information_schema.columns "
-                        "WHERE table_schema = :schema "
-                        "AND table_name = 'companies'"
-                    ),
-                    {"schema": SCHEMA},
-                ).scalars()
-            )
-            assert "instrument_type" not in columns
-            assert "isin" not in columns
+            tables = set(inspect(connection).get_table_names())
+            assert "notes" in tables
+            assert "theses" in tables
+            assert research_schema(connection) == from_model
         finally:
             connection.rollback()
             connection.execute(text("SET search_path TO public"))
@@ -92,9 +75,10 @@ def test_autogenerate_against_postgresql_notes_is_empty(postgres_engine):
 
     ``public`` is the schema the other PostgreSQL tests share. This
     one builds a full model there is no reason to share, drops
-    ``notes`` and ``theses``, stamps ``0002``, and upgrades. Price
-    bars from ``create_all`` stay in place. The schema is removed
-    afterwards, including the Alembic version table.
+    ``notes`` and ``theses``, stamps ``0004``, and upgrades. Price
+    bars and the watchlist from ``create_all`` stay in place. The
+    schema is removed afterwards, including the Alembic version
+    table.
     """
     schema = "notes_autogen"
     with postgres_engine.connect() as connection:
@@ -108,7 +92,7 @@ def test_autogenerate_against_postgresql_notes_is_empty(postgres_engine):
             connection.execute(text("DROP TABLE notes"))
             connection.commit()
             config = _config(connection)
-            command.stamp(config, "0002")
+            command.stamp(config, "0004")
             upgrade_head(connection)
             connection.execute(text(f"SET search_path TO {schema}"))
             assert_compare_metadata_is_empty(connection)

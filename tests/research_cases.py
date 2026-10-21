@@ -745,6 +745,7 @@ class ResearchBehavior:
             with pytest.raises(ResearchStorageError) as caught:
                 call()
             assert str(caught.value) == "Note or thesis could not be stored"
+            assert isinstance(caught.value, RuntimeError)
             assert "disk" not in str(caught.value)
             assert caught.value.__cause__ is None
             assert caught.value.__context__ is None

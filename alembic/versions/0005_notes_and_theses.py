@@ -1,29 +1,34 @@
 """add notes and theses
 
-Revision ID: 0033
-Revises: 0001
+Revision ID: 0005
+Revises: 0004
 Create Date: 2026-10-21
 
 Creates ``notes`` and ``theses``. Both reference ``companies.id``
 with ON DELETE CASCADE, so deleting a company removes its research.
 This revision does not rebuild ``companies``.
 
-``0033`` is the issue number. It is not renamed when the chain
-changes. ``down_revision`` is ``0002``, the price-bar revision
-that is now master's head. A later revision from an open pull
-request still has to be linked here after it merges. The
-revision id stays ``0033``.
+This revises ``0004``, the watchlist revision. The file used to be
+``0033``. After the revisions ahead merged, this one moved to
+``0005`` so Alembic has a single head. The slug stays
+``notes_and_theses``. Lengths, the status CHECK, and the revision
+ids are literals. This file does not import application or script
+code.
 
 SQLite and PostgreSQL both receive the same CREATE TABLE. The
 status CHECK is in the table definition, which SQLite accepts.
 There is no PostgreSQL ENUM, because one column type has to work
 on both databases.
+
+A database that ``create_all`` already built has these tables.
+Stamp that database (``alembic stamp head``). Running ``upgrade``
+there would try to create the tables again. A database that
+stopped at revision ``0004`` can upgrade.
 """
 
 import sqlalchemy as sa
 
 from alembic import op
-from app.core.utc_datetime import UTCDateTime
 
 # Lengths and the status CHECK are copied here on purpose.
 # Importing them from ``app.models.research`` would rewrite this
@@ -31,8 +36,8 @@ from app.core.utc_datetime import UTCDateTime
 # and the thesis body. 200 is the title. 5000 is thesis-breakers.
 # 6 is the length of ``active`` and of ``closed``.
 
-revision = "0033"
-down_revision = "0002"
+revision = "0005"
+down_revision = "0004"
 branch_labels = None
 depends_on = None
 
@@ -45,13 +50,13 @@ def upgrade() -> None:
         sa.Column("body", sa.String(length=10000), nullable=False),
         sa.Column(
             "created_at",
-            UTCDateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
-            UTCDateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.now(),
         ),
@@ -83,13 +88,13 @@ def upgrade() -> None:
         ),
         sa.Column(
             "created_at",
-            UTCDateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
-            UTCDateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.now(),
         ),

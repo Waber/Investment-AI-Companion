@@ -1,5 +1,42 @@
 # Development Journal
 
+## 2026-10-21 - Re-chain notes and theses to revision 0005
+
+- Scope: Raul approved
+  [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91).
+  #87, #89, and #90 have merged. This rebases
+  `cursor/notes-theses-backend-b69b` onto `origin/master`
+  `cb9e47c` and renames the notes migration. No HTTP API.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: `0005_notes_and_theses.py` revises `0004`
+  (watchlist). The file used to be `0033`. Lengths, the status
+  CHECK, and `DateTime(timezone=True)` are literals. The file
+  does not import application or script code.
+  `CompanyNotFoundError` is the class already on master.
+  `ResearchStorageError` subclasses `RuntimeError`, so an
+  `except ValueError` does not swallow it. Notes tests
+  downgrade to `0004` and upgrade again. `price_bars` and
+  `watchlist_items` stay. Databases that stamp `0002` or
+  `0003` and upgrade drop `notes` and `theses` first, the same
+  way `0004` drops `watchlist_items`. The notes feature entry
+  keeps a blank line before the next heading.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1687 passed, 208 deselected, coverage 96.49% (4128
+  statements, 121 miss, 1118 branches, 47 partial).
+  PostgreSQL, local 16, database `investment_test`,
+  `REQUIRE_POSTGRES=1` and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 208 passed, 1687 deselected. Scoped black, isort, and
+  flake8 passed on the Python this change owns. No live
+  market-data calls. GitHub Actions is recorded in the pull
+  request, not in a later commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-21 about 17:21 to 17:35.
+- Next: the owner reviews the re-chained pull request. It still
+  says Refs #33. Agents do not merge.
+
 ## 2026-10-21 - Code review on notes and theses (#33)
 
 - Scope: code review of
@@ -11,13 +48,13 @@
 - Decisions: `Note` and `Thesis` are output models. They do not
   strip text or apply `max_length`, so one stored NUL or a
   201-character title does not fail `list_for_company`. Write
-  models still validate. Revision `0033` copies the lengths and
+  models still validate. The migration copies the lengths and
   the status CHECK as literals (`String(10000)`, `String(200)`,
   `String(5000)`, `String(6)`, `status IN ('active', 'closed')`).
-  It does not import `app.models.research`. The revision id stays
-  `0033`. Price bars had merged, so `down_revision` is `0002`.
-  Leaving it on `0001` made two Alembic heads. Open revisions
-  after this still need another link; the id is not renamed.
+  It does not import `app.models.research`. At this review the
+  file was still `0033` with `down_revision` `0002`, because
+  leaving it on `0001` made two Alembic heads. The re-chain
+  entry above moved that file to `0005`.
   A title strips format characters at the edges and rejects bidi
   controls (U+202A–E, U+2066–9, U+200E, U+200F, U+061C) and
   categories Zl and Zp. A multi-line field turns `\\r\\n` and
@@ -43,16 +80,16 @@
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 16:08 to 16:20.
 - Next: the owner sends PR #91 back to code review. Agents do
-  not merge. If another revision merges first, point
-  `down_revision` at that head and leave the id `0033`.
+  not merge.
 
 ## 2026-10-21 - QA on notes and theses, blank format characters (#33)
 
 - Scope: QA on
   [PR #91](https://github.com/Waber/Investment-AI-Companion/pull/91),
   two items, before code review. Same branch
-  `cursor/notes-theses-backend-b69b`. Revision id `0033` is
-  unchanged. It is still re-chained later. No HTTP API.
+  `cursor/notes-theses-backend-b69b`. The revision file was
+  still `0033` at this QA pass. The re-chain entry above
+  renamed it. No HTTP API.
   `templates/`, `static/`, and `app/ui/` were not edited.
 - Decisions: a title, body, or thesis-breakers value is blank
   when every character is whitespace or Unicode category Cf
@@ -82,9 +119,8 @@
 - AI model: Grok 4.7. Account usage was not available in this session.
 - Time tracking (UTC): 2026-10-21 about 15:55 to 16:02.
 - Next: the owner sends PR #91 to code review. Agents do not
-  merge. After #83, #87, or the #32 migration merges, re-chain
-  `down_revision` on `0033` and leave the revision id as it is
-  at that time.
+  merge. The re-chain entry above is the later link onto
+  master.
 
 ## 2026-10-21 - Notes and investment theses, backend (#33)
 
@@ -109,11 +145,11 @@
   tab only. Thesis-breakers may be empty. Status is `active` or
   `closed`, with a CHECK constraint. `updated_at` moves when a
   field changes. An empty update, or `set_status` to the status
-  already stored, leaves `updated_at` alone. Revision id `0033`
-  follows master's head `0001`. It is not named `0002`, because
-  open PRs #83 and #87 each add a revision with that id, and the
-  #32 watchlist migration will add one too. `down_revision`
-  will be re-chained after those merge.
+  already stored, leaves `updated_at` alone. The revision file
+  was `0033` and followed master's head `0001` at that time. It
+  was not named `0002`, because open PRs #83 and #87 each added
+  a revision with that id, and the #32 watchlist migration
+  added one too. The re-chain entry above is the later link.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
@@ -128,8 +164,8 @@
 - Time tracking (UTC): 2026-10-21 about 15:27 to 15:48.
 - Next: the owner reviews the pull request. The Frontend
   Developer can build the `/ui` forms on the interface in the
-  pull request body. Agents do not merge. After #83, #87, or
-  the #32 migration merges, re-chain `down_revision` on `0033`.
+  pull request body. Agents do not merge. The re-chain entry
+  above links the notes revision after those merges.
 
 ## 2026-10-21 - Rebase the watchlist branch onto ad44969
 
@@ -327,6 +363,7 @@
   Frontend Developer's work. After #83 or #87 merges, rebase
   this branch and point the migration at the new head. Agents
   do not merge.
+
 ## 2026-10-21 - Code review on the ticker check, rebased onto price bars
 
 - Scope: Code Reviewer on pull request #87 at `1ba6616`.

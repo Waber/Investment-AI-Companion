@@ -1,4 +1,4 @@
-"""Schema and cascade checks for revision 0033.
+"""Schema and cascade checks for revision 0005.
 
 SQLite and PostgreSQL tests call these helpers after ``upgrade``.
 The helpers do not open a connection of their own.

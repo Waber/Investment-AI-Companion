@@ -318,8 +318,11 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         )
 
     with engine.connect() as connection:
-        # create_all already built watchlist_items. Revision 0004
-        # creates that table, so the upgrade from 0002 needs it gone.
+        # create_all already built watchlist_items, notes, and
+        # theses. Revisions 0004 and 0005 create those tables, so
+        # the upgrade from 0002 needs them gone.
+        connection.execute(text("DROP TABLE theses"))
+        connection.execute(text("DROP TABLE notes"))
         connection.execute(text("DROP TABLE watchlist_items"))
         connection.commit()
         stamp(connection, "0002")

@@ -24,11 +24,11 @@ from tests.watchlist_migration import (
 
 
 def test_alembic_has_a_single_head():
-    """Price bars and the watchlist are one chain, not two heads."""
+    """Notes continue the watchlist. One head, revision 0005."""
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
     heads = script.get_heads()
     assert len(heads) == 1
-    assert heads[0] == "0004"
+    assert heads[0] == "0005"
 
 
 def test_upgrade_downgrade_upgrade_on_sqlite(tmp_path):
@@ -143,6 +143,10 @@ def test_autogenerate_against_sqlite_watchlist_is_empty(tmp_path):
     engine = create_db_engine(f"sqlite:///{tmp_path / 'full.db'}")
     Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
+        # create_all already built these. Revision 0004 recreates
+        # the watchlist. Revision 0005 recreates notes and theses.
+        connection.execute(text("DROP TABLE theses"))
+        connection.execute(text("DROP TABLE notes"))
         connection.execute(text("DROP TABLE watchlist_items"))
     written = None
     try:
