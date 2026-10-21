@@ -1,5 +1,44 @@
 # Development Journal
 
+## 2026-10-21 - QA delta on the price preflight (PR #94)
+
+- Scope: one medium and two nits on #94 at `310c960`. Same
+  branch. `0006` still revises `0005`. The pull request stays
+  ready. `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: the preflight judges the price after the conversion
+  the upgrade applies. PostgreSQL names NaN and infinity first,
+  then checks `abs(ROUND(column::numeric, 8))`. That `ROUND`
+  expression is the same constant the `ALTER` uses. SQLite casts
+  each real to text and runs `_quantized_legacy`, which
+  `_canonical_text` also calls. `999999999999.9994` stays inside
+  the limit and becomes `999999999999.99900000`.
+  `upsert_many` loads existing rows with one query on
+  `(bar_date, source)`, then updates or inserts in memory. A
+  repeated key in the same batch updates the pending row.
+  `docs/work-state.md` now keeps only the current master, the
+  open pull requests, the queue, and the key decisions. The
+  older sections were already in this journal, including the
+  note that editable profiles and source-aware AI analysis
+  remain unimplemented, so they were not copied again. That
+  queue line stays in the work-state file because
+  `docs/research/llm-comparison.md` cites it.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. No live market-data calls. Scoped black, isort, and
+  flake8 passed on the Python this change touches. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1715 passed, 216 deselected, coverage 96.35%
+  (4316 statements, 131 miss, 1186 branches, 54 partial).
+  Local PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 216 passed, 1715 deselected. The Actions run id is
+  recorded on the pull request after both jobs are green. This
+  commit is the QA delta, not a CI note.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-21 about 18:34 to 18:43.
+- Next: both GitHub Actions jobs on this head. The pull request
+  stays ready for review. Agents do not merge.
+
 ## 2026-10-21 - Review fixes on price bars (PR #94)
 
 - Scope: code review on #94 at `dc7d9b8` requested changes. The
@@ -31,8 +70,8 @@
   migration docstring notes that PostgreSQL `ROUND` is half away
   from zero while the app uses half-even (at most `1e-8` on a
   legacy row), and that a float keeps about 15 significant
-  digits. `docs/work-state.md` keeps this section only. The
-  older snapshots are already in this journal.
+  digits. `docs/work-state.md` still held the older sections
+  under the new one at this commit. The trim is the next entry.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
   unset. No live market-data calls. Scoped black, isort, and
   flake8 passed on the Python this change touches. CI command

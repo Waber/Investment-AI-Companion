@@ -358,3 +358,120 @@ def test_oversized_legacy_prices_abort_the_postgres_upgrade(postgres_engine):
             assert after == before
         finally:
             _drop(connection)
+
+
+def test_floats_that_round_to_1e12_abort_the_postgres_upgrade(
+    postgres_engine,
+):
+    """ROUND(float::numeric, 8) is what the ALTER stores.
+
+    These four floats, and their negatives, are under 1e12 as raw
+    floats and become 1e12 after that ROUND. The upgrade names the
+    ids and leaves the float rows and revision ``0005`` in place.
+    """
+    from tests.test_price_bar_migration import (
+        _ROUNDS_TO_LIMIT,
+        _flat_float_rows,
+    )
+
+    sql = _flat_float_rows(_ROUNDS_TO_LIMIT, cast="::float8")
+    sql = sql.replace("00:00:00')", "00:00:00+00')")
+    with postgres_engine.connect() as connection:
+        _scratch(connection)
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.execute(
+                text(
+                    "INSERT INTO companies (id, name, ticker) "
+                    "VALUES (1, 'Apple', 'AAPL')"
+                )
+            )
+            connection.commit()
+            upgrade_to(connection, "0005")
+            connection.execute(text(sql))
+            connection.commit()
+            before = connection.execute(
+                text(
+                    "SELECT id, open_price::text FROM price_bars "
+                    "ORDER BY id"
+                )
+            ).all()
+        except Exception:
+            _drop(connection)
+            raise
+
+    with pytest.raises(RuntimeError) as error:
+        with postgres_engine.connect() as connection:
+            connection.execute(text(f"SET search_path TO {SCHEMA}"))
+            connection.commit()
+            upgrade_to(connection, "head")
+
+    assert type(error.value).__name__ == "OversizedPricesError"
+    assert str(error.value) == (
+        "price_bars ids 1, 2, 3, 4, 5, 6, 7, 8 have a price outside "
+        "Numeric(20, 8) or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
+    with postgres_engine.connect() as connection:
+        connection.execute(text(f"SET search_path TO {SCHEMA}"))
+        try:
+            assert (
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalar()
+                == "0005"
+            )
+            assert "NUMERIC" not in _column_types(connection)["open_price"]
+            after = connection.execute(
+                text(
+                    "SELECT id, open_price::text FROM price_bars "
+                    "ORDER BY id"
+                )
+            ).all()
+            assert after == before
+        finally:
+            _drop(connection)
+
+
+def test_postgres_boundary_float_upgrades_below_1e12(postgres_engine):
+    """``999999999999.9994`` rounds to ``999999999999.99900000``."""
+    with postgres_engine.connect() as connection:
+        _scratch(connection)
+        try:
+            connection.execute(text(LEGACY_COMPANIES))
+            connection.execute(text(LEGACY_METRICS))
+            connection.execute(
+                text(
+                    "INSERT INTO companies (id, name, ticker) "
+                    "VALUES (1, 'Apple', 'AAPL')"
+                )
+            )
+            connection.commit()
+            upgrade_to(connection, "0005")
+            connection.execute(
+                text(
+                    "INSERT INTO price_bars ("
+                    "id, instrument_id, bar_date, open_price, "
+                    "high_price, low_price, close_price, volume, "
+                    "currency, source, retrieved_at) VALUES ("
+                    "1, 1, '2024-04-01', "
+                    "999999999999.9994::float8, "
+                    "999999999999.9994::float8, "
+                    "999999999999.9994::float8, "
+                    "999999999999.9994::float8, "
+                    "1, 'USD', 'edge', '2024-04-01 00:00:00+00')"
+                )
+            )
+            connection.commit()
+            upgrade_to(connection, "head")
+            stored = connection.execute(
+                text(
+                    "SELECT open_price::text, high_price::text, "
+                    "low_price::text, close_price::text "
+                    "FROM price_bars"
+                )
+            ).one()
+            assert list(stored) == ["999999999999.99900000"] * 4
+        finally:
+            _drop(connection)

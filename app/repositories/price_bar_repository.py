@@ -10,6 +10,7 @@ import logging
 from datetime import date
 from typing import List, Optional
 
+from sqlalchemy import tuple_
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
@@ -147,17 +148,42 @@ class PriceBarRepository:
         """
         rows: List[PriceBarDB] = []
         inserted: List[PriceBarCreate] = []
+        # One SELECT for the whole batch. Looking up each bar would
+        # be one query per row, which is hundreds of round-trips for
+        # a year of daily bars. The map is updated when this batch
+        # inserts a key, so a second bar with that same key updates
+        # the pending row instead of inserting another.
+        found = self._existing_for_batch(instrument_id, bars)
         for bar in bars:
-            existing = self.get_by_key(instrument_id, bar.date, bar.source)
+            key = (bar.date, bar.source)
+            existing = found.get(key)
             if existing is None:
                 existing = self._new_row(instrument_id, bar)
                 self.db.add(existing)
+                found[key] = existing
                 inserted.append(bar)
             else:
                 self._copy_onto(existing, bar)
             rows.append(existing)
         self._flush_check_commit(instrument_id, inserted, rows, bars)
         return rows
+
+    def _existing_for_batch(
+        self, instrument_id: int, bars: List[PriceBarCreate]
+    ) -> dict:
+        """Rows this batch might update, keyed by date and source."""
+        if not bars:
+            return {}
+        keys = {(bar.date, bar.source) for bar in bars}
+        stored = (
+            self.db.query(PriceBarDB)
+            .filter(
+                PriceBarDB.instrument_id == instrument_id,
+                tuple_(PriceBarDB.bar_date, PriceBarDB.source).in_(keys),
+            )
+            .all()
+        )
+        return {(row.bar_date, row.source): row for row in stored}
 
     def _flush_check_commit(
         self,

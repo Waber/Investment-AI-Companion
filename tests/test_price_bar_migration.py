@@ -343,3 +343,102 @@ def test_oversized_legacy_prices_abort_the_sqlite_upgrade(tmp_path):
         ).all()
         assert after == before
     engine.dispose()
+
+
+# These floats are below 1e12. SQLite's REAL-to-text cast, then the
+# same quantize the upgrade uses, turns each of them into 1e12.
+_ROUNDS_TO_LIMIT = (
+    "999999999999.9999",
+    "999999999999.9998",
+    "999999999999.9996",
+    "999999999999.9995",
+    "-999999999999.9999",
+    "-999999999999.9998",
+    "-999999999999.9996",
+    "-999999999999.9995",
+)
+
+
+def _flat_float_rows(values, cast=""):
+    """One flat bar per value. ``cast`` is ``::float8`` on PostgreSQL."""
+    rows = []
+    for index, value in enumerate(values, start=1):
+        day = f"2024-03-{index:02d}"
+        price = f"{value}{cast}"
+        rows.append(
+            f"({index}, 1, '{day}', {price}, {price}, {price}, {price}, "
+            f"1, 'USD', 'near', '2024-03-{index:02d} 00:00:00')"
+        )
+    return (
+        "INSERT INTO price_bars ("
+        "id, instrument_id, bar_date, open_price, high_price, "
+        "low_price, close_price, volume, currency, source, "
+        "retrieved_at) VALUES " + ", ".join(rows)
+    )
+
+
+def test_floats_that_round_to_1e12_abort_the_sqlite_upgrade(tmp_path):
+    """A raw float under 1e12 can still be 1e12 after the text cast.
+
+    The preflight has to use that cast and the same quantize as the
+    rewrite. Otherwise the stored text is ``1000000000000.00000000``
+    and later reads skip the bar.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'rounded.db'}")
+    with engine.begin() as connection:
+        _legacy_company(connection)
+    with engine.connect() as connection:
+        upgrade_to(connection, "0005")
+        connection.execute(text(_flat_float_rows(_ROUNDS_TO_LIMIT)))
+        connection.commit()
+        before = connection.execute(
+            text("SELECT id, open_price FROM price_bars ORDER BY id")
+        ).all()
+
+    with pytest.raises(RuntimeError) as error:
+        with engine.connect() as connection:
+            upgrade_to(connection, "head")
+
+    assert type(error.value).__name__ == "OversizedPricesError"
+    assert str(error.value) == (
+        "price_bars ids 1, 2, 3, 4, 5, 6, 7, 8 have a price outside "
+        "Numeric(20, 8) or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
+    with engine.connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar()
+            == "0005"
+        )
+        assert _column_types(connection)["open_price"].startswith("FLOAT")
+        after = connection.execute(
+            text("SELECT id, open_price FROM price_bars ORDER BY id")
+        ).all()
+        assert after == before
+    engine.dispose()
+
+
+def test_sqlite_boundary_float_upgrades_below_1e12(tmp_path):
+    """``999999999999.9994`` stays inside Numeric(20, 8).
+
+    SQLite's text cast is ``999999999999.999``. Quantize writes
+    ``999999999999.99900000``.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'boundary.db'}")
+    with engine.begin() as connection:
+        _legacy_company(connection)
+    with engine.connect() as connection:
+        upgrade_to(connection, "0005")
+        connection.execute(text(_flat_float_rows(("999999999999.9994",))))
+        connection.commit()
+        upgrade_to(connection, "head")
+        stored = connection.execute(
+            text(
+                "SELECT open_price, high_price, low_price, close_price "
+                "FROM price_bars"
+            )
+        ).one()
+        assert list(stored) == ["999999999999.99900000"] * 4
+    engine.dispose()

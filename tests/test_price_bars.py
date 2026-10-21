@@ -10,7 +10,7 @@ from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from app.api.data_collection import get_collector
 from app.api.prices import _bar_from_collector, _decimal_price
@@ -1064,7 +1064,11 @@ def test_a_lost_insert_race_is_already_stored_when_the_row_remains():
         assert caught.value.__context__ is None
         assert caught.value.__cause__ is None
 
-        calls["count"] = 0
+        # The batch load is the pre-check now. It misses the row.
+        # After rollback, get_by_key finds the row the other
+        # transaction kept, so the message is the duplicate sentence.
+        repo._existing_for_batch = lambda *args, **kwargs: {}
+        repo.get_by_key = lambda *args, **kwargs: object()
         with pytest.raises(ValueError, match="already exists") as upserted:
             repo.upsert_many(instrument_id, [bar])
         assert "duplicate key" not in str(upserted.value)
@@ -1107,6 +1111,58 @@ def test_create_rolls_back_when_the_read_back_differs(read_back):
         assert kept.low_price == Decimal("9.00000000")
         assert kept.close_price == Decimal("11.00000000")
         assert kept.volume == 100
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def _select_statements(engine, call):
+    """SQL ``SELECT`` text executed while ``call`` runs."""
+    statements = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        call()
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    return [
+        statement
+        for statement in statements
+        if statement.lstrip().lower().startswith("select")
+    ]
+
+
+def test_upsert_many_loads_the_batch_in_one_select():
+    """Three bars, two sources: one lookup, then one reload.
+
+    A per-bar ``get_by_key`` would be three lookups. The second call
+    updates those rows and still uses one lookup.
+    """
+    engine, session, repo, instrument_id = _sqlite_price_repo()
+    bars = [
+        PriceBarCreate(**_bar(date="2026-01-06", source="fake")),
+        PriceBarCreate(**_bar(date="2026-01-07", source="fake")),
+        PriceBarCreate(**_bar(date="2026-01-06", source="other")),
+    ]
+    try:
+        first = _select_statements(
+            engine, lambda: repo.upsert_many(instrument_id, bars)
+        )
+        assert len(first) == 2
+        second = _select_statements(
+            engine, lambda: repo.upsert_many(instrument_id, bars)
+        )
+        assert len(second) == 2
+        rows = _stored_price_rows(session)
+        assert len(rows) == 3
+        assert {(row.bar_date, row.source) for row in rows} == {
+            (date(2026, 1, 6), "fake"),
+            (date(2026, 1, 7), "fake"),
+            (date(2026, 1, 6), "other"),
+        }
     finally:
         session.close()
         engine.dispose()

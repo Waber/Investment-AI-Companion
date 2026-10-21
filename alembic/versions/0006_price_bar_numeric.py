@@ -32,14 +32,18 @@ about 15 significant digits, so the conversion cannot recover
 digits the float never held.
 
 SQLite rewrites each stored float to the canonical 8-place string
-after the rebuild. A null price stays null. A price whose absolute
-value is at least ``1e12``, or a price that is not finite, does not
-fit ``NUMERIC(20, 8)``. Upgrade names those ``price_bars`` ids and
-stops before it changes a row. Downgrade returns the four columns
-to FLOAT and restores the check text from revision 0002.
+after the rebuild. A null price stays null. The preflight uses that
+same conversion, not the raw float: PostgreSQL checks
+``abs(ROUND(column::numeric, 8))``, and SQLite quantizes the text
+SQLite would store for the real. A float under ``1e12`` can still
+become ``1e12`` after that step. A result at or above ``1e12``, or
+a value that is not finite, does not fit ``NUMERIC(20, 8)``.
+Upgrade names those ``price_bars`` ids and stops before it changes
+a row. Downgrade returns the four columns to FLOAT and restores
+the check text from revision 0002.
 """
 
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 
 import sqlalchemy as sa
 
@@ -51,7 +55,11 @@ branch_labels = None
 depends_on = None
 
 # Twelve digits before the point is the numeric limit. 1e12 does not fit.
+# The preflight and the PostgreSQL USING clause share this expression
+# so a later edit cannot check one rounding and store another.
+_PG_ROUNDED = "ROUND({name}::numeric, 8)"
 _PRICE_ABS_LIMIT = "1000000000000"
+_PRICE_LIMIT = Decimal(_PRICE_ABS_LIMIT)
 _PRICE_COLUMNS = ("open_price", "high_price", "low_price", "close_price")
 _NUMERIC = sa.Numeric(20, 8)
 _QUANTUM = Decimal("0.00000001")
@@ -77,7 +85,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     _reject_oversized(bind)
     if bind.dialect.name == "postgresql":
-        _alter_postgres(_NUMERIC, sa.Float(), "ROUND({name}::numeric, 8)")
+        _alter_postgres(_NUMERIC, sa.Float(), _PG_ROUNDED)
         return
     _rebuild_sqlite(sa.Float(), sa.Text(), _cast_sql)
     _write_sqlite_canonical_text()
@@ -92,27 +100,48 @@ def downgrade() -> None:
 
 
 def _reject_oversized(bind) -> None:
-    """Abort before any rewrite when a price cannot be stored exactly.
+    """Abort before any rewrite when the converted price does not fit.
 
-    PostgreSQL would raise ``numeric field overflow`` during the
-    type change. SQLite would store ``1e12`` and ``1e20`` as text
-    the API then skips, and a value at ``1e20`` can come back as
-    ``1.0e+20``, which ``Decimal.quantize`` rejects. NaN and
-    infinity are not prices. SQLite's driver writes NaN as NULL, so
-    ``column != column`` is there for a NaN that is already stored.
-    PostgreSQL casts to float and names NaN and infinity as well.
-    ``abs`` of NULL is unknown, so a missing price is not selected.
+    The check uses the conversion this upgrade is about to apply.
+    A raw ``abs(float) >= 1e12`` misses ``999999999999.9999``: the
+    float is under the limit, and rounding makes it ``1e12``.
+    PostgreSQL would then raise ``numeric field overflow`` inside
+    the ``ALTER``. SQLite would store ``1000000000000.00000000``,
+    which later reads skip. NaN and infinity are named before the
+    numeric cast, because that cast rejects them. A null price is
+    not selected.
     """
+    if bind.dialect.name == "postgresql":
+        ids = _postgres_oversized_ids(bind)
+    else:
+        ids = _sqlite_oversized_ids(bind)
+    if not ids:
+        return
+    listed = ", ".join(str(item) for item in ids)
+    raise OversizedPricesError(
+        f"price_bars ids {listed} have a price outside Numeric(20, 8) "
+        "or a price that is not finite. "
+        "This upgrade did not change those rows."
+    )
+
+
+def _postgres_oversized_ids(bind):
+    """Ids whose rounded numeric price does not fit, or is not finite.
+
+    The ``CASE`` names NaN and infinity first. PostgreSQL does not
+    evaluate the ``ELSE``, so ``ROUND`` never sees those values.
+    ``_PG_ROUNDED`` is the same expression the ``ALTER`` uses.
+    """
+    nonfinite = "'NaN'::float8, 'Infinity'::float8, '-Infinity'::float8"
     parts = []
     for name in _PRICE_COLUMNS:
-        parts.append(f"abs({name}) >= {_PRICE_ABS_LIMIT}")
-        if bind.dialect.name == "postgresql":
-            parts.append(
-                f"{name}::float8 IN ("
-                "'NaN'::float8, 'Infinity'::float8, '-Infinity'::float8)"
-            )
-        else:
-            parts.append(f"{name} != {name}")
+        rounded = _PG_ROUNDED.format(name=name)
+        parts.append(
+            "CASE "
+            f"WHEN {name}::float8 IN ({nonfinite}) THEN TRUE "
+            f"ELSE abs({rounded}) >= {_PRICE_ABS_LIMIT} "
+            "END"
+        )
     rows = bind.execute(
         sa.text(
             "SELECT id FROM price_bars WHERE "
@@ -120,14 +149,39 @@ def _reject_oversized(bind) -> None:
             + " ORDER BY id"
         )
     ).fetchall()
-    if not rows:
-        return
-    listed = ", ".join(str(row.id) for row in rows)
-    raise OversizedPricesError(
-        f"price_bars ids {listed} have a price outside Numeric(20, 8) "
-        "or a price that is not finite. "
-        "This upgrade did not change those rows."
+    return [row.id for row in rows]
+
+
+def _sqlite_oversized_ids(bind):
+    """Ids whose canonical text does not fit, or cannot be quantized.
+
+    The batch copy turns each REAL into text with SQLite's own cast
+    (``1000000000000.0``, not the shorter Python ``str(float)``).
+    ``_quantized_legacy`` is the same function the rewrite uses on
+    that text. A value SQLite renders as ``1.0e+20`` or ``Inf``
+    cannot be quantized, and that is a rejection too.
+    """
+    columns = ", ".join(
+        f"CAST({name} AS TEXT) AS {name}" for name in _PRICE_COLUMNS
     )
+    rows = bind.execute(
+        sa.text(f"SELECT id, {columns} FROM price_bars ORDER BY id")
+    ).fetchall()
+    bad = []
+    for row in rows:
+        for name in _PRICE_COLUMNS:
+            raw = getattr(row, name)
+            if raw is None:
+                continue
+            try:
+                quantized = _quantized_legacy(raw)
+            except (InvalidOperation, ValueError):
+                bad.append(row.id)
+                break
+            if abs(quantized) >= _PRICE_LIMIT:
+                bad.append(row.id)
+                break
+    return bad
 
 
 def _alter_postgres(new_type, old_type, using: str) -> None:
@@ -223,8 +277,15 @@ def _write_sqlite_canonical_text() -> None:
         )
 
 
+def _quantized_legacy(value) -> Decimal:
+    """The decimal this upgrade stores for one copied SQLite price.
+
+    ``value`` is the text SQLite produced from the old real. The
+    preflight calls this before the rebuild, on ``CAST(column AS
+    TEXT)``, so both sides reject the same numbers.
+    """
+    return Decimal(str(value)).quantize(_QUANTUM, rounding=ROUND_HALF_EVEN)
+
+
 def _canonical_text(value) -> str:
-    quantized = Decimal(str(value)).quantize(
-        _QUANTUM, rounding=ROUND_HALF_EVEN
-    )
-    return format(quantized, "f")
+    return format(_quantized_legacy(value), "f")
