@@ -158,3 +158,59 @@ def test_company_row_becomes_an_instrument_view():
     assert plain_view.website.text is None
     assert plain_view.annual == []
     assert plain_view.quarterly == []
+
+
+def _bare_company(description):
+    """A company row with only the fields ``to_instrument`` reads."""
+    return Row(
+        id=1,
+        name="N",
+        ticker="T",
+        isin=None,
+        description=description,
+        website=None,
+        exchange=None,
+        currency=None,
+        country=None,
+        sector=None,
+        industry=None,
+        financial_metrics=[],
+    )
+
+
+def test_synthetic_source_uses_the_marker_token():
+    """The source is demo- plus the token inside the marker.
+
+    ``[IAC-DEMO-V2]`` becomes ``demo-v2``. The token is the text
+    up to the next ``]``, lowercased. It has to be short and
+    alphanumeric. A space, a hyphen, an empty token, or a long
+    token keeps the badge and uses the neutral label ``demo``.
+    """
+    assert to_instrument(_bare_company("[IAC-DEMO-V1] text")).source == (
+        "demo-v1"
+    )
+    assert to_instrument(_bare_company("[IAC-DEMO-V2] text")).source == (
+        "demo-v2"
+    )
+    assert to_instrument(_bare_company("[IAC-DEMO-V3] text")).source == (
+        "demo-v3"
+    )
+    # The prefix stays case-sensitive. The token itself is folded.
+    folded = to_instrument(_bare_company("[IAC-DEMO-v2] text"))
+    assert folded.is_synthetic is True
+    assert folded.source == "demo-v2"
+
+    malformed = to_instrument(_bare_company("[IAC-DEMO-V2 extra] notes"))
+    assert malformed.is_synthetic is True
+    assert malformed.source == "demo"
+    assert to_instrument(_bare_company("[IAC-DEMO-]")).source == "demo"
+    assert to_instrument(_bare_company("[IAC-DEMO-V-2]")).source == "demo"
+    assert to_instrument(_bare_company("[IAC-DEMO-")).source == "demo"
+    short = "A" * 16
+    long = "A" * 17
+    assert to_instrument(_bare_company(f"[IAC-DEMO-{short}]")).source == (
+        "demo-" + short.lower()
+    )
+    assert to_instrument(_bare_company(f"[IAC-DEMO-{long}]")).source == (
+        "demo"
+    )

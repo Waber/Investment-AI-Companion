@@ -61,6 +61,13 @@ returned 200. `demo/` is gitignored.
 - Rows from this fixture show the synthetic-data badge. The current
   `/ui` pages still show the older disclaimer banner. Product
   requirements v0.4 no longer require that notice.
+- A description that starts with `[IAC-DEMO-` gets that badge,
+  including one a person types by hand. The label can be
+  misleading. It is not a bypass of the seeder, and it is
+  acceptable for this local demo. The source is `demo-` plus the
+  token up to the next `]`, in lowercase, when that token is 1
+  to 16 ASCII letters or digits. `[IAC-DEMO-V2]` shows
+  `demo-v2`. Anything else shows `demo`.
 - A website is a link only when the view-model accepts `http` or
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".

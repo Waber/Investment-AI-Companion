@@ -272,6 +272,46 @@ async def test_synthetic_badge_matches_the_demo_prefix(client):
         assert (_SYNTHETIC_BADGE in detail.text) is shows_badge, ticker
 
 
+def _detail_source(html):
+    """The source value on an instrument detail page."""
+    match = re.search(r'data-field="source">\s*([^<]+)', html)
+    assert match is not None
+    return match.group(1).strip()
+
+
+@pytest.mark.asyncio
+async def test_synthetic_source_comes_from_the_marker(client):
+    """V2 shows demo-v2. A token that is not short and alphanumeric
+    still has the badge, and the source falls back to demo.
+    """
+    client.cookies.set("ui_lang", "en")
+    cases = (
+        ("SRCV1", "[IAC-DEMO-V1] seeded text", "demo-v1"),
+        ("SRCV2", "[IAC-DEMO-V2] seeded text", "demo-v2"),
+        ("SRCV3", "[IAC-DEMO-V3] later marker", "demo-v3"),
+        ("SRCBAD", "[IAC-DEMO-V2 extra] notes", "demo"),
+    )
+    ids = {}
+    for ticker, description, _source in cases:
+        ids[ticker] = _add_company(
+            client,
+            name=f"Name {ticker}",
+            ticker=ticker,
+            description=description,
+        )
+
+    page = await client.get("/ui")
+    assert page.status_code == 200
+    for ticker, _description, source in cases:
+        row = _list_row(page.text, ticker)
+        assert f"<td>{source}</td>" in row, ticker
+        assert _SYNTHETIC_BADGE in row
+        detail = await client.get(f"/ui/instruments/{ids[ticker]}")
+        assert detail.status_code == 200
+        assert _detail_source(detail.text) == source
+        assert _SYNTHETIC_BADGE in detail.text
+
+
 @pytest_asyncio.fixture
 async def seeded(client):
     session = client.app.state.testing_session_local()
