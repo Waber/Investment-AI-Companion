@@ -21,8 +21,25 @@ def test_name_is_stripped_and_a_blank_name_is_rejected():
             CompanyCreate(name=invisible, ticker="AAA")
         with pytest.raises(ValidationError):
             CompanyUpdate(name=invisible)
+    # After strip, a name with no character outside whitespace and
+    # Unicode category C* is blank. Cc is a control, Cf is format,
+    # Co is private use, Cn is unassigned. A letter next to a format
+    # character is a real name and is kept.
+    for invisible in (
+        "\u200b \u200b",
+        "\x00",
+        "\ue000",
+        "\u0378",
+        "\x00 \ue000",
+    ):
+        with pytest.raises(ValidationError):
+            CompanyCreate(name=invisible, ticker="AAA")
+        with pytest.raises(ValidationError):
+            CompanyUpdate(name=invisible)
     kept = CompanyCreate(name="Acme\u200b", ticker="AAA")
     assert kept.name == "Acme\u200b"
+    beside = CompanyCreate(name="A\u200bB", ticker="AAA")
+    assert beside.name == "A\u200bB"
 
 
 @pytest.mark.asyncio
@@ -53,10 +70,27 @@ async def test_blank_name_is_422_on_create_and_update(client):
     assert renamed.status_code == 200
     assert renamed.json()["name"] == "Renamed"
 
+    for invisible in ("\u200b \u200b", "\x00", "\ue000"):
+        rejected = await client.post(
+            "/api/v1/companies/", json={"name": invisible, "ticker": "INVIS"}
+        )
+        assert rejected.status_code == 422
+        rejected_update = await client.put(
+            f"/api/v1/companies/{company_id}", json={"name": invisible}
+        )
+        assert rejected_update.status_code == 422
+    fetched = await client.get(f"/api/v1/companies/{company_id}")
+    assert fetched.json()["name"] == "Renamed"
+    kept = await client.put(
+        f"/api/v1/companies/{company_id}", json={"name": "A\u200bB"}
+    )
+    assert kept.status_code == 200
+    assert kept.json()["name"] == "A\u200bB"
+
     db = client.app.state.testing_session_local()
     try:
         assert db.query(CompanyDB).count() == 1
-        assert db.get(CompanyDB, company_id).name == "Renamed"
+        assert db.get(CompanyDB, company_id).name == "A\u200bB"
     finally:
         db.close()
 
