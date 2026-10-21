@@ -124,7 +124,7 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
         Company: The created company with generated fields (id, timestamps)
 
     Raises:
-        HTTPException: 400 if company name or ticker already exists
+        HTTPException: 400 if this ticker or ISIN is already stored
     """
     repo = CompanyRepository(db)
 

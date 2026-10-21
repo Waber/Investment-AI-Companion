@@ -198,7 +198,7 @@ def test_duplicate_isin_from_integrity_error_uses_the_fixed_sentence(
 def test_update_duplicate_ticker_from_integrity_error_uses_the_fixed_sentence(
     monkeypatch, session
 ):
-    """The name/ticker pre-check is skipped, so the unique index fires.
+    """The ticker pre-check is skipped once, so the unique index fires.
 
     Update then uses the same sentence as create. The error is not
     chained to the driver, and the old ticker stays stored.
@@ -206,11 +206,16 @@ def test_update_duplicate_ticker_from_integrity_error_uses_the_fixed_sentence(
     repo = CompanyRepository(session)
     first = repo.create(CompanyCreate(name="A", ticker="AAA"))
     repo.create(CompanyCreate(name="B", ticker="BBB"))
-    monkeypatch.setattr(
-        repo,
-        "_other_company_with_name_or_ticker",
-        lambda company_id, name, ticker: None,
-    )
+    original = repo.get_by_ticker
+    calls = {"count": 0}
+
+    def hide_the_first_lookup(ticker):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return None
+        return original(ticker)
+
+    monkeypatch.setattr(repo, "get_by_ticker", hide_the_first_lookup)
 
     with pytest.raises(
         DuplicateTickerError,
@@ -267,11 +272,26 @@ def test_company_create_reraises_other_integrity_errors(monkeypatch, session):
 
 
 # company-shaped pin, see #26
-def test_company_is_unique_checks_name_or_ticker(session, company):
+def test_update_reuses_a_name_when_the_ticker_is_different(session, company):
+    """The stored name Acme can also be the name of ticker OTHR."""
+    repo = CompanyRepository(session)
+    other = repo.create(CompanyCreate(name="Other", ticker="OTHR"))
+
+    updated = repo.update(other.id, CompanyUpdate(name="Acme"))
+
+    assert updated.name == "Acme"
+    assert updated.ticker == "OTHR"
+    assert updated.id == other.id
+    assert repo.get_by_ticker("ACME").name == "Acme"
+    assert repo.get_by_ticker("OTHR").name == "Acme"
+
+
+def test_company_is_unique_allows_a_repeated_name(session, company):
+    """A second company may use Acme when its ticker is different."""
     repo = CompanyRepository(session)
 
     assert repo.is_unique("Other", "OTHR") is True
-    assert repo.is_unique("Acme", "OTHR") is False
+    assert repo.is_unique("Acme", "OTHR") is True
     assert repo.is_unique("Other", "ACME") is False
 
 

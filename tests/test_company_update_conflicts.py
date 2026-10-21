@@ -37,8 +37,48 @@ async def companies(client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("field", ["name", "ticker"])
-async def test_duplicate_update_preserves_records(client, companies, field):
+async def test_update_may_reuse_a_name_with_a_different_ticker(
+    client, companies
+):
+    """BRK.A and BRK.B can share a name. Create already allowed that.
+
+    Update used to reject it with "Company name or ticker already
+    exists". The one rule is ticker uniqueness, on both paths.
+    """
+    first, second = companies
+    response = await client.put(
+        f"/api/v1/companies/{first['id']}",
+        json={"name": second["name"]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["name"] == second["name"]
+    assert body["ticker"] == first["ticker"]
+    assert "code" not in body
+    other = await client.get(f"/api/v1/companies/{second['id']}")
+    assert other.status_code == 200
+    assert other.json()["name"] == second["name"]
+    assert other.json()["ticker"] == second["ticker"]
+
+
+@pytest.mark.asyncio
+async def test_create_may_reuse_a_name_with_a_different_ticker(client):
+    payload = {"name": "Berkshire Hathaway", "ticker": "BRK.A"}
+    first = await client.post("/api/v1/companies/", json=payload)
+    assert first.status_code == 201, first.text
+    second = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Berkshire Hathaway", "ticker": "BRK.B"},
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["name"] == "Berkshire Hathaway"
+    assert second.json()["ticker"] == "BRK.B"
+    assert first.json()["id"] != second.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_update_preserves_records(client, companies):
+    field = "ticker"
     first, second = companies
     url = f"/api/v1/companies/{first['id']}"
     with client.app.state.testing_session_local() as db:
@@ -49,15 +89,10 @@ async def test_duplicate_update_preserves_records(client, companies, field):
         json={field: second[field], "description": "Must not be saved"},
     )
     assert response.status_code == 400
-    if field == "ticker":
-        assert response.json() == {
-            "detail": "A company with this ticker already exists",
-            "code": "duplicate_ticker",
-        }
-    else:
-        assert response.json() == {
-            "detail": "Company name or ticker already exists"
-        }
+    assert response.json() == {
+        "detail": "A company with this ticker already exists",
+        "code": "duplicate_ticker",
+    }
     for item in companies:
         fetched = await client.get(f"/api/v1/companies/{item['id']}")
         assert fetched.status_code == 200
