@@ -25,8 +25,19 @@ On SQLite the pair constraint is part of ``CREATE TABLE``. Dropping
 it copies ``companies`` and only ``companies``. Foreign keys are
 turned off for that copy. With them on, ``DROP TABLE companies``
 either fails (``financial_metrics``) or cascade-deletes
-``price_bars``. The copy runs in one transaction. Foreign keys are
-turned back on afterward. PostgreSQL drops the constraint in place.
+``price_bars``. ``autocommit_block`` commits Alembic's transaction
+and leaves the driver outside a transaction, which is the only
+time ``PRAGMA foreign_keys`` is honored. The copy is then one
+explicit ``BEGIN`` / ``COMMIT``. A failure rolls that back.
+Foreign keys are restored afterward, and Alembic opens a new
+transaction for the version row. PostgreSQL drops the constraint
+in place.
+
+``ix_companies_ticker`` is a non-unique index on the column.
+Lookups compare ``ticker`` to a value, and the unique index is
+on ``upper(ticker)``, which those comparisons do not use.
+Downgrade drops the plain index. The unique column index from
+the previous revision keeps the name ``uq_companies_ticker``.
 
 ``down_revision`` is ``0005`` so this branch has one Alembic head.
 Revision ``0006`` is the price-bar numeric migration and is not on
@@ -53,6 +64,7 @@ branch_labels = None
 depends_on = None
 
 _TICKER_INDEX = "uq_companies_ticker"
+_PLAIN_TICKER_INDEX = "ix_companies_ticker"
 _NAME_TICKER = "uq_company_name_ticker"
 _CONSTRAINT_SQL = "CONSTRAINT uq_company_name_ticker UNIQUE (name, ticker)"
 _COMPANIES_NEW = "companies__new"
@@ -276,96 +288,158 @@ def _pragma(raw, statement):
         cursor.close()
 
 
-def _with_foreign_keys_off(bind, work):
+def _dbapi_execute(raw, statement):
+    cursor = raw.cursor()
+    try:
+        cursor.execute(statement)
+    finally:
+        cursor.close()
+
+
+def _with_foreign_keys_off(work):
     """Run ``work`` while SQLite is not enforcing foreign keys.
 
-    Any open SQLAlchemy transaction is committed first, because the
-    foreign-key pragma does nothing inside a transaction. The pragma
-    is changed on the DB-API connection so SQLAlchemy does not start
-    another transaction before ``begin()``.
+    ``PRAGMA foreign_keys`` is ignored inside a transaction.
+    :meth:`alembic.runtime.migration.MigrationContext.autocommit_block`
+    commits the migration transaction and sets the driver to
+    ``AUTOCOMMIT`` (SQLite isolation level ``None``), so the pragma
+    takes effect. The copy then uses its own ``BEGIN`` and
+    ``COMMIT``. A failure runs ``ROLLBACK`` and the exception
+    propagates, so Alembic does not advance the version. The block
+    opens a new transaction on the way out. That transaction is
+    where the version row is written when the migration succeeds.
 
-    The sqlite3 driver commits on its own before data-definition
-    statements unless its isolation level is ``None``. The copy has
-    to be one transaction: a failure must put ``companies`` back and
-    leave the child rows in place. This function turns that driver
-    behavior off, issues ``BEGIN`` itself, and uses ``bind.begin()``
-    to commit or roll back. ``do_begin`` does not issue a second
-    ``BEGIN``. Foreign keys are turned back on afterward, and the
-    driver's isolation level is restored.
+    ``work`` receives the connection from inside the block. The
+    connection captured before the block is a different object.
+
+    When the caller already had a transaction open, Alembic does
+    not start its own, and ``autocommit_block`` refuses to run
+    (it only commits the transaction it started). That caller
+    transaction is committed first so the pragma can change.
+    This function does not read or assign ``context._transaction``.
+    Alembic still commits the version row when it owns the
+    transaction: ``autocommit_block`` opens a new one on the way
+    out, and that is the transaction the version update uses.
     """
-    # Alembic commits the transaction it started for this revision
-    # after ``upgrade`` or ``downgrade`` returns, and that commit
-    # includes the version row. The pragma cannot change while a
-    # transaction is open, so this commits first. The object Alembic
-    # is holding is then finished. A new transaction is opened after
-    # the copy, in the same place, so the version row still commits
-    # when the connection closes. Without that, the schema changes
-    # and the version stays on the previous revision.
     context = op.get_context()
-    owned = context._transaction is not None
-    if bind.in_transaction():
+    bind = op.get_bind()
+    if bind.in_transaction() and context._in_external_transaction:
         bind.commit()
-        if owned:
-            context._transaction = None
-    raw = bind.connection.dbapi_connection
-    previous_isolation = raw.isolation_level
-    raw.isolation_level = None
-    previous = _pragma(raw, "PRAGMA foreign_keys")
-    try:
-        _pragma(raw, "PRAGMA foreign_keys=OFF")
-        turned_off = _pragma(raw, "PRAGMA foreign_keys")
-        if turned_off not in (0, "0"):
-            raise RuntimeError(
-                "SQLite foreign keys stayed on, so companies was not rebuilt."
-            )
-        cursor = raw.cursor()
+    with context.autocommit_block():
+        bind = op.get_bind()
+        raw = bind.connection.dbapi_connection
+        previous = _pragma(raw, "PRAGMA foreign_keys")
+        open_copy = False
         try:
-            cursor.execute("BEGIN")
-        finally:
-            cursor.close()
-        try:
-            with bind.begin():
-                work()
-        except Exception:
-            if bind.in_transaction():
-                bind.rollback()
+            _pragma(raw, "PRAGMA foreign_keys=OFF")
+            turned_off = _pragma(raw, "PRAGMA foreign_keys")
+            if turned_off not in (0, "0"):
+                raise RuntimeError(
+                    "SQLite foreign keys stayed on, so companies "
+                    "was not rebuilt."
+                )
+            _dbapi_execute(raw, "BEGIN")
+            open_copy = True
+            try:
+                work(bind)
+            except Exception:
+                _dbapi_execute(raw, "ROLLBACK")
+                open_copy = False
+                raise
             else:
-                raw.rollback()
-            raise
-    finally:
-        state = "ON" if previous in (1, "1") else "OFF"
-        _pragma(raw, "PRAGMA foreign_keys=" + state)
-        raw.isolation_level = previous_isolation
-        if owned and context._transaction is None:
-            context._transaction = bind.begin()
+                _dbapi_execute(raw, "COMMIT")
+                open_copy = False
+        finally:
+            if open_copy:
+                _dbapi_execute(raw, "ROLLBACK")
+            state = "ON" if previous in (1, "1") else "OFF"
+            _pragma(raw, "PRAGMA foreign_keys=" + state)
+
+
+def _company_child_tables(bind):
+    """Tables with a foreign key to ``companies``.
+
+    The copy does not rebuild these tables. ``PRAGMA
+    foreign_key_check`` is run on each of them. ``companies__new``
+    is the temporary copy and is not a child.
+    """
+    inspector = sa.inspect(bind)
+    children = []
+    for name in inspector.get_table_names():
+        if name == "companies" or name.startswith("companies__"):
+            continue
+        for foreign_key in inspector.get_foreign_keys(name):
+            if foreign_key.get("referred_table") == "companies":
+                children.append(name)
+                break
+    return children
+
+
+def _foreign_key_violations(bind, tables):
+    """Rows ``PRAGMA foreign_key_check`` reports for ``tables``.
+
+    Each item is ``(table, rowid, parent, fkid)``. The pragma
+    reports violations whether or not foreign keys are enforced.
+    """
+    found = set()
+    for table in tables:
+        rows = bind.execute(
+            sa.text('PRAGMA foreign_key_check("' + table + '")')
+        )
+        for row in rows:
+            found.add(tuple(row))
+    return found
+
+
+def _format_new_fk_violations(rows):
+    listed = ", ".join(
+        f"{table} rowid {rowid} -> {parent}"
+        for table, rowid, parent, _fkid in sorted(
+            rows, key=lambda item: (str(item[0]), item[1] or 0)
+        )
+    )
+    return (
+        "Rebuilding companies introduced foreign-key violations "
+        "that were not in the table before the copy: "
+        + listed
+        + ". The copy was rolled back."
+    )
 
 
 def _rebuild_sqlite_companies(bind, transform):
     """Copy ``companies`` through ``transform`` and recreate its indexes.
 
     Only this table is copied. Child tables are not dropped. Foreign
-    keys are off for the copy so their rows stay.
+    keys are off for the copy so their rows stay. After the rename,
+    ``PRAGMA foreign_key_check`` must not report a violation that
+    was not already there. An orphan that existed before the copy
+    does not stop the upgrade. A parent the copy dropped does.
     """
     ddl = _sqlite_table_sql(bind)
     indexes = _sqlite_index_sqls(bind)
+    children = _company_child_tables(bind)
     new_ddl = _as_new_table(transform(ddl))
 
-    def copy():
-        bind.execute(sa.text("DROP TABLE IF EXISTS " + _COMPANIES_NEW))
-        bind.execute(sa.text(new_ddl))
-        bind.execute(
+    def copy(active):
+        before = _foreign_key_violations(active, children)
+        active.execute(sa.text("DROP TABLE IF EXISTS " + _COMPANIES_NEW))
+        active.execute(sa.text(new_ddl))
+        active.execute(
             sa.text(
                 "INSERT INTO " + _COMPANIES_NEW + " SELECT * FROM companies"
             )
         )
-        bind.execute(sa.text("DROP TABLE companies"))
-        bind.execute(
+        active.execute(sa.text("DROP TABLE companies"))
+        active.execute(
             sa.text("ALTER TABLE " + _COMPANIES_NEW + " RENAME TO companies")
         )
+        introduced = _foreign_key_violations(active, children) - before
+        if introduced:
+            raise RuntimeError(_format_new_fk_violations(introduced))
         for statement in indexes:
-            bind.execute(sa.text(statement))
+            active.execute(sa.text(statement))
 
-    _with_foreign_keys_off(bind, copy)
+    _with_foreign_keys_off(copy)
 
 
 def _drop_name_ticker_constraint(bind):
@@ -384,6 +458,23 @@ def _restore_name_ticker_constraint(bind):
         _rebuild_sqlite_companies(bind, _with_name_ticker_constraint)
         return
     op.create_unique_constraint(_NAME_TICKER, "companies", ["name", "ticker"])
+
+
+def _ensure_plain_ticker_index(bind):
+    """Non-unique index for ``WHERE ticker = ...``.
+
+    The unique index is on ``upper(ticker)``. A comparison with the
+    column itself does not use that index. This one does. It is not
+    unique: uniqueness stays on ``uq_companies_ticker``.
+    """
+    if _index_exists(bind, _PLAIN_TICKER_INDEX):
+        return
+    op.create_index(_PLAIN_TICKER_INDEX, "companies", ["ticker"], unique=False)
+
+
+def _drop_plain_ticker_index(bind):
+    if _index_exists(bind, _PLAIN_TICKER_INDEX):
+        op.drop_index(_PLAIN_TICKER_INDEX, table_name="companies")
 
 
 def _replace_with_upper_index(bind):
@@ -416,9 +507,15 @@ def upgrade() -> None:
         raise UpperTickerCollision(_format_upper_collisions(found))
     _drop_name_ticker_constraint(bind)
     _replace_with_upper_index(bind)
+    _ensure_plain_ticker_index(bind)
 
 
 def downgrade() -> None:
     bind = op.get_bind()
+    # Drop the plain index before the companies copy. The copy
+    # recreates every index that is present, and the previous
+    # revision did not have this one. Revision 0003 may later
+    # create a unique index with the same name.
+    _drop_plain_ticker_index(bind)
     _restore_column_ticker_index(bind)
     _restore_name_ticker_constraint(bind)

@@ -164,7 +164,10 @@ def test_model_and_migration_use_the_same_isin_uniqueness(postgres_engine):
             from_migration = isin_uniqueness(connection)
             assert from_model == from_migration == EXPECTED_ISIN_UNIQUENESS
             assert ticker_uniqueness(connection) == ticker_from_model
-            assert ticker_from_model == ((), ())
+            assert ticker_from_model == (
+                (("ix_companies_ticker", False, ("ticker",)),),
+                (),
+            )
             assert upper_ticker_index(connection) == upper_from_model
             assert upper_from_model == (
                 "uq_companies_ticker",
@@ -361,7 +364,10 @@ def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
             True,
             ("upper(ticker::text)",),
         )
-        assert ticker_uniqueness(connection) == ((), ())
+        assert ticker_uniqueness(connection) == (
+            (("ix_companies_ticker", False, ("ticker",)),),
+            (),
+        )
     finally:
         _drop_scratch(connection, schema)
 
@@ -374,6 +380,7 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
         connection.commit()
         assert_empty_metadata_diff(connection)
         connection.execute(text("DROP INDEX uq_companies_ticker"))
+        connection.execute(text("DROP INDEX ix_companies_ticker"))
         connection.execute(
             text(
                 "CREATE UNIQUE INDEX ix_companies_ticker "
@@ -392,7 +399,10 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
         upgrade_head(connection)
         require_company_instrument_columns(connection)
         assert_empty_metadata_diff(connection)
-        assert ticker_uniqueness(connection) == ((), ())
+        assert ticker_uniqueness(connection) == (
+            (("ix_companies_ticker", False, ("ticker",)),),
+            (),
+        )
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
             True,

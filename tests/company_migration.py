@@ -153,10 +153,43 @@ def assert_upper_ticker_index_recorded(connection):
     assert "ticker" in folded
 
 
+def assert_plain_ticker_index_recorded(connection):
+    """``ix_companies_ticker`` is a non-unique index on ``ticker``.
+
+    The catalog is ``sqlite_master`` or ``pg_indexes``. The index
+    is not unique. Uniqueness stays on ``uq_companies_ticker``.
+    """
+    if connection.dialect.name == "sqlite":
+        sql = connection.execute(
+            text(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'index' AND name = 'ix_companies_ticker'"
+            )
+        ).scalar()
+        assert sql, "ix_companies_ticker is missing from sqlite_master"
+        compact = "".join(sql.split()).lower()
+        assert "createuniqueindex" not in compact
+        assert "(ticker)" in compact
+        return
+    indexdef = connection.execute(
+        text(
+            "SELECT indexdef FROM pg_indexes "
+            "WHERE schemaname = current_schema() "
+            "AND tablename = 'companies' "
+            "AND indexname = 'ix_companies_ticker'"
+        )
+    ).scalar()
+    assert indexdef, "ix_companies_ticker is missing from pg_indexes"
+    folded = "".join(indexdef.split()).lower()
+    assert "createuniqueindex" not in folded
+    assert "(ticker)" in folded
+
+
 def assert_empty_metadata_diff(connection):
-    """Autogenerate is empty and the upper ticker index is recorded."""
+    """Autogenerate is empty and both ticker indexes are recorded."""
     assert metadata_diff(connection) == []
     assert_upper_ticker_index_recorded(connection)
+    assert_plain_ticker_index_recorded(connection)
 
 
 def unique_constraint_names(connection):

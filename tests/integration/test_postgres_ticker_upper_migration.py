@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
+    assert_plain_ticker_index_recorded,
     downgrade_to,
     unique_constraint_names,
     upgrade_to,
@@ -134,6 +135,16 @@ def test_a_trailing_space_is_not_an_upper_collision(postgres_engine):
             True,
             ("upper(ticker::text)",),
         )
+        assert_plain_ticker_index_recorded(connection)
+        downgrade_to(connection, "0005")
+        missing = connection.execute(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE schemaname = current_schema() "
+                "AND indexname = 'ix_companies_ticker'"
+            )
+        ).scalar()
+        assert missing is None
     finally:
         _drop_scratch(connection, schema)
 

@@ -149,6 +149,13 @@ class CompanyDB(Base):
         # and drops uq_company_name_ticker: ticker uniqueness already
         # makes that pair unique, so the pair constraint was redundant.
         Index("uq_companies_ticker", func.upper(ticker), unique=True),
+        # Lookups filter on the column (CompanyDB.ticker == value).
+        # The unique index is on upper(ticker), so those comparisons
+        # do not use it. A non-unique index on the column keeps the
+        # lookup exact: upper(ticker) would also match a raw-SQL row
+        # such as 'AAPL ' when the caller asked for 'AAPL'. Revision
+        # 0007 creates and drops this index with the expression index.
+        Index("ix_companies_ticker", "ticker"),
         # Same unique index revision 0001 creates. Several null ISINs
         # are allowed; a present ISIN is stored once.
         Index("uq_companies_isin", "isin", unique=True),

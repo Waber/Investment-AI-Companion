@@ -328,6 +328,38 @@ def test_missing_sqlite_file_is_not_created(tmp_path, capsys, monkeypatch):
     assert not path.exists()
 
 
+def test_sqlite_uri_is_not_a_missing_file(tmp_path, capsys, monkeypatch):
+    """A ``file:`` database name is a SQLite URI, not a missing path.
+
+    ``_missing_sqlite_path`` refuses ``sqlite:///missing.db`` before
+    connect, because connect would create that file. ``file:`` is
+    not that kind of name. This URI points at a file that is already
+    on disk, and the command reads it.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    path = tmp_path / "present.db"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, "
+                "ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO companies (ticker) VALUES ('AAPL')")
+        )
+    engine.dispose()
+    url = "sqlite:///file:" + path.as_posix() + "?mode=rw&uri=true"
+    code = main(["check", url])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out == "No duplicate tickers.\n"
+    assert captured.err == ""
+    assert path.exists()
+
+
 def test_duplicate_tickers_requires_the_companies_table():
     engine = create_engine("sqlite://")
     with engine.connect() as connection:
