@@ -13,6 +13,7 @@ from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     upgrade_head,
+    without_unreflectable_ticker_index,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,12 +80,13 @@ def test_autogenerate_imports_utc_datetime(tmp_path):
             # Stamp without creating tables. Autogenerate then renders
             # the model, including UTCDateTime, against an empty file.
             command.stamp(config, "head")
-            script = command.revision(
-                config,
-                message="render check",
-                autogenerate=True,
-                rev_id="9998",
-            )
+            with without_unreflectable_ticker_index():
+                script = command.revision(
+                    config,
+                    message="render check",
+                    autogenerate=True,
+                    rev_id="9998",
+                )
         written = Path(script.path)
         source = written.read_text()
     finally:

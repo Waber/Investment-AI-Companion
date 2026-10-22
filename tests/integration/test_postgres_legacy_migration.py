@@ -14,11 +14,11 @@ from tests.company_migration import (
     EXPECTED_ISIN_UNIQUENESS,
     LEGACY_COMPANIES,
     LEGACY_METRICS,
+    assert_empty_metadata_diff,
     downgrade_base,
     downgrade_to,
     duplicate_ticker_message,
     isin_uniqueness,
-    metadata_diff,
     stamp,
     ticker_uniqueness,
     upgrade_head,
@@ -372,7 +372,7 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
     try:
         Base.metadata.create_all(bind=connection)
         connection.commit()
-        assert metadata_diff(connection) == []
+        assert_empty_metadata_diff(connection)
         connection.execute(text("DROP INDEX uq_companies_ticker"))
         connection.execute(
             text(
@@ -391,7 +391,7 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
         stamp(connection, "0002")
         upgrade_head(connection)
         require_company_instrument_columns(connection)
-        assert metadata_diff(connection) == []
+        assert_empty_metadata_diff(connection)
         assert ticker_uniqueness(connection) == ((), ())
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",

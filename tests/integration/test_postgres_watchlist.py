@@ -12,7 +12,10 @@ from sqlalchemy.exc import IntegrityError
 
 from alembic import command
 from app.core.database import Base
-from tests.company_migration import upgrade_head
+from tests.company_migration import (
+    upgrade_head,
+    without_unreflectable_ticker_index,
+)
 from tests.watchlist_checks import (
     assert_add_is_idempotent_and_keeps_the_first_label,
     assert_company_update_leaves_the_watchlist_row,
@@ -170,12 +173,13 @@ def test_autogenerate_against_postgresql_watchlist_is_empty(postgres_engine):
             command.stamp(config, "0003")
             upgrade_head(connection)
             assert_autogenerate_is_empty(connection)
-            script = command.revision(
-                config,
-                message="empty check",
-                autogenerate=True,
-                rev_id="9996",
-            )
+            with without_unreflectable_ticker_index():
+                script = command.revision(
+                    config,
+                    message="empty check",
+                    autogenerate=True,
+                    rev_id="9996",
+                )
             written = Path(script.path)
             source = written.read_text()
         finally:

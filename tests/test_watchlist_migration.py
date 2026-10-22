@@ -10,7 +10,10 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from app.core.database import Base, create_db_engine
-from tests.company_migration import upgrade_head
+from tests.company_migration import (
+    upgrade_head,
+    without_unreflectable_ticker_index,
+)
 from tests.watchlist_migration import (
     ROOT,
     _config,
@@ -158,12 +161,13 @@ def test_autogenerate_against_sqlite_watchlist_is_empty(tmp_path):
             command.stamp(config, "0003")
             upgrade_head(connection)
             assert_autogenerate_is_empty(connection)
-            script = command.revision(
-                config,
-                message="empty check",
-                autogenerate=True,
-                rev_id="9997",
-            )
+            with without_unreflectable_ticker_index():
+                script = command.revision(
+                    config,
+                    message="empty check",
+                    autogenerate=True,
+                    rev_id="9997",
+                )
             written = Path(script.path)
             source = written.read_text()
     finally:

@@ -15,16 +15,17 @@ from tests.company_migration import (
     EXPECTED_ISIN_UNIQUENESS,
     LEGACY_COMPANIES,
     LEGACY_METRICS,
+    assert_empty_metadata_diff,
     downgrade_base,
     downgrade_to,
     duplicate_ticker_message,
     isin_uniqueness,
-    metadata_diff,
     stamp,
     ticker_uniqueness,
     upgrade_head,
     upgrade_to,
     upper_ticker_index,
+    without_unreflectable_ticker_index,
 )
 
 
@@ -285,7 +286,8 @@ def test_tab_cr_and_lf_collisions_stop_the_sqlite_upgrade(tmp_path):
 def inspect_indexes(connection):
     from sqlalchemy import inspect
 
-    return inspect(connection).get_indexes("companies")
+    with without_unreflectable_ticker_index():
+        return inspect(connection).get_indexes("companies")
 
 
 def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
@@ -297,7 +299,7 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
     engine = create_db_engine(f"sqlite:///{tmp_path / 'named.db'}")
     Base.metadata.create_all(engine)
     with engine.connect() as connection:
-        assert metadata_diff(connection) == []
+        assert_empty_metadata_diff(connection)
         assert ticker_uniqueness(connection) == ((), ())
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
@@ -331,7 +333,7 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         stamp(connection, "0002")
         upgrade_head(connection)
         require_company_instrument_columns(connection)
-        assert metadata_diff(connection) == []
+        assert_empty_metadata_diff(connection)
         assert ticker_uniqueness(connection) == ((), ())
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
@@ -344,7 +346,7 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
             (),
         )
         upgrade_head(connection)
-        assert metadata_diff(connection) == []
+        assert_empty_metadata_diff(connection)
         stored = (
             connection.execute(
                 text("SELECT ticker FROM companies ORDER BY ticker")
