@@ -53,6 +53,7 @@ shape, not this message.
 """
 
 import unicodedata
+from typing import Literal, overload
 
 # Closed set. A new failure needs a new code and a test, not a
 # free-form sentence.
@@ -85,7 +86,10 @@ _BIDI_AND_HIDDEN = frozenset(
 )
 
 # Category Cc characters a multi-line field may contain. Any other
-# Cc character, including NUL and DEL, is ``control_char``.
+# Cc character, including NUL, DEL, and NEL (U+0085), is
+# ``control_char``. NEL is a line break for ``str.splitlines``.
+# Allowing it in a note would let one field forge a second log line.
+# ``strip`` on master removed a NEL at the edge. It is rejected now.
 _NEWLINE_CONTROLS = frozenset("\n\r\t")
 
 # A value made only of these, plus whitespace, is blank. ``Cs`` is
@@ -154,6 +158,28 @@ def _is_blank(value: str) -> bool:
             continue
         return False
     return True
+
+
+@overload
+def clean_text(
+    value: str | None,
+    *,
+    field: str,
+    max_len: int,
+    allow_newlines: bool = False,
+    allow_blank: Literal[False] = False,
+) -> str: ...
+
+
+@overload
+def clean_text(
+    value: str | None,
+    *,
+    field: str,
+    max_len: int,
+    allow_newlines: bool = False,
+    allow_blank: Literal[True],
+) -> str | None: ...
 
 
 def clean_text(

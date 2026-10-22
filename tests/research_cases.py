@@ -534,20 +534,41 @@ class ResearchBehavior:
         )
 
     @pytest.mark.parametrize(
-        "value",
-        ["\u200b", "\ufeff", " \u200b \ufeff ", "\n\u200c\t", "\u200d"],
+        ("value", "title_code", "body_code"),
+        [
+            ("\u200b", "blank", "blank"),
+            ("\ufeff", "blank", "blank"),
+            (" \u200b \ufeff ", "blank", "blank"),
+            ("\n\u200c\t", "control_char", "blank"),
+            ("\u200d", "blank", "blank"),
+        ],
+        ids=[
+            "U+200B",
+            "U+FEFF",
+            "spaces-and-Cf",
+            "LF-U+200C-tab",
+            "U+200D",
+        ],
     )
-    def test_format_characters_alone_count_as_blank(self, value):
-        """Cf plus whitespace is blank. A letter beside Cf is kept."""
+    def test_format_characters_alone_count_as_blank(
+        self, value, title_code, body_code
+    ):
+        """Cf plus whitespace is blank. A letter beside Cf is kept.
+
+        ``\\n\\u200c\\t`` is blank on a body: newline and tab are
+        allowed, then strip leaves U+200C. The same text is
+        ``control_char`` on a title, because a title rejects the
+        newline before strip. Checking only ``loc`` would hide that.
+        """
         with pytest.raises(ValidationError) as note_error:
             NoteCreate(body=value)
-        assert note_error.value.errors()[0]["loc"] == ("body",)
+        assert _text_failure(note_error, "body").code == body_code
         with pytest.raises(ValidationError) as title_error:
             ThesisCreate(title=value, body="drivers")
-        assert title_error.value.errors()[0]["loc"] == ("title",)
+        assert _text_failure(title_error, "title").code == title_code
         with pytest.raises(ValidationError) as body_error:
             ThesisCreate(title="Growth", body=value)
-        assert body_error.value.errors()[0]["loc"] == ("body",)
+        assert _text_failure(body_error, "body").code == body_code
         assert (
             ThesisCreate(
                 title="Growth",
@@ -556,12 +577,15 @@ class ResearchBehavior:
             ).thesis_breakers
             == ""
         )
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as note_update:
             NoteUpdate(body=value)
-        with pytest.raises(ValidationError):
+        assert _text_failure(note_update, "body").code == body_code
+        with pytest.raises(ValidationError) as title_update:
             ThesisUpdate(title=value)
-        with pytest.raises(ValidationError):
+        assert _text_failure(title_update, "title").code == title_code
+        with pytest.raises(ValidationError) as body_update:
             ThesisUpdate(body=value)
+        assert _text_failure(body_update, "body").code == body_code
         assert ThesisUpdate(thesis_breakers=value).thesis_breakers == ""
 
         kept = "a\u200bb"

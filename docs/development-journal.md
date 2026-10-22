@@ -1,5 +1,56 @@
 # Development Journal
 
+## 2026-10-22 - Review fixes for the shared text checker (#86)
+
+- Scope: code-review and QA follow-up on the same branch.
+  `templates/`, `static/`, and `app/ui/` were not edited.
+- Decisions: the 422 handler escapes surrogate characters in
+  dict keys as well as values, including a key nested inside
+  the body. A missing ticker puts that body in `input`, and a
+  raw U+DC00 key used to become a 500. The handler now writes
+  `ctx.error` itself: `{code, field}` for `TextValidationError`,
+  and `{}` for any other exception, before encoding. A new
+  attribute on the exception cannot leak into the contract.
+  `clean_text` has overloads: `allow_blank=False` returns
+  `str`, and `allow_blank=True` returns `str | None`.
+  `WatchlistRepository.add` rejects a label longer than 80
+  with `too_long`. The HTTP model still reports
+  `string_too_long` first. SQLite would otherwise store the
+  long label. Provider fetch strips edge whitespace
+  (spaces, tab, CR, LF) from a company name before
+  validation, which is what the old name rule did. A LRM or
+  other bidi or tag character in a provider name is still a
+  502. NEL (U+0085) stays `control_char` even when newlines
+  are allowed. `str.splitlines` treats it as a line break, so
+  accepting it would let a note forge a log line. Master
+  stripped a NEL at the edge. A company name that is only
+  U+202E was already 422. A surrogate beside a letter used to
+  surface as 500 (`UnicodeEncodeError`), not as a stored name.
+  The `/ui` form shows `error.required` for the new name
+  rejections because it catches `ValueError`. Mapping
+  `exc.code` to a catalog key is the Frontend Developer's
+  follow-up. Note and thesis bodies and thesis-breakers now
+  reject bidi marks and tag characters. On master only the
+  title did. A thesis title's bidi sentence changed from
+  `bidi controls` to `hidden or bidi controls`. The England,
+  Scotland, and Wales flags use tag characters, so they are
+  `bidi` too.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1770 passed, 209 deselected, coverage 96.49% (4191
+  statements, 123 miss, 1158 branches, 49 partial).
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. Two pre-existing long lines in
+  `tests/test_provider_data_hygiene.py` were left as they
+  were. No live market-data calls. PostgreSQL is the GitHub
+  Actions job. It is recorded on the pull request, not in a
+  later commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-22 about 09:16 to 09:50.
+- Next: both CI jobs, then the owner reviews the pull request.
+  Agents do not merge.
+
 ## 2026-10-22 - Lock the text 422 contract (#86)
 
 - Scope: QA follow-up on the shared text checker, same branch.

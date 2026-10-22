@@ -100,9 +100,23 @@ What differs from the previous write rules:
 
 - A trailing newline on a company name, a watchlist label, or a
   thesis title is 422 `control_char`. It used to be stripped and the
-  rest stored (`ETF\n` became `ETF`).
-- A company name with a bidi or hidden-format control, or an unpaired
-  surrogate beside a letter, is 422. Those names used to be stored.
+  rest stored (`ETF\n` became `ETF`). NEL (U+0085) is rejected even
+  when newlines are allowed. `str.splitlines` treats NEL as a line
+  break, so a note that contained one could forge a second log line.
+  Master stripped a NEL at the edge as whitespace.
+- A company name that is only U+202E was already 422. A bidi or
+  hidden-format mark beside a letter is now 422 `bidi`. A surrogate
+  beside a letter used to make the error encoder raise
+  `UnicodeEncodeError`, so the client saw 500, not 201. It is now
+  422 `surrogate`, and `input` shows the ASCII `\u` escape.
+- The `/ui` company form calls `normalize_name`. LRM, RLM, and ALM
+  (U+200E, U+200F, U+061C), U+206A–U+206F, tag characters, and a
+  trailing newline now fail in that function. The form catches
+  `ValueError` and shows `error.required`. Mapping `exc.code` to a
+  catalog key is a Frontend Developer follow-up. `app/ui/` was not
+  edited for that.
+- Note bodies, thesis bodies, and thesis-breakers now reject bidi
+  marks and tag characters. On master only the title did.
 - A watchlist label made only of private-use (Co) or unassigned (Cn)
   characters is stored as JSON `null`, the same as a blank label. It
   is not a 422, so it has no `type` or `ctx.error.code`. It used to
@@ -111,9 +125,22 @@ What differs from the previous write rules:
   thesis-breakers). There is no HTTP route for notes or theses yet.
 - The watchlist bidi message is `Value error, label must not contain
   hidden or bidi controls`. It used to say `hidden format controls`.
+  A thesis title used to say `bidi controls` and now says
+  `hidden or bidi controls`.
 - A thesis title keeps a format character at either edge. U+2028 at
   an edge is stripped; one in the middle is kept. A line or paragraph
   separator used to be 422 anywhere in the title.
+- Tag characters U+E0000–U+E007F are `bidi`. That range also rejects
+  the England, Scotland, and Wales subdivision flags, which are the
+  black flag plus those tags.
+- `POST /api/v1/data-collection/fetch-company` strips edge whitespace
+  from a provider name before validation, including spaces, tabs, CR,
+  and LF. A padded name is stored. A provider name that contains LRM
+  or another bidi or tag character still fails, and the fetch
+  returns 502.
+- The 422 handler sets `ctx.error` to `{code, field}` for a text
+  error and to `{}` for any other exception. An extra attribute on
+  the exception is not copied into the body.
 
 An existing database does not gain these columns by itself. Startup
 creates missing tables and then refuses to serve when `companies`
