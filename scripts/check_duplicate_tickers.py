@@ -193,6 +193,11 @@ def _missing_sqlite_path(url):
     database = parsed.database
     if not database or database == ":memory:":
         return None
+    # ``sqlite:///file:name.db?uri=true`` stores the database name
+    # as ``file:name.db``. That is a SQLite URI, not a path whose
+    # missing file this check should refuse. SQLite opens it.
+    if database.startswith("file:"):
+        return None
     if os.path.exists(database):
         return None
     return database

@@ -300,7 +300,10 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
     Base.metadata.create_all(engine)
     with engine.connect() as connection:
         assert_empty_metadata_diff(connection)
-        assert ticker_uniqueness(connection) == ((), ())
+        assert ticker_uniqueness(connection) == (
+            (("ix_companies_ticker", False, ("ticker",)),),
+            (),
+        )
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
             True,
@@ -308,6 +311,7 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         )
     with engine.begin() as connection:
         connection.execute(text("DROP INDEX uq_companies_ticker"))
+        connection.execute(text("DROP INDEX ix_companies_ticker"))
         connection.execute(
             text(
                 "CREATE UNIQUE INDEX ix_companies_ticker "
@@ -334,7 +338,10 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         upgrade_head(connection)
         require_company_instrument_columns(connection)
         assert_empty_metadata_diff(connection)
-        assert ticker_uniqueness(connection) == ((), ())
+        assert ticker_uniqueness(connection) == (
+            (("ix_companies_ticker", False, ("ticker",)),),
+            (),
+        )
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
             True,
@@ -385,12 +392,21 @@ def test_upgrade_downgrade_upgrade_keeps_the_legacy_row(tmp_path):
             True,
             "upper(ticker)",
         )
-        assert ticker_uniqueness(connection) == ((), ())
+        assert ticker_uniqueness(connection) == (
+            (("ix_companies_ticker", False, ("ticker",)),),
+            (),
+        )
     engine.dispose()
 
 
 def test_downgrade_keeps_an_extra_ticker_index(tmp_path):
-    """A second unique ticker index means downgrade does not add ix_."""
+    """A second unique ticker index means downgrade does not add one.
+
+    ``create_all`` already has the non-unique ``ix_companies_ticker``.
+    Revision 0003 does not replace that with the unique index it
+    would create when nothing else keeps ``ticker`` unique.
+    ``extra_ticker`` is that other unique index.
+    """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'extra.db'}")
     Base.metadata.create_all(engine)
     with engine.connect() as connection:
@@ -400,9 +416,16 @@ def test_downgrade_keeps_an_extra_ticker_index(tmp_path):
         )
         connection.commit()
         downgrade_to(connection, "0002")
-        names = [index["name"] for index in inspect_indexes(connection)]
+        reflected = inspect_indexes(connection)
+        names = [index["name"] for index in reflected]
         assert "uq_companies_ticker" not in names
-        assert "ix_companies_ticker" not in names
+        plain = [
+            index
+            for index in reflected
+            if index["name"] == "ix_companies_ticker"
+        ]
+        assert len(plain) == 1
+        assert not plain[0]["unique"]
         assert "extra_ticker" in names
     engine.dispose()
 

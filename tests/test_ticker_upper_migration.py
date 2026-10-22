@@ -11,6 +11,7 @@ from app.models.database_models import CompanyDB
 from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
+    assert_plain_ticker_index_recorded,
     downgrade_to,
     stamp,
     unique_constraint_names,
@@ -648,3 +649,108 @@ def test_create_all_rejects_a_lower_case_twin(tmp_path):
     # The ORM row uses the same index. Importing CompanyDB keeps the
     # model under the coverage run's measured package.
     assert CompanyDB.__table__.name == "companies"
+
+
+def test_plain_ticker_index_is_created_and_removed(tmp_path):
+    """``ix_companies_ticker`` exists after 0007 and not after downgrade.
+
+    The unique index is on ``upper(ticker)``. This one is on the
+    column, and it is not unique. Downgrade removes it so revision
+    0003 can later use that name for the old unique index.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'plain-index.db'}")
+    with engine.begin() as connection:
+        connection.execute(text(LEGACY_COMPANIES))
+        connection.execute(text(LEGACY_METRICS))
+    with engine.connect() as connection:
+        upgrade_to(connection, "0007")
+        assert_plain_ticker_index_recorded(connection)
+        downgrade_to(connection, "0005")
+        sql = connection.execute(
+            text(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'index' AND name = 'ix_companies_ticker'"
+            )
+        ).scalar()
+        assert sql is None
+    engine.dispose()
+
+
+def test_preexisting_orphan_does_not_block_the_companies_copy(tmp_path):
+    """An orphan that was already there is not a new violation.
+
+    The check compares ``PRAGMA foreign_key_check`` after the rename
+    with the same check taken before the copy. This metrics row
+    points at a company that does not exist. The upgrade still
+    finishes, and the orphan is still there.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'old-orphan.db'}")
+    with engine.connect() as connection:
+        connection.execute(text("PRAGMA foreign_keys=OFF"))
+        _companies_with_pair_constraint_and_children(connection)
+        connection.execute(
+            text(
+                "INSERT INTO financial_metrics (id, company_id) "
+                "VALUES (99, 999)"
+            )
+        )
+        connection.commit()
+    with engine.connect() as connection:
+        stamp(connection, "0005")
+        upgrade_to(connection, "0007")
+        assert _version(connection) == "0007"
+        orphan = connection.execute(
+            text("SELECT company_id FROM financial_metrics WHERE id = 99")
+        ).scalar()
+        assert orphan == 999
+        assert (
+            connection.execute(
+                text("SELECT ticker FROM companies WHERE id = 1")
+            ).scalar()
+            == "AAPL"
+        )
+    engine.dispose()
+
+
+def test_a_new_foreign_key_violation_rolls_the_copy_back(tmp_path):
+    """A parent removed during the copy is a new violation.
+
+    The listener deletes the copied company after the insert into
+    ``companies__new``. The child row was valid before the copy and
+    is not valid after the rename. The upgrade raises, and revision
+    0005 still has the company and every child row.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'new-orphan.db'}")
+    with engine.begin() as connection:
+        _companies_with_pair_constraint_and_children(connection)
+    with engine.connect() as connection:
+        stamp(connection, "0005")
+        connection.commit()
+        before = _child_row_counts(connection)
+
+        def drop_copied_parent(*listener_args):
+            statement = listener_args[2]
+            compact = " ".join(statement.split()).lower()
+            if compact.startswith("insert into companies__new"):
+                listener_args[1].execute(
+                    "DELETE FROM companies__new WHERE id = 1"
+                )
+
+        event.listen(engine, "after_cursor_execute", drop_copied_parent)
+        try:
+            with pytest.raises(RuntimeError, match="foreign-key violations"):
+                upgrade_to(connection, "0007")
+        finally:
+            event.remove(engine, "after_cursor_execute", drop_copied_parent)
+        assert _version(connection) == "0005"
+        assert _child_row_counts(connection) == before
+        assert (
+            connection.execute(
+                text(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE name = 'companies__new'"
+                )
+            ).scalar()
+            is None
+        )
+    engine.dispose()

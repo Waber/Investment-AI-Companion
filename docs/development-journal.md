@@ -23,15 +23,22 @@
   there. The command still trims spaces, tabs, CR, and LF.
   Rows are not rewritten. On SQLite the pair constraint is
   inside `CREATE TABLE`, so dropping or restoring it copies
-  only `companies`. Foreign keys are turned off for that copy
-  on the DB-API connection, because the pragma does nothing
-  inside a transaction and `execute` would start one.
-  `isolation_level` is set to `None` so the sqlite3 driver
-  does not commit before the `DROP`. The copy is one explicit
-  `BEGIN`. Alembic's transaction object for the revision is
-  replaced afterward, so the version row still commits when
-  the connection closes. Downgrade restores the column index
-  and, when it is missing, `uq_company_name_ticker`. A
+  only `companies`. Foreign keys are turned off for that copy.
+  `PRAGMA foreign_keys` does nothing inside a transaction.
+  The copy uses Alembic's documented
+  `with op.get_context().autocommit_block():`. That commits
+  the migration transaction Alembic started and sets the
+  driver to `AUTOCOMMIT`, so the pragma takes effect. Inside
+  the block the copy is an explicit `BEGIN`, then `COMMIT`,
+  or `ROLLBACK` when the copy fails. The block then opens a
+  new transaction, which is where the version row is written.
+  The migration does not read or assign `context._transaction`.
+  A caller that already had a transaction open is the case
+  Alembic calls external: `autocommit_block` will not start
+  until that transaction ends, so the copy commits it first
+  and leaves Alembic's transaction object alone. Downgrade restores
+  the column index and, when it is missing,
+  `uq_company_name_ticker`. A
   migration-path database never had that pair constraint.
   Putting it back matches the model from before `0007`, and
   it cannot fail while `ticker` is unique. SQLite `upper`
@@ -52,17 +59,42 @@
   copy. A failure after the copy starts rolls the schema back
   to revision `0005` with the company row and the child tables
   intact.
+  Code review on this pull request: after the rename,
+  `PRAGMA foreign_key_check` runs on every child of
+  `companies` (`financial_metrics`, `price_bars`,
+  `watchlist_items`, `notes`, `theses`, and any other).
+  Only a violation that was not already present stops the
+  upgrade, and that failure rolls the copy back. An orphan
+  that was already stored does not. Lookups compare
+  `CompanyDB.ticker` to a value
+  (`company_repository`, `init_db`). Switching each of those
+  to `func.upper(CompanyDB.ticker) == value.upper()` would
+  also match a raw-SQL row such as `AAPL ` when the caller
+  asked for `AAPL`, and it would touch every call site.
+  A non-unique `ix_companies_ticker` on the column keeps the
+  comparison exact and gives the lookup an index. The unique
+  index stays `uq_companies_ticker` on `upper(ticker)`.
+  Downgrade drops the plain index so revision `0003` can
+  reuse that name. `trim()` is not the index expression:
+  SQLite and PostgreSQL spell a multi-character trim
+  differently (`TRIM` with two arguments, and `BTRIM`), and
+  one-argument `trim` removes spaces only. The index is one
+  expression, so it is `upper(ticker)`. `docs/api-demo.md`
+  says raw SQL can store `AAPL` and `AAPL ` together, and
+  that the command's preflight still trims.
+  `check_duplicate_tickers` does not treat a SQLite URI
+  (`file:...`) as a missing filesystem path.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
   unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1699 passed, 212 deselected, coverage 96.47% (4143
-  statements, 122 miss, 1126 branches, 48 partial). The
+  -> 1703 passed, 212 deselected, coverage 96.47% (4145
+  statements, 122 miss, 1128 branches, 48 partial). The
   SQLite run prints no reflection warning for
   ``uq_companies_ticker``.
   PostgreSQL, local 16, database `investment_test`,
   `REQUIRE_POSTGRES=1` and
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1699 deselected. Upgrade and downgrade of
+  -> 212 passed, 1703 deselected. Upgrade and downgrade of
   `0007` ran on both, including child rows (`price_bars`,
   `financial_metrics`, watchlist, notes, theses). Scoped
   black, isort, and flake8 passed on the Python this change

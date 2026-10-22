@@ -105,6 +105,17 @@ that index with a unique index on `upper(ticker)`. It stops when
 those rows. It drops `uq_company_name_ticker` when that constraint is
 present. On SQLite the drop copies only `companies`, with foreign keys
 off for the copy, so child rows stay.
+The index expression is `upper(ticker)` with no trim, so raw SQL
+can store both `AAPL` and `AAPL ` (a trailing space). The API
+strips and uppercases a ticker before it writes, so a request
+cannot store that pair. The command's preflight still trims
+spaces, tabs, carriage returns, and line feeds, and it will
+report `AAPL` and `AAPL ` as one collision. The index does not
+use `trim()` because SQLite's one-argument `trim` and
+PostgreSQL's `trim` both remove spaces only, while a two-argument
+trim is `TRIM` on SQLite and `BTRIM` on PostgreSQL. One index
+expression has to mean the same thing on both, so it is
+`upper(ticker)` only.
 A database created by an older
 startup `create_all` needs that upgrade. Adding the columns by hand
 skips the CHECK, the `uq_companies_isin` unique index, and
