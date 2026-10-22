@@ -58,6 +58,10 @@ def normalize_name(value: object) -> object:
     that form treats every ``ValueError`` from this function as an
     empty name. The helper itself still raises ``too_long`` when a
     caller uses ``clean_text`` directly.
+
+    A blank name keeps the sentence from before the shared helper:
+    ``name must contain a visible character``. The error code is
+    still ``blank``.
     """
     if not isinstance(value, str):
         return value
@@ -71,6 +75,12 @@ def normalize_name(value: object) -> object:
     except TextValidationError as exc:
         if exc.code == "too_long":
             return value.strip()
+        if exc.code == "blank":
+            raise TextValidationError(
+                "blank",
+                "name",
+                message="name must contain a visible character",
+            ) from None
         raise
 
 

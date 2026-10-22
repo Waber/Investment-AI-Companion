@@ -33,6 +33,41 @@ _BIDI = (
 # U+E0000–U+E007F. They use the bidi code. See the helper docstring.
 _HIDDEN = ("\u206a", "\u206f", "\U000e0000", "\U000e007f")
 
+# A family emoji is seven code points: four emoji and three ZWJ
+# (U+200D). max_len counts those code points, not one grapheme.
+_FAMILY = "\U0001f468\u200d\U0001f469\u200d\U0001f467\u200d\U0001f466"
+
+
+def _case_id(value):
+    """A readable pytest id. Unprintable characters show as U+XXXX."""
+    if value is None:
+        return "none"
+    if value == "":
+        return "empty"
+    parts = []
+    letters = []
+
+    def flush():
+        if letters:
+            parts.append("".join(letters))
+            letters.clear()
+
+    for char in value:
+        if char.isprintable() and char != " ":
+            letters.append(char)
+            continue
+        flush()
+        if char == " ":
+            parts.append("space")
+        else:
+            parts.append("U+%04X" % ord(char))
+    flush()
+    return "+".join(parts)
+
+
+def _ids(values):
+    return [_case_id(value) for value in values]
+
 
 def _raise(value, **kwargs):
     options = {"field": "name", "max_len": 20}
@@ -64,7 +99,11 @@ def test_message_does_not_echo_the_input():
     assert "name must not contain hidden or bidi controls" == message
 
 
-@pytest.mark.parametrize("char", ("\ud800", "\udfff"))
+@pytest.mark.parametrize(
+    "char",
+    ("\ud800", "\udfff"),
+    ids=("U+D800", "U+DFFF"),
+)
 def test_surrogate_code(char):
     alone = _raise(char)
     assert alone.code == "surrogate"
@@ -75,7 +114,7 @@ def test_surrogate_code(char):
     assert inside.field == "body"
 
 
-@pytest.mark.parametrize("char", _BIDI + _HIDDEN)
+@pytest.mark.parametrize("char", _BIDI + _HIDDEN, ids=_ids(_BIDI + _HIDDEN))
 def test_bidi_and_hidden_format_codes(char):
     """A hidden mark next to a letter is rejected, not stored.
 
@@ -92,10 +131,15 @@ def test_bidi_and_hidden_format_codes(char):
         assert unicodedata.category(char) == "Cn"
 
 
-@pytest.mark.parametrize("char", ("\x00", "\x1b", "\x7f", "\n", "\r", "\t"))
+@pytest.mark.parametrize(
+    "char",
+    ("\x00", "\x1b", "\x7f", "\n", "\r", "\t"),
+    ids=_ids(("\x00", "\x1b", "\x7f", "\n", "\r", "\t")),
+)
 def test_control_code_without_newlines(char):
     error = _raise("A" + char + "B")
     assert error.code == "control_char"
+    assert error.field == "name"
     assert char not in str(error)
 
 
@@ -170,26 +214,28 @@ def test_length_boundaries():
     assert over.code == "too_long"
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
-        None,
-        "",
-        "   ",
-        "\u00a0",
-        "\u200b",
-        "\ufeff",
-        "\u200b \u200b",
-        " \u200c\u200d ",
-        "\ue000",
-        "\ue000 \ue001",
-        "\u0378",
-        "\u0378 \u0379",
-    ],
+_BLANK_VALUES = (
+    None,
+    "",
+    "   ",
+    "\u00a0",
+    "\u200b",
+    "\ufeff",
+    "\u200b \u200b",
+    " \u200c\u200d ",
+    "\ue000",
+    "\ue000 \ue001",
+    "\u0378",
+    "\u0378 \u0379",
 )
+
+
+@pytest.mark.parametrize("value", _BLANK_VALUES, ids=_ids(_BLANK_VALUES))
 def test_blank_values(value):
     error = _raise(value, allow_blank=False)
     assert error.code == "blank"
+    assert error.field == "name"
+    assert str(error) == "name must not be blank"
     assert (
         clean_text(value, field="label", max_len=80, allow_blank=True) is None
     )
@@ -226,3 +272,46 @@ def test_unknown_code_still_uses_a_safe_sentence():
 def test_non_string_is_a_programmer_error():
     with pytest.raises(TypeError):
         clean_text(5, field="name", max_len=20)  # type: ignore[arg-type]
+
+
+def test_tag_block_rejects_u_e0001_and_keeps_u_e0080():
+    """U+E0001 is inside U+E0000–U+E007F. U+E0080 is the next scalar.
+
+    The next scalar is unassigned. Beside a letter it is kept.
+    """
+    rejected = _raise("A\U000e0001B", field="label")
+    assert rejected.code == "bidi"
+    assert rejected.field == "label"
+    assert unicodedata.category("\U000e0001") == "Cf"
+    assert (
+        clean_text("A\U000e0080B", field="label", max_len=20) == "A\U000e0080B"
+    )
+    assert unicodedata.category("\U000e0080") == "Cn"
+
+
+def test_nel_is_rejected_even_when_newlines_are_allowed():
+    """U+0085 is category Cc. It is not newline, carriage return, or tab."""
+    assert unicodedata.category("\u0085") == "Cc"
+    error = _raise("A\u0085B", field="body", allow_newlines=True)
+    assert error.code == "control_char"
+    assert error.field == "body"
+    assert "\u0085" not in str(error)
+
+
+def test_line_separator_is_stripped_at_the_edge_and_kept_in_the_middle():
+    """U+2028 is whitespace (category Zl), not a control character."""
+    assert unicodedata.category("\u2028") == "Zl"
+    assert (
+        clean_text("\u2028Hello\u2028", field="title", max_len=20) == "Hello"
+    )
+    assert clean_text("A\u2028B", field="title", max_len=20) == "A\u2028B"
+
+
+def test_max_len_counts_code_points_not_graphemes():
+    """A ZWJ family emoji is one grapheme and seven code points."""
+    assert len(_FAMILY) == 7
+    assert [ord(char) for char in _FAMILY].count(0x200D) == 3
+    assert clean_text(_FAMILY, field="name", max_len=7) == _FAMILY
+    error = _raise(_FAMILY, max_len=6)
+    assert error.code == "too_long"
+    assert error.field == "name"

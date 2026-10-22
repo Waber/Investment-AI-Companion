@@ -12,8 +12,15 @@ def test_name_is_stripped_and_a_blank_name_is_rejected():
     assert created.name == "Acme"
     assert updated.name == "New"
     assert "name" not in CompanyUpdate().model_dump(exclude_unset=True)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as blank:
         CompanyCreate(name="   ", ticker="AAA")
+    blank_error = blank.value.errors()[0]
+    assert blank_error["type"] == "value_error"
+    assert blank_error["msg"] == (
+        "Value error, name must contain a visible character"
+    )
+    assert blank_error["ctx"]["error"].code == "blank"
+    assert blank_error["ctx"]["error"].field == "name"
     with pytest.raises(ValidationError):
         CompanyUpdate(name=" ")
     for invisible in ("\u200b", "\ufeff", "\u200c\u200d", "  \u200b  "):
@@ -139,13 +146,34 @@ async def test_create_and_list_company_persists_website_as_string(client):
         db.close()
 
 
-def _field_message(response, field):
-    """The 422 sentence for one field. It must not echo the input."""
+def _field_error(response, field):
+    """The 422 object for one field."""
     detail = response.json()["detail"]
     assert isinstance(detail, list)
     matched = [item for item in detail if item.get("loc", [None])[-1] == field]
     assert len(matched) == 1
-    return matched[0]["msg"]
+    return matched[0]
+
+
+def _field_message(response, field):
+    """The 422 sentence for one field. It must not echo the input."""
+    return _field_error(response, field)["msg"]
+
+
+def _assert_text_contract(response, field, code, msg, max_length=None):
+    """Lock type, msg, and ctx for one text failure.
+
+    ``too_long`` is Pydantic ``string_too_long``. The other codes are
+    ``value_error``, and ``ctx.error`` carries ``code`` and ``field``.
+    """
+    error = _field_error(response, field)
+    assert error["msg"] == msg
+    if code == "too_long":
+        assert error["type"] == "string_too_long"
+        assert error["ctx"] == {"max_length": max_length}
+        return
+    assert error["type"] == "value_error"
+    assert error["ctx"]["error"] == {"code": code, "field": field}
 
 
 def test_company_name_length_stays_a_max_length_error():
@@ -229,5 +257,83 @@ async def test_company_api_rejects_bidi_control_and_surrogate(client):
     )
     assert surrogate_update.status_code == 422
     assert "surrogate" in _field_message(surrogate_update, "name")
+    fetched = await client.get(f"/api/v1/companies/{company_id}")
+    assert fetched.json()["name"] == "Stored"
+
+
+_COMPANY_TEXT_CASES = (
+    (
+        "blank",
+        "   ",
+        "Value error, name must contain a visible character",
+        None,
+    ),
+    (
+        "too_long",
+        "N" * (COMPANY_NAME_MAX + 1),
+        "String should have at most %d characters" % COMPANY_NAME_MAX,
+        COMPANY_NAME_MAX,
+    ),
+    (
+        "control_char",
+        "ETF\n",
+        "Value error, name must not contain control characters",
+        None,
+    ),
+    (
+        "bidi",
+        "Kept\u202e",
+        "Value error, name must not contain hidden or bidi controls",
+        None,
+    ),
+    (
+        "surrogate",
+        None,
+        "Value error, name must not contain unpaired surrogates",
+        None,
+    ),
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "name", "msg", "max_length"),
+    _COMPANY_TEXT_CASES,
+    ids=["blank", "too_long", "control_char", "bidi", "surrogate"],
+)
+async def test_company_text_error_contract(
+    client, code, name, msg, max_length
+):
+    """Create and update both lock type, msg, and ctx for one code."""
+    kept = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Stored", "ticker": "K" + code[:4].upper()},
+    )
+    assert kept.status_code == 201
+    company_id = kept.json()["id"]
+    if code == "surrogate":
+        created = await client.post(
+            "/api/v1/companies/",
+            content=b'{"name": "A\\ud800B", "ticker": "BADNM"}',
+            headers={"content-type": "application/json"},
+        )
+        updated = await client.put(
+            f"/api/v1/companies/{company_id}",
+            content=b'{"name": "A\\ud800B"}',
+            headers={"content-type": "application/json"},
+        )
+    else:
+        created = await client.post(
+            "/api/v1/companies/",
+            json={"name": name, "ticker": "BADNM"},
+        )
+        updated = await client.put(
+            f"/api/v1/companies/{company_id}",
+            json={"name": name},
+        )
+    assert created.status_code == 422
+    assert updated.status_code == 422
+    _assert_text_contract(created, "name", code, msg, max_length)
+    _assert_text_contract(updated, "name", code, msg, max_length)
     fetched = await client.get(f"/api/v1/companies/{company_id}")
     assert fetched.json()["name"] == "Stored"

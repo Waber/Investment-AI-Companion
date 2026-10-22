@@ -1,5 +1,45 @@
 # Development Journal
 
+## 2026-10-22 - Lock the text 422 contract (#86)
+
+- Scope: QA follow-up on the shared text checker, same branch.
+  A too-long watchlist label and a too-long note or thesis
+  field are Pydantic `string_too_long` again. The blank company
+  name keeps the sentence `name must contain a visible
+  character`. HTTP tests lock `type`, `msg`, and `ctx` for
+  company create and update, and for the watchlist. `app/ui/`
+  was not edited.
+- Decisions: the helper still raises `too_long`. The company,
+  watchlist, and research adapters catch that one code and
+  return the stripped text. `Field(max_length=...)` then
+  reports `string_too_long`, which is what master did. The
+  other codes stay `value_error`. `ctx.error` is `{code,
+  field}`. It used to be `{}`. That extra object stays,
+  because the Frontend Developer wants the code. A blank
+  watchlist label is still HTTP 201 with `label: null`,
+  including a private-use-only label. It is not a 422, so it
+  has no error code. Co-only and Cn-only text was stored on
+  master for the watchlist and for notes and theses. Treating
+  it as blank is a behaviour change. The other differences
+  from master are listed in `docs/api-demo.md`: a trailing
+  newline is `control_char` instead of being stripped, bidi
+  and surrogates in a company name are 422, the watchlist bidi
+  sentence changed, and a thesis title keeps edge format
+  characters and treats U+2028 as whitespace.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1763 passed, 209 deselected, coverage 96.54% (4167
+  statements, 121 miss, 1146 branches, 47 partial).
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. No live market-data calls. PostgreSQL is the
+  GitHub Actions job. It is recorded on the pull request, not
+  in a later commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-22 about 08:52 to 09:30.
+- Next: wait for both CI jobs, then the owner reviews the
+  pull request. Agents do not merge.
+
 ## 2026-10-22 - Shared free-text validator (#86)
 
 - Scope: one checker for company names, watchlist labels, and
@@ -22,11 +62,15 @@
   (surrogate, then bidi, then category Cc), then `strip`, then
   blank, then length. `allow_newlines=True` allows `\n`, `\r`,
   and `\t`. `"ETF\n"` with newlines off is `control_char`, not
-  the word ETF. A blank value is only whitespace, or whitespace
-  plus categories Cf, Co, and Cn. Cf is in that set so a
-  zero-width-only value stays blank, which is what the company,
-  watchlist, and note rules already did. A Cf, Co, or Cn
-  character next to a letter is kept, including at an edge.
+  the word ETF.   A blank value is only whitespace, or whitespace
+  plus categories Cf, Co, and Cn. A Cf-only value was already
+  blank for a company name, a watchlist label, and a note.
+  Co-only and Cn-only are a behaviour change. On master the
+  watchlist stored them, and notes and theses stored them,
+  because those rules treated only whitespace and Cf as blank.
+  A company name made only of Co or Cn was already rejected.
+  A Cf, Co, or Cn character next to a letter is kept,
+  including at an edge.
   The `bidi` code also covers U+206A–U+206F and
   U+E0000–U+E007F, because issue #86 says those hidden format
   characters must be rejected and the code list has no sixth

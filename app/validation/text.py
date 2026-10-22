@@ -100,12 +100,28 @@ class TextValidationError(ValueError):
     ``code`` is one of ``TEXT_VALIDATION_CODES``. ``field`` is the
     name the caller passed (``name``, ``label``, ``body``, ...).
     ``str(error)`` is the sentence the API shows.
+
+    ``message`` replaces that sentence. It is a fixed string: it
+    must not contain the text that failed. The company name uses
+    it so a blank name still says ``name must contain a visible
+    character``, which is the sentence the API showed before this
+    helper. The code and the field stay on the exception, so the
+    422 body can still name them.
     """
 
-    def __init__(self, code: str, field: str, max_len: int | None = None):
+    def __init__(
+        self,
+        code: str,
+        field: str,
+        max_len: int | None = None,
+        *,
+        message: str | None = None,
+    ):
         self.code = code
         self.field = field
-        super().__init__(_message(code, field, max_len))
+        if message is None:
+            message = _message(code, field, max_len)
+        super().__init__(message)
 
 
 def _message(code: str, field: str, max_len: int | None) -> str:

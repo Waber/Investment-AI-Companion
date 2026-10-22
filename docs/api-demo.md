@@ -86,6 +86,35 @@ as `null` on read, so one bad row does not fail `GET /companies/`.
 spaces is 422. Surrounding spaces are removed before the name is
 stored.
 
+Company `name` and watchlist `label` share one text checker. A value
+that is only too long stays Pydantic `string_too_long`: company
+`ctx.max_length` is 255 and the message is `String should have at
+most 255 characters`; a watchlist label uses 80 and the same
+sentence. The other text failures are `value_error`. `ctx.error` is
+`{code, field}` (`code` is `blank`, `control_char`, `bidi`, or
+`surrogate`). It used to be `{}`. `type` and `msg` are unchanged in
+shape. A blank company name still says `Value error, name must
+contain a visible character`.
+
+What differs from the previous write rules:
+
+- A trailing newline on a company name, a watchlist label, or a
+  thesis title is 422 `control_char`. It used to be stripped and the
+  rest stored (`ETF\n` became `ETF`).
+- A company name with a bidi or hidden-format control, or an unpaired
+  surrogate beside a letter, is 422. Those names used to be stored.
+- A watchlist label made only of private-use (Co) or unassigned (Cn)
+  characters is stored as JSON `null`, the same as a blank label. It
+  is not a 422, so it has no `type` or `ctx.error.code`. It used to
+  be stored as that text. The same Co/Cn-only value is now blank for
+  a note or a thesis (422 on a required field, `""` for
+  thesis-breakers). There is no HTTP route for notes or theses yet.
+- The watchlist bidi message is `Value error, label must not contain
+  hidden or bidi controls`. It used to say `hidden format controls`.
+- A thesis title keeps a format character at either edge. U+2028 at
+  an edge is stripped; one in the middle is kept. A line or paragraph
+  separator used to be 422 anywhere in the title.
+
 An existing database does not gain these columns by itself. Startup
 creates missing tables and then refuses to serve when `companies`
 exists without `instrument_type` or `isin`. An Alembic-managed

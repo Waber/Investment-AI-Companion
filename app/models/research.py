@@ -10,7 +10,11 @@ flag each field uses, and it folds Windows newlines before that call.
 ``NoteCreate``, ``NoteUpdate``, ``ThesisCreate``, and
 ``ThesisUpdate`` are the only models that normalize text. A write
 strips leading and trailing whitespace, then checks the length.
-Padding spaces do not count toward the maximum. A title or a body
+Padding spaces do not count toward the maximum. A value that is
+only too long is returned stripped, and ``Field(max_length=...)``
+reports Pydantic ``string_too_long``. That is the error these
+fields produced before the shared helper. Raising ``too_long``
+here would turn it into ``value_error``. A title or a body
 that is empty after stripping is rejected. So is one made only of
 whitespace and Unicode categories Cf, Co, and Cn (zero-width
 characters, private use, unassigned), including a space that sits
@@ -44,7 +48,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.validation.text import clean_text
+from app.validation.text import TextValidationError, clean_text
 
 # Stored as VARCHAR of this length. PostgreSQL enforces it. The
 # Pydantic models enforce it on SQLite as well, after stripping.
@@ -107,17 +111,27 @@ def normalize_research_text(
     function turns that ``None`` into ``""`` so thesis-breakers
     stay a string. The helper's own empty convention is still
     ``None``.
+
+    ``too_long`` is not raised out of this function. The stripped
+    text is returned so the field's ``max_length`` can report
+    ``string_too_long``. The length is the length after the
+    newline fold, which is what the field sees.
     """
     if not isinstance(value, str):
         return value
     text = _fold_newlines(value) if allow_multiline else value
-    cleaned = clean_text(
-        text,
-        field=field_name,
-        max_len=max_len,
-        allow_newlines=allow_multiline,
-        allow_blank=allow_blank,
-    )
+    try:
+        cleaned = clean_text(
+            text,
+            field=field_name,
+            max_len=max_len,
+            allow_newlines=allow_multiline,
+            allow_blank=allow_blank,
+        )
+    except TextValidationError as exc:
+        if exc.code != "too_long":
+            raise
+        cleaned = text.strip()
     if allow_blank and cleaned is None:
         return ""
     return cleaned
