@@ -635,6 +635,57 @@ async def test_failed_update_returns_fixed_500(client, monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
+async def test_provider_name_edge_whitespace_is_stored(client):
+    """Padding at the ends, including CR LF and tab, is stripped first.
+
+    A person typing ``ETF\\n`` still gets 422. A provider name is
+    not typed. The old name rule stripped before it checked
+    characters, and this route keeps that for the edges only.
+    """
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": " \tAcme\r\n", "currency": "USD"}
+    )
+
+    created = await client.post(FETCH, json={"ticker": "ACME"})
+
+    assert created.status_code == 200
+    stored = await client.get(COMPANIES)
+    assert stored.status_code == 200
+    assert stored.json()[0]["name"] == "Acme"
+
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "\nAcme Industries\t", "currency": "USD"}
+    )
+    updated = await client.post(FETCH, json={"ticker": "ACME"})
+    assert updated.status_code == 200
+    stored = await client.get(COMPANIES)
+    assert stored.json()[0]["name"] == "Acme Industries"
+    assert _count(client) == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_name_with_lrm_is_502(client):
+    """LRM is not whitespace. The fetch fails closed as 502.
+
+    The same is true of the other bidi marks and tag characters.
+    The provider's character is not copied into the body.
+    """
+    client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(
+        {"name": "Acme\u200e", "currency": "USD"}
+    )
+
+    response = await client.post(FETCH, json={"ticker": "ACME"})
+
+    assert response.status_code == 502
+    assert (
+        response.json()["detail"] == "Provider returned invalid company data"
+    )
+    assert "\u200e" not in response.text
+    assert "Acme" not in response.text
+    assert _count(client) == 0
+
+
+@pytest.mark.asyncio
 async def test_company_name_with_newline_does_not_forge_a_log_line(
     client, caplog
 ):

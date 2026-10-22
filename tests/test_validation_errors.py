@@ -144,6 +144,34 @@ async def test_finite_error_details_match_default_handler(client):
     assert b"do-not-expose" not in response.body
 
 
+@pytest.mark.asyncio
+async def test_non_text_error_context_drops_extra_attributes(client):
+    """A ValueError that is not a text error still encodes as {}."""
+
+    class Loud(ValueError):
+        def __init__(self):
+            super().__init__("nope")
+            self.leak = "secret-token"
+
+    exc = RequestValidationError(
+        [
+            {
+                "type": "value_error",
+                "loc": ("body", "name"),
+                "msg": "Value error, nope",
+                "input": "x",
+                "ctx": {"error": Loud()},
+            }
+        ]
+    )
+    handler = client.app.exception_handlers[RequestValidationError]
+    response = await handler(Request({"type": "http"}), exc)
+    assert response.status_code == 422
+    assert json.loads(response.body)["detail"][0]["ctx"]["error"] == {}
+    assert b"secret-token" not in response.body
+    assert b"leak" not in response.body
+
+
 @dataclass
 class NestedInput:
     values: tuple

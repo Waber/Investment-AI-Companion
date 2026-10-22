@@ -337,3 +337,57 @@ async def test_company_text_error_contract(
     _assert_text_contract(updated, "name", code, msg, max_length)
     fetched = await client.get(f"/api/v1/companies/{company_id}")
     assert fetched.json()["name"] == "Stored"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content",
+    [
+        b'{"\\udc00": 1, "name": "X"}',
+        b'{"name": "X", "nested": {"\\udc00": 1}}',
+    ],
+    ids=["surrogate-key", "nested-surrogate-key"],
+)
+async def test_surrogate_object_key_with_a_missing_ticker_is_422(
+    client, content
+):
+    """A missing ticker puts the whole body in the 422 input.
+
+    The key U+DC00 is a lone surrogate. Leaving it raw makes the
+    JSON encoder raise, so the client would see 500. A nested key
+    is the same character one level down.
+    """
+    response = await client.post(
+        "/api/v1/companies/",
+        content=content,
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 422
+    response.content.decode("utf-8")
+    assert "\udc00" not in response.text
+    assert "\\udc00" in response.text
+
+
+@pytest.mark.asyncio
+async def test_extra_text_error_attribute_is_not_in_the_body(
+    client, monkeypatch
+):
+    """ctx.error is only code and field. A new attribute must not leak."""
+    from app.validation.text import TextValidationError
+
+    original = TextValidationError.__init__
+
+    def init(self, code, field, max_len=None, *, message=None):
+        original(self, code, field, max_len, message=message)
+        self.leak = "secret-token"
+
+    monkeypatch.setattr(TextValidationError, "__init__", init)
+    response = await client.post(
+        "/api/v1/companies/",
+        json={"name": "   ", "ticker": "LEAK1"},
+    )
+    assert response.status_code == 422
+    error = _field_error(response, "name")
+    assert error["ctx"]["error"] == {"code": "blank", "field": "name"}
+    assert "secret-token" not in response.text
+    assert "leak" not in response.text

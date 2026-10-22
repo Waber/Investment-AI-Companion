@@ -264,6 +264,23 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     )
     assert long_errors["name"] == "error.too_long"
     assert normalized_company_name("\u200bKept\u200b") == "\u200bKept\u200b"
+    # LRM, RLM, ALM, the deprecated controls, and a tag character
+    # now fail inside normalize_name. The form catches ValueError
+    # and shows error.required. Mapping exc.code onto a catalog
+    # key is the Frontend Developer's follow-up. This locks the
+    # page the form shows today.
+    for marked in (
+        "Kept\u200e",
+        "Kept\u200f",
+        "Kept\u061c",
+        "Kept\u206a",
+        "Kept\U000e0001",
+    ):
+        _marked_model, marked_errors, _marked_key = validate_company(
+            {"name": marked, "ticker": "MARKED", "currency": "USD"},
+            update=False,
+        )
+        assert marked_errors["name"] == "error.required"
     assert unicodedata.category("\u0301") == "Mn"
     assert unicodedata.category("\u093e") == "Mc"
     assert unicodedata.category("\u20dd") == "Me"

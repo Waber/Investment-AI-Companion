@@ -9,12 +9,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings
 from app.core.database import Base, create_db_engine
-from app.models.database_models import WatchlistItemDB
+from app.models.database_models import CompanyDB, WatchlistItemDB
 from app.models.watchlist import (
     WATCHLIST_LABEL_MAX_LENGTH,
     WatchlistItemCreate,
 )
 from app.repositories.watchlist_repository import WatchlistRepository
+from app.validation.text import TextValidationError
 from tests.watchlist_checks import (
     assert_add_is_idempotent_and_keeps_the_first_label,
     assert_blank_label_is_stored_as_null,
@@ -139,18 +140,32 @@ def test_create_model_rejects_controls_and_bidi(label, code):
     assert cause.field == "label"
 
 
+_BLANK_LABELS = (
+    "",
+    "   ",
+    "\u200b",
+    "\ufeff",
+    " \u200b ",
+    "\u200c\u200b",
+    "\ufeff\u200b",
+    "\ue000",
+    "\u0378",
+)
+
+
 @pytest.mark.parametrize(
     "label",
-    [
-        "",
-        "   ",
-        "\u200b",
-        "\ufeff",
-        " \u200b ",
-        "\u200c\u200b",
-        "\ufeff\u200b",
-        "\ue000",
-        "\u0378",
+    _BLANK_LABELS,
+    ids=[
+        "empty",
+        "spaces",
+        "U+200B",
+        "U+FEFF",
+        "space-U+200B-space",
+        "U+200C-U+200B",
+        "U+FEFF-U+200B",
+        "U+E000",
+        "U+0378",
     ],
 )
 def test_create_model_treats_blank_and_format_only_labels_as_null(label):
@@ -195,6 +210,26 @@ def test_stale_price_days_rejects_non_positive(monkeypatch, days):
 
 def test_add_is_idempotent_and_keeps_the_first_label(session):
     assert_add_is_idempotent_and_keeps_the_first_label(session)
+
+
+def test_repository_rejects_a_label_longer_than_the_column(session):
+    """The model is not the only gate. add() raises too_long itself.
+
+    SQLite would store the long string. PostgreSQL would raise a
+    database error. Neither of those is the text check.
+    """
+    company = CompanyDB(name="Acme", ticker="ACME")
+    session.add(company)
+    session.commit()
+    repo = WatchlistRepository(session)
+    with pytest.raises(TextValidationError) as caught:
+        repo.add(company.id, "x" * (WATCHLIST_LABEL_MAX_LENGTH + 1))
+    assert caught.value.code == "too_long"
+    assert caught.value.field == "label"
+    assert session.query(WatchlistItemDB).count() == 0
+    stored, created = repo.add(company.id, "x" * WATCHLIST_LABEL_MAX_LENGTH)
+    assert created is True
+    assert stored.label == "x" * WATCHLIST_LABEL_MAX_LENGTH
 
 
 def test_blank_label_is_stored_as_null(session):
@@ -563,6 +598,7 @@ def _assert_text_contract(response, field, code, msg, max_length=None):
         ("DEP1", "A\u206aB", "bidi"),
         ("TAG1", "A\U000e0001B", "bidi"),
     ],
+    ids=["U+202E", "U+0000", "trailing-LF", "U+206A", "U+E0001"],
 )
 async def test_watchlist_api_rejects_hidden_and_control_labels(
     client, ticker, label, word

@@ -6,8 +6,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.database_models import CompanyDB, WatchlistItemDB
-from app.models.watchlist import clean_watchlist_label
+from app.models.watchlist import (
+    WATCHLIST_LABEL_MAX_LENGTH,
+    clean_watchlist_label,
+)
 from app.repositories.company_errors import CompanyNotFoundError
+from app.validation.text import TextValidationError
 
 
 class WatchlistStorageError(ValueError):
@@ -58,9 +62,25 @@ class WatchlistRepository:
         if existing is not None:
             return existing, False
 
+        # The HTTP model reports string_too_long and never calls
+        # this method with a long label. A direct caller would
+        # otherwise insert it: SQLite does not enforce String(80),
+        # and PostgreSQL would turn the same insert into a database
+        # error. The helper's too_long code is the same failure.
+        cleaned = clean_watchlist_label(label)
+        if (
+            isinstance(cleaned, str)
+            and len(cleaned) > WATCHLIST_LABEL_MAX_LENGTH
+        ):
+            raise TextValidationError(
+                "too_long",
+                "label",
+                WATCHLIST_LABEL_MAX_LENGTH,
+            )
+
         row = WatchlistItemDB(
             company_id=company_id,
-            label=clean_watchlist_label(label),
+            label=cleaned,
             added_at=datetime.now(timezone.utc),
         )
         stored = None

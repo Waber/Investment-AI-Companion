@@ -125,6 +125,23 @@ def _log_provider_validation(ticker: str, exc: ValidationError) -> None:
     )
 
 
+def _provider_name(company_info: dict) -> object:
+    """Strip edge whitespace from a provider name, then validate.
+
+    A person typing a name still hits ``normalize_name`` on the raw
+    text, so a trailing newline is ``control_char``. A provider
+    name is not typed. ``strip`` removes spaces, tabs, CR, and LF
+    at the ends before that check, which is what the old name rule
+    did. A LRM, RLM, ALM, bidi override, or tag character is not
+    whitespace. It still fails validation, and this route returns
+    HTTP 502.
+    """
+    name = company_info.get("name")
+    if not isinstance(name, str):
+        return name
+    return name.strip()
+
+
 def _provider_description(company_info: dict) -> object:
     """Keep the first 5000 characters of a provider summary.
 
@@ -217,7 +234,7 @@ def fetch_company_data(
 
             # Prepare update data using CompanyUpdate model
             update_data = CompanyUpdate(
-                name=company_info.get("name"),
+                name=_provider_name(company_info),
                 sector=company_info.get("sector"),
                 industry=company_info.get("industry"),
                 description=_provider_description(company_info),
@@ -253,7 +270,7 @@ def fetch_company_data(
             from app.models.company import CompanyCreate
 
             company_create = CompanyCreate(
-                name=company_info.get("name"),
+                name=_provider_name(company_info),
                 ticker=ticker,
                 sector=company_info.get("sector"),
                 industry=company_info.get("industry"),
