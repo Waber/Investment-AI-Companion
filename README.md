@@ -169,11 +169,20 @@ process stops before it serves and names the missing columns.
   line feeds, so `aapl`, `AAPL `, and a trailing tab are one
   collision. It names the stored text and does not rewrite or
   delete those rows. On SQLite the index is created in place, so
-  child rows such as `price_bars` stay. Set `DATABASE_URL` and run
-  `python -m scripts.check_duplicate_tickers` to see that list
+  child rows such as `price_bars` stay. `0007` then replaces that
+  index with a unique index on `upper(ticker)`, so raw SQL cannot
+  store `aapl` next to `AAPL`. It stops when `upper(ticker)`
+  already collides, names those stored rows, and does not rewrite
+  them. A trailing space is not the same ticker under
+  `upper(ticker)`. It also drops `uq_company_name_ticker` when that
+  pair constraint is present. On SQLite that drop copies only
+  `companies`, with foreign keys off for the copy, so `price_bars`
+  and the other child rows stay. Set `DATABASE_URL` and run
+  `python -m scripts.check_duplicate_tickers` to see the trim list
   before you upgrade. Prefer the environment variable: a URL passed
   as an argument can appear in `ps` and in shell history. An
-  argument still overrides the variable when you pass one.
+  argument still overrides the variable when you pass one. A SQLite
+  file that is not on disk is reported and is not created.
 - A database created by an older startup `create_all` has `companies`
   and not those columns. Run `alembic upgrade head` before starting
   this version. Adding the columns by hand skips the CHECK, the

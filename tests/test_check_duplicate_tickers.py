@@ -182,7 +182,12 @@ def test_unparsed_url_uses_the_fixed_url_line(capsys, monkeypatch):
 
 
 def test_sqlalchemy_error_uses_the_fixed_read_line(monkeypatch, capsys):
-    """Driver text is not the message the operator sees."""
+    """Driver text is not the message the operator sees.
+
+    The URL is PostgreSQL, not a missing SQLite file. A missing file
+    is refused before ``create_engine``, so this stand-in would never
+    run for ``sqlite:///unused.db``.
+    """
     from sqlalchemy.exc import SQLAlchemyError
 
     def explode(_url):
@@ -192,7 +197,7 @@ def test_sqlalchemy_error_uses_the_fixed_read_line(monkeypatch, capsys):
         "scripts.check_duplicate_tickers.create_engine", explode
     )
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    assert main(["check", "sqlite:///unused.db"]) == 1
+    assert main(["check", "postgresql://localhost/db"]) == 1
     captured = capsys.readouterr()
     assert captured.err == _READ_LINE
     _assert_secret_stays_hidden(captured)
@@ -262,15 +267,65 @@ def test_tab_cr_and_lf_collide_without_rewriting(tmp_path, capsys):
 
 
 def test_script_prints_one_line_when_the_database_cannot_be_read(capsys):
-    """An unreachable file is exit 1, not a traceback."""
-    code = main(["check", "sqlite:////no/such/directory/companies.db"])
+    """A closed port is exit 1, not a traceback, and hides the password."""
+    code = main(["check", "postgresql://u:secret@127.0.0.1:1/investment_test"])
     assert code == 1
     error = capsys.readouterr().err
     assert error == (
         "Could not read companies: the database is unreachable "
         "or the table is missing.\n"
     )
+    assert "secret" not in error
     assert "Traceback" not in error
+
+
+def test_bad_port_uses_the_fixed_url_line(capsys, monkeypatch):
+    """A port that is not an integer is ``ValueError`` and exit 1.
+
+    SQLAlchemy's parser raises before it connects. The fixed line
+    replaces that message, which would otherwise name the bad port.
+    The password in the URL is not printed.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    code = main(["check", "postgresql://u:secret@127.0.0.1:not-a-port/db"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert captured.err == _URL_LINE
+    assert captured.out == ""
+    _assert_secret_stays_hidden(captured)
+    assert "not-a-port" not in captured.err
+
+
+def test_missing_driver_uses_the_fixed_url_line(capsys, monkeypatch):
+    """``postgresql+psycopg`` is not installed, so connect raises ImportError.
+
+    ``ModuleNotFoundError`` is a subclass of ``ImportError``. The fixed
+    URL line replaces the driver text. The password is not printed.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    code = main(["check", "postgresql+psycopg://u:secret@127.0.0.1/db"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert captured.err == _URL_LINE
+    assert captured.out == ""
+    _assert_secret_stays_hidden(captured)
+    assert "psycopg" not in captured.err
+    assert "ModuleNotFoundError" not in captured.err
+
+
+def test_missing_sqlite_file_is_not_created(tmp_path, capsys, monkeypatch):
+    """A mistyped SQLite path must not leave an empty file behind."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    path = tmp_path / "missing.db"
+    code = main(["check", f"sqlite:///{path}"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "does not exist" in captured.err
+    assert "no empty database file was created" in captured.err
+    assert str(path) in captured.err
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert not path.exists()
 
 
 def test_duplicate_tickers_requires_the_companies_table():

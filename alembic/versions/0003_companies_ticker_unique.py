@@ -25,21 +25,97 @@ PostgreSQL agree. ``uq_companies_isin`` is the same kind of index.
 
 Money columns stay ``Float``. ``price_bars`` already stores prices
 as ``Float``. This revision does not change them to ``Numeric``.
+
+The preflight SQL is copied into this file. A migration must stay
+frozen: importing ``scripts`` would change this revision when the
+command changes. ``scripts.check_duplicate_tickers`` repeats the
+same SQL for the operator command. ``DuplicateTickersError`` here
+is not that module's class.
 """
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from alembic import op
-from scripts.check_duplicate_tickers import (
-    DuplicateTickersError,
-    duplicate_tickers,
-    format_duplicate_tickers,
-)
 
 revision = "0003"
 down_revision = "0002"
 branch_labels = None
 depends_on = None
+
+
+class DuplicateTickersError(RuntimeError):
+    """``companies.ticker`` already has repeated values.
+
+    Raised before the unique index is created, so the rows stay as
+    they are. This class lives in the revision so the file does not
+    import the command.
+    """
+
+
+def _normalized_ticker_sql(dialect_name):
+    """SQL for the ticker key this revision compares.
+
+    ``TRIM(ticker)`` removes spaces only. SQLite's two-argument
+    ``TRIM`` and PostgreSQL ``BTRIM`` remove every character in the
+    set, so a tab, CR, or LF is the same kind of edge as a space.
+    ``chr`` and ``char`` are the two dialects' names for the same
+    function. These strings are literals. They are not imported.
+    """
+    if dialect_name == "postgresql":
+        removed = "chr(9) || chr(10) || chr(13) || chr(32)"
+        return f"UPPER(BTRIM(ticker, {removed}))"
+    removed = "char(9) || char(10) || char(13) || char(32)"
+    return f"UPPER(TRIM(ticker, {removed}))"
+
+
+def _duplicate_tickers(connection):
+    """Tickers that collide after trim and uppercase.
+
+    Each item is ``(normalized, [(stored_ticker, count), ...])``.
+    The stored text is not rewritten.
+    """
+    if "companies" not in inspect(connection).get_table_names():
+        raise RuntimeError("companies table is not in this database")
+    key = _normalized_ticker_sql(connection.dialect.name)
+    rows = connection.execute(
+        text(
+            f"SELECT {key} AS normalized, ticker, "
+            "COUNT(*) AS n FROM companies "
+            f"GROUP BY {key}, ticker "
+            f"HAVING {key} IN ("
+            f"SELECT {key} FROM companies "
+            f"GROUP BY {key} HAVING COUNT(*) > 1"
+            f") "
+            f"ORDER BY {key}, ticker"
+        )
+    )
+    grouped = {}
+    for normalized, stored, count in rows:
+        grouped.setdefault(normalized, []).append((stored, int(count)))
+    found = []
+    for normalized in sorted(grouped, key=lambda value: value or ""):
+        variants = sorted(grouped[normalized], key=lambda item: item[0])
+        found.append((normalized, variants))
+    return found
+
+
+def _format_duplicate_tickers(found):
+    """One sentence. ``found`` is not empty. Rows are not rewritten."""
+    parts = []
+    for normalized, variants in found:
+        stored = ", ".join(
+            f"{ticker!r} ({count} {'row' if count == 1 else 'rows'})"
+            for ticker, count in variants
+        )
+        parts.append(f"{normalized} is stored as {stored}")
+    listed = "; ".join(parts)
+    return (
+        "companies.ticker is not unique after trim and uppercase. "
+        "These stored rows collide, and they were not rewritten: "
+        + listed
+        + ". The upgrade did not change those rows. Merge or remove the "
+        "extras, then run the upgrade again."
+    )
 
 
 def _ticker_only(column_names):
@@ -52,9 +128,9 @@ def upgrade() -> None:
     # LF, then uppercases, matching the application's strip and
     # uppercase. Naming the stored rows here leaves the table
     # untouched by this revision.
-    found = duplicate_tickers(bind)
+    found = _duplicate_tickers(bind)
     if found:
-        raise DuplicateTickersError(format_duplicate_tickers(found))
+        raise DuplicateTickersError(_format_duplicate_tickers(found))
     _use_named_ticker_index(bind)
 
 

@@ -37,21 +37,23 @@ def session():
         engine.dispose()
 
 
-def test_revision_0005_follows_0004_and_the_head_is_0006():
-    """0005 sits on the watchlist revision. 0006 is the only head.
+def test_revision_0005_follows_0004_and_the_head_is_0007():
+    """0005 sits on the watchlist revision. 0007 is the only head.
 
-    The price revision revises 0005, so ``upgrade head`` has one
-    place to go. ``get_current_head`` is empty when two heads
-    exist, and the length check fails first.
+    The price revision 0006 revises 0005, and 0007 revises 0006, so
+    ``upgrade head`` has one place to go. ``get_current_head`` is
+    empty when two heads exist, and the length check fails first.
     """
     script = ScriptDirectory.from_config(Config("alembic.ini"))
     heads = script.get_heads()
     assert len(heads) == 1
-    assert heads[0] == "0006"
+    assert heads[0] == "0007"
     notes = script.get_revision("0005")
     assert notes.down_revision == "0004"
     prices = script.get_revision("0006")
     assert prices.down_revision == "0005"
+    upper = script.get_revision("0007")
+    assert upper.down_revision == "0006"
 
 
 def test_sqlite_loads_a_stored_row_the_write_models_would_reject(session):

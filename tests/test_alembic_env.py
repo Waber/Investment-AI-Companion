@@ -19,14 +19,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_alembic_script_has_one_head():
-    """One head: 0006 revises 0005.
+    """One head: 0007 revises 0006.
 
-    0005 is notes and theses, 0004 is the watchlist, and 0003 is
-    the unique ticker index. 0003 revises 0002.
+    0007 is the upper(ticker) index, 0006 is the price columns, 0005
+    is notes and theses, 0004 is the watchlist, and 0003 is the
+    unique ticker index. A second head would fork upgrades.
     """
     config = Config(str(ROOT / "alembic.ini"))
     heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == ["0006"]
+    assert heads == ["0007"]
 
 
 def test_version_num_format_is_a_literal_percent():

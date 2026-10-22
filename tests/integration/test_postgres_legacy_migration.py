@@ -10,18 +10,19 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.database import Base
 from app.core.init_db import require_company_instrument_columns
-from scripts.check_duplicate_tickers import DuplicateTickersError
 from tests.company_migration import (
     EXPECTED_ISIN_UNIQUENESS,
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_base,
     downgrade_to,
+    duplicate_ticker_message,
     isin_uniqueness,
     metadata_diff,
     stamp,
     ticker_uniqueness,
     upgrade_head,
+    upper_ticker_index,
 )
 
 pytestmark = pytest.mark.integration
@@ -148,6 +149,7 @@ def test_model_and_migration_use_the_same_isin_uniqueness(postgres_engine):
         public.execute(text("SET search_path TO public"))
         from_model = isin_uniqueness(public)
         ticker_from_model = ticker_uniqueness(public)
+        upper_from_model = upper_ticker_index(public)
 
     with postgres_engine.connect() as connection:
         connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
@@ -162,9 +164,12 @@ def test_model_and_migration_use_the_same_isin_uniqueness(postgres_engine):
             from_migration = isin_uniqueness(connection)
             assert from_model == from_migration == EXPECTED_ISIN_UNIQUENESS
             assert ticker_uniqueness(connection) == ticker_from_model
-            assert ticker_from_model == (
-                (("uq_companies_ticker", True, ("ticker",)),),
-                (),
+            assert ticker_from_model == ((), ())
+            assert upper_ticker_index(connection) == upper_from_model
+            assert upper_from_model == (
+                "uq_companies_ticker",
+                True,
+                ("upper(ticker::text)",),
             )
         finally:
             connection.rollback()
@@ -209,9 +214,9 @@ def test_duplicate_tickers_stop_the_upgrade_on_postgresql(postgres_engine):
             )
         )
         connection.commit()
-        with pytest.raises(DuplicateTickersError) as error:
+        with pytest.raises(RuntimeError) as error:
             upgrade_head(connection)
-        assert "'DUP' (2 rows)" in str(error.value)
+        assert "'DUP' (2 rows)" in duplicate_ticker_message(error.value)
         connection.rollback()
         connection.execute(text(f"SET search_path TO {schema}"))
         indexes = {
@@ -253,9 +258,9 @@ def test_case_and_space_collisions_stop_the_postgresql_upgrade(
             )
         )
         connection.commit()
-        with pytest.raises(DuplicateTickersError) as error:
+        with pytest.raises(RuntimeError) as error:
             upgrade_head(connection)
-        message = str(error.value)
+        message = duplicate_ticker_message(error.value)
         assert "'aapl'" in message
         assert "'AAPL '" in message
         assert "did not change those rows" in message
@@ -301,9 +306,9 @@ def test_tab_cr_and_lf_collisions_stop_the_postgresql_upgrade(
             {"tab": "AAPL\t", "cr": "aapl\r", "lf": "AAPL\n"},
         )
         connection.commit()
-        with pytest.raises(DuplicateTickersError) as error:
+        with pytest.raises(RuntimeError) as error:
             upgrade_head(connection)
-        message = str(error.value)
+        message = duplicate_ticker_message(error.value)
         assert repr("AAPL\t") in message
         assert repr("aapl\r") in message
         assert repr("AAPL\n") in message
@@ -351,9 +356,12 @@ def test_upgrade_downgrade_upgrade_on_postgresql(postgres_engine):
         ).one()
         assert stored.ticker == "AAPL"
         assert stored.instrument_type == "STOCK"
-        assert ("uq_companies_ticker", True, ("ticker",)) in ticker_uniqueness(
-            connection
-        )[0]
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            ("upper(ticker::text)",),
+        )
+        assert ticker_uniqueness(connection) == ((), ())
     finally:
         _drop_scratch(connection, schema)
 
@@ -384,9 +392,11 @@ def test_autogenerate_is_empty_after_replacing_the_old_index(postgres_engine):
         upgrade_head(connection)
         require_company_instrument_columns(connection)
         assert metadata_diff(connection) == []
-        assert ticker_uniqueness(connection) == (
-            (("uq_companies_ticker", True, ("ticker",)),),
-            (),
+        assert ticker_uniqueness(connection) == ((), ())
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            ("upper(ticker::text)",),
         )
         downgrade_to(connection, "0002")
         assert ticker_uniqueness(connection) == (

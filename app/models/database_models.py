@@ -50,15 +50,14 @@ class CompanyDB(Base):
     name = Column(
         String(255), nullable=False, index=True
     )  # index=True creates a database index for faster searches
-    # A named unique index, not unique=True on the column.
-    # unique=True would create ix_companies_ticker. Revision 0003
-    # creates uq_companies_ticker instead, so the model and the
-    # migration use the same name. It is an index rather than a
-    # UNIQUE CONSTRAINT: SQLite cannot add a constraint while
-    # financial_metrics and price_bars point at this table. A
-    # rebuild with foreign keys on would cascade-delete those rows.
-    # One index shape has to match on PostgreSQL too. The same
-    # choice is uq_companies_isin.
+    # Not unique=True. That flag would create ix_companies_ticker.
+    # The unique index is uq_companies_ticker. Revision 0003 created
+    # it on the column. Revision 0007 replaces it with a unique index
+    # on upper(ticker), so raw SQL cannot store 'aapl' next to
+    # 'AAPL'. The application already uppercases a ticker before it
+    # writes. It stays an index rather than a UNIQUE CONSTRAINT so
+    # SQLite does not have to rebuild companies to add it. The ISIN
+    # index is the same kind of index.
     ticker = Column(String(20), nullable=False)
     sector = Column(String(100), nullable=True)
     industry = Column(String(100), nullable=True)
@@ -145,13 +144,11 @@ class CompanyDB(Base):
 
     # Database constraints
     __table_args__ = (
-        # name + ticker together must be unique. Ticker alone is
-        # already unique, so this pair cannot repeat either. It stays
-        # so a database created before revision 0003 still matches.
-        UniqueConstraint("name", "ticker", name="uq_company_name_ticker"),
-        # One row per ticker. The company name may be shared
-        # (BRK.A and BRK.B). Revision 0003 creates this index.
-        Index("uq_companies_ticker", "ticker", unique=True),
+        # One row per ticker, ignoring case. The company name may be
+        # shared (BRK.A and BRK.B). Revision 0007 creates this index
+        # and drops uq_company_name_ticker: ticker uniqueness already
+        # makes that pair unique, so the pair constraint was redundant.
+        Index("uq_companies_ticker", func.upper(ticker), unique=True),
         # Same unique index revision 0001 creates. Several null ISINs
         # are allowed; a present ISIN is stored once.
         Index("uq_companies_isin", "isin", unique=True),
