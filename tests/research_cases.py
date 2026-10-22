@@ -458,9 +458,12 @@ class ResearchBehavior:
                 body="b",
                 thesis_breakers="k" * (THESIS_BREAKERS_MAX + 1),
             )
-        # A trailing newline is whitespace, so strip removes it.
-        # A newline between letters is a control character in a title.
-        assert ThesisCreate(title="  hello\n", body=" body\n").title == "hello"
+        # A trailing newline on a title is a control on the raw
+        # text. strip() must not hide it. A body allows the newline
+        # and then strips it.
+        with pytest.raises(ValidationError) as title_newline:
+            ThesisCreate(title="  hello\n", body="body")
+        assert title_newline.value.errors()[0]["loc"] == ("title",)
         assert ThesisCreate(title="t", body="  body\n").body == "body"
         assert (
             ThesisCreate(
@@ -565,23 +568,32 @@ class ResearchBehavior:
         with pytest.raises(ValidationError):
             ThesisUpdate(nope="x")
 
-    def test_title_strips_edge_format_characters_and_rejects_bidi(self):
-        """A title follows normalize_name, plus the title-only rules.
+    def test_title_keeps_format_characters_and_rejects_bidi(self):
+        """A title uses the same text helper as a body.
 
-        Format characters at the edges are removed. One between
-        letters stays. Bidi controls and line or paragraph
-        separators are rejected even at an edge, where a strip
-        would otherwise hide them. A body does not strip format
-        characters and may keep a line separator.
+        Format characters at the edges stay. One between letters
+        stays. Bidi controls are rejected on the raw text, on a
+        title and on a body. A line separator (U+2028, U+2029) is
+        whitespace, not category Cc, so strip() removes one at an
+        edge and a middle one is kept.
         """
-        assert (
-            ThesisCreate(title="\u200bHello\ufeff", body="b").title == "Hello"
+        assert ThesisCreate(title="\u200bHello\ufeff", body="b").title == (
+            "\u200bHello\ufeff"
         )
         assert ThesisCreate(title=" \u200b Hello \u200d ", body="b").title == (
-            "Hello"
+            "\u200b Hello \u200d"
         )
         assert ThesisCreate(title=" a\u200bb ", body="b").title == "a\u200bb"
-        assert ThesisUpdate(title="\u200cKept\u200d").title == "Kept"
+        # A format character at the edge is kept, so it counts
+        # toward the maximum. The old title rule peeled it off first.
+        with pytest.raises(ValidationError):
+            ThesisCreate(
+                title="\u200b" + ("t" * THESIS_TITLE_MAX),
+                body="b",
+            )
+        assert (
+            ThesisUpdate(title="\u200cKept\u200d").title == "\u200cKept\u200d"
+        )
         assert NoteCreate(body="\u200bHello\ufeff").body == "\u200bHello\ufeff"
         for mark in (
             "\u202a",
@@ -595,15 +607,57 @@ class ResearchBehavior:
             with pytest.raises(ValidationError) as caught:
                 ThesisCreate(title="Hello" + mark, body="b")
             assert caught.value.errors()[0]["loc"] == ("title",)
+            assert mark not in caught.value.errors()[0]["msg"]
             with pytest.raises(ValidationError):
                 ThesisUpdate(title=mark + "Hello")
-        for separator in ("\u2028", "\u2029"):
-            with pytest.raises(ValidationError) as caught:
-                ThesisCreate(title="Hello" + separator, body="b")
-            assert caught.value.errors()[0]["loc"] == ("title",)
-        # Zl in the middle of a body is not a title, so it is kept.
-        # strip() would remove one that sits at either end.
+            with pytest.raises(ValidationError) as body_error:
+                NoteCreate(body="Hello" + mark)
+            assert body_error.value.errors()[0]["loc"] == ("body",)
+            with pytest.raises(ValidationError) as breakers_error:
+                ThesisCreate(
+                    title="T",
+                    body="b",
+                    thesis_breakers="Hello" + mark,
+                )
+            assert breakers_error.value.errors()[0]["loc"] == (
+                "thesis_breakers",
+            )
+        # U+2028 at the edge is whitespace. strip() removes it.
+        # One between letters stays, on a title and on a body.
+        assert ThesisCreate(title="Hello\u2028", body="b").title == "Hello"
+        assert (
+            ThesisCreate(title="Hel\u2028lo", body="b").title == "Hel\u2028lo"
+        )
         assert NoteCreate(body="Hel\u2028lo").body == "Hel\u2028lo"
+
+    def test_write_models_reject_surrogates_without_echoing_them(self):
+        """A lone surrogate is rejected on every write field.
+
+        There is no HTTP route for notes or theses. These models are
+        the boundary that route will use. The message does not
+        repeat the character.
+        """
+        raw = "A\ud800B"
+        cases = (
+            (lambda: NoteCreate(body=raw), ("body",)),
+            (lambda: NoteUpdate(body=raw), ("body",)),
+            (lambda: ThesisCreate(title=raw, body="b"), ("title",)),
+            (lambda: ThesisCreate(title="t", body=raw), ("body",)),
+            (
+                lambda: ThesisCreate(title="t", body="b", thesis_breakers=raw),
+                ("thesis_breakers",),
+            ),
+            (lambda: ThesisUpdate(title=raw), ("title",)),
+            (lambda: ThesisUpdate(body=raw), ("body",)),
+            (lambda: ThesisUpdate(thesis_breakers=raw), ("thesis_breakers",)),
+        )
+        for build, loc in cases:
+            with pytest.raises(ValidationError) as caught:
+                build()
+            error = caught.value.errors()[0]
+            assert error["loc"] == loc
+            assert "surrogate" in error["msg"]
+            assert "\ud800" not in error["msg"]
 
     def test_multiline_newlines_count_as_one_before_the_length_check(self):
         """CRLF and a lone CR become LF, then the max length applies.

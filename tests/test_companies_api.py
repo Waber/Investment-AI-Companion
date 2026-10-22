@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.company import CompanyCreate, CompanyUpdate
+from app.models.company import COMPANY_NAME_MAX, CompanyCreate, CompanyUpdate
 from app.models.database_models import CompanyDB
 
 
@@ -137,3 +137,97 @@ async def test_create_and_list_company_persists_website_as_string(client):
         assert isinstance(stored.website, str)
     finally:
         db.close()
+
+
+def _field_message(response, field):
+    """The 422 sentence for one field. It must not echo the input."""
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    matched = [item for item in detail if item.get("loc", [None])[-1] == field]
+    assert len(matched) == 1
+    return matched[0]["msg"]
+
+
+def test_company_name_length_stays_a_max_length_error():
+    """A too-long name stays Pydantic's string_too_long error.
+
+    The /ui form maps that type to the "too long" sentence. Raising
+    inside normalize_name would make the form call the name required.
+    """
+    with pytest.raises(ValidationError) as caught:
+        CompanyCreate(name="N" * (COMPANY_NAME_MAX + 1), ticker="AAA")
+    assert caught.value.errors()[0]["type"] == "string_too_long"
+    created = CompanyCreate(name="N" * COMPANY_NAME_MAX, ticker="AAA")
+    assert created.name == "N" * COMPANY_NAME_MAX
+    padded = CompanyCreate(
+        name=" " + ("N" * COMPANY_NAME_MAX) + " ", ticker="AAA"
+    )
+    assert padded.name == "N" * COMPANY_NAME_MAX
+
+
+@pytest.mark.asyncio
+async def test_company_api_rejects_bidi_control_and_surrogate(client):
+    """Create and update both return 422. The stored name stays put.
+
+    The message names the problem and does not repeat the text.
+    """
+    kept = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Stored", "ticker": "KEPT1"},
+    )
+    assert kept.status_code == 201
+    company_id = kept.json()["id"]
+    cases = (
+        ("Kept\u202e", "bidi"),
+        ("A\x00B", "control"),
+        ("ETF\n", "control"),
+    )
+    for name, word in cases:
+        created = await client.post(
+            "/api/v1/companies/",
+            json={"name": name, "ticker": "BADNM"},
+        )
+        assert created.status_code == 422, repr(name)
+        message = _field_message(created, "name")
+        assert word in message
+        assert "Kept" not in message
+        assert "ETF" not in message
+        assert "\u202e" not in message
+        assert "\x00" not in message
+        assert "\ud800" not in message
+        updated = await client.put(
+            f"/api/v1/companies/{company_id}",
+            json={"name": name},
+        )
+        assert updated.status_code == 422, repr(name)
+        update_message = _field_message(updated, "name")
+        assert word in update_message
+        assert "\u202e" not in update_message
+        assert "\ud800" not in update_message
+    # A lone surrogate is not valid UTF-8. The JSON text uses the
+    # \\u escape, which the parser turns into category Cs.
+    surrogate = await client.post(
+        "/api/v1/companies/",
+        content=b'{"name": "A\\ud800B", "ticker": "BADNM"}',
+        headers={"content-type": "application/json"},
+    )
+    assert surrogate.status_code == 422
+    # The body is UTF-8. The raw surrogate is not in it. The input
+    # shows the ASCII \\u escape instead, which is why this is 422
+    # and not a 500 from the JSON encoder.
+    surrogate.content.decode("utf-8")
+    assert "\ud800" not in surrogate.text
+    assert "\\ud800" in surrogate.text
+    surrogate_message = _field_message(surrogate, "name")
+    assert "surrogate" in surrogate_message
+    assert "\\ud800" not in surrogate_message
+    assert "\ud800" not in surrogate_message
+    surrogate_update = await client.put(
+        f"/api/v1/companies/{company_id}",
+        content=b'{"name": "A\\ud800B"}',
+        headers={"content-type": "application/json"},
+    )
+    assert surrogate_update.status_code == 422
+    assert "surrogate" in _field_message(surrogate_update, "name")
+    fetched = await client.get(f"/api/v1/companies/{company_id}")
+    assert fetched.json()["name"] == "Stored"

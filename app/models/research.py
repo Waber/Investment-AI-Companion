@@ -3,43 +3,48 @@
 The UI imports the constants, ``ThesisStatus``, and the Pydantic
 models from this module. The SQLAlchemy tables live in
 ``app.models.database_models``. The repositories return these
-models, not the table rows.
+models, not the table rows. Character checks live in
+``app.validation.text.clean_text``. This module only decides which
+flag each field uses, and it folds Windows newlines before that call.
 
 ``NoteCreate``, ``NoteUpdate``, ``ThesisCreate``, and
 ``ThesisUpdate`` are the only models that normalize text. A write
 strips leading and trailing whitespace, then checks the length.
 Padding spaces do not count toward the maximum. A title or a body
 that is empty after stripping is rejected. So is one made only of
-invisible format characters (Unicode category Cf, such as U+200B
-or U+FEFF) and whitespace, including a space that sits between
-those characters. Thesis-breakers may be empty: a new thesis does
-not have to list any yet, and a breakers value that is only
-whitespace or format characters is stored as ``""``. A letter
-with a format character beside it is kept.
+whitespace and Unicode categories Cf, Co, and Cn (zero-width
+characters, private use, unassigned), including a space that sits
+between those characters. A letter with one of those characters
+beside it is kept, including at an edge. Thesis-breakers may be
+empty: a new thesis does not have to list any yet, and a blank
+breakers value is stored as ``""``. ``clean_text`` returns ``None``
+for that blank. This module turns that ``None`` into ``""`` because
+the column is not nullable.
 
-A title also strips format characters at the edges, rejects bidi
-controls, and rejects line and paragraph separators. A multi-line
-field turns ``\\r\\n`` and a lone ``\\r`` into ``\\n`` before the
-length check, so a Windows newline counts as one character.
+A title is one line (``allow_newlines=False``). A newline in it is
+``control_char``, not stripped. A body and thesis-breakers allow
+newline, carriage return, and tab. This module turns ``\\r\\n`` and
+a lone ``\\r`` into ``\\n`` before ``clean_text``, so a Windows
+newline counts as one character. ``clean_text`` itself does not
+rewrite characters. Bidi controls, tag characters, and surrogates
+are rejected on every field, including bodies.
 
 ``Note`` and ``Thesis`` are output models. They do not run those
 checks again. A row that was stored before a rule existed, or
 written past the repository, can still be listed. Re-checking it
 here would turn one bad row into an error for the whole list.
 
-Unicode category Cc is a control character (for example NUL, DEL,
-and the C1 controls). A title is one line, so every Cc character
-is rejected. A body and the thesis-breakers allow newline and tab
-after the carriage-return normalization, and reject every other
-Cc character. Failures on a write model are Pydantic's
-``ValidationError``. The UI maps that exception to HTTP 422.
+Failures on a write model are Pydantic's ``ValidationError``. The
+UI maps that exception to HTTP 422. There is no HTTP route for
+notes or theses yet.
 """
 
-import unicodedata
 from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.validation.text import clean_text
 
 # Stored as VARCHAR of this length. PostgreSQL enforces it. The
 # Pydantic models enforce it on SQLite as well, after stripping.
@@ -47,28 +52,6 @@ NOTE_BODY_MAX = 10000
 THESIS_TITLE_MAX = 200
 THESIS_BODY_MAX = 10000
 THESIS_BREAKERS_MAX = 5000
-
-# After ``\\r`` has been turned into ``\\n``, these are the only
-# control characters a multi-line field may still contain. They
-# are category Cc, so the check below has to allow them by hand.
-_MULTILINE_CONTROLS = frozenset("\n\t")
-
-# Bidi overrides, isolates, and marks reorder the letters around
-# them. They are format characters, so an edge-strip would hide
-# one that sits at the start or end of a title. The title rejects
-# them anywhere in the original text instead.
-# U+202A–U+202E overrides, U+2066–U+2069 isolates,
-# U+200E LRM, U+200F RLM, U+061C Arabic letter mark.
-_BIDI_CONTROLS = frozenset(
-    chr(codepoint)
-    for codepoint in (
-        *range(0x202A, 0x202F),
-        *range(0x2066, 0x206A),
-        0x200E,
-        0x200F,
-        0x061C,
-    )
-)
 
 # Unknown keys are a client error. A typo such as ``boddy`` must
 # not be ignored and then stored as a missing body.
@@ -94,118 +77,21 @@ THESIS_STATUS_CHECK = "status IN ({})".format(
 )
 
 
-def _only_format_characters(value: str) -> bool:
-    """True when nothing visible is left among format characters.
+def _fold_newlines(value: str) -> str:
+    """Turn a Windows newline into one LF.
 
-    Cf is an invisible format character: zero-width space (U+200B),
-    the byte-order mark (U+FEFF), and the joiners U+200C and U+200D.
-    ``str.strip`` only drops whitespace at the ends, so a normal
-    space between two of those characters is still in ``value``.
-    That space is not visible either. The value is blank when every
-    character is whitespace or category Cf. A letter with a format
-    character beside it is not blank.
+    ``clean_text`` does not rewrite characters. Notes and theses
+    still store CR as LF so the length limit counts a line, not a
+    CR LF pair. The fold runs before ``clean_text``. A title does
+    not call this: a CR in a title is a control character.
     """
-    return value != "" and all(
-        char.isspace() or unicodedata.category(char) == "Cf" for char in value
-    )
-
-
-def _is_title_edge(char: str) -> bool:
-    """True for whitespace or a format character at a title's edge.
-
-    ``str.strip`` removes whitespace only. A zero-width space before
-    the first letter would otherwise stay in the stored title.
-    """
-    return char.isspace() or unicodedata.category(char) == "Cf"
-
-
-def _strip_title_edges(value: str) -> str:
-    """Remove whitespace and Cf characters from both ends.
-
-    The two loops keep going so a space that was hidden behind a
-    format character is removed too. A format character between
-    letters is not at an edge, so it stays.
-    """
-    start = 0
-    end = len(value)
-    while start < end and _is_title_edge(value[start]):
-        start += 1
-    while end > start and _is_title_edge(value[end - 1]):
-        end -= 1
-    return value[start:end]
-
-
-def _reject_blank(value: str, *, allow_blank: bool, field_name: str) -> str:
-    """Return ``value``, or ``""`` when a blank value is allowed."""
-    if value == "" or _only_format_characters(value):
-        if allow_blank:
-            return ""
-        raise ValueError(field_name + " must not be blank")
-    return value
-
-
-def _normalize_title(value: str, *, allow_blank: bool, field_name: str) -> str:
-    """Normalize one title the way ``normalize_name`` treats a name.
-
-    Bidi controls and line or paragraph separators (categories Zl
-    and Zp, U+2028 and U+2029) are rejected on the original text.
-    An edge-strip would otherwise delete a mark that sits at either
-    end and store the rest. Format characters at the edges are then
-    removed. A letter with one beside it is kept. A control
-    character that remains is rejected. The length limit runs after
-    this function returns.
-    """
-    if any(char in _BIDI_CONTROLS for char in value):
-        raise ValueError(field_name + " must not contain bidi controls")
-    if any(unicodedata.category(char) in {"Zl", "Zp"} for char in value):
-        raise ValueError(
-            field_name + " must not contain line or paragraph separators"
-        )
-    stripped = _reject_blank(
-        _strip_title_edges(value),
-        allow_blank=allow_blank,
-        field_name=field_name,
-    )
-    for char in stripped:
-        if unicodedata.category(char) == "Cc":
-            raise ValueError(
-                field_name + " must not contain control characters"
-            )
-    return stripped
-
-
-def _normalize_multiline(
-    value: str,
-    *,
-    allow_blank: bool,
-    field_name: str,
-) -> str:
-    """Strip ends, fold newlines, then reject a blank value.
-
-    ``\\r\\n`` and a lone ``\\r`` become ``\\n`` before the length
-    check. The field's ``max_length`` sees this string, so a body
-    of CR LF pairs is measured in newlines, not in pairs. ``strip``
-    still removes a newline at either end. NUL and the other
-    control characters are rejected. Newline and tab are kept.
-    """
-    stripped = value.strip().replace("\r\n", "\n").replace("\r", "\n")
-    normalized = _reject_blank(
-        stripped,
-        allow_blank=allow_blank,
-        field_name=field_name,
-    )
-    for char in normalized:
-        if unicodedata.category(char) != "Cc":
-            continue
-        if char in _MULTILINE_CONTROLS:
-            continue
-        raise ValueError(field_name + " must not contain control characters")
-    return normalized
+    return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def normalize_research_text(
     value: object,
     *,
+    max_len: int,
     allow_blank: bool,
     allow_multiline: bool,
     field_name: str,
@@ -216,26 +102,32 @@ def normalize_research_text(
     report the type error. ``allow_multiline`` is false for a title
     and true for a body or thesis-breakers. Read models do not call
     this function.
+
+    ``clean_text`` returns ``None`` when a blank is allowed. This
+    function turns that ``None`` into ``""`` so thesis-breakers
+    stay a string. The helper's own empty convention is still
+    ``None``.
     """
     if not isinstance(value, str):
         return value
-    if allow_multiline:
-        return _normalize_multiline(
-            value,
-            allow_blank=allow_blank,
-            field_name=field_name,
-        )
-    return _normalize_title(
-        value,
+    text = _fold_newlines(value) if allow_multiline else value
+    cleaned = clean_text(
+        text,
+        field=field_name,
+        max_len=max_len,
+        allow_newlines=allow_multiline,
         allow_blank=allow_blank,
-        field_name=field_name,
     )
+    if allow_blank and cleaned is None:
+        return ""
+    return cleaned
 
 
 def _optional_text(
     value: object,
     field_name: str,
     *,
+    max_len: int,
     allow_blank: bool,
     allow_multiline: bool,
 ) -> object:
@@ -251,6 +143,7 @@ def _optional_text(
         )
     return normalize_research_text(
         value,
+        max_len=max_len,
         allow_blank=allow_blank,
         allow_multiline=allow_multiline,
         field_name=field_name,
@@ -269,6 +162,7 @@ class NoteCreate(BaseModel):
     def _body(cls, value: object) -> object:
         return normalize_research_text(
             value,
+            max_len=NOTE_BODY_MAX,
             allow_blank=False,
             allow_multiline=True,
             field_name="body",
@@ -288,6 +182,7 @@ class NoteUpdate(BaseModel):
         return _optional_text(
             value,
             "body",
+            max_len=NOTE_BODY_MAX,
             allow_blank=False,
             allow_multiline=True,
         )
@@ -326,6 +221,7 @@ class ThesisCreate(BaseModel):
     def _title(cls, value: object) -> object:
         return normalize_research_text(
             value,
+            max_len=THESIS_TITLE_MAX,
             allow_blank=False,
             allow_multiline=False,
             field_name="title",
@@ -336,6 +232,7 @@ class ThesisCreate(BaseModel):
     def _body(cls, value: object) -> object:
         return normalize_research_text(
             value,
+            max_len=THESIS_BODY_MAX,
             allow_blank=False,
             allow_multiline=True,
             field_name="body",
@@ -346,6 +243,7 @@ class ThesisCreate(BaseModel):
     def _thesis_breakers(cls, value: object) -> object:
         return normalize_research_text(
             value,
+            max_len=THESIS_BREAKERS_MAX,
             allow_blank=True,
             allow_multiline=True,
             field_name="thesis_breakers",
@@ -375,6 +273,7 @@ class ThesisUpdate(BaseModel):
         return _optional_text(
             value,
             "title",
+            max_len=THESIS_TITLE_MAX,
             allow_blank=False,
             allow_multiline=False,
         )
@@ -385,6 +284,7 @@ class ThesisUpdate(BaseModel):
         return _optional_text(
             value,
             "body",
+            max_len=THESIS_BODY_MAX,
             allow_blank=False,
             allow_multiline=True,
         )
@@ -395,6 +295,7 @@ class ThesisUpdate(BaseModel):
         return _optional_text(
             value,
             "thesis_breakers",
+            max_len=THESIS_BREAKERS_MAX,
             allow_blank=True,
             allow_multiline=True,
         )

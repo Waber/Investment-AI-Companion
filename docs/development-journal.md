@@ -1,5 +1,63 @@
 # Development Journal
 
+## 2026-10-22 - Shared free-text validator (#86)
+
+- Scope: one checker for company names, watchlist labels, and
+  note and thesis text. Import it from `app.validation.text`.
+  `templates/`, `static/`, and `app/ui/` were not edited. The
+  `/ui` forms still have their own name checks. That wiring is
+  the Frontend Developer's follow-up, so this pull request says
+  Refs #86. The issue text says moving the form helper needs
+  that sign-off, so the issue stays open. No migration: the
+  company name column is still `String(255)`.
+- Decisions: `clean_text(value, *, field, max_len,
+  allow_newlines=False, allow_blank=False)` returns the
+  stripped string, or `None` when a blank is allowed. `None`
+  is the empty convention. A watchlist label stores that
+  `None`. Thesis-breakers turn it into `""` because the column
+  is not null. `TextValidationError` is a `ValueError` with
+  `.code` and `.field`. The codes are `blank`, `too_long`,
+  `control_char`, `bidi`, and `surrogate`. The message does
+  not repeat the text. Checks run on the raw text first
+  (surrogate, then bidi, then category Cc), then `strip`, then
+  blank, then length. `allow_newlines=True` allows `\n`, `\r`,
+  and `\t`. `"ETF\n"` with newlines off is `control_char`, not
+  the word ETF. A blank value is only whitespace, or whitespace
+  plus categories Cf, Co, and Cn. Cf is in that set so a
+  zero-width-only value stays blank, which is what the company,
+  watchlist, and note rules already did. A Cf, Co, or Cn
+  character next to a letter is kept, including at an edge.
+  The `bidi` code also covers U+206A–U+206F and
+  U+E0000–U+E007F, because issue #86 says those hidden format
+  characters must be rejected and the code list has no sixth
+  value. Notes and theses still fold `\r\n` and `\r` to `\n`
+  before calling the helper, so a Windows newline still counts
+  as one character. The helper itself does not rewrite
+  characters. A title no longer peels Cf off the edges, and it
+  no longer has a separate ban on line and paragraph
+  separators. Those separators are whitespace, so `strip`
+  removes one at an edge. A company name longer than
+  `COMPANY_NAME_MAX` (255) is still Pydantic's
+  `string_too_long`, so the live form keeps the "too long"
+  sentence. A lone surrogate in the 422 `input` is written as
+  the ASCII `\u` escape. Otherwise the JSON encoder raises and
+  the client sees 500. Combining marks with no base letter stay
+  a form rule. The helper does not reject them.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1748 passed, 209 deselected, coverage 96.52% (4153
+  statements, 121 miss, 1138 branches, 47 partial).
+  Scoped black, isort, and flake8 passed on the Python this
+  change owns. No live market-data calls. PostgreSQL is the
+  GitHub Actions job. It is recorded on the pull request, not
+  in a later commit.
+- AI model: Grok 4.7. Account usage was not available in this session.
+- Time tracking (UTC): 2026-10-22 about 08:15 to 08:45.
+- Next: the owner reviews the pull request. The Frontend
+  Developer wires the forms to `clean_text` and the length
+  constants. Agents do not merge.
+
 ## 2026-10-23 - Rebase #97 onto master and re-chain 0007 onto 0006
 
 - Scope: rebased `cursor/ticker-uniqueness-followups-08b9` (PR

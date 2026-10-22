@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models.company import normalize_name
+from app.models.company import COMPANY_NAME_MAX, normalize_name
 from app.models.database_models import CompanyDB, FinancialMetricsDB
 from app.repositories.company_errors import (
     DuplicateIsinError,
@@ -33,6 +33,7 @@ from app.ui.form_fields import (
     validate_company,
 )
 from app.ui.origin import OriginRejected
+from app.validation.text import TextValidationError
 from tests.ui_html import parse_page, plain
 
 _ORIGIN = "http://127.0.0.1"
@@ -234,7 +235,6 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     # NUL and DEL survive strip(), and the form also rejects them
     # below.
     accepted_names = (
-        "  Kept\n",
         "\u00a0Kept\u3000",
         "\u200bKept\u200b",
         "\u200b Kept",
@@ -248,7 +248,21 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     )
     for accepted in accepted_names:
         assert normalized_company_name(accepted) == normalize_name(accepted)
-    assert normalized_company_name("  Kept\n") == "Kept"
+    # A trailing newline is a control on the raw name. The form
+    # rejects it. strip() must not turn it into "Kept".
+    assert normalized_company_name("  Kept\n") is None
+    with pytest.raises(TextValidationError) as newline_name:
+        normalize_name("  Kept\n")
+    assert newline_name.value.code == "control_char"
+    _model, long_errors, _form_key = validate_company(
+        {
+            "name": "N" * (COMPANY_NAME_MAX + 1),
+            "ticker": "LONGNM",
+            "currency": "USD",
+        },
+        update=False,
+    )
+    assert long_errors["name"] == "error.too_long"
     assert normalized_company_name("\u200bKept\u200b") == "\u200bKept\u200b"
     assert unicodedata.category("\u0301") == "Mn"
     assert unicodedata.category("\u093e") == "Mc"
@@ -1079,11 +1093,11 @@ async def test_blank_company_name_is_422_in_both_languages(client, name):
 async def test_stored_name_matches_normalize_name(client):
     """Whitespace ends are stripped. A format character beside a letter stays.
 
-    ``normalize_name`` does not peel Cf or Cc off the ends. The form
-    stores that same string. A NUL between two letters is a 422,
-    covered below.
+    ``normalize_name`` does not peel Cf off the ends. A newline is a
+    control on the raw text, so it is not stripped down to the words.
+    A NUL between two letters is a 422, covered below.
     """
-    raw = "\n  Kept Name\u3000"
+    raw = "\u3000  Kept Name\u3000"
     assert normalize_name(raw) == "Kept Name"
     company_id, _data = await _create(client, name=raw, ticker="KEPTNM")
     assert _stored_column(client, company_id, "name") == "Kept Name"
@@ -1097,6 +1111,13 @@ async def test_stored_name_matches_normalize_name(client):
         {"name": edited, "ticker": "KEPTNM"},
     )
     assert updated.status_code == 303
+    assert _stored_column(client, company_id, "name") == edited
+    rejected = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": "\n  Kept Name", "ticker": "KEPTNM"},
+    )
+    assert rejected.status_code == 422
     assert _stored_column(client, company_id, "name") == edited
 
 
