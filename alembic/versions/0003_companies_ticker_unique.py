@@ -33,7 +33,11 @@ same SQL for the operator command. ``DuplicateTickersError`` here
 is not that module's class.
 """
 
+import warnings
+from contextlib import contextmanager
+
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SAWarning
 
 from alembic import op
 
@@ -122,6 +126,37 @@ def _ticker_only(column_names):
     return list(column_names or []) == ["ticker"]
 
 
+@contextmanager
+def _quiet_expression_index():
+    """Hide SQLite's skip warning for ``uq_companies_ticker``.
+
+    Revision 0007 may already have replaced that index with
+    ``upper(ticker)`` before a later downgrade runs this file.
+    SQLAlchemy 2.0.23 cannot reflect an expression index and warns.
+    The filter matches that one message. It is not a blanket ignore.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                "Skipped unsupported reflection of "
+                "expression-based index uq_companies_ticker"
+            ),
+            category=SAWarning,
+        )
+        yield
+
+
+def _reflected_indexes(bind):
+    with _quiet_expression_index():
+        return inspect(bind).get_indexes("companies")
+
+
+def _reflected_unique_constraints(bind):
+    with _quiet_expression_index():
+        return inspect(bind).get_unique_constraints("companies")
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     # Before any index change. The check trims spaces, tabs, CR, and
@@ -135,7 +170,7 @@ def upgrade() -> None:
 
 
 def _use_named_ticker_index(bind) -> None:
-    names = {index["name"] for index in inspect(bind).get_indexes("companies")}
+    names = {index["name"] for index in _reflected_indexes(bind)}
     if "uq_companies_ticker" not in names:
         op.create_index(
             "uq_companies_ticker", "companies", ["ticker"], unique=True
@@ -143,7 +178,7 @@ def _use_named_ticker_index(bind) -> None:
     # The old create_all index. A PostgreSQL UNIQUE constraint is also
     # listed as an index, with duplicates_constraint set. Dropping it
     # here and again as a constraint would fail, so those are skipped.
-    for index in inspect(bind).get_indexes("companies"):
+    for index in _reflected_indexes(bind):
         if (
             index["name"] != "uq_companies_ticker"
             and index.get("unique")
@@ -157,14 +192,14 @@ def _use_named_ticker_index(bind) -> None:
         # it would rebuild the table and cascade-delete price_bars.
         # The new unique index is enough.
         return
-    for item in inspect(bind).get_unique_constraints("companies"):
+    for item in _reflected_unique_constraints(bind):
         if _ticker_only(item.get("column_names")) and item.get("name"):
             op.drop_constraint(item["name"], "companies", type_="unique")
 
 
 def downgrade() -> None:
     bind = op.get_bind()
-    names = {index["name"] for index in inspect(bind).get_indexes("companies")}
+    names = {index["name"] for index in _reflected_indexes(bind)}
     if "uq_companies_ticker" in names:
         op.drop_index("uq_companies_ticker", table_name="companies")
     # The previous revision's create_all index. Skip it when something
@@ -178,11 +213,10 @@ def downgrade() -> None:
 
 
 def _ticker_still_unique(bind) -> bool:
-    inspector = inspect(bind)
-    for index in inspector.get_indexes("companies"):
+    for index in _reflected_indexes(bind):
         if index.get("unique") and _ticker_only(index.get("column_names")):
             return True
-    for item in inspector.get_unique_constraints("companies"):
+    for item in _reflected_unique_constraints(bind):
         if _ticker_only(item.get("column_names")):
             return True
     return False

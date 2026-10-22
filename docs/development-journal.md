@@ -37,15 +37,32 @@
   it cannot fail while `ticker` is unique. SQLite `upper`
   folds ASCII letters. Tickers stored by the application are
   ASCII. PostgreSQL reflects `upper(ticker::text)`.
+  QA on this pull request: SQLite cannot reflect the expression
+  index, so reflection emits `SAWarning` "Skipped unsupported
+  reflection of expression-based index uq_companies_ticker" and
+  Alembic emits `UserWarning` "autogenerate skipping
+  metadata-specified expression-based index
+  'uq_companies_ticker'". `warnings.filterwarnings` matches those
+  messages only, inside the reflection calls in
+  `tests/company_migration.py`, `0003`, and `0007`. There is no
+  pytest-wide filter. An empty autogenerate diff does not see
+  the index, so those checks also read `sqlite_master` or
+  `pg_indexes` and require the unique `upper(ticker)` index.
+  A connection whose foreign-key pragma is 0 stays 0 after the
+  copy. A failure after the copy starts rolls the schema back
+  to revision `0005` with the company row and the child tables
+  intact.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
   unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1697 passed, 212 deselected, coverage 96.47% (4143
-  statements, 122 miss, 1126 branches, 48 partial).
+  -> 1699 passed, 212 deselected, coverage 96.47% (4143
+  statements, 122 miss, 1126 branches, 48 partial). The
+  SQLite run prints no reflection warning for
+  ``uq_companies_ticker``.
   PostgreSQL, local 16, database `investment_test`,
   `REQUIRE_POSTGRES=1` and
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1697 deselected. Upgrade and downgrade of
+  -> 212 passed, 1699 deselected. Upgrade and downgrade of
   `0007` ran on both, including child rows (`price_bars`,
   `financial_metrics`, watchlist, notes, theses). Scoped
   black, isort, and flake8 passed on the Python this change

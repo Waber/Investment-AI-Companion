@@ -6,7 +6,7 @@
 
 Sources: `README.md`, `requirements.txt`, `.env.example`, `docs/work-state.md`, `docs/superpowers/specs/2026-09-08-research-workflow-and-hardening-design.md` (repo HEAD `b2541d7`, 2026-10-07).
 
-- **There is no LLM code yet.** `docs/work-state.md` says "source-aware AI analysis remain[s] unimplemented". The README lists OpenAI as a "planned or configured integration".
+- **There is no LLM code yet.** `docs/api-demo.md` and `docs/ide-startup.md` say AI analysis is not implemented. `docs/work-state.md` no longer contains that sentence. The README lists OpenAI as a "planned or configured integration" and names Gemini through `google-genai` as the planned provider. That package is not pinned.
 - **Planned contract** (design spec, section "Source-aware AI analysis"): `POST /api/v1/analyses/` takes a stored **investor profile** (horizon, risk tolerance, markets, allowed and excluded instruments, notes), an **instrument and its type**, and **1–20 user-supplied evidence items**. Each item has a unique ID, a source name/URL, an `as_of` date and an **excerpt**.
 - **Output must be strict structured JSON:** a summary, evidence-linked observations and risks, base/upside/downside scenarios, assumptions, thesis-breakers, open questions and uncertainty. Every factual observation must cite at least one known evidence ID. The service validates the schema and the cited IDs and fails visibly on malformed output. **Strict JSON-schema support is therefore a hard requirement.**
 - **Planned integration:** "a small injectable provider interface and the official OpenAI Python SDK Responses API with structured output". The documented example model is GPT-5.4 Mini.

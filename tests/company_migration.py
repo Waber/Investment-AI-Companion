@@ -5,9 +5,12 @@ should change, including a PostgreSQL connection whose search_path
 points at a scratch schema.
 """
 
+import warnings
+from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SAWarning
 
 from alembic import command
 from alembic.config import Config
@@ -61,17 +64,112 @@ def stamp(connection, revision):
     command.stamp(_config(connection), revision)
 
 
+# SQLite cannot reflect an index on upper(ticker). These two messages
+# are the only ones hidden, and only while a block below reflects
+# companies. A different warning still surfaces. The catalog assert
+# reads sqlite_master or pg_indexes, because an empty autogenerate
+# diff stays empty when this index is missing.
+_REFLECTION_SKIPPED = (
+    "Skipped unsupported reflection of "
+    "expression-based index uq_companies_ticker"
+)
+_AUTOGENERATE_SKIPPED = (
+    "autogenerate skipping metadata-specified "
+    "expression-based index 'uq_companies_ticker'"
+)
+
+
+@contextmanager
+def without_unreflectable_ticker_index():
+    """Ignore the SQLite reflection warning for ``uq_companies_ticker``.
+
+    ``warnings.filterwarnings`` matches the start of the message.
+    The SQLAlchemy warning is an ``SAWarning``. Alembic's autogenerate
+    warning is a ``UserWarning`` and names the same index. Nothing
+    else is filtered. This is not a pytest-wide filter.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=_REFLECTION_SKIPPED,
+            category=SAWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=_AUTOGENERATE_SKIPPED,
+            category=UserWarning,
+        )
+        yield
+
+
 def metadata_diff(connection):
     """Operations autogenerate would apply to match ``Base.metadata``.
 
     An empty list means the live schema and the models agree.
+    On SQLite that list does not include ``uq_companies_ticker``.
+    ``assert_upper_ticker_index_recorded`` is the check for the index.
     """
     from alembic.autogenerate import compare_metadata
     from alembic.migration import MigrationContext
     from app.core.database import Base
 
-    context = MigrationContext.configure(connection)
-    return compare_metadata(context, Base.metadata)
+    with without_unreflectable_ticker_index():
+        context = MigrationContext.configure(connection)
+        return compare_metadata(context, Base.metadata)
+
+
+def assert_upper_ticker_index_recorded(connection):
+    """``uq_companies_ticker`` is unique and uses ``upper(ticker)``.
+
+    SQLite reads ``sqlite_master``. PostgreSQL reads ``pg_indexes``.
+    Both are the database catalog, not SQLAlchemy's inspector.
+    Reflection skips this index on SQLite, so autogenerate cannot
+    report it missing.
+    """
+    if connection.dialect.name == "sqlite":
+        sql = connection.execute(
+            text(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'index' AND name = 'uq_companies_ticker'"
+            )
+        ).scalar()
+        assert sql, "uq_companies_ticker is missing from sqlite_master"
+        compact = "".join(sql.split()).lower()
+        assert "unique" in compact
+        assert "upper(ticker)" in compact
+        return
+    indexdef = connection.execute(
+        text(
+            "SELECT indexdef FROM pg_indexes "
+            "WHERE schemaname = current_schema() "
+            "AND tablename = 'companies' "
+            "AND indexname = 'uq_companies_ticker'"
+        )
+    ).scalar()
+    assert indexdef, "uq_companies_ticker is missing from pg_indexes"
+    folded = "".join(indexdef.split()).lower()
+    assert "unique" in folded
+    assert "upper(" in folded
+    assert "ticker" in folded
+
+
+def assert_empty_metadata_diff(connection):
+    """Autogenerate is empty and the upper ticker index is recorded."""
+    assert metadata_diff(connection) == []
+    assert_upper_ticker_index_recorded(connection)
+
+
+def unique_constraint_names(connection):
+    """Names of unique constraints on ``companies``.
+
+    The SQLite inspector warns while it skips the expression index.
+    That warning is ignored here. The names themselves are unchanged.
+    """
+    with without_unreflectable_ticker_index():
+        return {
+            item["name"]
+            for item in inspect(connection).get_unique_constraints("companies")
+        }
 
 
 def duplicate_ticker_message(error):
@@ -107,7 +205,9 @@ def upper_ticker_index(connection):
         if "upper(ticker)" not in compact:
             return None
         return ("uq_companies_ticker", True, "upper(ticker)")
-    for index in inspect(connection).get_indexes("companies"):
+    with without_unreflectable_ticker_index():
+        reflected = inspect(connection).get_indexes("companies")
+    for index in reflected:
         if index["name"] != "uq_companies_ticker":
             continue
         expressions = tuple(index.get("expressions") or ())
@@ -124,7 +224,10 @@ def ticker_uniqueness(connection):
     PostgreSQL unique constraint also appears as an index with
     ``duplicates_constraint`` set; that index is still listed here.
     """
-    inspector = inspect(connection)
+    with without_unreflectable_ticker_index():
+        inspector = inspect(connection)
+        reflected_indexes = inspector.get_indexes("companies")
+        reflected_constraints = inspector.get_unique_constraints("companies")
     indexes = tuple(
         sorted(
             (
@@ -132,14 +235,14 @@ def ticker_uniqueness(connection):
                 bool(index["unique"]),
                 tuple(index["column_names"]),
             )
-            for index in inspector.get_indexes("companies")
+            for index in reflected_indexes
             if index["column_names"] == ["ticker"]
         )
     )
     constraints = tuple(
         sorted(
             (item["name"], tuple(item["column_names"] or []))
-            for item in inspector.get_unique_constraints("companies")
+            for item in reflected_constraints
             if list(item.get("column_names") or []) == ["ticker"]
         )
     )
@@ -161,7 +264,10 @@ def isin_uniqueness(connection):
     Callers compare a create_all database with a database that
     revision 0001 upgraded.
     """
-    inspector = inspect(connection)
+    with without_unreflectable_ticker_index():
+        inspector = inspect(connection)
+        reflected_indexes = inspector.get_indexes("companies")
+        reflected_constraints = inspector.get_unique_constraints("companies")
     indexes = tuple(
         sorted(
             (
@@ -169,14 +275,14 @@ def isin_uniqueness(connection):
                 bool(index["unique"]),
                 tuple(index["column_names"]),
             )
-            for index in inspector.get_indexes("companies")
+            for index in reflected_indexes
             if index["column_names"] == ["isin"]
         )
     )
     constraints = tuple(
         sorted(
             (item["name"], tuple(item["column_names"] or []))
-            for item in inspector.get_unique_constraints("companies")
+            for item in reflected_constraints
             if item.get("column_names") == ["isin"]
         )
     )

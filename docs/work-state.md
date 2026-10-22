@@ -15,18 +15,23 @@
   replaces `uq_companies_ticker` with that expression, and
   drops `uq_company_name_ticker`. On SQLite only `companies`
   is copied, with foreign keys off for the copy. Downgrade
-  restores the column index and the pair constraint.
+  restores the column index and the pair constraint. SQLite
+  cannot reflect that expression index. The reflection warning
+  is filtered by its message at the reflection calls, and the
+  empty-autogenerate checks read `sqlite_master` or
+  `pg_indexes` for the unique `upper(ticker)` index.
 - Incomplete: re-chain `0007` onto `0006` after #94 merges.
   That is a later request, not this pull request.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1697 passed, 212 deselected, coverage 96.47% (4143
-  statements, 122 miss, 1126 branches, 48 partial).
+  -> 1699 passed, 212 deselected, coverage 96.47% (4143
+  statements, 122 miss, 1126 branches, 48 partial). No
+  reflection warning for ``uq_companies_ticker``.
   Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
   `investment_test`, `REQUIRE_POSTGRES=1`,
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1697 deselected. Scoped black, isort, and
+  -> 212 passed, 1699 deselected. Scoped black, isort, and
   flake8 passed. No live market-data calls. GitHub Actions is
   recorded in the pull request, not in a later commit.
 - Active agents: none. Blockers: none. Account usage was not

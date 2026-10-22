@@ -17,6 +17,10 @@ from app.models.research import (
     THESIS_BREAKERS_MAX,
     THESIS_TITLE_MAX,
 )
+from tests.company_migration import (
+    assert_upper_ticker_index_recorded,
+    without_unreflectable_ticker_index,
+)
 
 
 def _columns(inspector, table):
@@ -97,9 +101,12 @@ def assert_compare_metadata_is_empty(connection):
     ``create_all``, a drop of the research tables, a stamp of the
     parent revision, and the upgrade that creates them again.
     """
-    context = MigrationContext.configure(connection)
-    diff = compare_metadata(context, Base.metadata)
+    with without_unreflectable_ticker_index():
+        context = MigrationContext.configure(connection)
+        diff = compare_metadata(context, Base.metadata)
     assert diff == []
+    # An empty diff does not prove the expression index is present.
+    assert_upper_ticker_index_recorded(connection)
 
 
 def assert_declared_lengths(connection):

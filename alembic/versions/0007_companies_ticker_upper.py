@@ -39,8 +39,11 @@ dialect, and the reflected expression is ``upper(ticker::text)``.
 """
 
 import re
+import warnings
+from contextlib import contextmanager
 
 import sqlalchemy as sa
+from sqlalchemy.exc import SAWarning
 
 from alembic import op
 
@@ -114,11 +117,33 @@ def _format_upper_collisions(found):
     )
 
 
+@contextmanager
+def _quiet_expression_index():
+    """Hide SQLite's skip warning for ``uq_companies_ticker``.
+
+    The index expression is ``upper(ticker)``. SQLAlchemy 2.0.23
+    cannot reflect that and emits one ``SAWarning`` whose text names
+    this index. The filter matches that message only, and only while
+    the constraint names are read. The tests check the index in
+    ``sqlite_master`` or ``pg_indexes`` instead.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                "Skipped unsupported reflection of "
+                "expression-based index uq_companies_ticker"
+            ),
+            category=SAWarning,
+        )
+        yield
+
+
 def _constraint_names(bind):
-    inspector = sa.inspect(bind)
-    return {
-        item["name"] for item in inspector.get_unique_constraints("companies")
-    }
+    with _quiet_expression_index():
+        inspector = sa.inspect(bind)
+        found = inspector.get_unique_constraints("companies")
+    return {item["name"] for item in found}
 
 
 def _sqlite_rows(bind, statement, parameters=None):

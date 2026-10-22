@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from sqlalchemy import inspect, text
+from sqlalchemy import event, text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import Base, create_db_engine
@@ -13,6 +13,7 @@ from tests.company_migration import (
     LEGACY_METRICS,
     downgrade_to,
     stamp,
+    unique_constraint_names,
     upgrade_to,
     upper_ticker_index,
 )
@@ -233,18 +234,14 @@ def test_round_trip_keeps_child_rows(tmp_path):
         downgrade_to(connection, "0005")
         assert _child_counts(connection) == before
         assert upper_ticker_index(connection) is None
-        names = {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        names = unique_constraint_names(connection)
         assert "uq_company_name_ticker" in names
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
         upgrade_to(connection, "0007")
         assert _child_counts(connection) == before
-        assert "uq_company_name_ticker" not in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
     engine.dispose()
 
 
@@ -323,10 +320,9 @@ def test_sqlite_rebuild_drops_the_pair_constraint_and_keeps_children(
         assert connection.execute(
             text("SELECT name, ticker, instrument_type FROM companies")
         ).one() == ("Apple", "AAPL", "STOCK")
-        assert "uq_company_name_ticker" not in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
             True,
@@ -351,10 +347,7 @@ def test_sqlite_rebuild_drops_the_pair_constraint_and_keeps_children(
             ).scalar()
             == 1
         )
-        assert "uq_company_name_ticker" in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" in unique_constraint_names(connection)
         assert upper_ticker_index(connection) is None
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
     engine.dispose()
@@ -419,10 +412,7 @@ def test_version_survives_closing_the_connection(tmp_path):
     with engine.connect() as connection:
         assert _version(connection) == "0005"
         assert upper_ticker_index(connection) is None
-        names = {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        names = unique_constraint_names(connection)
         assert "uq_company_name_ticker" in names
         assert (
             connection.execute(
@@ -445,10 +435,185 @@ def test_version_survives_closing_the_connection(tmp_path):
             True,
             "upper(ticker)",
         )
-        assert "uq_company_name_ticker" not in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
+    engine.dispose()
+
+
+def _companies_with_pair_constraint_and_children(connection):
+    """A 0005-shaped file whose companies table still has the pair constraint.
+
+    The child tables are the ones that reference companies. The copy
+    in revision 0007 must leave every one of them in place.
+    """
+    connection.execute(
+        text(
+            "CREATE TABLE companies ("
+            "id INTEGER PRIMARY KEY, "
+            "name VARCHAR(255) NOT NULL, "
+            "ticker VARCHAR(20) NOT NULL, "
+            "instrument_type VARCHAR(8) NOT NULL DEFAULT 'STOCK' "
+            "CHECK (instrument_type IN ('STOCK', 'ETF', 'ETC')), "
+            "CONSTRAINT uq_company_name_ticker UNIQUE (name, ticker))"
+        )
+    )
+    connection.execute(
+        text("CREATE UNIQUE INDEX uq_companies_ticker ON companies (ticker)")
+    )
+    connection.execute(
+        text(
+            "CREATE TABLE price_bars ("
+            "id INTEGER PRIMARY KEY, "
+            "instrument_id INTEGER NOT NULL "
+            "REFERENCES companies (id) ON DELETE CASCADE)"
+        )
+    )
+    connection.execute(
+        text(
+            "CREATE TABLE financial_metrics ("
+            "id INTEGER PRIMARY KEY, "
+            "company_id INTEGER NOT NULL REFERENCES companies (id))"
+        )
+    )
+    connection.execute(
+        text(
+            "CREATE TABLE watchlist_items ("
+            "id INTEGER PRIMARY KEY, "
+            "company_id INTEGER NOT NULL "
+            "REFERENCES companies (id) ON DELETE CASCADE)"
+        )
+    )
+    connection.execute(
+        text(
+            "CREATE TABLE notes ("
+            "id INTEGER PRIMARY KEY, "
+            "company_id INTEGER NOT NULL "
+            "REFERENCES companies (id) ON DELETE CASCADE)"
+        )
+    )
+    connection.execute(
+        text(
+            "CREATE TABLE theses ("
+            "id INTEGER PRIMARY KEY, "
+            "company_id INTEGER NOT NULL "
+            "REFERENCES companies (id) ON DELETE CASCADE)"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT INTO companies (id, name, ticker, instrument_type) "
+            "VALUES (1, 'Apple', 'AAPL', 'STOCK')"
+        )
+    )
+    connection.execute(
+        text("INSERT INTO price_bars (id, instrument_id) VALUES (7, 1)")
+    )
+    connection.execute(
+        text("INSERT INTO financial_metrics (id, company_id) VALUES (1, 1)")
+    )
+    connection.execute(
+        text("INSERT INTO watchlist_items (id, company_id) VALUES (1, 1)")
+    )
+    connection.execute(
+        text("INSERT INTO notes (id, company_id) VALUES (1, 1)")
+    )
+    connection.execute(
+        text("INSERT INTO theses (id, company_id) VALUES (1, 1)")
+    )
+
+
+def _child_row_counts(connection):
+    return {
+        name: connection.execute(text(f"SELECT COUNT(*) FROM {name}")).scalar()
+        for name in (
+            "companies",
+            "financial_metrics",
+            "price_bars",
+            "watchlist_items",
+            "notes",
+            "theses",
+        )
+    }
+
+
+def test_upgrade_keeps_foreign_keys_off_when_they_started_off(tmp_path):
+    """A connection that had foreign keys off still has them off.
+
+    The companies copy turns the pragma off, then puts back the value
+    it found. The application's connections start with the pragma on.
+    This one is turned off first, so afterwards it must still be 0.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'fk-off.db'}")
+    with engine.begin() as connection:
+        _companies_with_pair_constraint_and_children(connection)
+    with engine.connect() as connection:
+        connection.execute(text("PRAGMA foreign_keys=OFF"))
+        assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 0
+        stamp(connection, "0005")
+        before = _child_row_counts(connection)
+        upgrade_to(connection, "0007")
+        assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 0
+        assert _child_row_counts(connection) == before
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            "upper(ticker)",
+        )
+    engine.dispose()
+
+
+def test_a_failed_companies_copy_rolls_back_to_0005(tmp_path):
+    """A failure after the copy starts leaves revision 0005 intact.
+
+    The listener raises once ``DROP TABLE companies`` is about to
+    run. By then ``companies__new`` has been created and filled.
+    The copy's transaction rolls that back. The company row and
+    every child table are still there, and the version is 0005.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'copy-fail.db'}")
+    with engine.begin() as connection:
+        _companies_with_pair_constraint_and_children(connection)
+    with engine.connect() as connection:
+        stamp(connection, "0005")
+        connection.commit()
+        before = _child_row_counts(connection)
+
+        def fail_mid_copy(*listener_args):
+            statement = listener_args[2]
+            compact = " ".join(statement.split()).lower()
+            if (
+                compact.startswith("drop table")
+                and "companies__new" not in compact
+                and compact.endswith("companies")
+            ):
+                raise RuntimeError("forced failure during the companies copy")
+
+        event.listen(engine, "before_cursor_execute", fail_mid_copy)
+        try:
+            with pytest.raises(
+                RuntimeError, match="forced failure during the companies copy"
+            ):
+                upgrade_to(connection, "0007")
+        finally:
+            event.remove(engine, "before_cursor_execute", fail_mid_copy)
+        assert _version(connection) == "0005"
+        assert _child_row_counts(connection) == before
+        assert (
+            connection.execute(
+                text(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE name = 'companies__new'"
+                )
+            ).scalar()
+            is None
+        )
+        assert "uq_company_name_ticker" in unique_constraint_names(connection)
+        assert upper_ticker_index(connection) is None
+        assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
     engine.dispose()
 
 
@@ -476,11 +641,9 @@ def test_create_all_rejects_a_lower_case_twin(tmp_path):
             connection.execute(text("SELECT COUNT(*) FROM companies")).scalar()
             == 1
         )
-        names = {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
-        assert "uq_company_name_ticker" not in names
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
     engine.dispose()
     # The ORM row uses the same index. Importing CompanyDB keeps the
     # model under the coverage run's measured package.

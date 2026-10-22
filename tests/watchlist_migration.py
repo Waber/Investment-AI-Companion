@@ -14,7 +14,12 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from app.core.database import Base
-from tests.company_migration import LEGACY_COMPANIES, LEGACY_METRICS
+from tests.company_migration import (
+    LEGACY_COMPANIES,
+    LEGACY_METRICS,
+    assert_upper_ticker_index_recorded,
+    without_unreflectable_ticker_index,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -100,8 +105,9 @@ def watchlist_diffs(connection):
     Other tables are ignored: a legacy companies table is not the full
     model, and this helper is also used after a full ``create_all``.
     """
-    context = MigrationContext.configure(connection)
-    diff = compare_metadata(context, Base.metadata)
+    with without_unreflectable_ticker_index():
+        context = MigrationContext.configure(connection)
+        diff = compare_metadata(context, Base.metadata)
     return [item for item in diff if "watchlist" in repr(item).lower()]
 
 
@@ -130,6 +136,9 @@ def assert_autogenerate_is_empty(connection):
     ``create_all``, with the watchlist table recreated by revision 0004,
     so a drift in that revision shows up here.
     """
-    context = MigrationContext.configure(connection)
-    diff = compare_metadata(context, Base.metadata)
+    with without_unreflectable_ticker_index():
+        context = MigrationContext.configure(connection)
+        diff = compare_metadata(context, Base.metadata)
     assert diff == []
+    # An empty diff does not prove the expression index is present.
+    assert_upper_ticker_index_recorded(connection)

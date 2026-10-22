@@ -1,13 +1,14 @@
 """Revision 0007 on PostgreSQL, in a schema the other tests do not use."""
 
 import pytest
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_to,
+    unique_constraint_names,
     upgrade_to,
     upper_ticker_index,
 )
@@ -210,17 +211,13 @@ def test_round_trip_keeps_child_rows(postgres_engine):
         downgrade_to(connection, "0005")
         assert _child_counts(connection) == before
         assert upper_ticker_index(connection) is None
-        names = {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        names = unique_constraint_names(connection)
         assert "uq_company_name_ticker" in names
         upgrade_to(connection, "0007")
         assert _child_counts(connection) == before
-        assert "uq_company_name_ticker" not in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
     finally:
         _drop_scratch(connection, schema)
 
@@ -269,10 +266,9 @@ def test_pair_constraint_is_dropped_and_children_stay(postgres_engine):
         assert connection.execute(
             text("SELECT id, company_id FROM financial_metrics")
         ).one() == (1, 1)
-        assert "uq_company_name_ticker" not in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
         assert upper_ticker_index(connection) == (
             "uq_companies_ticker",
             True,
@@ -282,10 +278,7 @@ def test_pair_constraint_is_dropped_and_children_stay(postgres_engine):
         assert (
             connection.execute(text("SELECT id FROM price_bars")).scalar() == 7
         )
-        assert "uq_company_name_ticker" in {
-            item["name"]
-            for item in inspect(connection).get_unique_constraints("companies")
-        }
+        assert "uq_company_name_ticker" in unique_constraint_names(connection)
         assert upper_ticker_index(connection) is None
     finally:
         _drop_scratch(connection, schema)
