@@ -1,4 +1,5 @@
 import math
+import unicodedata
 from typing import Any
 
 from fastapi import Request
@@ -26,6 +27,34 @@ def _truncate_error_input(value: Any) -> Any:
     return value
 
 
+def _escape_surrogates(value: Any) -> Any:
+    """Replace lone surrogates so the 422 body can be encoded as UTF-8.
+
+    A surrogate is a real Python character (category Cs) and not a
+    valid UTF-8 byte. ``JSONResponse`` writes with ``ensure_ascii``
+    off, then encodes the text. Leaving the character in ``input``
+    turns a 422 into a 500. The six ASCII characters ``\\uXXXX``
+    stand in for it. The validator message never contains the
+    character in the first place.
+    """
+    if isinstance(value, str):
+        if not any(unicodedata.category(char) == "Cs" for char in value):
+            return value
+        return "".join(
+            (
+                "\\u%04x" % ord(char)
+                if unicodedata.category(char) == "Cs"
+                else char
+            )
+            for char in value
+        )
+    if isinstance(value, list):
+        return [_escape_surrogates(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _escape_surrogates(item) for key, item in value.items()}
+    return value
+
+
 def _sanitize_nonfinite(value: Any) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
@@ -44,4 +73,6 @@ async def request_validation_exception_handler(
     for error in errors:
         if isinstance(error, dict) and "input" in error:
             error["input"] = _truncate_error_input(error["input"])
+    # After truncation, so a huge surrogate string is shortened first.
+    errors = _escape_surrogates(errors)
     return JSONResponse(status_code=422, content={"detail": errors})

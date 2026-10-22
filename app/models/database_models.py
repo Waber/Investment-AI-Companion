@@ -18,6 +18,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utc_datetime import UTCDateTime
+from app.models.company import COMPANY_NAME_MAX
 from app.models.price_amount import PriceAmount, price_compare
 from app.models.research import (
     NOTE_BODY_MAX,
@@ -48,7 +49,7 @@ class CompanyDB(Base):
 
     # Company information fields
     name = Column(
-        String(255), nullable=False, index=True
+        String(COMPANY_NAME_MAX), nullable=False, index=True
     )  # index=True creates a database index for faster searches
     # Not unique=True. That flag would create ix_companies_ticker.
     # The unique index is uq_companies_ticker. Revision 0003 created

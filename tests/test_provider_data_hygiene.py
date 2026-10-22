@@ -640,9 +640,9 @@ async def test_company_name_with_newline_does_not_forge_a_log_line(
 ):
     """A newline in the provider name is a control and is not stored.
 
-    ``normalize_name`` rejects category Cc anywhere after strip, so
-    the fetch is 502. The error log must not split into a forged
-    record.
+    ``normalize_name`` rejects category Cc on the raw text, so a
+    newline is not stripped away and the fetch is 502. The error
+    log must not split into a forged record.
     """
     name = "Acme\nINFO forged-admin-login"
     client.app.dependency_overrides[get_collector] = lambda: PayloadCollector(

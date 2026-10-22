@@ -88,6 +88,8 @@ def test_create_model_strips_the_label_and_rejects_a_long_one():
         "A\u200fB",
         "\U000e0001",
         "A\U000e007fB",
+        "\n",
+        "note\n",
     ],
 )
 def test_create_model_rejects_controls_and_bidi(label):
@@ -111,10 +113,12 @@ def test_create_model_rejects_controls_and_bidi(label):
         " \u200b ",
         "\u200c\u200b",
         "\ufeff\u200b",
+        "\ue000",
+        "\u0378",
     ],
 )
 def test_create_model_treats_blank_and_format_only_labels_as_null(label):
-    """Whitespace and Cf-only notes are the same as omitting the label."""
+    """Whitespace, Cf, Co, and Cn notes are the same as omitting the label."""
     created = WatchlistItemCreate(company_id=1, label=label)
     assert created.label is None
 
@@ -476,3 +480,67 @@ async def test_race_loser_is_200(client, monkeypatch):
     assert again.json()["id"] == first.json()["id"]
     assert again.json()["label"] == "keep"
     assert calls["count"] == 2
+
+
+def _field_message(response, field):
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    matched = [item for item in detail if item.get("loc", [None])[-1] == field]
+    assert len(matched) == 1
+    return matched[0]["msg"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("ticker", "label", "word"),
+    [
+        ("BIDI1", "Kept\u202e", "bidi"),
+        ("CTRL1", "A\x00B", "control"),
+        ("NLBL1", "ETF\n", "control"),
+        ("DEP1", "A\u206aB", "bidi"),
+        ("TAG1", "A\U000e0001B", "bidi"),
+    ],
+)
+async def test_watchlist_api_rejects_hidden_and_control_labels(
+    client, ticker, label, word
+):
+    """A bad label is 422 and does not insert a row.
+
+    The message does not repeat the label.
+    """
+    company_id = await _company(client, ticker)
+    response = await client.post(
+        "/api/v1/watchlist/",
+        json={"company_id": company_id, "label": label},
+    )
+    assert response.status_code == 422
+    message = _field_message(response, "label")
+    assert word in message
+    assert "Kept" not in message
+    assert "ETF" not in message
+    assert "\u202e" not in message
+    assert "\x00" not in message
+    assert "\ud800" not in message
+    listed = await client.get("/api/v1/watchlist/")
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_watchlist_api_rejects_a_surrogate_label(client):
+    """The JSON \\u escape becomes a lone surrogate and is 422."""
+    company_id = await _company(client, "SURR1")
+    body = ('{"company_id": %d, "label": "A\\ud800B"}' % company_id).encode()
+    response = await client.post(
+        "/api/v1/watchlist/",
+        content=body,
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 422
+    response.content.decode("utf-8")
+    assert "\ud800" not in response.text
+    assert "\\ud800" in response.text
+    message = _field_message(response, "label")
+    assert "surrogate" in message
+    assert "\ud800" not in message
+    listed = await client.get("/api/v1/watchlist/")
+    assert listed.json() == []
