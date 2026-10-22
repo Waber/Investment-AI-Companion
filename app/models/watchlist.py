@@ -15,7 +15,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.validation.text import clean_text
+from app.validation.text import TextValidationError, clean_text
 
 # The column is String(80). The write model uses the same limit so a
 # too-long note is HTTP 422 instead of a database error on PostgreSQL.
@@ -30,16 +30,28 @@ def clean_watchlist_label(value: object) -> object:
     non-string. Everything else is ``clean_text`` with newlines
     disallowed and blanks allowed. The helper returns ``None`` for a
     blank, which is the value this column stores.
+
+    A label that is only too long is returned stripped.
+    ``Field(max_length=...)`` on ``WatchlistItemCreate`` then
+    reports Pydantic ``string_too_long``, the same error a long
+    label produced before this helper. This function does not
+    apply that limit itself. The HTTP route always goes through
+    the model, so the 422 happens before the repository inserts.
     """
     if not isinstance(value, str):
         return value
-    return clean_text(
-        value,
-        field="label",
-        max_len=WATCHLIST_LABEL_MAX_LENGTH,
-        allow_newlines=False,
-        allow_blank=True,
-    )
+    try:
+        return clean_text(
+            value,
+            field="label",
+            max_len=WATCHLIST_LABEL_MAX_LENGTH,
+            allow_newlines=False,
+            allow_blank=True,
+        )
+    except TextValidationError as exc:
+        if exc.code == "too_long":
+            return value.strip()
+        raise
 
 
 class WatchlistItemCreate(BaseModel):

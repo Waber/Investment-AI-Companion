@@ -63,36 +63,67 @@ def test_create_model_strips_the_label_and_rejects_a_long_one():
     assert omitted.label is None
     with pytest.raises(ValidationError):
         WatchlistItemCreate(company_id=0, label="x")
-    with pytest.raises(ValidationError):
-        WatchlistItemCreate(company_id=1, label="x" * 81)
+    with pytest.raises(ValidationError) as too_long:
+        WatchlistItemCreate(
+            company_id=1, label="x" * (WATCHLIST_LABEL_MAX_LENGTH + 1)
+        )
+    length_error = too_long.value.errors()[0]
+    assert length_error["loc"] == ("label",)
+    assert length_error["type"] == "string_too_long"
+    assert length_error["ctx"]["max_length"] == WATCHLIST_LABEL_MAX_LENGTH
+
+
+# (label, code). Ids name the unprintable characters as U+XXXX.
+_REJECTED_LABELS = (
+    ("\x00", "control_char"),
+    ("A\x00B", "control_char"),
+    ("\x7f", "control_char"),
+    ("\u202a", "bidi"),
+    ("\u202e", "bidi"),
+    ("\u2066", "bidi"),
+    ("\u2069", "bidi"),
+    ("\u200e", "bidi"),
+    ("\u200f", "bidi"),
+    ("\u061c", "bidi"),
+    ("A\u061cB", "bidi"),
+    ("\u206a", "bidi"),
+    ("\u206f", "bidi"),
+    ("A\u206aB", "bidi"),
+    ("A\u200eB", "bidi"),
+    ("A\u200fB", "bidi"),
+    ("\U000e0001", "bidi"),
+    ("A\U000e007fB", "bidi"),
+    ("\n", "control_char"),
+    ("note\n", "control_char"),
+)
+
+
+def _label_case_id(pair):
+    label, code = pair
+    parts = []
+    letters = []
+
+    def flush():
+        if letters:
+            parts.append("".join(letters))
+            letters.clear()
+
+    for char in label:
+        if char.isprintable() and char != " ":
+            letters.append(char)
+            continue
+        flush()
+        parts.append("U+%04X" % ord(char))
+    flush()
+    return "+".join(parts) + "-" + code
 
 
 @pytest.mark.parametrize(
-    "label",
-    [
-        "\x00",
-        "A\x00B",
-        "\x7f",
-        "\u202a",
-        "\u202e",
-        "\u2066",
-        "\u2069",
-        "\u200e",
-        "\u200f",
-        "\u061c",
-        "A\u061cB",
-        "\u206a",
-        "\u206f",
-        "A\u206aB",
-        "A\u200eB",
-        "A\u200fB",
-        "\U000e0001",
-        "A\U000e007fB",
-        "\n",
-        "note\n",
-    ],
+    ("label", "code"),
+    _REJECTED_LABELS,
+    ids=[_label_case_id(pair) for pair in _REJECTED_LABELS],
 )
-def test_create_model_rejects_controls_and_bidi(label):
+def test_create_model_rejects_controls_and_bidi(label, code):
     """Cc (including NUL) and the listed bidi controls are invalid.
 
     U+200E and U+200F are format characters, and they are still
@@ -100,7 +131,12 @@ def test_create_model_rejects_controls_and_bidi(label):
     """
     with pytest.raises(ValidationError) as caught:
         WatchlistItemCreate(company_id=1, label=label)
-    assert caught.value.errors()[0]["loc"] == ("label",)
+    error = caught.value.errors()[0]
+    assert error["loc"] == ("label",)
+    assert error["type"] == "value_error"
+    cause = error["ctx"]["error"]
+    assert cause.code == code
+    assert cause.field == "label"
 
 
 @pytest.mark.parametrize(
@@ -286,6 +322,17 @@ async def test_watchlist_api_rejects_a_bad_body(client):
         json={"company_id": company_id, "label": "x" * 81},
     )
     assert too_long.status_code == 422
+    length_error = [
+        item
+        for item in too_long.json()["detail"]
+        if item.get("loc", [None])[-1] == "label"
+    ]
+    assert len(length_error) == 1
+    assert length_error[0]["type"] == "string_too_long"
+    assert length_error[0]["msg"] == (
+        "String should have at most %d characters" % WATCHLIST_LABEL_MAX_LENGTH
+    )
+    assert length_error[0]["ctx"] == {"max_length": WATCHLIST_LABEL_MAX_LENGTH}
     missing_id = await client.post("/api/v1/watchlist/", json={"label": "x"})
     assert missing_id.status_code == 422
     listed = await client.get("/api/v1/watchlist/")
@@ -482,12 +529,28 @@ async def test_race_loser_is_200(client, monkeypatch):
     assert calls["count"] == 2
 
 
-def _field_message(response, field):
+def _field_error(response, field):
     detail = response.json()["detail"]
     assert isinstance(detail, list)
     matched = [item for item in detail if item.get("loc", [None])[-1] == field]
     assert len(matched) == 1
-    return matched[0]["msg"]
+    return matched[0]
+
+
+def _field_message(response, field):
+    return _field_error(response, field)["msg"]
+
+
+def _assert_text_contract(response, field, code, msg, max_length=None):
+    """Lock type, msg, and the error code on one 422 field."""
+    error = _field_error(response, field)
+    assert error["msg"] == msg
+    if code == "too_long":
+        assert error["type"] == "string_too_long"
+        assert error["ctx"] == {"max_length": max_length}
+        return
+    assert error["type"] == "value_error"
+    assert error["ctx"]["error"] == {"code": code, "field": field}
 
 
 @pytest.mark.asyncio
@@ -542,5 +605,90 @@ async def test_watchlist_api_rejects_a_surrogate_label(client):
     message = _field_message(response, "label")
     assert "surrogate" in message
     assert "\ud800" not in message
+    listed = await client.get("/api/v1/watchlist/")
+    assert listed.json() == []
+
+
+_WATCHLIST_TEXT_CASES = (
+    ("blank", "   ", None, None),
+    ("blank", "\ue000", None, None),
+    (
+        "too_long",
+        "x" * (WATCHLIST_LABEL_MAX_LENGTH + 1),
+        "String should have at most %d characters"
+        % WATCHLIST_LABEL_MAX_LENGTH,
+        WATCHLIST_LABEL_MAX_LENGTH,
+    ),
+    (
+        "control_char",
+        "ETF\n",
+        "Value error, label must not contain control characters",
+        None,
+    ),
+    (
+        "bidi",
+        "Kept\u202e",
+        "Value error, label must not contain hidden or bidi controls",
+        None,
+    ),
+    (
+        "surrogate",
+        None,
+        "Value error, label must not contain unpaired surrogates",
+        None,
+    ),
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "label", "msg", "max_length"),
+    _WATCHLIST_TEXT_CASES,
+    ids=[
+        "blank-spaces",
+        "blank-U+E000",
+        "too_long",
+        "control_char",
+        "bidi",
+        "surrogate",
+    ],
+)
+async def test_watchlist_text_error_contract(
+    client, code, label, msg, max_length
+):
+    """Lock type, msg, and ctx.error.code for each text failure.
+
+    A blank label is not a 422, so it has no error type. Whitespace
+    and a private-use-only label are stored as null. On master the
+    private-use label was stored as that text.
+    """
+    company_id = await _company(client, "W" + code[:5].upper())
+    if code == "blank":
+        created = await client.post(
+            "/api/v1/watchlist/",
+            json={"company_id": company_id, "label": label},
+        )
+        assert created.status_code == 201
+        assert created.json()["label"] is None
+        return
+    if code == "surrogate":
+        body = (
+            '{"company_id": %d, "label": "A\\ud800B"}' % company_id
+        ).encode()
+        response = await client.post(
+            "/api/v1/watchlist/",
+            content=body,
+            headers={"content-type": "application/json"},
+        )
+    else:
+        response = await client.post(
+            "/api/v1/watchlist/",
+            json={"company_id": company_id, "label": label},
+        )
+    assert response.status_code == 422
+    _assert_text_contract(response, "label", code, msg, max_length)
+    if code == "surrogate":
+        response.content.decode("utf-8")
+        assert "\ud800" not in response.text
     listed = await client.get("/api/v1/watchlist/")
     assert listed.json() == []

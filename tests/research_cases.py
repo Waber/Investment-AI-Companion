@@ -33,6 +33,30 @@ from app.repositories.company_repository import CompanyRepository
 from app.repositories.note_repository import NoteRepository
 from app.repositories.research_store import ResearchStorageError
 from app.repositories.thesis_repository import ThesisRepository
+from app.validation.text import TextValidationError
+
+
+def _text_failure(caught, field):
+    """The TextValidationError Pydantic stored for one field."""
+    error = caught.value.errors()[0]
+    assert error["loc"] == (field,)
+    assert error["type"] == "value_error"
+    cause = error["ctx"]["error"]
+    assert isinstance(cause, TextValidationError)
+    assert cause.field == field
+    return cause
+
+
+def _assert_string_too_long(caught, field, max_len):
+    """Length is Pydantic's constraint, not the helper's value_error."""
+    error = caught.value.errors()[0]
+    assert error["loc"] == (field,)
+    assert error["type"] == "string_too_long"
+    assert error["msg"] == (
+        "String should have at most " + str(max_len) + " characters"
+    )
+    assert error["ctx"]["max_length"] == max_len
+
 
 _OLD = datetime(2020, 1, 1, tzinfo=timezone.utc)
 _NEWER = datetime(2024, 6, 1, tzinfo=timezone.utc)
@@ -386,31 +410,58 @@ class ResearchBehavior:
         )
         assert created.status is ThesisStatus.ACTIVE
 
-    @pytest.mark.parametrize("value", ["", " ", "\n", "\t", "\r\n", " \n\t "])
+    @pytest.mark.parametrize(
+        "value",
+        ["", " ", "\n", "\t", "\r\n", " \n\t "],
+        ids=["empty", "space", "LF", "tab", "CRLF", "space-LF-tab-space"],
+    )
     def test_blank_note_body_is_rejected(self, value):
         with pytest.raises(ValidationError) as caught:
             NoteCreate(body=value)
-        assert caught.value.errors()[0]["loc"] == ("body",)
+        assert _text_failure(caught, "body").code == "blank"
 
-    @pytest.mark.parametrize("value", ["", " ", "\n"])
-    def test_blank_title_and_thesis_body_are_rejected(self, value):
-        with pytest.raises(ValidationError):
+    @pytest.mark.parametrize(
+        ("value", "title_code", "body_code"),
+        [
+            ("", "blank", "blank"),
+            (" ", "blank", "blank"),
+            ("\n", "control_char", "blank"),
+        ],
+        ids=["empty", "space", "LF"],
+    )
+    def test_blank_title_and_thesis_body_are_rejected(
+        self, value, title_code, body_code
+    ):
+        """A newline in a title is a control. A body strips it first."""
+        with pytest.raises(ValidationError) as title_error:
             ThesisCreate(title=value, body="body")
-        with pytest.raises(ValidationError):
+        assert _text_failure(title_error, "title").code == title_code
+        with pytest.raises(ValidationError) as body_error:
             ThesisCreate(title="title", body=value)
+        assert _text_failure(body_error, "body").code == body_code
 
-    @pytest.mark.parametrize("char", _CONTROLS)
+    @pytest.mark.parametrize(
+        "char",
+        _CONTROLS,
+        ids=["U+%04X" % ord(char) for char in _CONTROLS],
+    )
     def test_multiline_fields_reject_other_controls(self, char):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as note_error:
             NoteCreate(body="a" + char + "b")
-        with pytest.raises(ValidationError):
+        assert _text_failure(note_error, "body").code == "control_char"
+        with pytest.raises(ValidationError) as body_error:
             ThesisCreate(title="title", body="a" + char + "b")
-        with pytest.raises(ValidationError):
+        assert _text_failure(body_error, "body").code == "control_char"
+        with pytest.raises(ValidationError) as breakers_error:
             ThesisCreate(
                 title="title",
                 body="body",
                 thesis_breakers="a" + char + "b",
             )
+        assert (
+            _text_failure(breakers_error, "thesis_breakers").code
+            == "control_char"
+        )
 
     @pytest.mark.parametrize(
         ("char", "stored"),
@@ -427,17 +478,22 @@ class ResearchBehavior:
         assert thesis.body == "a" + stored + "b"
         assert thesis.thesis_breakers == "c" + stored + "d"
 
-    @pytest.mark.parametrize("char", ["\n", "\r", "\t", "\x00", "\x7f"])
+    @pytest.mark.parametrize(
+        "char",
+        ["\n", "\r", "\t", "\x00", "\x7f"],
+        ids=["LF", "CR", "tab", "U+0000", "U+007F"],
+    )
     def test_title_rejects_every_control(self, char):
         with pytest.raises(ValidationError) as caught:
             ThesisCreate(title="a" + char + "b", body="body")
-        assert caught.value.errors()[0]["loc"] == ("title",)
+        assert _text_failure(caught, "title").code == "control_char"
 
     def test_strip_happens_before_the_length_and_control_checks(self):
         padded = " " + ("x" * NOTE_BODY_MAX) + "\n"
         assert NoteCreate(body=padded).body == "x" * NOTE_BODY_MAX
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as note_length:
             NoteCreate(body="x" * (NOTE_BODY_MAX + 1))
+        _assert_string_too_long(note_length, "body", NOTE_BODY_MAX)
         assert NoteCreate(body="x" * NOTE_BODY_MAX).body == "x" * NOTE_BODY_MAX
 
         thesis = ThesisCreate(
@@ -448,16 +504,21 @@ class ResearchBehavior:
         assert thesis.title == "t" * THESIS_TITLE_MAX
         assert thesis.body == "b" * THESIS_BODY_MAX
         assert thesis.thesis_breakers == "k" * THESIS_BREAKERS_MAX
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as title_length:
             ThesisCreate(title="t" * (THESIS_TITLE_MAX + 1), body="b")
-        with pytest.raises(ValidationError):
+        _assert_string_too_long(title_length, "title", THESIS_TITLE_MAX)
+        with pytest.raises(ValidationError) as body_length:
             ThesisCreate(title="t", body="b" * (THESIS_BODY_MAX + 1))
-        with pytest.raises(ValidationError):
+        _assert_string_too_long(body_length, "body", THESIS_BODY_MAX)
+        with pytest.raises(ValidationError) as breakers_length:
             ThesisCreate(
                 title="t",
                 body="b",
                 thesis_breakers="k" * (THESIS_BREAKERS_MAX + 1),
             )
+        _assert_string_too_long(
+            breakers_length, "thesis_breakers", THESIS_BREAKERS_MAX
+        )
         # A trailing newline on a title is a control on the raw
         # text. strip() must not hide it. A body allows the newline
         # and then strips it.
@@ -524,8 +585,9 @@ class ResearchBehavior:
             NoteUpdate(body="  ")
         with pytest.raises(ValidationError):
             NoteUpdate(body="a\x00b")
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as note_length:
             NoteUpdate(body="x" * (NOTE_BODY_MAX + 1))
+        _assert_string_too_long(note_length, "body", NOTE_BODY_MAX)
         assert NoteUpdate(body="x" * NOTE_BODY_MAX).body == "x" * NOTE_BODY_MAX
 
         assert ThesisUpdate().model_dump(exclude_unset=True) == {}
@@ -549,8 +611,9 @@ class ResearchBehavior:
             ThesisUpdate(status="ACTIVE")
         with pytest.raises(ValidationError):
             ThesisUpdate(title="a\nb")
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as title_length:
             ThesisUpdate(title="t" * (THESIS_TITLE_MAX + 1))
+        _assert_string_too_long(title_length, "title", THESIS_TITLE_MAX)
         assert (
             ThesisUpdate(
                 thesis_breakers="k" * THESIS_BREAKERS_MAX
@@ -586,11 +649,12 @@ class ResearchBehavior:
         assert ThesisCreate(title=" a\u200bb ", body="b").title == "a\u200bb"
         # A format character at the edge is kept, so it counts
         # toward the maximum. The old title rule peeled it off first.
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as edge_length:
             ThesisCreate(
                 title="\u200b" + ("t" * THESIS_TITLE_MAX),
                 body="b",
             )
+        _assert_string_too_long(edge_length, "title", THESIS_TITLE_MAX)
         assert (
             ThesisUpdate(title="\u200cKept\u200d").title == "\u200cKept\u200d"
         )
