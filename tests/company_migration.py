@@ -7,7 +7,7 @@ points at a scratch schema.
 
 from pathlib import Path
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from alembic import command
 from alembic.config import Config
@@ -72,6 +72,49 @@ def metadata_diff(connection):
 
     context = MigrationContext.configure(connection)
     return compare_metadata(context, Base.metadata)
+
+
+def duplicate_ticker_message(error):
+    """Text of revision 0003's own ``DuplicateTickersError``.
+
+    The revision defines that class so it does not import the command.
+    A second class with the same name lives in
+    ``scripts.check_duplicate_tickers``. ``pytest.raises`` has to use
+    ``RuntimeError``, then this check, or it will miss the revision's
+    class.
+    """
+    assert error.__class__.__name__ == "DuplicateTickersError"
+    return str(error)
+
+
+def upper_ticker_index(connection):
+    """The ``uq_companies_ticker`` index when it uses ``upper``.
+
+    SQLite does not reflect an expression index, so the SQL is read
+    from ``sqlite_master``. PostgreSQL reflects ``upper(ticker::text)``.
+    ``None`` means the index is missing or it is still on the raw column.
+    """
+    if connection.dialect.name == "sqlite":
+        sql = connection.execute(
+            text(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'index' AND name = 'uq_companies_ticker'"
+            )
+        ).scalar()
+        if sql is None:
+            return None
+        compact = "".join(sql.split()).lower()
+        if "upper(ticker)" not in compact:
+            return None
+        return ("uq_companies_ticker", True, "upper(ticker)")
+    for index in inspect(connection).get_indexes("companies"):
+        if index["name"] != "uq_companies_ticker":
+            continue
+        expressions = tuple(index.get("expressions") or ())
+        if not any("upper" in item.lower() for item in expressions):
+            return None
+        return (index["name"], bool(index["unique"]), expressions)
+    return None
 
 
 def ticker_uniqueness(connection):

@@ -11,19 +11,20 @@ from sqlalchemy.exc import IntegrityError
 from app.core.database import Base, create_db_engine
 from app.core.init_db import require_company_instrument_columns
 from app.models.database_models import CompanyDB
-from scripts.check_duplicate_tickers import DuplicateTickersError
 from tests.company_migration import (
     EXPECTED_ISIN_UNIQUENESS,
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_base,
     downgrade_to,
+    duplicate_ticker_message,
     isin_uniqueness,
     metadata_diff,
     stamp,
     ticker_uniqueness,
     upgrade_head,
     upgrade_to,
+    upper_ticker_index,
 )
 
 
@@ -176,11 +177,11 @@ def test_duplicate_tickers_stop_the_upgrade_without_a_unique_index(tmp_path):
             )
         )
 
-    with pytest.raises(DuplicateTickersError) as error:
+    with pytest.raises(RuntimeError) as error:
         with engine.connect() as connection:
             upgrade_head(connection)
 
-    message = str(error.value)
+    message = duplicate_ticker_message(error.value)
     assert "'DUP' (2 rows)" in message
     assert "did not change those rows" in message
     with engine.connect() as connection:
@@ -216,11 +217,11 @@ def test_case_and_space_collisions_stop_the_sqlite_upgrade(tmp_path):
             )
         )
 
-    with pytest.raises(DuplicateTickersError) as error:
+    with pytest.raises(RuntimeError) as error:
         with engine.connect() as connection:
             upgrade_head(connection)
 
-    message = str(error.value)
+    message = duplicate_ticker_message(error.value)
     assert "'aapl'" in message
     assert "'AAPL '" in message
     assert "did not change those rows" in message
@@ -258,11 +259,11 @@ def test_tab_cr_and_lf_collisions_stop_the_sqlite_upgrade(tmp_path):
             {"tab": "AAPL\t", "cr": "aapl\r", "lf": "AAPL\n"},
         )
 
-    with pytest.raises(DuplicateTickersError) as error:
+    with pytest.raises(RuntimeError) as error:
         with engine.connect() as connection:
             upgrade_head(connection)
 
-    message = str(error.value)
+    message = duplicate_ticker_message(error.value)
     assert repr("AAPL\t") in message
     assert repr("aapl\r") in message
     assert repr("AAPL\n") in message
@@ -297,9 +298,11 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
     Base.metadata.create_all(engine)
     with engine.connect() as connection:
         assert metadata_diff(connection) == []
-        assert ticker_uniqueness(connection) == (
-            (("uq_companies_ticker", True, ("ticker",)),),
-            (),
+        assert ticker_uniqueness(connection) == ((), ())
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            "upper(ticker)",
         )
     with engine.begin() as connection:
         connection.execute(text("DROP INDEX uq_companies_ticker"))
@@ -329,9 +332,11 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
         upgrade_head(connection)
         require_company_instrument_columns(connection)
         assert metadata_diff(connection) == []
-        assert ticker_uniqueness(connection) == (
-            (("uq_companies_ticker", True, ("ticker",)),),
-            (),
+        assert ticker_uniqueness(connection) == ((), ())
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            "upper(ticker)",
         )
         downgrade_to(connection, "0002")
         assert ticker_uniqueness(connection) == (
@@ -373,9 +378,12 @@ def test_upgrade_downgrade_upgrade_keeps_the_legacy_row(tmp_path):
         ).one()
         assert stored.ticker == "AAPL"
         assert stored.instrument_type == "STOCK"
-        assert ticker_uniqueness(connection)[0] == (
-            ("uq_companies_ticker", True, ("ticker",)),
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            "upper(ticker)",
         )
+        assert ticker_uniqueness(connection) == ((), ())
     engine.dispose()
 
 
@@ -415,6 +423,8 @@ def test_sqlite_ticker_upgrade_keeps_price_bars(tmp_path):
     source = migration.read_text()
     assert "op.batch_alter_table" not in source
     assert "op.create_index" in source
+    assert "from scripts" not in source
+    assert "import scripts" not in source
 
     engine = create_db_engine(f"sqlite:///{tmp_path / 'children.db'}")
     with engine.begin() as connection:

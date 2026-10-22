@@ -99,7 +99,12 @@ stale. `0003` stops when stored tickers collide after trim
 and uppercase. The trim removes spaces, tabs, carriage returns, and
 line feeds, so `aapl` and `AAPL ` are one collision. It names that
 stored text and does not rewrite the rows. On SQLite the index is
-created in place, so `price_bars` rows stay.
+created in place, so `price_bars` rows stay. Revision `0007` replaces
+that index with a unique index on `upper(ticker)`. It stops when
+`upper(ticker)` collides (`aapl` and `AAPL`) and does not rewrite
+those rows. It drops `uq_company_name_ticker` when that constraint is
+present. On SQLite the drop copies only `companies`, with foreign keys
+off for the copy, so child rows stay.
 A database created by an older
 startup `create_all` needs that upgrade. Adding the columns by hand
 skips the CHECK, the `uq_companies_isin` unique index, and

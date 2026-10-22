@@ -17,6 +17,14 @@ Pass the database URL in the ``DATABASE_URL`` environment variable.
 An argument overrides that variable, but the argument can show up
 in ``ps`` and in shell history.
 
+A SQLite URL whose file is not on disk is refused before
+``create_engine`` connects. Connecting would create an empty file
+for a mistyped path. ``:memory:`` is not a file and is still opened.
+
+A malformed URL, a non-numeric port, and a missing database driver
+each print one fixed line and exit 1. That line does not include
+the URL or the driver text.
+
     DATABASE_URL=sqlite:///path.db python -m scripts.check_duplicate_tickers
 """
 
@@ -24,6 +32,7 @@ import os
 import sys
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 
@@ -144,6 +153,10 @@ _READ_MESSAGE = (
     "Could not read companies: the database is unreachable "
     "or the table is missing."
 )
+_MISSING_SQLITE_MESSAGE = (
+    "Could not read companies: the SQLite file does not exist, "
+    "so no empty database file was created: "
+)
 
 
 def _chosen_url(arguments):
@@ -162,13 +175,38 @@ def _chosen_url(arguments):
     return None
 
 
+def _missing_sqlite_path(url):
+    """The sqlite file path when that file is not on disk.
+
+    ``None`` means this URL is not a missing file: it is another
+    dialect, an in-memory database, or a file that exists.
+    ``create_engine`` creates a missing SQLite file on connect, so
+    the caller must stop before that connect.
+
+    ``make_url`` raises ``ArgumentError`` for a URL it cannot parse
+    and ``ValueError`` for a port that is not an integer. The caller
+    prints the fixed URL line for both.
+    """
+    parsed = make_url(url)
+    if not parsed.drivername.startswith("sqlite"):
+        return None
+    database = parsed.database
+    if not database or database == ":memory:":
+        return None
+    if os.path.exists(database):
+        return None
+    return database
+
+
 def main(argv=None):
     """Exit 0 when tickers are unique, 1 on duplicates or a read error.
 
     Exit 2 is usage, or a database that has no ``companies`` table.
-    A bad URL or a connection failure is exit 1 and one fixed line on
-    stderr. The line does not include the URL or the driver text, and
-    the return happens after the handler so nothing is chained.
+    A bad URL, a non-numeric port, or a missing driver is exit 1 and
+    one fixed line on stderr. The line does not include the URL or
+    the driver text, and the return happens after the handler so
+    nothing is chained. A SQLite path that is not on disk is also
+    exit 1, and the file is not created.
     """
     arguments = list(sys.argv if argv is None else argv)
     url = _chosen_url(arguments)
@@ -178,13 +216,23 @@ def main(argv=None):
     found = None
     failure = None
     try:
-        engine = create_engine(url)
-        try:
-            with engine.connect() as connection:
-                found = duplicate_tickers(connection)
-        finally:
-            engine.dispose()
-    except ArgumentError:
+        missing = _missing_sqlite_path(url)
+        if missing is not None:
+            failure = (_MISSING_SQLITE_MESSAGE + missing, 1)
+        else:
+            engine = create_engine(url)
+            try:
+                with engine.connect() as connection:
+                    found = duplicate_tickers(connection)
+            finally:
+                engine.dispose()
+    except (ArgumentError, ImportError, ValueError):
+        # ArgumentError: a URL SQLAlchemy cannot parse.
+        # ValueError: a port that is not an integer (``not-a-port``).
+        # ImportError: the driver named in the URL is not installed
+        # (``ModuleNotFoundError`` is a subclass). The driver text
+        # can be a traceback the operator should not have to read,
+        # and a URL in that text would include the password.
         failure = (_URL_MESSAGE, 1)
     except SQLAlchemyError:
         failure = (_READ_MESSAGE, 1)
