@@ -329,12 +329,11 @@ def test_missing_sqlite_file_is_not_created(tmp_path, capsys, monkeypatch):
 
 
 def test_sqlite_uri_is_not_a_missing_file(tmp_path, capsys, monkeypatch):
-    """A ``file:`` database name is a SQLite URI, not a missing path.
+    """An existing ``file:`` URI is read, not reported missing.
 
-    ``_missing_sqlite_path`` refuses ``sqlite:///missing.db`` before
-    connect, because connect would create that file. ``file:`` is
-    not that kind of name. This URI points at a file that is already
-    on disk, and the command reads it.
+    The path after ``file:`` is checked the same way as a plain
+    SQLite path. This file is already on disk, so the command
+    reads it.
     """
     monkeypatch.delenv("DATABASE_URL", raising=False)
     path = tmp_path / "present.db"
@@ -358,6 +357,32 @@ def test_sqlite_uri_is_not_a_missing_file(tmp_path, capsys, monkeypatch):
     assert captured.out == "No duplicate tickers.\n"
     assert captured.err == ""
     assert path.exists()
+
+
+def test_missing_sqlite_uri_is_not_created(tmp_path, capsys, monkeypatch):
+    """A missing ``file:`` URI must not create an empty database.
+
+    ``mode=rwc`` would create the file on connect. The command
+    refuses first, with the same fixed line as a plain missing path.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    path = tmp_path / "missing-uri.db"
+    urls = (
+        "sqlite:///file:" + path.as_posix() + "?uri=true",
+        "sqlite:///file:" + path.as_posix() + "?mode=rwc&uri=true",
+    )
+    for url in urls:
+        code = main(["check", url])
+        captured = capsys.readouterr()
+        assert code == 1
+        assert captured.err.startswith(
+            "Could not read companies: the SQLite file does not exist, "
+            "so no empty database file was created: "
+        )
+        assert path.as_posix() in captured.err
+        assert captured.out == ""
+        assert "Traceback" not in captured.err
+        assert not path.exists()
 
 
 def test_duplicate_tickers_requires_the_companies_table():

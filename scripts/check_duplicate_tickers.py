@@ -19,7 +19,10 @@ in ``ps`` and in shell history.
 
 A SQLite URL whose file is not on disk is refused before
 ``create_engine`` connects. Connecting would create an empty file
-for a mistyped path. ``:memory:`` is not a file and is still opened.
+for a mistyped path. A ``file:`` URI is the same check after the
+``file:`` prefix is removed, including ``mode=rwc``, which would
+also create a missing file. ``:memory:`` is not a file and is
+still opened.
 
 A malformed URL, a non-numeric port, and a missing database driver
 each print one fixed line and exit 1. That line does not include
@@ -193,14 +196,35 @@ def _missing_sqlite_path(url):
     database = parsed.database
     if not database or database == ":memory:":
         return None
-    # ``sqlite:///file:name.db?uri=true`` stores the database name
-    # as ``file:name.db``. That is a SQLite URI, not a path whose
-    # missing file this check should refuse. SQLite opens it.
+    # ``sqlite:///file:/tmp/x.db?uri=true`` stores the database
+    # name as ``file:/tmp/x.db``. The query (``uri``, ``mode``)
+    # is separate. ``mode=rwc`` would create a missing file on
+    # connect, so the path is checked the same way as a plain
+    # SQLite path.
     if database.startswith("file:"):
-        return None
+        database = _path_from_sqlite_file_uri(database)
+        if not database:
+            return None
     if os.path.exists(database):
         return None
     return database
+
+
+def _path_from_sqlite_file_uri(database):
+    """Filesystem path named by a SQLite ``file:`` URI.
+
+    ``file:/tmp/x.db`` and ``file:///tmp/x.db`` are absolute.
+    ``file:name.db`` is relative. A query string left on the
+    name is not part of the path.
+    """
+    # split, not a slice: black puts a space before ':' in
+    # database[len("file:"):], and flake8 E203 rejects that space.
+    rest = database.split(":", 1)[1]
+    rest = rest.split("?", 1)[0]
+    if rest.startswith("//"):
+        # file:///tmp/x.db -> ///tmp/x.db -> /tmp/x.db
+        rest = rest[2:]
+    return rest
 
 
 def main(argv=None):

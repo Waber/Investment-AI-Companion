@@ -347,11 +347,18 @@ def test_named_ticker_index_matches_the_model_and_round_trips(tmp_path):
             True,
             "upper(ticker)",
         )
+        # The asserts above left a transaction open. Downgrade
+        # copies companies and refuses that.
+        connection.commit()
         downgrade_to(connection, "0002")
         assert ticker_uniqueness(connection) == (
             (("ix_companies_ticker", True, ("ticker",)),),
             (),
         )
+        # That read opened another transaction. The next upgrade
+        # copies companies again, because downgrade put the pair
+        # constraint back.
+        connection.commit()
         upgrade_head(connection)
         assert_empty_metadata_diff(connection)
         stored = (
@@ -379,6 +386,9 @@ def test_upgrade_downgrade_upgrade_keeps_the_legacy_row(tmp_path):
     with engine.connect() as connection:
         upgrade_head(connection)
         require_company_instrument_columns(connection)
+        # The column check opened a transaction. Downgrade copies
+        # companies and refuses that.
+        connection.commit()
         downgrade_base(connection)
         upgrade_head(connection)
         require_company_instrument_columns(connection)

@@ -16,7 +16,9 @@
   drops `uq_company_name_ticker`. On SQLite only `companies`
   is copied. The copy uses Alembic's `autocommit_block`, then
   an explicit `BEGIN`/`COMMIT`, and restores the foreign-key
-  pragma. A new foreign-key violation rolls that copy back.
+  pragma. An open caller transaction is refused before that
+  copy, so the caller's uncommitted writes stay uncommitted.
+  A new foreign-key violation rolls that copy back.
   `ix_companies_ticker` is a non-unique index on the column
   so `ticker == value` lookups are not full scans. Downgrade
   restores the column unique index and the pair constraint,
@@ -30,13 +32,13 @@
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1703 passed, 212 deselected, coverage 96.47% (4145
-  statements, 122 miss, 1128 branches, 48 partial). No
+  -> 1706 passed, 212 deselected, coverage 96.40% (4153
+  statements, 124 miss, 1132 branches, 50 partial). No
   reflection warning for ``uq_companies_ticker``.
   Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
   `investment_test`, `REQUIRE_POSTGRES=1`,
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1703 deselected. Scoped black, isort, and
+  -> 212 passed, 1706 deselected. Scoped black, isort, and
   flake8 passed. No live market-data calls. GitHub Actions is
   recorded in the pull request, not in a later commit.
 - Active agents: none. Blockers: none. Account usage was not
@@ -72,8 +74,9 @@ onto `0006`, union this list with #94's list as well.
 - Demo-v1 price profiles: `run_demo` loads demo-v2, and the
   manual `seed_demo` steps stay demo-v1 unless
   `--fixture demo-v2`. The fake collector still serves demo-v1
-  price profiles. The `/ui` synthetic badge still matches only
-  `[IAC-DEMO-V1]`.
+  price profiles. The `/ui` synthetic badge labels
+  `[IAC-DEMO-V1]` as `demo-v1` and `[IAC-DEMO-V2]` as `demo-v2`
+  (`demo_source_label` in `app/ui/view_models.py`).
 - #57, #58, and #65 are open post-demo issues. #57 is
   portfolio holdings (model, manual or CSV import, privacy).
   #58 is the market scanner and buy, sell, and opportunity

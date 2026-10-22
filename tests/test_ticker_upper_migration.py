@@ -238,6 +238,9 @@ def test_round_trip_keeps_child_rows(tmp_path):
         names = unique_constraint_names(connection)
         assert "uq_company_name_ticker" in names
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
+        # The reads above opened a transaction. The companies copy
+        # refuses that, so commit them before the second upgrade.
+        connection.commit()
         upgrade_to(connection, "0007")
         assert _child_counts(connection) == before
         assert "uq_company_name_ticker" not in unique_constraint_names(
@@ -307,6 +310,7 @@ def test_sqlite_rebuild_drops_the_pair_constraint_and_keeps_children(
     with engine.connect() as connection:
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
         stamp(connection, "0005")
+        connection.commit()
         upgrade_to(connection, "0007")
         # Commit the Alembic version before the CHECK insert is
         # rolled back. The version update shares that transaction.
@@ -553,6 +557,7 @@ def test_upgrade_keeps_foreign_keys_off_when_they_started_off(tmp_path):
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 0
         stamp(connection, "0005")
         before = _child_row_counts(connection)
+        connection.commit()
         upgrade_to(connection, "0007")
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 0
         assert _child_row_counts(connection) == before
@@ -582,6 +587,7 @@ def test_a_failed_companies_copy_rolls_back_to_0005(tmp_path):
         stamp(connection, "0005")
         connection.commit()
         before = _child_row_counts(connection)
+        connection.commit()
 
         def fail_mid_copy(*listener_args):
             statement = listener_args[2]
@@ -665,6 +671,9 @@ def test_plain_ticker_index_is_created_and_removed(tmp_path):
     with engine.connect() as connection:
         upgrade_to(connection, "0007")
         assert_plain_ticker_index_recorded(connection)
+        # The catalog read opened a transaction. Downgrade copies
+        # companies and refuses that, so commit before it runs.
+        connection.commit()
         downgrade_to(connection, "0005")
         sql = connection.execute(
             text(
@@ -697,6 +706,7 @@ def test_preexisting_orphan_does_not_block_the_companies_copy(tmp_path):
         connection.commit()
     with engine.connect() as connection:
         stamp(connection, "0005")
+        connection.commit()
         upgrade_to(connection, "0007")
         assert _version(connection) == "0007"
         orphan = connection.execute(
@@ -727,6 +737,7 @@ def test_a_new_foreign_key_violation_rolls_the_copy_back(tmp_path):
         stamp(connection, "0005")
         connection.commit()
         before = _child_row_counts(connection)
+        connection.commit()
 
         def drop_copied_parent(*listener_args):
             statement = listener_args[2]
@@ -753,4 +764,77 @@ def test_a_new_foreign_key_violation_rolls_the_copy_back(tmp_path):
             ).scalar()
             is None
         )
+    engine.dispose()
+
+
+def _stamped_pair_constraint_database(tmp_path, name):
+    """A committed SQLite file at revision 0005 with the pair constraint."""
+    engine = create_db_engine(f"sqlite:///{tmp_path / name}")
+    with engine.begin() as connection:
+        _companies_with_pair_constraint_and_children(connection)
+    with engine.connect() as connection:
+        stamp(connection, "0005")
+        connection.commit()
+    return engine
+
+
+def _assert_still_revision_0005(engine):
+    with engine.connect() as connection:
+        assert _version(connection) == "0005"
+        assert connection.execute(
+            text("SELECT ticker FROM companies ORDER BY id")
+        ).scalars().all() == ["AAPL"]
+        assert "uq_company_name_ticker" in unique_constraint_names(connection)
+        assert upper_ticker_index(connection) is None
+        plain = connection.execute(
+            text(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'index' AND name = 'ix_companies_ticker'"
+            )
+        ).scalar()
+        assert plain is None
+
+
+def test_begin_transaction_is_not_committed_by_the_rebuild(tmp_path):
+    """``engine.begin()`` plus an insert is not committed by 0007.
+
+    The copy used to commit that transaction so the foreign-key
+    pragma could change. The insert stayed, and closing the block
+    raised ``InvalidRequestError``. The upgrade now stops first.
+    A new connection does not see the insert, and the schema is
+    still revision 0005.
+    """
+    engine = _stamped_pair_constraint_database(tmp_path, "begin-open.db")
+    with pytest.raises(RuntimeError, match="open transaction"):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO companies "
+                    "(id, name, ticker, instrument_type) "
+                    "VALUES (2, 'Pending', 'PEND', 'STOCK')"
+                )
+            )
+            upgrade_to(connection, "0007")
+    _assert_still_revision_0005(engine)
+    engine.dispose()
+
+
+def test_uncommitted_insert_is_not_committed_by_the_rebuild(tmp_path):
+    """An insert on ``connect()`` without ``commit`` stays uncommitted.
+
+    The upgrade stops because the connection already has a
+    transaction. Closing the connection rolls the insert back.
+    The pair constraint is still there, and the version is 0005.
+    """
+    engine = _stamped_pair_constraint_database(tmp_path, "connect-open.db")
+    with engine.connect() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker, instrument_type) "
+                "VALUES (2, 'Pending', 'PEND', 'STOCK')"
+            )
+        )
+        with pytest.raises(RuntimeError, match="open transaction"):
+            upgrade_to(connection, "0007")
+    _assert_still_revision_0005(engine)
     engine.dispose()

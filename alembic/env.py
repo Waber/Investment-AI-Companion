@@ -106,6 +106,14 @@ def run_migrations_online() -> None:
     """
     connection = config.attributes.get("connection")
     if connection is not None:
+        # Taken before begin_transaction. After that call,
+        # in_transaction() is also true when Alembic started the
+        # transaction. Revision 0007 reads this flag through
+        # op.get_context().config and refuses to rebuild companies
+        # while the caller still has uncommitted work.
+        config.attributes["caller_transaction_open"] = bool(
+            connection.in_transaction()
+        )
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
@@ -126,6 +134,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        config.attributes["caller_transaction_open"] = False
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

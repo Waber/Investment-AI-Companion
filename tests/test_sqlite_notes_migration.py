@@ -38,6 +38,9 @@ def test_upgrade_creates_notes_and_downgrade_removes_them(tmp_path):
         assert research_schema(connection) == from_model
         assert_declared_lengths(connection)
         exercise_migrated_research(connection)
+        # Those checks opened a transaction. Downgrade copies
+        # companies and refuses that.
+        connection.commit()
 
         command.downgrade(_config(connection), "0004")
         tables = set(inspect(connection).get_table_names())
@@ -45,6 +48,10 @@ def test_upgrade_creates_notes_and_downgrade_removes_them(tmp_path):
         assert "theses" not in tables
         assert "price_bars" in tables
         assert "watchlist_items" in tables
+        # The table list opened a transaction. The next upgrade
+        # copies companies, because downgrade put the pair
+        # constraint back.
+        connection.commit()
 
         upgrade_head(connection)
         tables = set(inspect(connection).get_table_names())
