@@ -657,6 +657,55 @@ def test_create_all_rejects_a_lower_case_twin(tmp_path):
     assert CompanyDB.__table__.name == "companies"
 
 
+def test_unique_plain_ticker_index_becomes_non_unique(tmp_path):
+    """A unique ``ix_companies_ticker`` is recreated as non-unique.
+
+    Revision 0003 drops that name while it is installing
+    ``uq_companies_ticker``, so this database is already at 0005.
+    The leftover unique index would not match the model. Upgrade
+    drops it and creates the non-unique column index.
+    """
+    engine = create_db_engine(f"sqlite:///{tmp_path / 'unique-plain.db'}")
+    with engine.begin() as connection:
+        connection.execute(text(LEGACY_COMPANIES))
+        connection.execute(text(LEGACY_METRICS))
+        connection.execute(
+            text(
+                "INSERT INTO companies (id, name, ticker) "
+                "VALUES (1, 'Apple', 'AAPL')"
+            )
+        )
+    with engine.connect() as connection:
+        upgrade_to(connection, "0005")
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX ix_companies_ticker "
+                "ON companies (ticker)"
+            )
+        )
+        connection.commit()
+        before = connection.execute(
+            text(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'index' AND name = 'ix_companies_ticker'"
+            )
+        ).scalar()
+        assert before
+        assert "createuniqueindex" in "".join(before.split()).lower()
+        # The catalog read opened a transaction. This upgrade does
+        # not copy companies, but commit so Alembic owns the
+        # transaction that writes the version row.
+        connection.commit()
+        upgrade_to(connection, "0007")
+        assert_plain_ticker_index_recorded(connection)
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            "upper(ticker)",
+        )
+    engine.dispose()
+
+
 def test_plain_ticker_index_is_created_and_removed(tmp_path):
     """``ix_companies_ticker`` exists after 0007 and not after downgrade.
 
@@ -819,6 +868,32 @@ def test_begin_transaction_is_not_committed_by_the_rebuild(tmp_path):
     engine.dispose()
 
 
+def test_select_only_transaction_is_refused(tmp_path):
+    """A ``SELECT`` opens a transaction, and the upgrade refuses it.
+
+    No row was inserted. The message is the same one downgrade
+    uses. After the caller rolls back, the same connection can
+    read the company again. The schema stays at revision 0005.
+    """
+    engine = _stamped_pair_constraint_database(tmp_path, "select-open.db")
+    with engine.connect() as connection:
+        seen = connection.execute(
+            text("SELECT ticker FROM companies")
+        ).scalar()
+        assert seen == "AAPL"
+        with pytest.raises(
+            RuntimeError, match="This migration did not change"
+        ):
+            upgrade_to(connection, "0007")
+        connection.rollback()
+        again = connection.execute(
+            text("SELECT ticker FROM companies")
+        ).scalar()
+        assert again == "AAPL"
+    _assert_still_revision_0005(engine)
+    engine.dispose()
+
+
 def test_uncommitted_insert_is_not_committed_by_the_rebuild(tmp_path):
     """An insert on ``connect()`` without ``commit`` stays uncommitted.
 
@@ -837,4 +912,76 @@ def test_uncommitted_insert_is_not_committed_by_the_rebuild(tmp_path):
         with pytest.raises(RuntimeError, match="open transaction"):
             upgrade_to(connection, "0007")
     _assert_still_revision_0005(engine)
+    engine.dispose()
+
+
+def _database_at_0007(tmp_path, name):
+    """A committed SQLite file at revision 0007, pair constraint gone."""
+    engine = _stamped_pair_constraint_database(tmp_path, name)
+    with engine.connect() as connection:
+        upgrade_to(connection, "0007")
+    return engine
+
+
+def _assert_still_revision_0007(engine):
+    with engine.connect() as connection:
+        assert _version(connection) == "0007"
+        assert connection.execute(
+            text("SELECT ticker FROM companies ORDER BY id")
+        ).scalars().all() == ["AAPL"]
+        assert "uq_company_name_ticker" not in unique_constraint_names(
+            connection
+        )
+        assert upper_ticker_index(connection) == (
+            "uq_companies_ticker",
+            True,
+            "upper(ticker)",
+        )
+        assert_plain_ticker_index_recorded(connection)
+
+
+def test_downgrade_begin_transaction_does_no_ddl(tmp_path):
+    """Downgrade refuses before it drops ``ix_companies_ticker``.
+
+    ``engine.begin()`` plus an insert used to reach the index
+    drop, then the companies copy. The copy needs the pair
+    constraint to be absent, which it is at 0007. The refusal
+    is first. Inside that transaction the plain index is still
+    there and the insert is still visible. A new connection
+    does not see the insert, and the version stays 0007.
+    """
+    engine = _database_at_0007(tmp_path, "downgrade-open.db")
+    with pytest.raises(RuntimeError, match="This migration did not change"):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO companies "
+                    "(id, name, ticker, instrument_type) "
+                    "VALUES (2, 'Pending', 'PEND', 'STOCK')"
+                )
+            )
+            try:
+                downgrade_to(connection, "0005")
+            except RuntimeError:
+                sql = connection.execute(
+                    text(
+                        "SELECT sql FROM sqlite_master "
+                        "WHERE type = 'index' "
+                        "AND name = 'ix_companies_ticker'"
+                    )
+                ).scalar()
+                assert sql
+                compact = "".join(sql.split()).lower()
+                assert "createuniqueindex" not in compact
+                stored = (
+                    connection.execute(
+                        text("SELECT ticker FROM companies ORDER BY ticker")
+                    )
+                    .scalars()
+                    .all()
+                )
+                assert stored == ["AAPL", "PEND"]
+                assert _version(connection) == "0007"
+                raise
+    _assert_still_revision_0007(engine)
     engine.dispose()

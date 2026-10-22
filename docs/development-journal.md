@@ -41,8 +41,17 @@
   on `config.attributes["caller_transaction_open"]` before
   Alembic calls `begin_transaction`. The migration reads that
   flag through the public `MigrationContext.config`. The
-  message tells the caller to commit or roll back, then run
-  `0007` on a connection with no open transaction. The normal
+  message says "This migration did not change the database"
+  and tells the caller to commit or roll back, then run `0007`
+  on a connection with no open transaction. Downgrade needs the
+  same check before it drops ``ix_companies_ticker``. On SQLite
+  the companies copy runs only when the pair constraint is
+  absent, and that copy is not the first statement. The refusal
+  is at the top of ``downgrade`` in that case, so no index is
+  dropped either. A unique ``ix_companies_ticker`` left from an
+  older schema is not kept. SQLite reports ``unique`` as ``1``.
+  The upgrade drops that index and creates the non-unique one,
+  which is what the model declares. The normal
   path, where Alembic starts the transaction itself, is
   unchanged. A test that already ran SQL on that connection
   commits before the copy. A `SELECT` starts a transaction,
@@ -95,21 +104,24 @@
   says raw SQL can store `AAPL` and `AAPL ` together, and
   that the command's preflight still trims.
   `check_duplicate_tickers` strips a SQLite ``file:`` prefix
-  and any query string, then checks that path the same way as
-  a plain SQLite file. ``mode=rwc`` would create a missing
-  file on connect, so that URI is refused before connect and
-  the file is not created.
+  and any query string, percent-decodes the path (``%20`` is
+  a space), and treats ``file://localhost/tmp/x.db`` as
+  ``/tmp/x.db``. ``localhost`` is the authority, not a
+  directory. The path is then checked the same way as a plain
+  SQLite file. ``mode=rwc`` would create a missing file on
+  connect, so that URI is refused before connect and the file
+  is not created.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
   unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1706 passed, 212 deselected, coverage 96.40% (4153
-  statements, 124 miss, 1132 branches, 50 partial). The
+  -> 1711 passed, 212 deselected, coverage 96.45% (4156
+  statements, 123 miss, 1134 branches, 49 partial). The
   SQLite run prints no reflection warning for
   ``uq_companies_ticker``.
   PostgreSQL, local 16, database `investment_test`,
   `REQUIRE_POSTGRES=1` and
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1706 deselected. Upgrade and downgrade of
+  -> 212 passed, 1711 deselected. Upgrade and downgrade of
   `0007` ran on both, including child rows (`price_bars`,
   `financial_metrics`, watchlist, notes, theses). Scoped
   black, isort, and flake8 passed on the Python this change
@@ -117,7 +129,7 @@
   in the pull request, not in a later commit.
 - AI model: Grok 4.7. Account usage was not available in this
   session.
-- Time tracking (UTC): 2026-10-22 about 07:06 to 08:51.
+- Time tracking (UTC): 2026-10-22 about 07:06 to 09:11.
 - Next: the owner reviews the pull request. It says Closes
   #92. Agents do not merge. After PR #94 merges, re-chain
   `0007` so `down_revision` is `0006`.

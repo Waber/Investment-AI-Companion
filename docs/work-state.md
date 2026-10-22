@@ -17,8 +17,12 @@
   is copied. The copy uses Alembic's `autocommit_block`, then
   an explicit `BEGIN`/`COMMIT`, and restores the foreign-key
   pragma. An open caller transaction is refused before that
-  copy, so the caller's uncommitted writes stay uncommitted.
-  A new foreign-key violation rolls that copy back.
+  copy. Downgrade refuses before it drops an index, so the
+  caller's uncommitted writes stay uncommitted. A unique
+  leftover ``ix_companies_ticker`` is recreated as non-unique.
+  A ``file:`` URI is percent-decoded, and ``localhost`` is not
+  part of the path. A new foreign-key violation rolls that
+  copy back.
   `ix_companies_ticker` is a non-unique index on the column
   so `ticker == value` lookups are not full scans. Downgrade
   restores the column unique index and the pair constraint,
@@ -32,13 +36,13 @@
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
   CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1706 passed, 212 deselected, coverage 96.40% (4153
-  statements, 124 miss, 1132 branches, 50 partial). No
+  -> 1711 passed, 212 deselected, coverage 96.45% (4156
+  statements, 123 miss, 1134 branches, 49 partial). No
   reflection warning for ``uq_companies_ticker``.
   Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
   `investment_test`, `REQUIRE_POSTGRES=1`,
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1706 deselected. Scoped black, isort, and
+  -> 212 passed, 1711 deselected. Scoped black, isort, and
   flake8 passed. No live market-data calls. GitHub Actions is
   recorded in the pull request, not in a later commit.
 - Active agents: none. Blockers: none. Account usage was not

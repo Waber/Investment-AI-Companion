@@ -359,6 +359,70 @@ def test_sqlite_uri_is_not_a_missing_file(tmp_path, capsys, monkeypatch):
     assert path.exists()
 
 
+def test_percent_encoded_sqlite_uri_is_found(tmp_path, capsys, monkeypatch):
+    """``%20`` in a ``file:`` URI is the space in the file name.
+
+    ``mode=rw`` does not create a file. The command has to decode
+    the path before it checks that the file exists, or it refuses
+    a database that is already on disk.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    path = tmp_path / "x y.db"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, "
+                "ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO companies (ticker) VALUES ('AAPL')")
+        )
+    engine.dispose()
+    encoded = path.as_posix().replace(" ", "%20")
+    url = "sqlite:///file:" + encoded + "?mode=rw&uri=true"
+    code = main(["check", url])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out == "No duplicate tickers.\n"
+    assert captured.err == ""
+    assert path.exists()
+
+
+def test_localhost_sqlite_uri_is_an_absolute_path(
+    tmp_path, capsys, monkeypatch
+):
+    """``file://localhost/tmp/...`` is the absolute path ``/tmp/...``.
+
+    ``localhost`` is the URI authority. Leaving it on the path
+    would look for a relative file named ``localhost``.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    path = tmp_path / "local.db"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE companies ("
+                "id INTEGER PRIMARY KEY, "
+                "ticker VARCHAR(20) NOT NULL)"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO companies (ticker) VALUES ('AAPL')")
+        )
+    engine.dispose()
+    url = "sqlite:///file://localhost" + path.as_posix() + "?uri=true"
+    code = main(["check", url])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out == "No duplicate tickers.\n"
+    assert captured.err == ""
+    assert path.exists()
+
+
 def test_missing_sqlite_uri_is_not_created(tmp_path, capsys, monkeypatch):
     """A missing ``file:`` URI must not create an empty database.
 

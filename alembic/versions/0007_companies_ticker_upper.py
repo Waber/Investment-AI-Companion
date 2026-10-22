@@ -302,7 +302,9 @@ def _refuse_open_caller_transaction():
     The companies copy has to leave the transaction Alembic
     started. A transaction the caller started would be committed
     by that step, including rows the caller has not committed.
-    The upgrade does not run, and those rows stay uncommitted.
+    This migration does not run, and those rows stay uncommitted.
+    Downgrade calls this before it drops an index, because the
+    copy is not the first statement on that path.
     """
     context = op.get_context()
     config = context.config
@@ -314,10 +316,10 @@ def _refuse_open_caller_transaction():
     raise RuntimeError(
         "Revision 0007 rebuilds companies on SQLite, and that "
         "copy cannot run while this connection has an open "
-        "transaction. The upgrade did not change the database "
+        "transaction. This migration did not change the database "
         "and did not commit the transaction. Commit or roll it "
-        "back, then run the upgrade on a connection with no open "
-        "transaction."
+        "back, then run this migration on a connection with no "
+        "open transaction."
     )
 
 
@@ -485,15 +487,37 @@ def _restore_name_ticker_constraint(bind):
     op.create_unique_constraint(_NAME_TICKER, "companies", ["name", "ticker"])
 
 
+def _plain_ticker_index(bind):
+    """The reflected ``ix_companies_ticker``, or ``None``.
+
+    SQLite reports ``unique`` as ``1`` or ``0``, not ``True`` or
+    ``False``. Either value is enough: a unique leftover is not
+    the index this revision wants. Reflection also sees
+    ``uq_companies_ticker``, so the expression-index warning is
+    hidden here.
+    """
+    with _quiet_expression_index():
+        inspector = sa.inspect(bind)
+        for index in inspector.get_indexes("companies"):
+            if index["name"] == _PLAIN_TICKER_INDEX:
+                return index
+    return None
+
+
 def _ensure_plain_ticker_index(bind):
     """Non-unique index for ``WHERE ticker = ...``.
 
     The unique index is on ``upper(ticker)``. A comparison with the
     column itself does not use that index. This one does. It is not
-    unique: uniqueness stays on ``uq_companies_ticker``.
+    unique: uniqueness stays on ``uq_companies_ticker``. A unique
+    index already using this name is dropped and created again.
+    Leaving it would not match the model.
     """
-    if _index_exists(bind, _PLAIN_TICKER_INDEX):
+    existing = _plain_ticker_index(bind)
+    if existing is not None and not existing.get("unique"):
         return
+    if existing is not None:
+        op.drop_index(_PLAIN_TICKER_INDEX, table_name="companies")
     op.create_index(_PLAIN_TICKER_INDEX, "companies", ["ticker"], unique=False)
 
 
@@ -537,6 +561,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    # The copy runs when the pair constraint is missing. That copy
+    # is not the first statement: the index changes below are DDL.
+    # Refuse first, so an open caller transaction sees no drop.
+    if (
+        bind.dialect.name == "sqlite"
+        and _NAME_TICKER not in _constraint_names(bind)
+    ):
+        _refuse_open_caller_transaction()
     # Drop the plain index before the companies copy. The copy
     # recreates every index that is present, and the previous
     # revision did not have this one. Revision 0003 may later
