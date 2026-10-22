@@ -1,5 +1,63 @@
 # Development Journal
 
+## 2026-10-22 - Ticker uniqueness follow-ups (#92)
+
+- Scope: GitHub issue #92, the follow-ups from PR #87. All five
+  items are in this change. `scripts/check_duplicate_tickers`
+  catches `ImportError` and `ValueError` (a missing driver, a
+  port that is not an integer) and prints the fixed URL line.
+  A SQLite path that is not on disk is refused before
+  `create_engine`, so a mistyped path does not create an empty
+  file. Revision `0003` no longer imports `scripts`. The SQL
+  and `DuplicateTickersError` are copied into the migration as
+  literals. `uq_company_name_ticker` is dropped. The ticker
+  unique index is now `upper(ticker)`. `app/ui/forms.py`,
+  `templates/`, `static/`, and `app/ui/` were not edited.
+  Issue #86 still owns the form rules.
+- Decisions: revision `0007` in
+  `0007_companies_ticker_upper.py` revises `0005`. Revision
+  `0006` is the unmerged price-bar migration from PR #94, so
+  this branch skips it and keeps one Alembic head. The
+  preflight compares `upper(ticker)` with no trim, which is
+  the index expression. `AAPL` and `AAPL ` are not a collision
+  there. The command still trims spaces, tabs, CR, and LF.
+  Rows are not rewritten. On SQLite the pair constraint is
+  inside `CREATE TABLE`, so dropping or restoring it copies
+  only `companies`. Foreign keys are turned off for that copy
+  on the DB-API connection, because the pragma does nothing
+  inside a transaction and `execute` would start one.
+  `isolation_level` is set to `None` so the sqlite3 driver
+  does not commit before the `DROP`. The copy is one explicit
+  `BEGIN`. Alembic's transaction object for the revision is
+  replaced afterward, so the version row still commits when
+  the connection closes. Downgrade restores the column index
+  and, when it is missing, `uq_company_name_ticker`. A
+  migration-path database never had that pair constraint.
+  Putting it back matches the model from before `0007`, and
+  it cannot fail while `ticker` is unique. SQLite `upper`
+  folds ASCII letters. Tickers stored by the application are
+  ASCII. PostgreSQL reflects `upper(ticker::text)`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
+  unset. CI command
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
+  -> 1697 passed, 212 deselected, coverage 96.47% (4143
+  statements, 122 miss, 1126 branches, 48 partial).
+  PostgreSQL, local 16, database `investment_test`,
+  `REQUIRE_POSTGRES=1` and
+  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
+  -> 212 passed, 1697 deselected. Upgrade and downgrade of
+  `0007` ran on both, including child rows (`price_bars`,
+  `financial_metrics`, watchlist, notes, theses). Scoped
+  black, isort, and flake8 passed on the Python this change
+  owns. No live market-data calls. GitHub Actions is recorded
+  in the pull request, not in a later commit.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-22 about 07:06 to 07:45.
+- Next: the owner reviews the pull request. It says Closes
+  #92. Agents do not merge. After PR #94 merges, re-chain
+  `0007` so `down_revision` is `0006`.
+
 ## 2026-10-23 - Rebase and refresh of the handoff guide (PR #88)
 
 - Scope: rebased `docs/handoff-external-agent` onto `master`
