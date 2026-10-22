@@ -33,10 +33,22 @@
   or `ROLLBACK` when the copy fails. The block then opens a
   new transaction, which is where the version row is written.
   The migration does not read or assign `context._transaction`.
-  A caller that already had a transaction open is the case
-  Alembic calls external: `autocommit_block` will not start
-  until that transaction ends, so the copy commits it first
-  and leaves Alembic's transaction object alone. Downgrade restores
+  A caller that already had a transaction open is refused
+  before the copy. Committing it would make that caller's
+  uncommitted inserts durable, and `engine.begin()` would then
+  raise `InvalidRequestError` because its transaction was
+  already closed. `env.py` stores `connection.in_transaction()`
+  on `config.attributes["caller_transaction_open"]` before
+  Alembic calls `begin_transaction`. The migration reads that
+  flag through the public `MigrationContext.config`. The
+  message tells the caller to commit or roll back, then run
+  `0007` on a connection with no open transaction. The normal
+  path, where Alembic starts the transaction itself, is
+  unchanged. A test that already ran SQL on that connection
+  commits before the copy. A `SELECT` starts a transaction,
+  and that is the same open transaction the copy refuses.
+  The command line opens its own connection, so it does not
+  hit this check. Downgrade restores
   the column index and, when it is missing,
   `uq_company_name_ticker`. A
   migration-path database never had that pair constraint.
@@ -82,19 +94,22 @@
   expression, so it is `upper(ticker)`. `docs/api-demo.md`
   says raw SQL can store `AAPL` and `AAPL ` together, and
   that the command's preflight still trims.
-  `check_duplicate_tickers` does not treat a SQLite URI
-  (`file:...`) as a missing filesystem path.
+  `check_duplicate_tickers` strips a SQLite ``file:`` prefix
+  and any query string, then checks that path the same way as
+  a plain SQLite file. ``mode=rwc`` would create a missing
+  file on connect, so that URI is refused before connect and
+  the file is not created.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY`
   unset. CI command
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1703 passed, 212 deselected, coverage 96.47% (4145
-  statements, 122 miss, 1128 branches, 48 partial). The
+  -> 1706 passed, 212 deselected, coverage 96.40% (4153
+  statements, 124 miss, 1132 branches, 50 partial). The
   SQLite run prints no reflection warning for
   ``uq_companies_ticker``.
   PostgreSQL, local 16, database `investment_test`,
   `REQUIRE_POSTGRES=1` and
   `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1703 deselected. Upgrade and downgrade of
+  -> 212 passed, 1706 deselected. Upgrade and downgrade of
   `0007` ran on both, including child rows (`price_bars`,
   `financial_metrics`, watchlist, notes, theses). Scoped
   black, isort, and flake8 passed on the Python this change
@@ -102,7 +117,7 @@
   in the pull request, not in a later commit.
 - AI model: Grok 4.7. Account usage was not available in this
   session.
-- Time tracking (UTC): 2026-10-22 about 07:06 to 07:45.
+- Time tracking (UTC): 2026-10-22 about 07:06 to 08:51.
 - Next: the owner reviews the pull request. It says Closes
   #92. Agents do not merge. After PR #94 merges, re-chain
   `0007` so `down_revision` is `0006`.

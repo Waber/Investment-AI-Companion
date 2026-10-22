@@ -296,6 +296,31 @@ def _dbapi_execute(raw, statement):
         cursor.close()
 
 
+def _refuse_open_caller_transaction():
+    """Stop when the caller still has an open transaction.
+
+    The companies copy has to leave the transaction Alembic
+    started. A transaction the caller started would be committed
+    by that step, including rows the caller has not committed.
+    The upgrade does not run, and those rows stay uncommitted.
+    """
+    context = op.get_context()
+    config = context.config
+    caller_open = False
+    if config is not None:
+        caller_open = bool(config.attributes.get("caller_transaction_open"))
+    if not caller_open:
+        return
+    raise RuntimeError(
+        "Revision 0007 rebuilds companies on SQLite, and that "
+        "copy cannot run while this connection has an open "
+        "transaction. The upgrade did not change the database "
+        "and did not commit the transaction. Commit or roll it "
+        "back, then run the upgrade on a connection with no open "
+        "transaction."
+    )
+
+
 def _with_foreign_keys_off(work):
     """Run ``work`` while SQLite is not enforcing foreign keys.
 
@@ -312,19 +337,19 @@ def _with_foreign_keys_off(work):
     ``work`` receives the connection from inside the block. The
     connection captured before the block is a different object.
 
-    When the caller already had a transaction open, Alembic does
-    not start its own, and ``autocommit_block`` refuses to run
-    (it only commits the transaction it started). That caller
-    transaction is committed first so the pragma can change.
-    This function does not read or assign ``context._transaction``.
-    Alembic still commits the version row when it owns the
-    transaction: ``autocommit_block`` opens a new one on the way
-    out, and that is the transaction the version update uses.
+    A caller that already had a transaction open is refused before
+    this block. Committing that transaction here would make the
+    caller's uncommitted inserts durable. ``env.py`` records
+    ``connection.in_transaction()`` before Alembic starts its own
+    transaction, on ``config.attributes["caller_transaction_open"]``.
+    This function reads that flag through the public
+    ``MigrationContext.config``. It does not read or assign
+    ``context._transaction``. When Alembic owns the transaction,
+    ``autocommit_block`` commits it and opens the next one, which
+    is where the version row is written.
     """
+    _refuse_open_caller_transaction()
     context = op.get_context()
-    bind = op.get_bind()
-    if bind.in_transaction() and context._in_external_transaction:
-        bind.commit()
     with context.autocommit_block():
         bind = op.get_bind()
         raw = bind.connection.dbapi_connection

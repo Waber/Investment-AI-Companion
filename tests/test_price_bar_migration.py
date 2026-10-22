@@ -229,6 +229,9 @@ def test_sqlite_cascade_deletes_bars_with_the_company(tmp_path):
             text("SELECT COUNT(*) FROM price_bars")
         ).scalar()
         assert remaining == 0
+        # The count opened a transaction. Downgrade copies
+        # companies and refuses that.
+        connection.commit()
         downgrade_base(connection)
         assert "price_bars" not in inspect(connection).get_table_names()
     engine.dispose()

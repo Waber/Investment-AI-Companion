@@ -103,6 +103,9 @@ def test_upgrade_downgrade_upgrade_on_sqlite(tmp_path):
             ).scalar()
             == "AAPL"
         )
+        # Those reads opened a transaction. The next upgrade copies
+        # companies, because downgrade put the pair constraint back.
+        connection.commit()
 
         upgrade_head(connection)
         assert "watchlist_items" in inspect(connection).get_table_names()
