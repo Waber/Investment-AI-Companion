@@ -20,9 +20,10 @@ in ``ps`` and in shell history.
 A SQLite URL whose file is not on disk is refused before
 ``create_engine`` connects. Connecting would create an empty file
 for a mistyped path. A ``file:`` URI is the same check after the
-``file:`` prefix is removed, including ``mode=rwc``, which would
-also create a missing file. ``:memory:`` is not a file and is
-still opened.
+``file:`` prefix is removed. ``%20`` is decoded, and
+``file://localhost/tmp/x.db`` is the absolute path ``/tmp/x.db``.
+``mode=rwc`` would also create a missing file. ``:memory:`` is
+not a file and is still opened.
 
 A malformed URL, a non-numeric port, and a missing database driver
 each print one fixed line and exit 1. That line does not include
@@ -33,6 +34,7 @@ the URL or the driver text.
 
 import os
 import sys
+from urllib.parse import unquote
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine.url import make_url
@@ -214,17 +216,22 @@ def _path_from_sqlite_file_uri(database):
     """Filesystem path named by a SQLite ``file:`` URI.
 
     ``file:/tmp/x.db`` and ``file:///tmp/x.db`` are absolute.
+    ``file://localhost/tmp/x.db`` is that same absolute path.
+    ``localhost`` is the authority, not a directory.
     ``file:name.db`` is relative. A query string left on the
-    name is not part of the path.
+    name is not part of the path. ``%20`` is a space.
     """
     # split, not a slice: black puts a space before ':' in
     # database[len("file:"):], and flake8 E203 rejects that space.
     rest = database.split(":", 1)[1]
     rest = rest.split("?", 1)[0]
     if rest.startswith("//"):
-        # file:///tmp/x.db -> ///tmp/x.db -> /tmp/x.db
+        # file:///tmp/x.db -> /tmp/x.db
+        # file://localhost/tmp/x.db -> localhost/tmp/x.db
         rest = rest[2:]
-    return rest
+    if rest.lower().startswith("localhost/"):
+        rest = "/" + rest.split("/", 1)[1]
+    return unquote(rest)
 
 
 def main(argv=None):
