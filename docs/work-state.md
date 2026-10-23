@@ -1,37 +1,39 @@
 # Current Work State
 
-## Merging #88, #97, and #98: 2026-10-23
+## Merged #88, #97, and #98: 2026-10-23
 
-- The owner asked to merge #88, #97, and #98 in that order and
-  to resolve the conflicts. #88 (`docs/HANDOFF.md`) merged as
-  `1d684c6`. #97 is rebased onto it; #98 follows.
-- #97 (`cursor/ticker-uniqueness-followups-08b9`, Closes #92):
-  revision `0007` now revises `0006` (#94's price revision), so
-  the chain is `0001` to `0007` with one head. The `0007` tests
-  use `0006` as the revision before `0007`.
-  `test_revision_0006_stores_sqlite_prices_as_text` stops at
-  `0006`, because `0007` rebuilds `companies` on SQLite and that
-  test checks `companies` is unchanged. What `0007` does: it
-  refuses rows that collide on `upper(ticker)`, replaces
-  `uq_companies_ticker` with a unique index on `upper(ticker)`,
-  drops `uq_company_name_ticker`, and adds the non-unique
-  `ix_companies_ticker`. On SQLite only `companies` is copied,
-  inside Alembic's `autocommit_block`, and an open caller
-  transaction is refused before the copy.
+- The owner asked to merge #88, #97, and #98 in that order and to
+  resolve the conflicts. All three use "Rebase and merge". #88
+  (`docs/HANDOFF.md`) and #97 (Closes #92) are on `master`. #98
+  (Refs #86) merges with this commit as its last one.
+- Master after the merges: Alembic chain `0001` to `0007`, one
+  head. `0007` revises `0006` (#94's prices) and puts the unique
+  index on `upper(ticker)`. `app.validation.text.clean_text` is
+  the shared free-text checker for company names, watchlist
+  labels, notes, and theses. Codes: `blank`, `too_long`,
+  `control_char`, `bidi`, `surrogate`. Length constants:
+  `COMPANY_NAME_MAX` 255, `WATCHLIST_LABEL_MAX_LENGTH` 80,
+  `NOTE_BODY_MAX` 10000, `THESIS_TITLE_MAX` 200,
+  `THESIS_BODY_MAX` 10000, `THESIS_BREAKERS_MAX` 5000. The 422
+  contract is in `docs/api-demo.md`.
+- Conflict decisions: #97 `test_revision_0006_stores_sqlite_prices_as_text`
+  stops at `0006`, because `0007` rebuilds `companies` on SQLite.
+  The `0007` tests use `0006` as the revision before it. #98 kept
+  both imports in `app/models/database_models.py` (#94's
+  `PriceAmount` and its `COMPANY_NAME_MAX`).
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
-  command on SQLite, local SQLite 3.54.1: 2 failed, the rest
-  passed. Both failures
-  (`test_floats_that_round_to_1e12_abort_the_sqlite_upgrade`,
-  `test_sqlite_boundary_float_upgrades_below_1e12`) also fail on
-  a clean `master` `1d684c6` with the same SQLite. That SQLite
-  casts a float to text with more digits than the SQLite in CI,
-  so the expected strings differ. Not caused by this merge. No
-  local PostgreSQL; GitHub Actions runs both jobs before each
-  merge. No live market-data calls.
+  command on #98's rebased head, local SQLite 3.54.1: 1823
+  passed, 2 failed, 221 deselected, coverage 96.30%. Both
+  failures (`test_floats_that_round_to_1e12_abort_the_sqlite_upgrade`,
+  `test_sqlite_boundary_float_upgrades_below_1e12`) also fail on a
+  clean `master` with that SQLite: it casts a float to text with
+  more digits than the SQLite in CI. Not caused by these merges.
+  No local PostgreSQL; both GitHub Actions jobs passed on each
+  pull request before its merge. No live market-data calls.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: merge #97 after both CI jobs pass, then rebase
-  and merge #98.
+- Next action: the queue in `docs/HANDOFF.md` section 3, starting
+  with #96.
 
 ## Open work elsewhere
 
@@ -60,8 +62,11 @@
   `[IAC-DEMO-V1]` as `demo-v1` and `[IAC-DEMO-V2]` as `demo-v2`
   (`demo_source_label` in `app/ui/view_models.py`).
 - #96: the watchlist `/ui` page (UI part of #32).
-- #86: #98 adds the shared text validator. The `/ui` helper
-  moves onto it with the Frontend Developer.
+- #86: the shared validator is on master (#98). The `/ui` helper
+  (`normalized_company_name` in `app/ui/form_fields.py`) moves
+  onto it with the Frontend Developer, and the form maps
+  `exc.code` to a catalog key. A name made only of combining
+  marks is still rejected by the form and accepted by the API.
 - #28: ETF/ETC attribute columns, fund attributes, and the
   attribute forms. Yahoo still does not implement
   `FundAttributes`.
