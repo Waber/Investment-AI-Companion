@@ -68,7 +68,7 @@ def test_case_collision_stops_before_the_index_changes(postgres_engine):
             )
         )
         connection.commit()
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "INSERT INTO companies (id, name, ticker) "
@@ -85,7 +85,7 @@ def test_case_collision_stops_before_the_index_changes(postgres_engine):
         assert "did not change those rows" in message
         connection.rollback()
         connection.execute(text(f"SET search_path TO {schema}"))
-        assert _version(connection) == "0005"
+        assert _version(connection) == "0006"
         stored = (
             connection.execute(
                 text("SELECT ticker FROM companies ORDER BY id")
@@ -113,7 +113,7 @@ def test_a_trailing_space_is_not_an_upper_collision(postgres_engine):
             )
         )
         connection.commit()
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "INSERT INTO companies (id, name, ticker) "
@@ -136,7 +136,7 @@ def test_a_trailing_space_is_not_an_upper_collision(postgres_engine):
             ("upper(ticker::text)",),
         )
         assert_plain_ticker_index_recorded(connection)
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
         missing = connection.execute(
             text(
                 "SELECT indexdef FROM pg_indexes "
@@ -150,7 +150,7 @@ def test_a_trailing_space_is_not_an_upper_collision(postgres_engine):
 
 
 def test_round_trip_keeps_child_rows(postgres_engine):
-    """Upgrade to 0007 and back to 0005 keeps every child row."""
+    """Upgrade to 0007 and back to 0006 keeps every child row."""
     schema = "ticker_upper_children"
     connection = _scratch(postgres_engine, schema)
     try:
@@ -163,7 +163,7 @@ def test_round_trip_keeps_child_rows(postgres_engine):
             )
         )
         connection.commit()
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "INSERT INTO financial_metrics (id, company_id) "
@@ -202,7 +202,7 @@ def test_round_trip_keeps_child_rows(postgres_engine):
         upgrade_to(connection, "0007")
         # The count above left a transaction open. Commit the upgrade
         # before the insert that is rolled back, or that rollback
-        # returns the schema to 0005 and the downgrade does not run.
+        # returns the schema to 0006 and the downgrade does not run.
         connection.commit()
         assert _child_counts(connection) == before
         assert upper_ticker_index(connection) == (
@@ -219,7 +219,7 @@ def test_round_trip_keeps_child_rows(postgres_engine):
             )
         connection.rollback()
         connection.execute(text(f"SET search_path TO {schema}"))
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
         assert _child_counts(connection) == before
         assert upper_ticker_index(connection) is None
         names = unique_constraint_names(connection)
@@ -247,7 +247,7 @@ def test_pair_constraint_is_dropped_and_children_stay(postgres_engine):
             )
         )
         connection.commit()
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "ALTER TABLE companies ADD CONSTRAINT "
@@ -285,7 +285,7 @@ def test_pair_constraint_is_dropped_and_children_stay(postgres_engine):
             True,
             ("upper(ticker::text)",),
         )
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
         assert (
             connection.execute(text("SELECT id FROM price_bars")).scalar() == 7
         )

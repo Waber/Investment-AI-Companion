@@ -1,7 +1,7 @@
 """unique index on upper(companies.ticker)
 
 Revision ID: 0007
-Revises: 0005
+Revises: 0006
 Create Date: 2026-10-22
 
 Revision 0003 made ``ticker`` unique as stored. The application
@@ -39,9 +39,9 @@ on ``upper(ticker)``, which those comparisons do not use.
 Downgrade drops the plain index. The unique column index from
 the previous revision keeps the name ``uq_companies_ticker``.
 
-``down_revision`` is ``0005`` so this branch has one Alembic head.
-Revision ``0006`` is the price-bar numeric migration and is not on
-this branch. Lengths and SQL fragments in this file are literals.
+``down_revision`` is ``0006`` (the price-bar numeric migration), so
+Alembic has one head. Lengths and SQL fragments in this file are
+literals.
 This file does not import application or script code.
 
 SQLite's ``upper`` folds ASCII letters. Tickers stored by the
@@ -59,7 +59,7 @@ from sqlalchemy.exc import SAWarning
 from alembic import op
 
 revision = "0007"
-down_revision = "0005"
+down_revision = "0006"
 branch_labels = None
 depends_on = None
 

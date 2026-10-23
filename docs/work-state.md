@@ -1,61 +1,39 @@
 # Current Work State
 
-## Ticker uniqueness follow-ups (#92): 2026-10-22
+## Merging #88, #97, and #98: 2026-10-23
 
-- Branch `cursor/ticker-uniqueness-followups-08b9`, from
-  `origin/master` `1223be6`. One pull request to `master`.
-  Not merged. `templates/`, `static/`, and `app/ui/` were not
-  edited. Issue #86 still owns `normalize_name` on the forms.
-- Completed: the duplicate-ticker command prints the fixed URL
-  line for `ImportError` and `ValueError`, and it does not
-  create a missing SQLite file. Revision `0003` keeps its SQL
-  in the file and does not import `scripts`. Revision `0007`
-  revises `0005` (one Alembic head; `0006` stays on unmerged
-  PR #94). It refuses rows that collide on `upper(ticker)`,
-  replaces `uq_companies_ticker` with that expression, and
-  drops `uq_company_name_ticker`. On SQLite only `companies`
-  is copied. The copy uses Alembic's `autocommit_block`, then
-  an explicit `BEGIN`/`COMMIT`, and restores the foreign-key
-  pragma. An open caller transaction is refused before that
-  copy. Downgrade refuses before it drops an index, so the
-  caller's uncommitted writes stay uncommitted. A unique
-  leftover ``ix_companies_ticker`` is recreated as non-unique.
-  A ``file:`` URI is percent-decoded, and ``localhost`` is not
-  part of the path. A new foreign-key violation rolls that
-  copy back.
-  `ix_companies_ticker` is a non-unique index on the column
-  so `ticker == value` lookups are not full scans. Downgrade
-  restores the column unique index and the pair constraint,
-  and drops the plain index. SQLite
-  cannot reflect that expression index. The reflection warning
-  is filtered by its message at the reflection calls, and the
-  empty-autogenerate checks read `sqlite_master` or
-  `pg_indexes` for the unique `upper(ticker)` index.
-- Incomplete: re-chain `0007` onto `0006` after #94 merges.
-  That is a later request, not this pull request.
-- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
-  CI command
-  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning --cov=app --cov=main --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=80`
-  -> 1711 passed, 212 deselected, coverage 96.45% (4156
-  statements, 123 miss, 1134 branches, 49 partial). No
-  reflection warning for ``uq_companies_ticker``.
-  Local PostgreSQL 16, `TEST_POSTGRES_DSN` on
-  `investment_test`, `REQUIRE_POSTGRES=1`,
-  `python -m pytest -q -p no:cacheprovider -W error::DeprecationWarning -m integration`
-  -> 212 passed, 1711 deselected. Scoped black, isort, and
-  flake8 passed. No live market-data calls. GitHub Actions is
-  recorded in the pull request, not in a later commit.
+- The owner asked to merge #88, #97, and #98 in that order and
+  to resolve the conflicts. #88 (`docs/HANDOFF.md`) merged as
+  `1d684c6`. #97 is rebased onto it; #98 follows.
+- #97 (`cursor/ticker-uniqueness-followups-08b9`, Closes #92):
+  revision `0007` now revises `0006` (#94's price revision), so
+  the chain is `0001` to `0007` with one head. The `0007` tests
+  use `0006` as the revision before `0007`.
+  `test_revision_0006_stores_sqlite_prices_as_text` stops at
+  `0006`, because `0007` rebuilds `companies` on SQLite and that
+  test checks `companies` is unchanged. What `0007` does: it
+  refuses rows that collide on `upper(ticker)`, replaces
+  `uq_companies_ticker` with a unique index on `upper(ticker)`,
+  drops `uq_company_name_ticker`, and adds the non-unique
+  `ix_companies_ticker`. On SQLite only `companies` is copied,
+  inside Alembic's `autocommit_block`, and an open caller
+  transaction is refused before the copy.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
+  command on SQLite, local SQLite 3.54.1: 2 failed, the rest
+  passed. Both failures
+  (`test_floats_that_round_to_1e12_abort_the_sqlite_upgrade`,
+  `test_sqlite_boundary_float_upgrades_below_1e12`) also fail on
+  a clean `master` `1d684c6` with the same SQLite. That SQLite
+  casts a float to text with more digits than the SQLite in CI,
+  so the expected strings differ. Not caused by this merge. No
+  local PostgreSQL; GitHub Actions runs both jobs before each
+  merge. No live market-data calls.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: the owner reviews the pull request. Agents do
-  not merge.
+- Next action: merge #97 after both CI jobs pass, then rebase
+  and merge #98.
 
 ## Open work elsewhere
-
-Master's work-state still lists the items below. This section
-keeps those and the notes added on this branch. The long
-historical sections stay on `master`. When `0007` is re-chained
-onto `0006`, union this list with #94's list as well.
 
 - #33: notes and theses are on master (revision `0005`). Master's
   work-state still lists the `/ui` forms and any HTTP API as
@@ -81,6 +59,15 @@ onto `0006`, union this list with #94's list as well.
   price profiles. The `/ui` synthetic badge labels
   `[IAC-DEMO-V1]` as `demo-v1` and `[IAC-DEMO-V2]` as `demo-v2`
   (`demo_source_label` in `app/ui/view_models.py`).
+- #96: the watchlist `/ui` page (UI part of #32).
+- #86: #98 adds the shared text validator. The `/ui` helper
+  moves onto it with the Frontend Developer.
+- #28: ETF/ETC attribute columns, fund attributes, and the
+  attribute forms. Yahoo still does not implement
+  `FundAttributes`.
+- Local SQLite 3.54 casts a float to text with more digits than
+  the SQLite in CI. Two `0006` boundary tests fail locally on
+  `master` for that reason. Not tracked in an issue yet.
 - #57, #58, and #65 are open post-demo issues. #57 is
   portfolio holdings (model, manual or CSV import, privacy).
   #58 is the market scanner and buy, sell, and opportunity
@@ -93,9 +80,8 @@ onto `0006`, union this list with #94's list as well.
 - #95 is open. It lists follow-ups for #94: skipped bars, a
   duplicate `(date, source)` inside one batch, a lighter tie
   query, an optional cap on the log-once sets, and currency
-  length on SQLite. #94 is open and not merged. Its revision
-  is `0006`, which revises `0005`. This branch does not
-  contain `0006`. `0007` revises `0005` until #94 merges.
+  length on SQLite. #94 merged on 2026-10-22 (revision
+  `0006`).
 - Tooling: `.github/workflows/tests.yml` runs the two pytest
   jobs only. The workflow says neither job lints, so CI does
   not run black, isort, or flake8. `setup_database.py` fails

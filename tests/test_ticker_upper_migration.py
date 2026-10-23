@@ -58,7 +58,7 @@ def test_migration_file_does_not_import_application_code():
         assert not stripped.startswith("import scripts")
         assert not stripped.startswith("from scripts")
     assert 'revision = "0007"' in source
-    assert 'down_revision = "0005"' in source
+    assert 'down_revision = "0006"' in source
     assert (
         "price_bars"
         not in source.split("def upgrade")[1].split("def downgrade")[0]
@@ -83,7 +83,7 @@ def test_case_collision_stops_before_the_index_changes(tmp_path):
         )
     with engine.connect() as connection:
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "INSERT INTO companies (id, name, ticker) "
@@ -99,7 +99,7 @@ def test_case_collision_stops_before_the_index_changes(tmp_path):
         assert "'AAPL'" in message
         assert "did not change those rows" in message
         assert "Traceback" not in message
-        assert _version(connection) == "0005"
+        assert _version(connection) == "0006"
         stored = (
             connection.execute(
                 text("SELECT ticker FROM companies ORDER BY id")
@@ -129,7 +129,7 @@ def test_a_trailing_space_is_not_an_upper_collision(tmp_path):
             )
         )
     with engine.connect() as connection:
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "INSERT INTO companies (id, name, ticker) "
@@ -155,7 +155,7 @@ def test_a_trailing_space_is_not_an_upper_collision(tmp_path):
 
 
 def test_round_trip_keeps_child_rows(tmp_path):
-    """Upgrade to 0007 and back to 0005 keeps every child row.
+    """Upgrade to 0007 and back to 0006 keeps every child row.
 
     This path never had ``uq_company_name_ticker``. Downgrade adds that
     constraint back, which matches the model from before 0007. The
@@ -174,7 +174,7 @@ def test_round_trip_keeps_child_rows(tmp_path):
         )
     with engine.connect() as connection:
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "INSERT INTO financial_metrics (id, company_id) "
@@ -214,7 +214,7 @@ def test_round_trip_keeps_child_rows(tmp_path):
         # The sqlite3 driver commits the index change immediately and
         # leaves the Alembic version in the open transaction. Commit
         # that version before the insert below. Rolling back the
-        # insert would otherwise move the version back to 0005 and
+        # insert would otherwise move the version back to 0006 and
         # the downgrade would not run.
         connection.commit()
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
@@ -232,7 +232,7 @@ def test_round_trip_keeps_child_rows(tmp_path):
                 )
             )
         connection.rollback()
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
         assert _child_counts(connection) == before
         assert upper_ticker_index(connection) is None
         names = unique_constraint_names(connection)
@@ -309,7 +309,7 @@ def test_sqlite_rebuild_drops_the_pair_constraint_and_keeps_children(
         )
     with engine.connect() as connection:
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
-        stamp(connection, "0005")
+        stamp(connection, "0006")
         connection.commit()
         upgrade_to(connection, "0007")
         # Commit the Alembic version before the CHECK insert is
@@ -342,7 +342,7 @@ def test_sqlite_rebuild_drops_the_pair_constraint_and_keeps_children(
                 )
             )
         connection.rollback()
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
         assert (
             connection.execute(text("SELECT id FROM price_bars")).scalar() == 7
         )
@@ -410,12 +410,12 @@ def test_version_survives_closing_the_connection(tmp_path):
 
     engine = create_db_engine(f"sqlite:///{path}")
     with engine.connect() as connection:
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
     engine.dispose()
 
     engine = create_db_engine(f"sqlite:///{path}")
     with engine.connect() as connection:
-        assert _version(connection) == "0005"
+        assert _version(connection) == "0006"
         assert upper_ticker_index(connection) is None
         names = unique_constraint_names(connection)
         assert "uq_company_name_ticker" in names
@@ -447,7 +447,7 @@ def test_version_survives_closing_the_connection(tmp_path):
 
 
 def _companies_with_pair_constraint_and_children(connection):
-    """A 0005-shaped file whose companies table still has the pair constraint.
+    """A 0006-shaped file whose companies table still has the pair constraint.
 
     The child tables are the ones that reference companies. The copy
     in revision 0007 must leave every one of them in place.
@@ -555,7 +555,7 @@ def test_upgrade_keeps_foreign_keys_off_when_they_started_off(tmp_path):
     with engine.connect() as connection:
         connection.execute(text("PRAGMA foreign_keys=OFF"))
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 0
-        stamp(connection, "0005")
+        stamp(connection, "0006")
         before = _child_row_counts(connection)
         connection.commit()
         upgrade_to(connection, "0007")
@@ -572,19 +572,19 @@ def test_upgrade_keeps_foreign_keys_off_when_they_started_off(tmp_path):
     engine.dispose()
 
 
-def test_a_failed_companies_copy_rolls_back_to_0005(tmp_path):
-    """A failure after the copy starts leaves revision 0005 intact.
+def test_a_failed_companies_copy_rolls_back_to_0006(tmp_path):
+    """A failure after the copy starts leaves revision 0006 intact.
 
     The listener raises once ``DROP TABLE companies`` is about to
     run. By then ``companies__new`` has been created and filled.
     The copy's transaction rolls that back. The company row and
-    every child table are still there, and the version is 0005.
+    every child table are still there, and the version is 0006.
     """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'copy-fail.db'}")
     with engine.begin() as connection:
         _companies_with_pair_constraint_and_children(connection)
     with engine.connect() as connection:
-        stamp(connection, "0005")
+        stamp(connection, "0006")
         connection.commit()
         before = _child_row_counts(connection)
         connection.commit()
@@ -607,7 +607,7 @@ def test_a_failed_companies_copy_rolls_back_to_0005(tmp_path):
                 upgrade_to(connection, "0007")
         finally:
             event.remove(engine, "before_cursor_execute", fail_mid_copy)
-        assert _version(connection) == "0005"
+        assert _version(connection) == "0006"
         assert _child_row_counts(connection) == before
         assert (
             connection.execute(
@@ -661,7 +661,7 @@ def test_unique_plain_ticker_index_becomes_non_unique(tmp_path):
     """A unique ``ix_companies_ticker`` is recreated as non-unique.
 
     Revision 0003 drops that name while it is installing
-    ``uq_companies_ticker``, so this database is already at 0005.
+    ``uq_companies_ticker``, so this database is already at 0006.
     The leftover unique index would not match the model. Upgrade
     drops it and creates the non-unique column index.
     """
@@ -676,7 +676,7 @@ def test_unique_plain_ticker_index_becomes_non_unique(tmp_path):
             )
         )
     with engine.connect() as connection:
-        upgrade_to(connection, "0005")
+        upgrade_to(connection, "0006")
         connection.execute(
             text(
                 "CREATE UNIQUE INDEX ix_companies_ticker "
@@ -723,7 +723,7 @@ def test_plain_ticker_index_is_created_and_removed(tmp_path):
         # The catalog read opened a transaction. Downgrade copies
         # companies and refuses that, so commit before it runs.
         connection.commit()
-        downgrade_to(connection, "0005")
+        downgrade_to(connection, "0006")
         sql = connection.execute(
             text(
                 "SELECT sql FROM sqlite_master "
@@ -754,7 +754,7 @@ def test_preexisting_orphan_does_not_block_the_companies_copy(tmp_path):
         )
         connection.commit()
     with engine.connect() as connection:
-        stamp(connection, "0005")
+        stamp(connection, "0006")
         connection.commit()
         upgrade_to(connection, "0007")
         assert _version(connection) == "0007"
@@ -777,13 +777,13 @@ def test_a_new_foreign_key_violation_rolls_the_copy_back(tmp_path):
     The listener deletes the copied company after the insert into
     ``companies__new``. The child row was valid before the copy and
     is not valid after the rename. The upgrade raises, and revision
-    0005 still has the company and every child row.
+    0006 still has the company and every child row.
     """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'new-orphan.db'}")
     with engine.begin() as connection:
         _companies_with_pair_constraint_and_children(connection)
     with engine.connect() as connection:
-        stamp(connection, "0005")
+        stamp(connection, "0006")
         connection.commit()
         before = _child_row_counts(connection)
         connection.commit()
@@ -802,7 +802,7 @@ def test_a_new_foreign_key_violation_rolls_the_copy_back(tmp_path):
                 upgrade_to(connection, "0007")
         finally:
             event.remove(engine, "after_cursor_execute", drop_copied_parent)
-        assert _version(connection) == "0005"
+        assert _version(connection) == "0006"
         assert _child_row_counts(connection) == before
         assert (
             connection.execute(
@@ -817,19 +817,19 @@ def test_a_new_foreign_key_violation_rolls_the_copy_back(tmp_path):
 
 
 def _stamped_pair_constraint_database(tmp_path, name):
-    """A committed SQLite file at revision 0005 with the pair constraint."""
+    """A committed SQLite file at revision 0006 with the pair constraint."""
     engine = create_db_engine(f"sqlite:///{tmp_path / name}")
     with engine.begin() as connection:
         _companies_with_pair_constraint_and_children(connection)
     with engine.connect() as connection:
-        stamp(connection, "0005")
+        stamp(connection, "0006")
         connection.commit()
     return engine
 
 
-def _assert_still_revision_0005(engine):
+def _assert_still_revision_0006(engine):
     with engine.connect() as connection:
-        assert _version(connection) == "0005"
+        assert _version(connection) == "0006"
         assert connection.execute(
             text("SELECT ticker FROM companies ORDER BY id")
         ).scalars().all() == ["AAPL"]
@@ -851,7 +851,7 @@ def test_begin_transaction_is_not_committed_by_the_rebuild(tmp_path):
     pragma could change. The insert stayed, and closing the block
     raised ``InvalidRequestError``. The upgrade now stops first.
     A new connection does not see the insert, and the schema is
-    still revision 0005.
+    still revision 0006.
     """
     engine = _stamped_pair_constraint_database(tmp_path, "begin-open.db")
     with pytest.raises(RuntimeError, match="open transaction"):
@@ -864,7 +864,7 @@ def test_begin_transaction_is_not_committed_by_the_rebuild(tmp_path):
                 )
             )
             upgrade_to(connection, "0007")
-    _assert_still_revision_0005(engine)
+    _assert_still_revision_0006(engine)
     engine.dispose()
 
 
@@ -873,7 +873,7 @@ def test_select_only_transaction_is_refused(tmp_path):
 
     No row was inserted. The message is the same one downgrade
     uses. After the caller rolls back, the same connection can
-    read the company again. The schema stays at revision 0005.
+    read the company again. The schema stays at revision 0006.
     """
     engine = _stamped_pair_constraint_database(tmp_path, "select-open.db")
     with engine.connect() as connection:
@@ -890,7 +890,7 @@ def test_select_only_transaction_is_refused(tmp_path):
             text("SELECT ticker FROM companies")
         ).scalar()
         assert again == "AAPL"
-    _assert_still_revision_0005(engine)
+    _assert_still_revision_0006(engine)
     engine.dispose()
 
 
@@ -899,7 +899,7 @@ def test_uncommitted_insert_is_not_committed_by_the_rebuild(tmp_path):
 
     The upgrade stops because the connection already has a
     transaction. Closing the connection rolls the insert back.
-    The pair constraint is still there, and the version is 0005.
+    The pair constraint is still there, and the version is 0006.
     """
     engine = _stamped_pair_constraint_database(tmp_path, "connect-open.db")
     with engine.connect() as connection:
@@ -911,7 +911,7 @@ def test_uncommitted_insert_is_not_committed_by_the_rebuild(tmp_path):
         )
         with pytest.raises(RuntimeError, match="open transaction"):
             upgrade_to(connection, "0007")
-    _assert_still_revision_0005(engine)
+    _assert_still_revision_0006(engine)
     engine.dispose()
 
 
@@ -961,7 +961,7 @@ def test_downgrade_begin_transaction_does_no_ddl(tmp_path):
                 )
             )
             try:
-                downgrade_to(connection, "0005")
+                downgrade_to(connection, "0006")
             except RuntimeError:
                 sql = connection.execute(
                     text(
