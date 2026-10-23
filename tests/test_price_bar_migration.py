@@ -104,11 +104,12 @@ def _column_types(connection):
 def test_revision_0006_stores_sqlite_prices_as_text(tmp_path):
     """A float stored at 0002 is the canonical string after 0006.
 
-    Upgrade to head, downgrade to 0005, and upgrade again.
+    Upgrade to 0006, downgrade to 0005, and upgrade again.
     0005 is the parent (notes and theses), so the downgrade undoes
     only this price revision and the column is FLOAT again. The
     second upgrade stores the 8-place string. ``companies`` is
-    not rebuilt.
+    not rebuilt. The test stops at 0006 because revision 0007
+    rebuilds ``companies`` on SQLite.
     """
     engine = create_db_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
     with engine.begin() as connection:
@@ -128,7 +129,7 @@ def test_revision_0006_stores_sqlite_prices_as_text(tmp_path):
         companies_sql = connection.execute(
             text("SELECT sql FROM sqlite_master WHERE name = 'companies'")
         ).scalar()
-        upgrade_to(connection, "head")
+        upgrade_to(connection, "0006")
         kinds = _column_types(connection)
         assert kinds["open_price"].startswith("TEXT")
         assert check_names(connection) == set(CANDLE_CHECK_NAMES)
@@ -156,7 +157,7 @@ def test_revision_0006_stores_sqlite_prices_as_text(tmp_path):
             text("SELECT open_price FROM price_bars")
         ).scalar()
         assert Decimal(str(again)) == Decimal("10.5")
-        upgrade_to(connection, "head")
+        upgrade_to(connection, "0006")
         restored = connection.execute(
             text("SELECT open_price FROM price_bars")
         ).scalar()
