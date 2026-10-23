@@ -2,7 +2,7 @@
 
 This guide lets a coding agent outside Grok Bot (Claude Code, Codex,
 Cursor IDE) pull `master` and continue the work. State is as of
-2026-10-23, `master` at `5d1eac6` (after #94). If `master` has moved,
+2026-10-23, after #88, #97, and #98 merged. If `master` has moved,
 trust `docs/work-state.md` and GitHub over this file.
 
 ## 1. Start here
@@ -65,20 +65,19 @@ Merged since the first version of this guide (`a21d912`): #83 (price
 bars, demo-v2 fixture), #87 (unique ticker index, shared company names,
 `scripts.check_duplicate_tickers`), #89 (instrument-type select on the
 company forms), #90 (watchlist backend, #32), #91 (notes and theses
-backend, #33), #94 (price-bar follow-ups, Decimal OHLC, #85).
-`alembic/versions` on master runs `0001` to `0006` in one chain
-(`0006_price_bar_numeric.py` is the head). Run `alembic heads` to
+backend, #33), #94 (price-bar follow-ups, Decimal OHLC, #85), #97
+(case-insensitive ticker index on `upper(ticker)`, #92), #98 (shared
+free-text validator `app.validation.text.clean_text`, Refs #86).
+`alembic/versions` on master runs `0001` to `0007` in one chain
+(`0007_companies_ticker_upper.py` is the head). Run `alembic heads` to
 check; a new revision revises the current head.
 
-Open PRs at this time:
+No pull requests were open after #98 merged.
 
-- **#97** `cursor/ticker-uniqueness-followups-08b9` (Closes #92):
-  case-insensitive ticker index on `upper(ticker)`, drops
-  `uq_company_name_ticker`. Its revision `0007` must revise `0006`.
-- **#98** `cursor/shared-text-validator-222f` (Refs #86): one shared
-  free-text validator (`app.validation.text.clean_text`) for company
-  names, watchlist labels, notes and theses. The `/ui` form part of
-  #86 stays with the Frontend Developer.
+Known local issue: with SQLite 3.54 two `0006` float boundary tests in
+`tests/test_price_bar_migration.py` fail locally on `master`. That
+SQLite casts a float to text with more digits than the SQLite in CI.
+CI is green.
 
 ## 3. Prioritized queue
 

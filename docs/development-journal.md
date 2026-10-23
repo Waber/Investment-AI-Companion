@@ -1,5 +1,77 @@
 # Development Journal
 
+## 2026-10-23 - Rebase and merge #98 after #97
+
+- Scope: rebased `cursor/shared-text-validator-222f` (PR #98, Refs
+  #86) onto `master` after #88 and #97 merged. The only code
+  conflict was the import block in `app/models/database_models.py`:
+  both `COMPANY_NAME_MAX` (#98) and `PriceAmount, price_compare`
+  (#94) stay. The journal keeps both sides with the newest entries
+  on top. `docs/work-state.md` keeps master's version through the
+  rebase and is rewritten here. `docs/HANDOFF.md` section 2 now
+  lists #97 and #98 as merged, the head as `0007`, and the local
+  SQLite 3.54 test issue.
+- Decisions: the owner asked to merge #88, #97, and #98. #86 stays
+  open for the `/ui` part.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI pytest command, local SQLite 3.54.1: 1823 passed, 2 failed,
+  221 deselected, coverage 96.30%. The two failures are the `0006`
+  float boundary tests that also fail on a clean `master` with this
+  SQLite. Both GitHub Actions jobs run before the merge. No live
+  market-data calls.
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-10-23, about 15 minutes.
+- Next: the `docs/HANDOFF.md` queue, starting with #96.
+
+## 2026-10-23 - Rebase #97 onto master and re-chain 0007 onto 0006
+
+- Scope: rebased `cursor/ticker-uniqueness-followups-08b9` (PR
+  #97, Closes #92) onto `master` `1d684c6` (after #88 and #94).
+  Conflicts: README and `docs/api-demo.md` keep master's
+  "run `alembic heads`" wording and add the `0007` paragraph; the
+  head-check tests expect the chain `0005` -> `0006` -> `0007`;
+  the journal keeps both sides; `docs/work-state.md` was rewritten
+  for the merge and keeps both "Open work elsewhere" lists. The
+  six commits were kept; squashing them first was not allowed in
+  this session.
+- Decisions: `0007` revises `0006`. In the `0007` tests every
+  `0005` that meant "the revision before `0007`" is now `0006`.
+  `test_revision_0006_stores_sqlite_prices_as_text` upgrades to
+  `0006` instead of `head`: with `0007` on top, `head` rebuilds
+  `companies` on SQLite, and the downgrade to `0005` is refused
+  while the test connection holds an open transaction.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI pytest command on local SQLite 3.54.1: 2 failed, the rest
+  passed. The two failures are `0006` float boundary tests that
+  also fail on a clean `master` with this SQLite (more digits in
+  its float-to-text cast). No local PostgreSQL; both GitHub
+  Actions jobs run before the merge. No live market-data calls.
+  The local `.venv` was synced with `requirements-dev.lock`
+  (`python-multipart` was missing).
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-10-23, about 30 minutes.
+- Next: merge #97 when CI is green, then rebase and merge #98.
+
+## 2026-10-23 - Rebase and refresh of the handoff guide (PR #88)
+
+- Scope: rebased `docs/handoff-external-agent` onto `master`
+  `5d1eac6` (after #94). The only conflict was the top of this
+  journal; both sides were kept. `docs/HANDOFF.md` sections 2 and
+  3 were rewritten: #83, #87, #89, #90, #91, and #94 are merged,
+  the migration chain is `0001` to `0006`, and the open pull
+  requests are #97 and #98. The queue now starts with #96, then
+  #33 UI and API, the #86 `/ui` remainder, #95, and #34.
+- Decisions: the owner asked to merge #88, #97, and #98 in that
+  order and to resolve the conflicts. Docs only.
+- Verification: documentation only; tests not run locally. Both
+  GitHub Actions jobs run on the pushed head before the merge.
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-10-23, about 10 minutes.
+- Next: rebase and merge #97, then #98.
+
 ## 2026-10-22 - Review fixes for the shared text checker (#86)
 
 - Scope: code-review and QA follow-up on the same branch.
@@ -152,54 +224,6 @@
 - Next: the owner reviews the pull request. The Frontend
   Developer wires the forms to `clean_text` and the length
   constants. Agents do not merge.
-
-## 2026-10-23 - Rebase #97 onto master and re-chain 0007 onto 0006
-
-- Scope: rebased `cursor/ticker-uniqueness-followups-08b9` (PR
-  #97, Closes #92) onto `master` `1d684c6` (after #88 and #94).
-  Conflicts: README and `docs/api-demo.md` keep master's
-  "run `alembic heads`" wording and add the `0007` paragraph; the
-  head-check tests expect the chain `0005` -> `0006` -> `0007`;
-  the journal keeps both sides; `docs/work-state.md` was rewritten
-  for the merge and keeps both "Open work elsewhere" lists. The
-  six commits were kept; squashing them first was not allowed in
-  this session.
-- Decisions: `0007` revises `0006`. In the `0007` tests every
-  `0005` that meant "the revision before `0007`" is now `0006`.
-  `test_revision_0006_stores_sqlite_prices_as_text` upgrades to
-  `0006` instead of `head`: with `0007` on top, `head` rebuilds
-  `companies` on SQLite, and the downgrade to `0005` is refused
-  while the test connection holds an open transaction.
-- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
-  CI pytest command on local SQLite 3.54.1: 2 failed, the rest
-  passed. The two failures are `0006` float boundary tests that
-  also fail on a clean `master` with this SQLite (more digits in
-  its float-to-text cast). No local PostgreSQL; both GitHub
-  Actions jobs run before the merge. No live market-data calls.
-  The local `.venv` was synced with `requirements-dev.lock`
-  (`python-multipart` was missing).
-- AI model: Claude Opus 5.5. Account usage was not available in
-  this session.
-- Time tracking (UTC): 2026-10-23, about 30 minutes.
-- Next: merge #97 when CI is green, then rebase and merge #98.
-
-## 2026-10-23 - Rebase and refresh of the handoff guide (PR #88)
-
-- Scope: rebased `docs/handoff-external-agent` onto `master`
-  `5d1eac6` (after #94). The only conflict was the top of this
-  journal; both sides were kept. `docs/HANDOFF.md` sections 2 and
-  3 were rewritten: #83, #87, #89, #90, #91, and #94 are merged,
-  the migration chain is `0001` to `0006`, and the open pull
-  requests are #97 and #98. The queue now starts with #96, then
-  #33 UI and API, the #86 `/ui` remainder, #95, and #34.
-- Decisions: the owner asked to merge #88, #97, and #98 in that
-  order and to resolve the conflicts. Docs only.
-- Verification: documentation only; tests not run locally. Both
-  GitHub Actions jobs run on the pushed head before the merge.
-- AI model: Claude Opus 5.5. Account usage was not available in
-  this session.
-- Time tracking (UTC): 2026-10-23, about 10 minutes.
-- Next: rebase and merge #97, then #98.
 
 ## 2026-10-22 - Ticker uniqueness follow-ups (#92)
 
