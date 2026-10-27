@@ -5,7 +5,7 @@ bars in memory. Nothing in this file calls a market-data provider.
 """
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -1425,3 +1425,117 @@ async def test_deleting_the_instrument_deletes_its_bars(client):
         assert db.query(PriceBarDB).count() == 0
     missing = await client.get(f"/api/v1/instruments/{instrument_id}/prices")
     assert missing.status_code == 404
+
+
+def _store_closes(client, instrument_id, closes, *, source="[IAC-DEMO-V2]",
+                  retrieved_at=RETRIEVED):
+    """Insert one bar per ``(date, close)``. ``close`` may be None."""
+    from app.models.database_models import PriceBarDB
+
+    session = client.app.state.testing_session_local()
+    try:
+        for day, close in closes:
+            session.add(
+                PriceBarDB(
+                    instrument_id=instrument_id,
+                    bar_date=day,
+                    close_price=None if close is None else Decimal(close),
+                    currency="PLN",
+                    source=source,
+                    retrieved_at=retrieved_at,
+                )
+            )
+        session.commit()
+    finally:
+        session.close()
+
+
+def _recent(client, instrument_id, **kwargs):
+    from app.repositories.price_bar_repository import PriceBarRepository
+
+    session = client.app.state.testing_session_local()
+    try:
+        return PriceBarRepository(session).recent_closes(
+            instrument_id, **kwargs
+        )
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_recent_closes_window_and_previous(client):
+    instrument_id = await _company(client)
+    # Every Monday from 2026-06-01 to 2026-09-28.
+    weekly = [
+        (date(2026, 6, 1) + timedelta(days=7 * week), "100")
+        for week in range(18)
+    ]
+    _store_closes(client, instrument_id, weekly)
+    recent = _recent(client, instrument_id)
+    assert recent.source == "[IAC-DEMO-V2]"
+    assert recent.latest.bar_date == date(2026, 9, 28)
+    assert recent.previous.bar_date == date(2026, 9, 21)
+    dates = [bar.bar_date for bar in recent.window]
+    assert dates == sorted(dates)
+    assert dates[0] >= date(2026, 6, 28)
+    assert dates[-1] == date(2026, 9, 28)
+    assert date(2026, 6, 29) in dates
+
+
+@pytest.mark.asyncio
+async def test_recent_closes_skips_a_bar_without_a_close(client):
+    instrument_id = await _company(client)
+    _store_closes(
+        client,
+        instrument_id,
+        [
+            (date(2026, 9, 21), "10"),
+            (date(2026, 9, 28), "11"),
+            (date(2026, 10, 5), None),
+        ],
+    )
+    recent = _recent(client, instrument_id)
+    assert recent.latest.bar_date == date(2026, 9, 28)
+    assert recent.previous.bar_date == date(2026, 9, 21)
+    assert [bar.bar_date for bar in recent.window] == [
+        date(2026, 9, 21),
+        date(2026, 9, 28),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recent_closes_uses_the_default_source(client):
+    instrument_id = await _company(client)
+    _store_closes(client, instrument_id, [(date(2026, 9, 28), "10")])
+    _store_closes(
+        client,
+        instrument_id,
+        [(date(2026, 9, 21), "20"), (date(2026, 9, 28), "21")],
+        source="fake",
+        retrieved_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+    )
+    recent = _recent(client, instrument_id)
+    assert recent.source == "fake"
+    assert recent.latest.close_price == Decimal("21")
+    assert {bar.source for bar in recent.window} == {"fake"}
+
+
+@pytest.mark.asyncio
+async def test_recent_closes_is_none_without_a_close(client):
+    instrument_id = await _company(client)
+    assert _recent(client, instrument_id) is None
+    _store_closes(client, instrument_id, [(date(2026, 9, 28), None)])
+    assert _recent(client, instrument_id) is None
+
+
+@pytest.mark.asyncio
+async def test_previous_close_can_be_older_than_the_window(client):
+    instrument_id = await _company(client)
+    _store_closes(
+        client,
+        instrument_id,
+        [(date(2026, 1, 5), "10"), (date(2026, 9, 28), "12")],
+    )
+    recent = _recent(client, instrument_id)
+    assert recent.previous.bar_date == date(2026, 1, 5)
+    assert [bar.bar_date for bar in recent.window] == [date(2026, 9, 28)]

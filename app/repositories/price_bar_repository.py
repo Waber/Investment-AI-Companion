@@ -7,7 +7,8 @@ to run twice.
 """
 
 import logging
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import List, Optional
 
 from sqlalchemy import func, tuple_
@@ -29,6 +30,22 @@ _CONSTRAINT = "Price bar could not be stored"
 # One skip warning per bar id for this process. Reading the series
 # again must not repeat the same line.
 _logged_skip_ids = set()
+
+
+@dataclass(frozen=True)
+class RecentCloses:
+    """The newest closes of one instrument's default price series.
+
+    Only bars with a close are here. ``latest`` is the newest one.
+    ``previous`` is the one before it, and may be older than the
+    window. ``window`` holds every bar from ``window_days`` before
+    ``latest`` up to ``latest``, oldest first, including ``latest``.
+    """
+
+    source: str
+    latest: PriceBarDB
+    previous: Optional[PriceBarDB]
+    window: List[PriceBarDB]
 
 
 class PriceBarRepository:
@@ -89,6 +106,50 @@ class PriceBarRepository:
         # A cell that is not a decimal must not fail this query.
         # Dropping the row keeps the rest of the series readable.
         return [row for row in rows if _readable(row)]
+
+    def recent_closes(
+        self, instrument_id: int, window_days: int = 92
+    ) -> Optional[RecentCloses]:
+        """The latest closes of the default series, or None.
+
+        The series is the one ``get_range`` picks without a source.
+        A bar without a close is skipped, so ``latest`` is the newest
+        bar that has one. None means that series has no close at all.
+        The window ends on ``latest``, not on today, so an old series
+        still has a trend line.
+        """
+        bars = self.db.query(PriceBarDB).filter(
+            PriceBarDB.instrument_id == instrument_id
+        )
+        source = self._default_source(bars)
+        if source is None:
+            return None
+        closes = bars.filter(
+            PriceBarDB.source == source,
+            PriceBarDB.close_price.isnot(None),
+        )
+        newest = [
+            row
+            for row in closes.order_by(PriceBarDB.bar_date.desc()).limit(2)
+            if _readable(row)
+        ]
+        if not newest:
+            return None
+        latest = newest[0]
+        start = latest.bar_date - timedelta(days=window_days)
+        window = [
+            row
+            for row in closes.filter(PriceBarDB.bar_date >= start)
+            .order_by(PriceBarDB.bar_date.asc())
+            .all()
+            if _readable(row)
+        ]
+        return RecentCloses(
+            source=source,
+            latest=latest,
+            previous=newest[1] if len(newest) > 1 else None,
+            window=window,
+        )
 
     @staticmethod
     def _default_source(query) -> Optional[str]:
