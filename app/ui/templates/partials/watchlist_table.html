@@ -1,0 +1,85 @@
+<div id="watchlist-table">
+  {# The remove button swaps this whole region, so removing the last
+     row shows the empty state. Colours come from classes in ui.css:
+     the page CSP does not allow style attributes. #}
+  {% if entries %}
+  <table class="watchlist">
+    <thead>
+      <tr>
+        <th scope="col">{{ t['column.company'] }}</th>
+        <th scope="col" class="num">{{ t['column.price'] }}</th>
+        <th scope="col" class="num">{{ t['column.change'] }}</th>
+        <th scope="col">{{ t['column.trend'] }}</th>
+        <th scope="col">{{ t['column.latest_bar'] }}</th>
+        <th scope="col"><span class="visually-hidden">{{ t['watchlist.remove'] }}</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr data-company-id="{{ entry.company_id }}">
+        <td data-field="company">
+          <a href="/ui/instruments/{{ entry.company_id }}">{{ entry.name if entry.name else t['missing'] }}</a>
+          {% if entry.is_synthetic %}
+          <span class="badge">{{ t['badge.synthetic'] }}</span>
+          {% endif %}
+          <br>
+          <span class="muted">{{ entry.ticker if entry.ticker else t['missing'] }}{% if entry.label %} · {{ entry.label }}{% endif %}</span>
+        </td>
+        <td data-field="price" class="num">
+          {% if entry.close is not none %}
+          {{ format_price(entry.close, language) }} {{ entry.currency }}
+          {% else %}
+          <span class="missing" title="{{ t['missing'] }}">—</span>
+          {% endif %}
+        </td>
+        <td data-field="change" class="num">
+          {% if entry.change is not none %}
+          <span class="change-{{ entry.direction }}" title="{{ t['watchlist.change_since'].replace('{date}', format_day(entry.previous_date, language)) }}">
+            {% if entry.direction == 'up' %}▲ {% elif entry.direction == 'down' %}▼ {% endif %}{{ format_change(entry.change, language) }}%
+          </span>
+          {% else %}
+          <span class="missing" title="{{ t['missing'] }}">—</span>
+          {% endif %}
+        </td>
+        <td data-field="trend">
+          {% if entry.sparkline %}
+          <svg class="sparkline sparkline-{{ entry.sparkline.direction }}" width="90" height="24" viewBox="0 0 90 24" role="img" aria-label="{{ t['column.trend'] }}">
+            <polyline points="{{ entry.sparkline.points }}"/>
+          </svg>
+          {% else %}
+          <span class="missing" title="{{ t['missing'] }}">—</span>
+          {% endif %}
+        </td>
+        <td data-field="latest_bar">
+          {% if entry.latest_date %}
+          {{ format_day(entry.latest_date, language) }}
+          {% if entry.is_stale %}
+          <span class="badge badge-stale" title="{{ t['watchlist.stale_hint'].replace('{days}', stale_days|string) }}">{{ t['watchlist.stale'] }}</span>
+          {% endif %}
+          <br>
+          <span class="muted">{{ t['watchlist.source'].replace('{source}', entry.source) }}</span>
+          {% else %}
+          <span class="missing">{{ t['watchlist.no_prices'] }}</span>
+          {% endif %}
+        </td>
+        <td data-field="remove">
+          <form
+            method="post"
+            action="/ui/watchlist/{{ entry.company_id }}/remove"
+            hx-post="/ui/watchlist/{{ entry.company_id }}/remove"
+            hx-target="#watchlist-table"
+            hx-swap="outerHTML"
+          >
+            <input type="hidden" name="from" value="watchlist">
+            <button type="submit" class="icon-button" aria-label="{{ t['watchlist.remove'] }}" title="{{ t['watchlist.remove'] }}">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>{{ t['watchlist.empty'] }}</p>
+  <p><a href="/ui">{{ t['watchlist.go_to_instruments'] }}</a></p>
+  {% endif %}
+</div>
