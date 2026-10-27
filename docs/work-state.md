@@ -1,39 +1,44 @@
 # Current Work State
 
-## Merged #88, #97, and #98: 2026-10-23
+## Watchlist `/ui` page (#96): 2026-10-27
 
-- The owner asked to merge #88, #97, and #98 in that order and to
-  resolve the conflicts. All three use "Rebase and merge". #88
-  (`docs/HANDOFF.md`) and #97 (Closes #92) are on `master`. #98
-  (Refs #86) merges with this commit as its last one.
-- Master after the merges: Alembic chain `0001` to `0007`, one
-  head. `0007` revises `0006` (#94's prices) and puts the unique
-  index on `upper(ticker)`. `app.validation.text.clean_text` is
-  the shared free-text checker for company names, watchlist
-  labels, notes, and theses. Codes: `blank`, `too_long`,
-  `control_char`, `bidi`, `surrogate`. Length constants:
-  `COMPANY_NAME_MAX` 255, `WATCHLIST_LABEL_MAX_LENGTH` 80,
-  `NOTE_BODY_MAX` 10000, `THESIS_TITLE_MAX` 200,
-  `THESIS_BODY_MAX` 10000, `THESIS_BREAKERS_MAX` 5000. The 422
-  contract is in `docs/api-demo.md`.
-- Conflict decisions: #97 `test_revision_0006_stores_sqlite_prices_as_text`
-  stops at `0006`, because `0007` rebuilds `companies` on SQLite.
-  The `0007` tests use `0006` as the revision before it. #98 kept
-  both imports in `app/models/database_models.py` (#94's
-  `PriceAmount` and its `COMPANY_NAME_MAX`).
-- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
-  command on #98's rebased head, local SQLite 3.54.1: 1823
-  passed, 2 failed, 221 deselected, coverage 96.30%. Both
-  failures (`test_floats_that_round_to_1e12_abort_the_sqlite_upgrade`,
-  `test_sqlite_boundary_float_upgrades_below_1e12`) also fail on a
-  clean `master` with that SQLite: it casts a float to text with
-  more digits than the SQLite in CI. Not caused by these merges.
-  No local PostgreSQL; both GitHub Actions jobs passed on each
-  pull request before its merge. No live market-data calls.
+- Branch `feat/watchlist-ui-96`, from `origin/master` `b871326`.
+  Pull request to `master`, Closes #96. Not merged.
+- Design: `docs/superpowers/specs/2026-10-27-watchlist-ui-design.md`.
+  Plan: `docs/superpowers/plans/2026-10-27-watchlist-ui.md`. Raul
+  approved the design and chose the table layout.
+- Completed: `/ui/watchlist` (nav link "Watchlista" / "Watchlist")
+  lists company, ticker and label, latest close with currency, change
+  against the previous bar, a 3-month sparkline (inline SVG, 92 days
+  ending on the latest bar), the latest bar date with its source, a
+  stale badge, and a remove button. The detail page has a heart
+  toggle (♡/♥, `aria-pressed`). Add and remove are POST forms that
+  HTMX enhances (`POST /ui/watchlist/{id}` and `.../remove`, hidden
+  `from` = `detail` or `watchlist`). Prices are formatted from
+  `Decimal` (`format_price`, 2 to 4 decimals, up to 8 for a price
+  below 0.0001). `PriceBarRepository.recent_closes` reads the default
+  series and skips bars without a close.
+- Decisions: "stale" counts from today's UTC date (Raul), so every
+  demo-v2 row with prices is stale (the fixture ends 2026-09-28). The
+  column is "Zmiana" / "Change", not "daily", because demo bars are
+  weekly. The demo starts with an empty watchlist; the demo script
+  adds two instruments. A missing price, change, or trend is an em
+  dash with the "no data" text as its title.
+- Not in scope: named lists (#99), on-demand AI summary per row
+  (#100), entering or editing the label.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
+  on local SQLite 3.54.1: 1868 passed, 2 failed, 221 deselected,
+  coverage 96.39%. The two failures are the known `0006` float
+  boundary tests (below). Demo check: demo-v2 seeded into a
+  throwaway SQLite file; four companies added through the heart
+  POST; the table showed prices, sparklines, stale badges, sources,
+  and no `style=` attribute. No local PostgreSQL; GitHub Actions runs
+  both jobs. No live market-data calls. black, isort, and flake8
+  passed on the changed Python files.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: the queue in `docs/HANDOFF.md` section 3, starting
-  with #96.
+- Next action: GitHub Actions on the pull request, then QA and Code
+  Reviewer. Raul merges with "Rebase and merge".
 
 ## Open work elsewhere
 
@@ -41,8 +46,7 @@
   work-state still lists the `/ui` forms and any HTTP API as
   incomplete. Those belong to the Frontend Developer.
 - #32: the watchlist backend is on master (revision `0004`).
-  The `/ui` watchlist page, the stale-price marker, and the
-  PL/EN strings are still open.
+  The `/ui` page is #96, on `feat/watchlist-ui-96`.
 - #8 and #10: the instrument Alembic baseline is still open,
   and `init_db` still uses `create_all`.
 - #54: the real Yahoo adapter, and the case where a Yahoo HTTP
@@ -61,7 +65,8 @@
   price profiles. The `/ui` synthetic badge labels
   `[IAC-DEMO-V1]` as `demo-v1` and `[IAC-DEMO-V2]` as `demo-v2`
   (`demo_source_label` in `app/ui/view_models.py`).
-- #96: the watchlist `/ui` page (UI part of #32).
+- #99: named watchlists (several lists per company).
+- #100: on-demand AI summary of recent moves in a watchlist row.
 - #86: the shared validator is on master (#98). The `/ui` helper
   (`normalized_company_name` in `app/ui/form_fields.py`) moves
   onto it with the Frontend Developer, and the form maps

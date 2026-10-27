@@ -83,10 +83,9 @@ CI is green.
 
 Each item: own branch, PR, tests, work-state + journal updated.
 
-a. **#96 watchlist `/ui` page** (UI part of #32): `WatchlistEntryView`,
-   stale-price marker (latest close from the default price-bar source;
-   the stale rule uses that bar's date; a dash when there is no bar),
-   PL/EN strings.
+a. **#96 watchlist `/ui` page**: pull request from
+   `feat/watchlist-ui-96`. Follow-ups: #99 (named lists), #100
+   (on-demand AI summary per row).
 b. **#33 notes and theses UI and HTTP API**. The backend is merged.
 c. **#86 remainder**: move the `/ui` helper
    (`normalized_company_name` in `app/ui/form_fields.py`) onto the
