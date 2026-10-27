@@ -16,7 +16,13 @@ from app.ui.catalog import (
     SUPPORTED_LANGUAGES,
     translate,
 )
-from app.ui.formatting import format_date, format_number
+from app.ui.formatting import (
+    format_change,
+    format_date,
+    format_day,
+    format_number,
+    format_price,
+)
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -110,6 +116,9 @@ def render(request, template_name, *, status_code=200, **extra):
         "t": MessageCatalog(language),
         "format_number": format_number,
         "format_date": format_date,
+        "format_day": format_day,
+        "format_price": format_price,
+        "format_change": format_change,
         "next_path": language_next_path(request),
     }
     context.update(extra)

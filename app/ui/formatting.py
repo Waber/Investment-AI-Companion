@@ -9,9 +9,16 @@ returns ISO strings; this module is only for HTML.
 """
 
 import math
-from datetime import datetime
+from datetime import date, datetime
+from decimal import ROUND_HALF_EVEN, Decimal
 
 from app.core.utc_datetime import as_utc
+
+# A price shows at least 2 and at most 4 decimals. A price that 4
+# places would round to zero keeps up to 8, the stored scale.
+_PRICE_MIN_PLACES = 2
+_PRICE_MAX_PLACES = 4
+_PRICE_TINY_PLACES = 8
 
 # Thousands separator, then the decimal mark.
 _NUMBER_SEPARATORS = {
@@ -81,3 +88,80 @@ def format_date(value, language):
         month = _ENGLISH_MONTHS[utc.month - 1]
         return f"{month} {utc.day}, {utc.year}"
     return f"{utc.day:02d}.{utc.month:02d}.{utc.year}"
+
+
+def _group_thousands(digits, separator):
+    """Insert ``separator`` every three digits from the right."""
+    groups = []
+    while digits:
+        groups.append(digits[-3:])
+        digits = digits[:-3]
+    return separator.join(reversed(groups)) or "0"
+
+
+def _decimal_text(value, places, min_places, language):
+    """``value`` rounded half-even to ``places``, in the UI language.
+
+    Trailing zeros past ``min_places`` are dropped. Everything stays
+    a ``Decimal`` or a string, so no digit passes through ``float``.
+    """
+    rounded = value.quantize(
+        Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN
+    )
+    sign = "-" if rounded < 0 else ""
+    whole, _, fraction = f"{abs(rounded):f}".partition(".")
+    fraction = fraction.rstrip("0").ljust(min_places, "0")
+    thousands, decimal_mark = _NUMBER_SEPARATORS.get(
+        language, _NUMBER_SEPARATORS["pl"]
+    )
+    body = _group_thousands(whole, thousands)
+    if fraction:
+        body = f"{body}{decimal_mark}{fraction}"
+    return f"{sign}{body}"
+
+
+def format_price(value, language):
+    """Format a ``Decimal`` price, or return None when it is missing.
+
+    ``227.50000000`` is ``227,50`` in Polish and ``227.50`` in
+    English. Up to four decimals are kept (``3 487,9709``). A price
+    that four places would show as zero keeps up to eight, so
+    ``0.00001234`` is not ``0,0000``. A ``float`` is never used:
+    prices are stored as exact decimals (#94).
+    """
+    if not isinstance(value, Decimal) or not value.is_finite():
+        return None
+    places = _PRICE_MAX_PLACES
+    shown = value.quantize(
+        Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN
+    )
+    if shown == 0 and value != 0:
+        places = _PRICE_TINY_PLACES
+    return _decimal_text(value, places, _PRICE_MIN_PLACES, language)
+
+
+def format_change(value, language):
+    """Format a percent change with a sign and two decimals.
+
+    ``1.2449`` is ``+1,24`` in Polish. Zero has no sign. The value is
+    the percent itself, not a fraction. None stays None.
+    """
+    if not isinstance(value, Decimal) or not value.is_finite():
+        return None
+    text = _decimal_text(value, 2, 2, language)
+    if value.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN) > 0:
+        return f"+{text}"
+    return text
+
+
+def format_day(value, language):
+    """Format a calendar ``date`` the way ``format_date`` does.
+
+    A price bar has a date and no time, so there is no UTC step.
+    """
+    if not isinstance(value, date) or isinstance(value, datetime):
+        return None
+    if language == "en":
+        month = _ENGLISH_MONTHS[value.month - 1]
+        return f"{month} {value.day}, {value.year}"
+    return f"{value.day:02d}.{value.month:02d}.{value.year}"
