@@ -370,3 +370,96 @@ async def test_heart_is_not_inside_a_paragraph(client):
     parser.feed(html)
     assert 'class="watchlist-heart"' in html
     assert parser.nested is False
+
+
+def _row(html, company_id):
+    """The ``<tr>`` of one company in the watchlist table."""
+    start = html.index(f'<tr data-company-id="{company_id}">')
+    end = html.index("</tr>", start)
+    return html[start:end]
+
+
+@pytest.mark.asyncio
+async def test_htmx_errors_fall_back_to_a_plain_post(client):
+    """A failed HTMX request must not leave the click without effect.
+
+    ``static/ui.js`` posts the form again without HTMX, so the browser
+    shows what the server answered, for example the 404 page of a
+    company deleted in another tab. Add and remove are both safe to
+    repeat.
+    """
+    company_id = _company(client)
+    _watch(client, company_id)
+    detail = (await client.get(f"/ui/instruments/{company_id}")).text
+    table = (await client.get("/ui/watchlist")).text
+    htmx_at = detail.find('src="/static/vendor/htmx-2.0.10.min.js"')
+    script_at = detail.find('<script src="/static/ui.js" defer></script>')
+    assert htmx_at != -1
+    assert script_at > htmx_at
+    heart = detail.split('class="watchlist-heart"', 1)[1].split(">", 1)[0]
+    assert "data-plain-fallback" in heart
+    remove = _row(table, company_id).split("<form", 1)[1].split(">", 1)[0]
+    assert "data-plain-fallback" in remove
+
+    script = await client.get("/static/ui.js")
+    assert script.status_code == 200
+    assert "javascript" in script.headers["content-type"]
+    assert "htmx:responseError" in script.text
+    assert "htmx:sendError" in script.text
+    assert "data-plain-fallback" in script.text
+
+
+@pytest.mark.asyncio
+async def test_heart_button_keeps_its_id_for_focus(client):
+    """HTMX moves focus back only to an element whose id survives."""
+    company_id = _company(client)
+    detail = (await client.get(f"/ui/instruments/{company_id}")).text
+    assert detail.count('id="watchlist-heart-button"') == 1
+    fragment = await _post(
+        client, f"/ui/watchlist/{company_id}", {"from": "detail"}, htmx=True
+    )
+    assert fragment.text.count('id="watchlist-heart-button"') == 1
+
+
+@pytest.mark.asyncio
+async def test_remove_focuses_the_row_that_takes_its_place(client):
+    """After ✕ the focus goes to the next row, or to the previous one
+    when the last row went, or to the empty state link."""
+    first = _company(client, ticker="AAA", name="First")
+    second = _company(client, ticker="BBB", name="Second")
+    third = _company(client, ticker="CCC", name="Third")
+    for company_id in (first, second, third):
+        _watch(client, company_id)
+    page = (await client.get("/ui/watchlist")).text
+    assert "autofocus" not in page
+
+    async def remove(company_id):
+        response = await _post(
+            client,
+            f"/ui/watchlist/{company_id}/remove",
+            {"from": "watchlist"},
+            htmx=True,
+        )
+        assert response.status_code == 200
+        assert response.text.count("autofocus") == 1
+        return response.text
+
+    html = await remove(second)
+    assert "autofocus" in _row(html, third)
+    html = await remove(third)
+    assert "autofocus" in _row(html, first)
+    html = await remove(first)
+    assert '<a href="/ui" autofocus>' in html
+
+
+@pytest.mark.asyncio
+async def test_remove_buttons_name_their_company(client):
+    company_id = _company(client, name='Apple "Inc."')
+    _watch(client, company_id)
+    row = _row((await client.get("/ui/watchlist")).text, company_id)
+    label = "Usuń Apple &#34;Inc.&#34; z watchlisty"
+    assert f'aria-label="{label}"' in row
+    assert f'title="{label}"' in row
+    client.cookies.set("ui_lang", "en")
+    row = _row((await client.get("/ui/watchlist")).text, company_id)
+    assert 'aria-label="Remove Apple &#34;Inc.&#34; from watchlist"' in row

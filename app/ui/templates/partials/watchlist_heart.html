@@ -14,7 +14,8 @@
   hx-post="{{ heart_action }}"
   hx-target="this"
   hx-swap="outerHTML"
+  data-plain-fallback
 >
   <input type="hidden" name="from" value="detail">
-  <button type="submit" class="heart" aria-pressed="{{ 'true' if on_watchlist else 'false' }}" aria-label="{{ heart_label }}" title="{{ heart_label }}">{{ '♥' if on_watchlist else '♡' }}</button>
+  <button type="submit" id="watchlist-heart-button" class="heart" aria-pressed="{{ 'true' if on_watchlist else 'false' }}" aria-label="{{ heart_label }}" title="{{ heart_label }}">{{ '♥' if on_watchlist else '♡' }}</button>
 </form>
