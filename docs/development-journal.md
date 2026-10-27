@@ -30,6 +30,20 @@
   direction now follows the rounded value); a price such as 0.00006
   showed as 0.0001 (prices below 0.1 now keep 4 significant digits).
   Deferred minors are listed on the pull request.
+- Code Reviewer pass (fresh reviewer, Claude Opus): ready to merge,
+  no Critical or Important. Raul asked to fix three minors in this
+  pull request, each with a test that failed first:
+  a failed HTMX add or remove (404, 500, no network) did nothing on
+  screen, so `static/ui.js` posts a form marked `data-plain-fallback`
+  again without HTMX and the browser shows the server's answer (both
+  actions are safe to repeat); keyboard focus fell back to the page
+  start after a swap, so the heart button has a stable id and the row
+  that takes a removed row's place gets `autofocus` (the empty state
+  link when the list is empty); every ✕ had the same label, so it now
+  names the company ("Usuń {name} z watchlisty"). The remaining two
+  minors (trend direction only in colour, duplicated hidden-text CSS)
+  stay deferred. `ui.js` was checked in node with a fake `document`;
+  no real browser run.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
   pytest command on local SQLite 3.54.1: 1871 passed, 2 failed (the
   known `0006` float boundary tests), 221 deselected, coverage
@@ -41,7 +55,9 @@
   session.
 - Time tracking (UTC): 2026-10-27, about 2 hours including the design
   conversation.
-- Next: GitHub Actions, QA, and Code Reviewer on the pull request.
+- Verification after the review fixes: same CI command, 1875 passed,
+  2 failed (the same `0006` tests), 221 deselected, coverage 96.39%.
+- Next: GitHub Actions and QA on the pull request.
 
 ## 2026-10-23 - Rebase and merge #98 after #97
 

@@ -837,7 +837,7 @@ def delete_metrics(
     return _see_other(f"/ui/instruments/{company.id}")
 
 
-def _watchlist_response(request, db, company_id, origin):
+def _watchlist_response(request, db, company_id, origin, position=0):
     """Where an add or remove lands, for a plain POST and for HTMX.
 
     ``origin`` is the hidden ``from`` field. ``watchlist`` means the
@@ -845,6 +845,9 @@ def _watchlist_response(request, db, company_id, origin):
     field cannot send the browser off /ui. HTMX gets only the part
     that changed: the heart, or the whole table (the last removal
     shows the empty state).
+
+    ``position`` is the index the removed row had in the table. The
+    row now at that index, or the new last row, gets the focus.
     """
     from_watchlist = origin == "watchlist"
     if not is_htmx(request):
@@ -852,12 +855,14 @@ def _watchlist_response(request, db, company_id, origin):
             return _see_other("/ui/watchlist")
         return _see_other(f"/ui/instruments/{company_id}")
     if from_watchlist:
+        entries = watchlist_view.list_entries(db)
         return _with_ui_headers(
             render(
                 request,
                 "partials/watchlist_table.html",
-                entries=watchlist_view.list_entries(db),
+                entries=entries,
                 stale_days=settings.WATCHLIST_STALE_PRICE_DAYS,
+                focus_index=min(position, len(entries) - 1) if entries else -1,
             )
         )
     return _with_ui_headers(
@@ -896,5 +901,8 @@ def remove_from_watchlist(
     row, missing = _load_company(request, db, company_id)
     if missing is not None:
         return missing
-    WatchlistRepository(db).remove(row.id)
-    return _watchlist_response(request, db, row.id, origin)
+    watchlist = WatchlistRepository(db)
+    listed = [item.company_id for item in watchlist.list_items()]
+    position = listed.index(row.id) if row.id in listed else 0
+    watchlist.remove(row.id)
+    return _watchlist_response(request, db, row.id, origin, position)

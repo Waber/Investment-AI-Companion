@@ -1,6 +1,9 @@
 <div id="watchlist-table">
   {# The remove button swaps this whole region, so removing the last
-     row shows the empty state. Colours come from classes in ui.css:
+     row shows the empty state. ``focus_index`` is set only for that
+     HTMX answer: the row that took the removed row's place gets
+     ``autofocus`` (HTMX focuses it after the swap), so keyboard focus
+     stays in the table. Colours come from classes in ui.css:
      the page CSP does not allow style attributes. #}
   {% if entries %}
   <table class="watchlist">
@@ -69,9 +72,11 @@
             hx-post="/ui/watchlist/{{ entry.company_id }}/remove"
             hx-target="#watchlist-table"
             hx-swap="outerHTML"
+            data-plain-fallback
           >
             <input type="hidden" name="from" value="watchlist">
-            <button type="submit" class="icon-button" aria-label="{{ t['watchlist.remove'] }}" title="{{ t['watchlist.remove'] }}">✕</button>
+            {% set remove_label = t['watchlist.remove_named'].replace('{name}', entry.name if entry.name else t['missing']) %}
+            <button type="submit" class="icon-button" aria-label="{{ remove_label }}" title="{{ remove_label }}"{% if loop.index0 == focus_index %} autofocus{% endif %}>✕</button>
           </form>
         </td>
       </tr>
@@ -80,6 +85,6 @@
   </table>
   {% else %}
   <p>{{ t['watchlist.empty'] }}</p>
-  <p><a href="/ui">{{ t['watchlist.go_to_instruments'] }}</a></p>
+  <p><a href="/ui"{% if focus_index is not none %} autofocus{% endif %}>{{ t['watchlist.go_to_instruments'] }}</a></p>
   {% endif %}
 </div>

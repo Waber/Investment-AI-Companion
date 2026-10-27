@@ -25,6 +25,12 @@
   weekly. The demo starts with an empty watchlist; the demo script
   adds two instruments. A missing price, change, or trend is an em
   dash with the "no data" text as its title.
+- Code Reviewer: ready to merge, no Critical or Important. Fixed at
+  Raul's request: HTMX errors fall back to a plain POST
+  (`static/ui.js`, forms marked `data-plain-fallback`), focus stays on
+  the heart or moves to the neighbour row after ✕, and each ✕ names
+  its company. Deferred: trend direction only shown by colour,
+  duplicated `.visually-hidden` CSS.
 - Not in scope: named lists (#99), on-demand AI summary per row
   (#100), entering or editing the label.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
@@ -38,8 +44,11 @@
   passed on the changed Python files.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: GitHub Actions on the pull request, then QA and Code
-  Reviewer. Raul merges with "Rebase and merge".
+- After the review fixes: CI command locally 1875 passed, the same 2
+  failed, coverage 96.39%. `ui.js` checked in node only, not in a real
+  browser.
+- Next action: GitHub Actions on the pull request, then QA. Raul
+  merges with "Rebase and merge".
 
 ## Open work elsewhere
 

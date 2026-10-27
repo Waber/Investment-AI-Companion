@@ -274,6 +274,7 @@ def watchlist(request: Request, db: Session = Depends(get_db)):
             "watchlist.html",
             entries=watchlist_view.list_entries(db),
             stale_days=settings.WATCHLIST_STALE_PRICE_DAYS,
+            focus_index=None,
         )
     )
 
