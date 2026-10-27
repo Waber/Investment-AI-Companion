@@ -18,13 +18,20 @@
 - Decisions by Claude: change is against the previous bar ("Zmiana" /
   "Change"), because demo bars are weekly; the trend covers 92 days
   ending on the latest bar; bars without a close are ignored; the
-  price shows 2 to 4 decimals from `Decimal`, up to 8 below 0.0001;
+  price shows 2 to 4 decimals from `Decimal`, and 4 significant
+  digits (up to 8 places) below 0.1;
   the row shows the price source and the synthetic badge; a missing
   value is an em dash titled "no data"; colours are CSS classes
   because the CSP blocks `style` attributes; the hidden `from` field
   only chooses between two fixed /ui paths.
+- Final review (fresh reviewer, Claude Opus): no Critical. Fixed: the
+  heart form sat inside a `<p>`, so browsers put it under the name
+  (now a `div`); a change that rounds to 0.00% showed a red arrow (the
+  direction now follows the rounded value); a price such as 0.00006
+  showed as 0.0001 (prices below 0.1 now keep 4 significant digits).
+  Deferred minors are listed on the pull request.
 - Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
-  pytest command on local SQLite 3.54.1: 1868 passed, 2 failed (the
+  pytest command on local SQLite 3.54.1: 1871 passed, 2 failed (the
   known `0006` float boundary tests), 221 deselected, coverage
   96.39%. Demo-v2 seeded into a throwaway SQLite file and exercised
   through `TestClient`: four hearts, four rows with prices, trend

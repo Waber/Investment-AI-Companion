@@ -58,8 +58,11 @@ text buttons.
 - **Latest close and its date:** the last bar of that series.
 - **Price text:** formatted from `Decimal` with the PL/EN separators,
   at least 2 and at most 4 decimals, trailing zeros past the second
-  removed (`227,50`, `7,376`, `3 487,9709`). A value with more places
-  is rounded half-even in `Decimal`. *(Claude's call.)*
+  removed (`227,50`, `7,376`, `3 487,9709`). A price below 0.1 keeps
+  4 significant digits, up to 8 places (`0,001235`, `0,00006`), so a
+  sub-cent price is not rounded to one digit. A value with more places
+  is rounded half-even in `Decimal`. *(Claude's call; the sub-0.1 rule
+  was added after the final review.)*
 - **Source and synthetic data:** the date cell shows the series'
   source in muted text under the date, and the company cell shows the
   existing synthetic badge (`badge.synthetic`) when the company is

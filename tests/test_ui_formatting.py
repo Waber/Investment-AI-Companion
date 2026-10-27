@@ -87,3 +87,11 @@ def test_day_formats_a_calendar_date():
     assert format_day(date(2026, 9, 28), "pl") == "28.09.2026"
     assert format_day(date(2026, 9, 28), "en") == "Sep 28, 2026"
     assert format_day(None, "pl") is None
+
+
+def test_small_prices_keep_four_significant_digits():
+    """A sub-cent price is not rounded to one significant digit."""
+    assert format_price(Decimal("0.00006000"), "en") == "0.00006"
+    assert format_price(Decimal("0.00123456"), "en") == "0.001235"
+    assert format_price(Decimal("0.01234500"), "pl") == "0,01234"
+    assert format_price(Decimal("0.12345678"), "en") == "0.1235"

@@ -157,7 +157,13 @@ def to_entry(
         close=latest.close_price,
         currency=latest.currency,
         change=change,
-        direction=None if change is None else _direction(Decimal(0), change),
+        # The direction follows the change as shown (two places), so a
+        # move that rounds to 0.00 is not a red or green arrow.
+        direction=(
+            None
+            if change is None
+            else _direction(Decimal(0), change.quantize(Decimal("0.01")))
+        ),
         previous_date=(
             None if recent.previous is None else recent.previous.bar_date
         ),

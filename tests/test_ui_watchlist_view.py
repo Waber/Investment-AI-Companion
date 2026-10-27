@@ -155,3 +155,18 @@ def test_synthetic_company_is_flagged():
         to_entry(_item(description="Real"), None, TODAY, 7).is_synthetic
         is False
     )
+
+
+def test_change_that_rounds_to_zero_is_flat():
+    """-0.004% is shown as 0.00, so it must not carry a red arrow."""
+    entry = to_entry(
+        _item(),
+        _recent(
+            _bar(date(2026, 10, 19), "3487.9709"),
+            _bar(date(2026, 10, 26), "3487.83"),
+        ),
+        TODAY,
+        7,
+    )
+    assert entry.change < 0
+    assert entry.direction == "flat"
