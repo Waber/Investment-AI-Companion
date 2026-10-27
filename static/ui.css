@@ -253,3 +253,99 @@ textarea[aria-invalid="true"] {
   font-weight: 400;
   font-size: 0.85rem;
 }
+
+/* Watchlist (#96). The page CSP blocks style attributes, so every
+   colour on the table and the sparkline is a class here. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.muted {
+  color: #6b675f;
+  font-size: 0.85rem;
+}
+
+.change-up {
+  color: #1a7f37;
+}
+
+.change-down {
+  color: #b42318;
+}
+
+.change-flat {
+  color: #6b675f;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke-width: 1.6;
+  stroke: #6b675f;
+}
+
+.sparkline-up polyline {
+  stroke: #1a7f37;
+}
+
+.sparkline-down polyline {
+  stroke: #b42318;
+}
+
+.badge-stale {
+  background: #fff4d6;
+  color: #7a5200;
+  border: 1px solid #e9c46a;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  color: #6b675f;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.heart {
+  background: none;
+  border: 1px solid #d8d4cc;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: #6b675f;
+}
+
+.heart[aria-pressed="true"] {
+  color: #c0264b;
+  border-color: #c0264b;
+}
+
+/* The global form rule is for filters and editors. These one-button
+   forms sit inside a table cell or next to a heading. */
+.watchlist form,
+form.watchlist-heart {
+  display: inline-flex;
+  margin: 0;
+}
+
+form.watchlist-heart {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}

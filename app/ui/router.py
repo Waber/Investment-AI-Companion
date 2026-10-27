@@ -11,7 +11,9 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.ui import watchlist_view
 from app.ui.catalog import LANGUAGE_COOKIE, SUPPORTED_LANGUAGES
 from app.ui.origin import require_same_origin
 from app.ui.queries import ListFilters, get_instrument, list_instruments
@@ -253,6 +255,23 @@ def instrument_detail(
             instrument=instrument,
             metric_fields=METRIC_FIELDS,
             monetary_fields=MONETARY_FIELDS,
+        )
+    )
+
+
+@router.get("/watchlist", include_in_schema=False)
+def watchlist(request: Request, db: Session = Depends(get_db)):
+    """The single watchlist as a table, oldest addition first.
+
+    Freshness counts from today's UTC date, so a series that stopped
+    more than ``WATCHLIST_STALE_PRICE_DAYS`` days ago is marked stale.
+    """
+    return _with_ui_headers(
+        render(
+            request,
+            "watchlist.html",
+            entries=watchlist_view.list_entries(db),
+            stale_days=settings.WATCHLIST_STALE_PRICE_DAYS,
         )
     )
 
