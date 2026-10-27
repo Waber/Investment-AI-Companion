@@ -64,6 +64,13 @@ current pages still show the older disclaimer ("Nie jest poradą
 inwestycyjną" / "It is not financial advice."). Product
 requirements v0.4 no longer require that notice.
 
+The watchlist starts empty. Open a company and click the heart next
+to its name, then open "Watchlista" / "Watchlist" in the header. Each
+row shows the latest close, the change against the previous bar, a
+3-month trend line, and the bar date. demo-v2 prices end on
+2026-09-28, so every row with prices carries the "nieaktualne" /
+"stale" badge: staleness counts from today.
+
 To reset, stop uvicorn, delete the file, and seed again:
 
 ```bash

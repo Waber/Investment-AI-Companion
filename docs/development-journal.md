@@ -1,5 +1,41 @@
 # Development Journal
 
+## 2026-10-27 - Watchlist `/ui` page (#96)
+
+- Scope: the UI part of #32. `/ui/watchlist` table and the heart
+  toggle on the instrument detail page, with PL/EN strings. Design
+  `docs/superpowers/specs/2026-10-27-watchlist-ui-design.md` (approved
+  by Raul), plan `docs/superpowers/plans/2026-10-27-watchlist-ui.md`.
+  New: `format_price`, `format_change`, `format_day` in
+  `app/ui/formatting.py`; `PriceBarRepository.recent_closes` and
+  `RecentCloses`; `app/ui/watchlist_view.py` (`WatchlistEntryView`,
+  `Sparkline`, `list_entries`); `GET /ui/watchlist`,
+  `POST /ui/watchlist/{id}` and `POST /ui/watchlist/{id}/remove`.
+- Decisions with Raul: one list now, named lists in #99; table layout;
+  a heart icon instead of a text button; change and a trend line per
+  row; the AI summary per row is #100 (on request, to save tokens);
+  "stale" counts from today, so demo-v2 rows are all stale.
+- Decisions by Claude: change is against the previous bar ("Zmiana" /
+  "Change"), because demo bars are weekly; the trend covers 92 days
+  ending on the latest bar; bars without a close are ignored; the
+  price shows 2 to 4 decimals from `Decimal`, up to 8 below 0.0001;
+  the row shows the price source and the synthetic badge; a missing
+  value is an em dash titled "no data"; colours are CSS classes
+  because the CSP blocks `style` attributes; the hidden `from` field
+  only chooses between two fixed /ui paths.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
+  pytest command on local SQLite 3.54.1: 1868 passed, 2 failed (the
+  known `0006` float boundary tests), 221 deselected, coverage
+  96.39%. Demo-v2 seeded into a throwaway SQLite file and exercised
+  through `TestClient`: four hearts, four rows with prices, trend
+  lines, stale badges, and sources. black, isort, and flake8 passed
+  on the changed Python files. No live market-data calls.
+- AI model: Claude Opus 5.5. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-27, about 2 hours including the design
+  conversation.
+- Next: GitHub Actions, QA, and Code Reviewer on the pull request.
+
 ## 2026-10-23 - Rebase and merge #98 after #97
 
 - Scope: rebased `cursor/shared-text-validator-222f` (PR #98, Refs
