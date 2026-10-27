@@ -187,3 +187,152 @@ async def test_watchlist_headers_nav_and_no_inline_style(client):
     assert "style=" not in response.text
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert 'href="/ui/watchlist"' in detail.text
+
+
+async def _post(client, path, data=None, *, origin=_ORIGIN, htmx=False):
+    headers = {}
+    if origin is not None:
+        headers["origin"] = origin
+    if htmx:
+        headers["hx-request"] = "true"
+    return await client.post(path, data=data or {}, headers=headers)
+
+
+def _stored(client, company_id):
+    session = _session(client)
+    try:
+        row = WatchlistRepository(session).get_by_company_id(company_id)
+        return None if row is None else (row.company_id, row.label)
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_heart_adds_and_removes_with_plain_post(client):
+    company_id = _company(client)
+    detail = (await client.get(f"/ui/instruments/{company_id}")).text
+    assert 'aria-pressed="false"' in detail
+    assert "Dodaj do watchlisty" in detail
+    assert "♡" in detail
+
+    added = await _post(
+        client, f"/ui/watchlist/{company_id}", {"from": "detail"}
+    )
+    assert added.status_code == 303
+    assert added.headers["location"] == f"/ui/instruments/{company_id}"
+    assert _stored(client, company_id) == (company_id, None)
+    detail = (await client.get(f"/ui/instruments/{company_id}")).text
+    assert 'aria-pressed="true"' in detail
+    assert "Usuń z watchlisty" in detail
+    assert "♥" in detail
+
+    removed = await _post(
+        client, f"/ui/watchlist/{company_id}/remove", {"from": "detail"}
+    )
+    assert removed.status_code == 303
+    assert removed.headers["location"] == f"/ui/instruments/{company_id}"
+    assert _stored(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_heart_htmx_returns_only_the_heart(client):
+    company_id = _company(client)
+    response = await _post(
+        client, f"/ui/watchlist/{company_id}", {"from": "detail"}, htmx=True
+    )
+    assert response.status_code == 200
+    assert "<html" not in response.text
+    assert 'class="watchlist-heart"' in response.text
+    assert 'aria-pressed="true"' in response.text
+    assert f'hx-post="/ui/watchlist/{company_id}/remove"' in response.text
+    _assert_ui_headers(response)
+
+
+@pytest.mark.asyncio
+async def test_repeat_add_keeps_the_label(client):
+    company_id = _company(client)
+    _watch(client, company_id, label="long term")
+    response = await _post(
+        client, f"/ui/watchlist/{company_id}", {"from": "detail"}
+    )
+    assert response.status_code == 303
+    assert _stored(client, company_id) == (company_id, "long term")
+
+
+@pytest.mark.asyncio
+async def test_remove_from_the_watchlist_page(client):
+    company_id = _company(client)
+    _watch(client, company_id)
+    plain = await _post(
+        client, f"/ui/watchlist/{company_id}/remove", {"from": "watchlist"}
+    )
+    assert plain.status_code == 303
+    assert plain.headers["location"] == "/ui/watchlist"
+
+    _watch(client, company_id)
+    fragment = await _post(
+        client,
+        f"/ui/watchlist/{company_id}/remove",
+        {"from": "watchlist"},
+        htmx=True,
+    )
+    assert fragment.status_code == 200
+    assert "<html" not in fragment.text
+    assert 'id="watchlist-table"' in fragment.text
+    assert "Watchlista jest pusta" in fragment.text
+    assert _stored(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_remove_of_a_company_that_is_not_listed_is_not_an_error(client):
+    company_id = _company(client)
+    plain = await _post(
+        client, f"/ui/watchlist/{company_id}/remove", {"from": "detail"}
+    )
+    assert plain.status_code == 303
+    fragment = await _post(
+        client,
+        f"/ui/watchlist/{company_id}/remove",
+        {"from": "detail"},
+        htmx=True,
+    )
+    assert fragment.status_code == 200
+    assert 'aria-pressed="false"' in fragment.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw_id", ["999999", "abc", "01"])
+@pytest.mark.parametrize("htmx", [False, True])
+@pytest.mark.parametrize("action", ["", "/remove"])
+async def test_unknown_company_is_the_html_404(client, raw_id, htmx, action):
+    response = await _post(
+        client,
+        f"/ui/watchlist/{raw_id}{action}",
+        {"from": "detail"},
+        htmx=htmx,
+    )
+    assert response.status_code == 404
+    assert "text/html" in response.headers["content-type"]
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_add_is_403(client):
+    company_id = _company(client)
+    response = await _post(
+        client,
+        f"/ui/watchlist/{company_id}",
+        {"from": "detail"},
+        origin="http://evil.example",
+    )
+    assert response.status_code == 403
+    assert _stored(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_from_value_returns_to_the_detail_page(client):
+    company_id = _company(client)
+    response = await _post(
+        client, f"/ui/watchlist/{company_id}", {"from": "https://evil.example"}
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/ui/instruments/{company_id}"

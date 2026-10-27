@@ -1,0 +1,20 @@
+{# The heart next to the company name. A plain POST reloads the detail
+   page. With HTMX this form is replaced by the response. #}
+{% if on_watchlist %}
+{% set heart_action = '/ui/watchlist/' ~ company_id ~ '/remove' %}
+{% set heart_label = t['watchlist.remove'] %}
+{% else %}
+{% set heart_action = '/ui/watchlist/' ~ company_id %}
+{% set heart_label = t['watchlist.add'] %}
+{% endif %}
+<form
+  class="watchlist-heart"
+  method="post"
+  action="{{ heart_action }}"
+  hx-post="{{ heart_action }}"
+  hx-target="this"
+  hx-swap="outerHTML"
+>
+  <input type="hidden" name="from" value="detail">
+  <button type="submit" class="heart" aria-pressed="{{ 'true' if on_watchlist else 'false' }}" aria-label="{{ heart_label }}" title="{{ heart_label }}">{{ '♥' if on_watchlist else '♡' }}</button>
+</form>

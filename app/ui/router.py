@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.repositories.watchlist_repository import WatchlistRepository
 from app.ui import watchlist_view
 from app.ui.catalog import LANGUAGE_COOKIE, SUPPORTED_LANGUAGES
 from app.ui.origin import require_same_origin
@@ -255,6 +256,7 @@ def instrument_detail(
             instrument=instrument,
             metric_fields=METRIC_FIELDS,
             monetary_fields=MONETARY_FIELDS,
+            on_watchlist=WatchlistRepository(db).contains(instrument.id),
         )
     )
 
