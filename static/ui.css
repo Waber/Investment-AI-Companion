@@ -184,6 +184,13 @@ h2 {
   margin-top: 0;
 }
 
+div.instrument-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
 /* Create and edit forms stack. The filter form on the list stays a row. */
 form.stacked-form {
   flex-direction: column;

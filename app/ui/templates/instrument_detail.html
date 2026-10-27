@@ -7,7 +7,9 @@
   <a href="/ui/companies/{{ instrument.id }}/delete">{{ t['action.delete_company'] }}</a>
   <a href="/ui/companies/{{ instrument.id }}/metrics/new">{{ t['action.add_metrics'] }}</a>
 </p>
-<p class="instrument-name">
+{# A div, not a p: a form inside a p would close the p and push the
+   heart onto its own line. #}
+<div class="instrument-name">
   {{ instrument.name if instrument.name else t['missing'] }}
   {% if instrument.is_synthetic %}
   <span class="badge">{{ t['badge.synthetic'] }}</span>
@@ -15,7 +17,7 @@
   {% with company_id=instrument.id %}
   {% include "partials/watchlist_heart.html" %}
   {% endwith %}
-</p>
+</div>
 <dl>
   {% macro text_field(code, value) %}
   <dt>{{ t['field.' ~ code] }}</dt>

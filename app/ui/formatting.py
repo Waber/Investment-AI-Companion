@@ -14,11 +14,13 @@ from decimal import ROUND_HALF_EVEN, Decimal
 
 from app.core.utc_datetime import as_utc
 
-# A price shows at least 2 and at most 4 decimals. A price that 4
-# places would round to zero keeps up to 8, the stored scale.
+# A price shows at least 2 decimals. Prices of 0.1 and up keep up to
+# 4. A smaller price keeps enough places for 4 significant digits,
+# up to 8, the stored scale, so 0.00006 is not shown as 0.0001.
 _PRICE_MIN_PLACES = 2
 _PRICE_MAX_PLACES = 4
-_PRICE_TINY_PLACES = 8
+_PRICE_SIGNIFICANT_DIGITS = 4
+_PRICE_STORED_PLACES = 8
 
 # Thousands separator, then the decimal mark.
 _NUMBER_SEPARATORS = {
@@ -125,18 +127,20 @@ def format_price(value, language):
 
     ``227.50000000`` is ``227,50`` in Polish and ``227.50`` in
     English. Up to four decimals are kept (``3 487,9709``). A price
-    that four places would show as zero keeps up to eight, so
-    ``0.00001234`` is not ``0,0000``. A ``float`` is never used:
-    prices are stored as exact decimals (#94).
+    below 0.1 keeps four significant digits, up to eight places, so
+    ``0.00123456`` is ``0,001235`` and ``0.00006`` is not
+    ``0,0001``. A ``float`` is never used: prices are stored as
+    exact decimals (#94).
     """
     if not isinstance(value, Decimal) or not value.is_finite():
         return None
     places = _PRICE_MAX_PLACES
-    shown = value.quantize(
-        Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN
-    )
-    if shown == 0 and value != 0:
-        places = _PRICE_TINY_PLACES
+    if value != 0:
+        # ``adjusted`` is the exponent of the first significant digit:
+        # -5 for 0.00006. Places to the 4th significant digit are
+        # 3 - adjusted.
+        needed = _PRICE_SIGNIFICANT_DIGITS - 1 - value.adjusted()
+        places = min(_PRICE_STORED_PLACES, max(places, needed))
     return _decimal_text(value, places, _PRICE_MIN_PLACES, language)
 
 

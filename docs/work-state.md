@@ -15,9 +15,10 @@
   toggle (♡/♥, `aria-pressed`). Add and remove are POST forms that
   HTMX enhances (`POST /ui/watchlist/{id}` and `.../remove`, hidden
   `from` = `detail` or `watchlist`). Prices are formatted from
-  `Decimal` (`format_price`, 2 to 4 decimals, up to 8 for a price
-  below 0.0001). `PriceBarRepository.recent_closes` reads the default
-  series and skips bars without a close.
+  `Decimal` (`format_price`, 2 to 4 decimals; below 0.1 it keeps 4
+  significant digits, up to 8 places).
+  `PriceBarRepository.recent_closes` reads the default series and
+  skips bars without a close.
 - Decisions: "stale" counts from today's UTC date (Raul), so every
   demo-v2 row with prices is stale (the fixture ends 2026-09-28). The
   column is "Zmiana" / "Change", not "daily", because demo bars are
@@ -27,7 +28,7 @@
 - Not in scope: named lists (#99), on-demand AI summary per row
   (#100), entering or editing the label.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
-  on local SQLite 3.54.1: 1868 passed, 2 failed, 221 deselected,
+  on local SQLite 3.54.1: 1871 passed, 2 failed, 221 deselected,
   coverage 96.39%. The two failures are the known `0006` float
   boundary tests (below). Demo check: demo-v2 seeded into a
   throwaway SQLite file; four companies added through the heart
