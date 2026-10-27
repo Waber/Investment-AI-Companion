@@ -1427,8 +1427,14 @@ async def test_deleting_the_instrument_deletes_its_bars(client):
     assert missing.status_code == 404
 
 
-def _store_closes(client, instrument_id, closes, *, source="[IAC-DEMO-V2]",
-                  retrieved_at=RETRIEVED):
+def _store_closes(
+    client,
+    instrument_id,
+    closes,
+    *,
+    source="[IAC-DEMO-V2]",
+    retrieved_at=RETRIEVED,
+):
     """Insert one bar per ``(date, close)``. ``close`` may be None."""
     from app.models.database_models import PriceBarDB
 
