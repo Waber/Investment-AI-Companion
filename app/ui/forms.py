@@ -21,6 +21,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.database_models import CompanyDB
 from app.repositories.company_errors import (
@@ -31,6 +32,8 @@ from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
 )
+from app.repositories.watchlist_repository import WatchlistRepository
+from app.ui import watchlist_view
 from app.ui.form_fields import (
     COMPANY_FIELDS,
     INSTRUMENT_TYPE_CHOICES,
@@ -46,7 +49,7 @@ from app.ui.form_fields import (
     validate_metrics,
 )
 from app.ui.origin import require_same_origin
-from app.ui.router import _instrument_id, _with_ui_headers
+from app.ui.router import _instrument_id, _with_ui_headers, is_htmx
 from app.ui.templating import render
 from app.ui.view_models import METRIC_FIELDS
 
@@ -832,3 +835,66 @@ def delete_metrics(
         return missing
     FinancialMetricsRepository(db).delete(row.id)
     return _see_other(f"/ui/instruments/{company.id}")
+
+
+def _watchlist_response(request, db, company_id, origin):
+    """Where an add or remove lands, for a plain POST and for HTMX.
+
+    ``origin`` is the hidden ``from`` field. ``watchlist`` means the
+    table page, and anything else means the detail page, so the
+    field cannot send the browser off /ui. HTMX gets only the part
+    that changed: the heart, or the whole table (the last removal
+    shows the empty state).
+    """
+    from_watchlist = origin == "watchlist"
+    if not is_htmx(request):
+        if from_watchlist:
+            return _see_other("/ui/watchlist")
+        return _see_other(f"/ui/instruments/{company_id}")
+    if from_watchlist:
+        return _with_ui_headers(
+            render(
+                request,
+                "partials/watchlist_table.html",
+                entries=watchlist_view.list_entries(db),
+                stale_days=settings.WATCHLIST_STALE_PRICE_DAYS,
+            )
+        )
+    return _with_ui_headers(
+        render(
+            request,
+            "partials/watchlist_heart.html",
+            company_id=company_id,
+            on_watchlist=WatchlistRepository(db).contains(company_id),
+        )
+    )
+
+
+@router.post("/watchlist/{company_id}", include_in_schema=False)
+def add_to_watchlist(
+    request: Request,
+    company_id: str,
+    origin: str = Form("", alias="from"),
+    db: Session = Depends(get_db),
+):
+    """Add the company. A second add keeps the stored label."""
+    row, missing = _load_company(request, db, company_id)
+    if missing is not None:
+        return missing
+    WatchlistRepository(db).add(row.id)
+    return _watchlist_response(request, db, row.id, origin)
+
+
+@router.post("/watchlist/{company_id}/remove", include_in_schema=False)
+def remove_from_watchlist(
+    request: Request,
+    company_id: str,
+    origin: str = Form("", alias="from"),
+    db: Session = Depends(get_db),
+):
+    """Remove the company. One that is not listed is not an error."""
+    row, missing = _load_company(request, db, company_id)
+    if missing is not None:
+        return missing
+    WatchlistRepository(db).remove(row.id)
+    return _watchlist_response(request, db, row.id, origin)
