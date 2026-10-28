@@ -108,6 +108,15 @@ Each call is described in full in the sections below.
     text, with a link back to the panel.
 13. There are no screen-reader status messages yet. Focus rules
     replace them.
+14. Keyboard focus follows a fixed table, and a delete question never
+    puts focus on the destructive button.
+15. Item buttons name their item, for example "Usuń notatkę z
+    28.10.2026, 14:05", the way the watchlist ✕ names its company.
+16. A "too long" error names the limit. There is no `maxlength`,
+    because a browser would cut a long paste silently.
+17. Saving an edit without changing the text changes nothing, so the
+    note does not show "edytowano".
+18. A second panel click while a request is still running is ignored.
 
 ## What exists (master `3c40413`)
 
@@ -150,10 +159,20 @@ Each call is described in full in the sections below.
   CSP allows no `style` attribute.
 - The count is notes plus theses, active and closed. With nothing
   stored the button shows the icon without a number.
+- The button's form carries `data-plain-fallback`, like the heart. A
+  failed open then loads the page with the panel open, or the 404.
 - Every action inside the panel (add, edit, delete, close, reopen,
-  open a form, cancel) replaces the whole panel. Each response also
-  brings the button with its new count. One target means one
-  rendering of the panel, used by both the full page and HTMX.
+  open a form, cancel) replaces the whole panel.
+  - Each response also brings the whole button form out of band: its
+    new count, `aria-expanded`, and the hidden value for the next
+    click. A second click must close the panel.
+  - With HTMX the response also updates the language switch's return
+    path, so PL/EN keeps the panel in its current state. The
+    instrument list already does this.
+  - One target means one rendering of the panel, used by both the
+    full page and HTMX.
+  - While one panel request runs, a second click is dropped
+    (`hx-sync`), so two quick clicks cannot leave a stale panel.
 - Without JavaScript every action still works:
   - each "Edytuj", "Usuń", and "+ Nowa teza" link opens a GET URL
     that renders the full company page with the panel in that state
@@ -179,18 +198,34 @@ Each call is described in full in the sections below.
   "Anuluj". Delete is a hard delete.
 - Drafts:
   - With HTMX, text typed in "Nowa notatka" survives the other panel
-    actions (`hx-preserve`). Its own successful add clears it, and
-    its own 422 shows it with the error.
+    actions. The field and its own error message are kept together
+    (`hx-preserve` on their wrapper).
+  - Its own successful add clears it. Its own 422 shows it with the
+    error.
+  - Closing the panel drops an unsent draft. A network error on
+    "Dodaj notatkę" shows the browser's error page and the draft is
+    lost. Both costs are accepted.
   - Only one inline form is open at a time: a note edit, a delete
     question, or a new or edited thesis. Opening another one, or
     "Anuluj", drops unsaved text in it.
   - Without JavaScript, every action is a page load, so text in other
     forms is lost, as on the other `/ui` forms.
-- After any panel action, keyboard focus stays in the panel. After
-  adding a note, focus is back in the empty note field. Focus never
-  falls back to the top of the page. There are no screen-reader
-  status messages in this slice. A lasting status region outside the
-  panel can come later.
+- Focus never falls back to the top of the page:
+
+  | After | Focus |
+  |---|---|
+  | open or close the panel | stays on the sticky-note button |
+  | add a note | the empty "Nowa notatka" field |
+  | a 422 | that form's error summary |
+  | open an inline form | its first field |
+  | a delete question | the question text, never the "Usuń" button |
+  | save an edit, or "Anuluj" | the item that was edited |
+  | add a thesis | the new thesis card |
+  | close or reopen | the status button, which keeps one id |
+  | delete | the next item, else the previous one, else the panel heading |
+
+- There are no screen-reader status messages in this slice. A
+  lasting status region outside the panel can come later.
 
 ### What the panel shows
 
@@ -206,14 +241,30 @@ Each call is described in full in the sections below.
 - **Closed theses:** folded in a native `<details>` "Zamknięte tezy
   (n)", newest closing first. Each card shows "zamknięta {date}" and
   "Otwórz ponownie" instead of "Zamknij tezę".
+  - With no closed thesis the `<details>` is not shown.
+  - With closed theses only, the active part says "Brak aktywnych tez."
+  - The list is unfolded after an action on a closed thesis. Any other
+    action folds it again; that is accepted.
+- **Item buttons:** "Edytuj", "Usuń", "Zamknij tezę", and "Otwórz
+  ponownie" show those words but carry a name with the item for screen
+  readers: the note's date and time, or the thesis title.
 - **Times:** stored as UTC and shown in Polish time (`Europe/Warsaw`,
   24-hour clock) in both languages, because the app is Raul's. PL
   `28.10.2026, 14:05`; EN `Oct 28, 2026, 14:05`. Theses show dates
   only, also in Polish time. Existing UTC dates elsewhere on the page
   do not change.
 - **Text:** shown with `white-space: pre-wrap` from a CSS class, so
-  line breaks show and HTML stays escaped. Long words wrap. There is
-  no truncation.
+  line breaks show and HTML stays escaped.
+  - Nothing may sit between the tag and the value, or the indentation
+    would show.
+  - Long words wrap, in titles too.
+  - There is no truncation.
+- **Edits:** saving an edit with the same text stores nothing and
+  does not mark the item edited. This is UI-only: an API `PUT` with the
+  same values still counts as an update.
+- **Limits:** a too-long field says its limit: 10 000 characters for a
+  note or a thesis body, 200 for a title, 5000 for the breakers. The
+  fields have no `maxlength`.
 - **Empty states:** "Brak tez." and "Brak notatek."
 - A new thesis always starts active. The edit form has title, body,
   and breakers; the status changes only through "Zamknij tezę" and
@@ -238,8 +289,11 @@ Each call is described in full in the sections below.
   `require_company_instrument_columns` already guards `companies`
   (`app/core/init_db.py`). The message names the commands:
   - an Alembic-managed database runs `alembic upgrade head`;
-  - an older `create_all` database runs `alembic stamp 0007`, then
-    `alembic upgrade head`.
+  - an older `create_all` database is stamped with the Alembic head of
+    the version that created it, then runs `alembic upgrade head`.
+    For a database created on or after 2026-10-22 that head is `0007`.
+    The notes tables reached `create_all` on 2026-10-21, before 0006
+    and 0007, so an earlier file needs an earlier stamp.
 - The existing "stamp head" advice, in the 0005 docstring and the
   companies message, says it applies only to a fresh `create_all`
   database. On an older one it would skip 0008.
@@ -335,7 +389,6 @@ Behaviour of these routes:
 - Element ids for several forms on one page. They must be unique, and
   error-summary links must point at the right field.
 - CSS for the panel, the cards, and the icon.
-- `maxlength` attributes, if any. The server's limits decide.
 - Test file layout and fixtures.
 - How the docs are updated: `docs/api-demo.md` with examples, the
   README API list, and `docs/RUN_DEMO.md`. The demo starts with no
