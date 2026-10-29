@@ -180,8 +180,15 @@ expression has to mean the same thing on both, so it is
 A database created by an older
 startup `create_all` needs that upgrade. Adding the columns by hand
 skips the CHECK, the `uq_companies_isin` unique index, and
-`alembic stamp head`. A fresh `create_all` database already has the
-columns: run `alembic stamp head`, not `alembic upgrade head`.
+`alembic stamp head`. A fresh `create_all` database that this version
+built already has the columns: run `alembic stamp head`, not
+`alembic upgrade head`. `alembic stamp head` is only for a database
+the current version built. On one an older version built it would
+skip the revisions added since. Startup also refuses to serve when
+`theses` exists without `closed_at` (revision `0008`). A database
+that an older `create_all` built is first stamped with the Alembic
+head of that version (`alembic stamp 0007` for one created on or
+after 2026-10-22), then runs `alembic upgrade head`.
 
 The same company name may be stored on two tickers, on create and on
 update. `BRK.A` and `BRK.B` can both be named Berkshire Hathaway.

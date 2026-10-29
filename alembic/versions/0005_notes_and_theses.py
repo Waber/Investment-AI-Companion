@@ -21,9 +21,12 @@ There is no PostgreSQL ENUM, because one column type has to work
 on both databases.
 
 A database that ``create_all`` already built has these tables.
-Stamp that database (``alembic stamp head``). Running ``upgrade``
-there would try to create the tables again. A database that
-stopped at revision ``0004`` can upgrade.
+Running ``upgrade`` there would try to create them again, so that
+database is stamped instead. ``alembic stamp head`` is only for a
+database the current version built. One that an older version
+built is stamped with that version's head, then upgraded: stamping
+head there would skip later revisions such as ``0008``. A database
+that stopped at revision ``0004`` can upgrade.
 """
 
 import sqlalchemy as sa

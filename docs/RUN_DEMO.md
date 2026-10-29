@@ -96,6 +96,13 @@ That second seed also created 6 companies and 20 metric rows.
 - Pip hash mismatch: `--require-hashes` refuses a file whose hash
   is not in `requirements.lock`. Install that lock as written. Do
   not drop the flag.
+- A demo file kept with `--keep` from before revision `0008` refuses
+  to start. The seed summary prints, then uvicorn logs
+  `ThesisSchemaError: theses is missing closed_at` and
+  `Application startup failed. Exiting.` Run
+  `python -m scripts.run_demo` without `--keep`: that replaces the
+  file and seeds it again. With the manual steps, use the reset
+  above.
 
 ## Tests
 
