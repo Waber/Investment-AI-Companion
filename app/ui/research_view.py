@@ -29,11 +29,13 @@ class PanelForm:
     """The one inline form open in the panel, if any.
 
     ``kind`` is ``note_edit``, ``note_delete``, ``thesis_new``,
-    ``thesis_edit``, or ``thesis_delete``. ``item_id`` is the note
-    or thesis it belongs to (None for a new thesis). ``values`` are
-    the field texts to show. ``errors`` maps a field to the catalog
-    key of its message. ``form_error`` is the catalog key of a
-    message for the whole form.
+    ``thesis_edit``, or ``thesis_delete``. ``thesis_status`` is a
+    close or reopen that failed to save: it opens no form, and its
+    message shows in the thesis's card. ``item_id`` is the note or
+    thesis it belongs to (None for a new thesis). ``values`` are the
+    field texts to show. ``errors`` maps a field to the catalog key
+    of its message. ``form_error`` is the catalog key of a message
+    for the whole form.
     """
 
     kind: str
@@ -91,11 +93,16 @@ class ResearchPanel:
 
 
 # The GET route of each inline form. It renders the company page with
-# that form open. Without JavaScript the "Edytuj" and "Usuń" links
-# open it, and with HTMX the language switch returns there.
+# that form open. Without JavaScript the "Edytuj", "Usuń", and
+# "+ Nowa teza" links open it, and with HTMX the language switch
+# returns there. ``thesis_status`` has no form of its own, so it
+# returns to the open panel.
 _FORM_PATHS = {
     "note_edit": "/ui/companies/{company_id}/notes/{item_id}/edit",
     "note_delete": "/ui/companies/{company_id}/notes/{item_id}/delete",
+    "thesis_new": "/ui/companies/{company_id}/theses/new",
+    "thesis_edit": "/ui/companies/{company_id}/theses/{item_id}/edit",
+    "thesis_delete": "/ui/companies/{company_id}/theses/{item_id}/delete",
 }
 
 

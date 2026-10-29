@@ -60,6 +60,11 @@ _POLISH = {
     "research.new_note": "Nowa notatka",
     "research.edit_note_named": "Edytuj notatkę z {datetime}",
     "research.delete_note_named": "Usuń notatkę z {datetime}",
+    "research.edit_thesis_named": "Edytuj tezę „{title}”",
+    "research.delete_thesis_named": "Usuń tezę „{title}”",
+    "research.close_thesis_named": "Zamknij tezę „{title}”",
+    "research.reopen_thesis_named": "Otwórz ponownie tezę „{title}”",
+    "field.thesis_title": "Tytuł",
     "field.thesis_body": "Dlaczego kupiłem",
     "field.thesis_breakers": "Kiedy sprzedam / co złamie tezę",
     "field.note_body": "Treść notatki",
@@ -141,6 +146,9 @@ _POLISH = {
     "action.add_note": "Dodaj notatkę",
     "action.edit": "Edytuj",
     "action.delete": "Usuń",
+    "action.new_thesis": "+ Nowa teza",
+    "action.close_thesis": "Zamknij tezę",
+    "action.reopen_thesis": "Otwórz ponownie",
     "page.create_company": "Nowy instrument",
     "page.edit_company": "Edycja instrumentu",
     "page.delete_company": "Usuwanie instrumentu",
@@ -158,6 +166,7 @@ _POLISH = {
     "delete.metrics_warning": ("Usunięcie tych wskaźników nie usuwa spółki."),
     "delete.metrics_question": "Usunąć te wskaźniki?",
     "delete.note_question": "Usunąć tę notatkę?",
+    "delete.thesis_question": "Usunąć tę tezę?",
     "hint.period_end": (
         "Czas bez strefy jest zapisywany jako UTC. "
         "Przykład: 2024-12-31T00:00:00."
@@ -257,6 +266,11 @@ _ENGLISH = {
     "research.new_note": "New note",
     "research.edit_note_named": "Edit the note from {datetime}",
     "research.delete_note_named": "Delete the note from {datetime}",
+    "research.edit_thesis_named": 'Edit the thesis "{title}"',
+    "research.delete_thesis_named": 'Delete the thesis "{title}"',
+    "research.close_thesis_named": 'Close the thesis "{title}"',
+    "research.reopen_thesis_named": 'Reopen the thesis "{title}"',
+    "field.thesis_title": "Title",
     "field.thesis_body": "Why I bought",
     "field.thesis_breakers": "When I sell / what breaks the thesis",
     "field.note_body": "Note text",
@@ -336,6 +350,9 @@ _ENGLISH = {
     "action.add_note": "Add note",
     "action.edit": "Edit",
     "action.delete": "Delete",
+    "action.new_thesis": "+ New thesis",
+    "action.close_thesis": "Close thesis",
+    "action.reopen_thesis": "Reopen",
     "page.create_company": "New instrument",
     "page.edit_company": "Edit instrument",
     "page.delete_company": "Delete instrument",
@@ -355,6 +372,7 @@ _ENGLISH = {
     ),
     "delete.metrics_question": "Delete these metrics?",
     "delete.note_question": "Delete this note?",
+    "delete.thesis_question": "Delete this thesis?",
     "hint.period_end": (
         "A time with no zone is stored as UTC. "
         "Example: 2024-12-31T00:00:00."
