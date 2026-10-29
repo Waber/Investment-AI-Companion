@@ -141,6 +141,7 @@ def test_init_db_rejects_theses_without_closed_at(monkeypatch, memory_engine):
     assert "theses is missing closed_at" in message
     assert "alembic upgrade head" in message
     assert "alembic stamp 0007" in message
+    assert "2026-10-24" in message
     assert "alembic stamp head" not in message
 
 

@@ -291,9 +291,13 @@ Each call is described in full in the sections below.
   - an Alembic-managed database runs `alembic upgrade head`;
   - an older `create_all` database is stamped with the Alembic head of
     the version that created it, then runs `alembic upgrade head`.
-    For a database created on or after 2026-10-22 that head is `0007`.
-    The notes tables reached `create_all` on 2026-10-21, before 0006
-    and 0007, so an earlier file needs an earlier stamp.
+    For a database created on or after 2026-10-24 that head is `0007`.
+    For a file built from master, by when it was created (CEST, when
+    each revision reached master): from 2026-10-21 19:35 until
+    2026-10-22 12:08 the head is `0005`, until 2026-10-23 13:02 it is
+    `0006`, and after that it is `0007`. A file from before
+    2026-10-21 19:35 has no `theses` table, so the guard does not
+    apply to it.
 - The existing "stamp head" advice, in the 0005 docstring and the
   companies message, says it applies only to a fresh `create_all`
   database. On an older one it would skip 0008.

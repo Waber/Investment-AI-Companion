@@ -177,18 +177,27 @@ PostgreSQL's `trim` both remove spaces only, while a two-argument
 trim is `TRIM` on SQLite and `BTRIM` on PostgreSQL. One index
 expression has to mean the same thing on both, so it is
 `upper(ticker)` only.
-A database created by an older
-startup `create_all` needs that upgrade. Adding the columns by hand
-skips the CHECK, the `uq_companies_isin` unique index, and
-`alembic stamp head`. A fresh `create_all` database that this version
-built already has the columns: run `alembic stamp head`, not
-`alembic upgrade head`. `alembic stamp head` is only for a database
-the current version built. On one an older version built it would
-skip the revisions added since. Startup also refuses to serve when
-`theses` exists without `closed_at` (revision `0008`). A database
-that an older `create_all` built is first stamped with the Alembic
-head of that version (`alembic stamp 0007` for one created on or
-after 2026-10-22), then runs `alembic upgrade head`.
+A database that an older
+startup `create_all` built without `instrument_type` and `isin` needs
+that upgrade. Adding the columns by hand skips the CHECK, the
+`uq_companies_isin` unique index, and `alembic stamp head`.
+`alembic stamp head` is only for a fresh `create_all` database that
+the current version built. That database already has the columns, so
+it is stamped, not upgraded. On a database an older version built,
+`alembic stamp head` would skip the revisions added since.
+
+Startup also refuses to serve when `theses` exists without
+`closed_at` (revision `0008`). A database that an older startup
+`create_all` built after notes and theses arrived is stamped with the
+Alembic head of the version that built it, then runs
+`alembic upgrade head` in every case. A file from before 2026-10-21
+19:35 CEST has no `theses` table, so this check does not apply to it.
+For a file built from `master`, the head depends on when it was
+created (CEST; each time is when that revision reached `master`):
+
+- from 2026-10-21 19:35 until 2026-10-22 12:08: `alembic stamp 0005`;
+- from 2026-10-22 12:08 until 2026-10-23 13:02: `alembic stamp 0006`;
+- after 2026-10-23 13:02: `alembic stamp 0007`.
 
 The same company name may be stored on two tickers, on create and on
 update. `BRK.A` and `BRK.B` can both be named Berkshire Hathaway.
