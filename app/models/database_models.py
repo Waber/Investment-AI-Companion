@@ -423,7 +423,8 @@ class ThesisDB(Base):
     ``status`` is a short string plus a CHECK, not a PostgreSQL ENUM.
     SQLite has no ENUM type, and one column type has to work on both
     databases. ``thesis_breakers`` is an empty string when the thesis
-    has none yet; it is not NULL.
+    has none yet; it is not NULL. ``closed_at`` is when the thesis
+    was closed, and NULL while it is active.
     """
 
     __tablename__ = "theses"
@@ -455,8 +456,10 @@ class ThesisDB(Base):
         default=ThesisStatus.ACTIVE.value,
         server_default=text("'active'"),
     )
-    # Same clocks as ``NoteDB``. Insert uses the server default.
-    # The repository sets ``updated_at`` when a field changes.
+    # ``created_at`` and ``updated_at`` use the same clocks as
+    # ``NoteDB``. Insert uses the server default. The repository sets
+    # ``updated_at`` when a field changes, and ``closed_at`` below
+    # from that same instant when the status changes.
     created_at = Column(
         UTCDateTime(),
         nullable=False,
@@ -467,6 +470,12 @@ class ThesisDB(Base):
         nullable=False,
         server_default=func.now(),
     )
+    # Set by the repository when a thesis is closed, including one
+    # created closed, and cleared when it is reopened. There is no
+    # server default. Revision 0008 adds this column with ADD COLUMN,
+    # which appends it, so it stays the last column here too:
+    # create_all and the upgrade then build the same column order.
+    closed_at = Column(UTCDateTime(), nullable=True)
 
     company = relationship("CompanyDB", back_populates="theses")
 
