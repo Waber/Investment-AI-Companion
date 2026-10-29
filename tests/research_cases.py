@@ -247,22 +247,109 @@ class ResearchBehavior:
         assert caught.value.__cause__ is None
         assert caught.value.__context__ is None
 
-    def test_unexpected_integrity_error_is_reraised_and_session_recovers(
+    def test_unexpected_integrity_error_on_create_is_a_storage_error_and_session_recovers(  # noqa: E501
         self, session, monkeypatch
     ):
+        """A constraint failure while the company exists is a storage error.
+
+        The failed insert is rolled back, so the next ``create``
+        stores only its own row.
+        """
         company = _company(session, "ACME")
 
         def fail_commit():
             raise IntegrityError("INSERT", {}, Exception("check"))
 
         monkeypatch.setattr(session, "commit", fail_commit)
-        with pytest.raises(IntegrityError):
+        with pytest.raises(ResearchStorageError) as caught:
             NoteRepository(session).create(company.id, NoteCreate(body="x"))
         monkeypatch.undo()
-        created = NoteRepository(session).create(
-            company.id, NoteCreate(body="after")
+        assert str(caught.value) == "Note or thesis could not be stored"
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert NoteRepository(session).create(
+            company.id, NoteCreate(body="ok")
         )
-        assert created.body == "after"
+        assert session.query(NoteDB).count() == 1
+
+    @pytest.mark.parametrize("step", ["query", "commit", "refresh"])
+    @pytest.mark.parametrize(
+        ("repository", "item"),
+        [
+            (NoteRepository, NoteCreate(body="x")),
+            (ThesisRepository, ThesisCreate(title="T", body="B")),
+        ],
+        ids=["note", "thesis"],
+    )
+    def test_operational_error_on_create_is_a_storage_error_and_session_recovers(  # noqa: E501
+        self, session, monkeypatch, repository, item, step
+    ):
+        """A locked database at any step of ``create`` is a storage error.
+
+        ``query`` is the company check, ``commit`` writes the row, and
+        ``refresh`` reads back its id and timestamps. The patched step
+        fails on its first call only.
+        """
+        company = _company(session, "ACME")
+        real_step = getattr(session, step)
+        calls = {"n": 0}
+
+        def fail_once(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError(
+                    "stmt", {}, Exception("database is locked")
+                )
+            return real_step(*args, **kwargs)
+
+        monkeypatch.setattr(session, step, fail_once)
+        with pytest.raises(ResearchStorageError) as caught:
+            repository(session).create(company.id, item)
+        monkeypatch.undo()
+        assert str(caught.value) == "Note or thesis could not be stored"
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert NoteRepository(session).create(
+            company.id, NoteCreate(body="ok")
+        )
+
+    def test_failed_lookup_after_a_failed_insert_is_a_storage_error(
+        self, session, monkeypatch
+    ):
+        """The lookup that tells a deleted company apart can fail too.
+
+        With no answer, the error stays ``ResearchStorageError``. The
+        second lookup runs a real statement that fails. PostgreSQL
+        then refuses every statement until a rollback, so there the
+        last ``create`` shows that the session was rolled back again.
+        """
+        company = _company(session, "ACME")
+        calls = {"n": 0}
+
+        def lookup(db, _company_id):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return False
+            # No such column on either database, so this raises.
+            db.execute(text("SELECT no_such_column FROM companies"))
+
+        def fail_commit():
+            raise IntegrityError("INSERT", {}, Exception("fk"))
+
+        monkeypatch.setattr(
+            "app.repositories.research_store.missing_company",
+            lookup,
+        )
+        monkeypatch.setattr(session, "commit", fail_commit)
+        with pytest.raises(ResearchStorageError) as caught:
+            NoteRepository(session).create(company.id, NoteCreate(body="x"))
+        monkeypatch.undo()
+        assert calls["n"] == 2
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert NoteRepository(session).create(
+            company.id, NoteCreate(body="ok")
+        )
         assert session.query(NoteDB).count() == 1
 
     def test_thesis_status_filter_and_set_status(self, session):
