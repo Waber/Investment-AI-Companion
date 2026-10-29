@@ -1,7 +1,8 @@
 """The sticky note beside the heart, and the research panel it opens.
 
-The panel lists theses and notes, and its forms add, edit, and delete
-notes. Notes and theses are stored through ``NoteRepository`` and
+The panel lists theses and notes. Its forms add, edit, and delete
+notes and theses, and close and reopen theses. Notes and theses are
+stored through ``NoteRepository`` and
 ``ThesisRepository`` on the test database. The database stamps an
 insert with the current time, so every timestamp a test asserts is
 pinned on the table row afterwards. No market-data provider is called.
@@ -43,6 +44,12 @@ _ESCAPED = "&lt;script&gt;alert(1)&lt;/script&gt;"
 _HTMX = {"hx-request": "true"}
 _ORIGIN = "http://127.0.0.1"
 _NOT_STORED = "Nie udało się zapisać. Spróbuj ponownie."
+# A valid thesis form, as the browser posts it.
+_NEW_THESIS = {
+    "title": "Nowa teza",
+    "body": "Nowy powód.",
+    "thesis_breakers": "Nowy próg.",
+}
 # Elements without an end tag. The text parser below must not wait
 # for one.
 _VOID = frozenset(
@@ -299,6 +306,20 @@ def _stored_notes(client, company_id):
     try:
         rows = session.query(NoteDB).filter(NoteDB.company_id == company_id)
         return {row.id: row.body for row in rows}
+    finally:
+        session.close()
+
+
+def _stored_theses(client, company_id):
+    """``{id: Thesis}`` of the company's theses, read from the table.
+
+    ``Thesis`` models compare field by field, so two reads are equal
+    exactly when nothing was stored in between.
+    """
+    session = _session(client)
+    try:
+        theses = ThesisRepository(session).list_for_company(company_id)
+        return {thesis.id: thesis for thesis in theses}
     finally:
         session.close()
 
@@ -826,14 +847,41 @@ def test_a_thesis_form_does_not_open_a_note_form():
         created_at=_utc("2026-10-28T13:05"),
         updated_at=_utc("2026-10-28T13:05"),
     )
-    for kind in ("thesis_edit", "thesis_delete"):
+    for kind in ("thesis_edit", "thesis_delete", "thesis_status"):
         html = _render_panel(
-            notes=[note], form=PanelForm(kind=kind, item_id=3)
+            notes=[note],
+            form=PanelForm(kind=kind, item_id=3, form_error="error.storage"),
         )
         assert 'id="note-3-body"' not in html
         assert 'id="note-3-delete-question"' not in html
+        assert 'id="note-3-errors"' not in html
         assert 'href="/ui/companies/1/notes/3/edit"' in html
         assert 'href="/ui/companies/1/notes/3/delete"' in html
+
+
+def test_a_note_form_does_not_open_a_thesis_form():
+    """The other way round: a note form leaves thesis 3 as it is."""
+    thesis = Thesis(
+        id=3,
+        company_id=1,
+        title="Teza",
+        body="Powód zakupu.",
+        thesis_breakers="",
+        status=ThesisStatus.ACTIVE,
+        created_at=_utc("2026-10-28T13:05"),
+        updated_at=_utc("2026-10-28T13:05"),
+    )
+    for kind in ("note_edit", "note_delete"):
+        html = _render_panel(
+            active_theses=[thesis],
+            form=PanelForm(kind=kind, item_id=3, form_error="error.storage"),
+        )
+        assert 'id="thesis-3-title"' not in html
+        assert 'id="thesis-3-delete-question"' not in html
+        assert 'id="thesis-3-errors"' not in html
+        assert 'id="thesis-3-status"' in html
+        assert 'href="/ui/companies/1/theses/3/edit"' in html
+        assert 'href="/ui/companies/1/theses/3/delete"' in html
 
 
 def test_show_closed_unfolds_the_closed_theses():
@@ -1273,7 +1321,9 @@ async def test_note_actions_fall_back_and_are_named(client):
                 assert attrs["hx-get"] == attrs["href"]
                 links.add(attrs["href"])
     assert actions == {f"{base}/notes", f"{note}/edit", f"{note}/delete"}
+    # "+ Nowa teza" is in every open panel.
     assert links == {
+        f"{base}/theses/new",
         f"{note}/edit",
         f"{note}/delete",
         f"{base}/research?focus=note-{note_id}",
@@ -1547,3 +1597,984 @@ def test_research_error_key_names_the_limit():
     for key in ("error.max_200", "error.max_5000", "error.max_10000"):
         assert CATALOGS["pl"][key].startswith("Najwyżej ")
         assert CATALOGS["en"][key].startswith("At most ")
+
+
+@pytest.mark.asyncio
+async def test_add_thesis_plain_and_htmx(client):
+    company_id = _company(client)
+    _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}"
+
+    opened = await client.get(f"{base}/theses/new", headers=_HTMX)
+    assert opened.status_code == 200
+    html = opened.text
+    assert "<html" not in html
+    assert _focus(opened) == "thesis-new-title"
+    assert_labeled(html)
+    form = _between(html, f'action="{base}/theses"', "</form>")
+    for field, label in (
+        ("title", "Tytuł"),
+        ("body", "Dlaczego kupiłem"),
+        ("thesis_breakers", "Kiedy sprzedam / co złamie tezę"),
+    ):
+        assert f'<label for="thesis-new-{field}">{label}</label>' in form
+        assert _attrs(html, f"thesis-new-{field}")["name"] == field
+    title = _attrs(html, "thesis-new-title")
+    assert (title["type"], title["value"]) == ("text", "")
+    assert _text(html, "thesis-new-body") == ""
+    assert _text(html, "thesis-new-thesis_breakers") == ""
+    # There is no status field: a new thesis always starts active.
+    assert 'name="status"' not in html
+    # The form takes the place of the "+ Nowa teza" link.
+    assert f'href="{base}/theses/new"' not in html
+
+    page = await client.get(f"{base}/theses/new")
+    assert page.status_code == 200
+    assert "<html" in page.text
+    assert _attrs(page.text, "research-toggle-button")["aria-expanded"] == (
+        "true"
+    )
+    assert _focus(page) == "thesis-new-title"
+
+    added = await _post(
+        client,
+        f"{base}/theses",
+        {
+            "title": " Teza AI ",
+            "body": "Powód zakupu.",
+            "thesis_breakers": "Spadek o 20%",
+        },
+        htmx=True,
+    )
+    assert added.status_code == 200
+    [thesis] = _stored_theses(client, company_id).values()
+    assert (thesis.title, thesis.body, thesis.thesis_breakers) == (
+        "Teza AI",
+        "Powód zakupu.",
+        "Spadek o 20%",
+    )
+    assert thesis.status == ThesisStatus.ACTIVE
+    assert thesis.closed_at is None
+    html = added.text
+    assert "<html" not in html
+    assert _focus(added) == f"thesis-{thesis.id}"
+    card = _between(html, f'<li id="thesis-{thesis.id}"', "</li>")
+    assert '<h4 class="thesis-title">Teza AI</h4>' in card
+    assert '<span class="badge badge-active">aktywna</span>' in card
+    # The form is closed, and the link is back with its id.
+    assert 'id="thesis-new-title"' not in html
+    assert _link(html, f"{base}/theses/new")["id"] == "thesis-new-link"
+    assert _between(html, f'href="{base}/theses/new"', "</a>").endswith(
+        ">+ Nowa teza"
+    )
+    _assert_toggle(
+        html,
+        company_id,
+        expanded="true",
+        next_state="closed",
+        label="Notatki i tezy (2)",
+    )
+    _assert_ui_headers(added)
+
+    plain = await _post(
+        client, f"{base}/theses", {"title": "Druga teza", "body": "Powód."}
+    )
+    assert plain.status_code == 303
+    assert plain.headers["location"] == (
+        f"/ui/instruments/{company_id}?research=open#research"
+    )
+    _assert_ui_headers(plain)
+    stored = {
+        item.title: item
+        for item in _stored_theses(client, company_id).values()
+    }
+    assert sorted(stored) == ["Druga teza", "Teza AI"]
+    # The breakers may stay empty.
+    assert stored["Druga teza"].thesis_breakers == ""
+    assert stored["Druga teza"].status == ThesisStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("htmx", [False, True])
+async def test_invalid_thesis_is_422(client, htmx):
+    company_id = _company(client)
+    path = f"/ui/companies/{company_id}/theses"
+    valid = {"title": "Teza", "body": "Powód zakupu.", "thesis_breakers": ""}
+    for field, value, message in (
+        ("title", "   ", "To pole jest wymagane."),
+        ("title", "a\nb", "Ta wartość jest nieprawidłowa."),
+        ("title", "a" * 201, "Najwyżej 200 znaków."),
+        ("body", "a" * 10001, "Najwyżej 10 000 znaków."),
+        ("thesis_breakers", "a" * 5001, "Najwyżej 5000 znaków."),
+    ):
+        typed = {**valid, field: value}
+        response = await _post(client, path, typed, htmx=htmx)
+        assert response.status_code == 422, (field, value[:3])
+        html = response.text
+        control = f"thesis-new-{field}"
+        assert _text(html, f"{control}-error") == message
+        assert _attrs(html, control)["aria-invalid"] == "true"
+        assert _attrs(html, control)["aria-describedby"] == f"{control}-error"
+        summary = _between(html, 'id="thesis-new-errors"', "</div>")
+        assert f'href="#{control}"' in summary
+        assert message in summary
+        assert _attrs(html, "thesis-new-errors")["tabindex"] == "-1"
+        assert "role" not in _attrs(html, "thesis-new-errors")
+        assert _focus(response) == "thesis-new-errors"
+        assert_labeled(html)
+        # Every typed value is kept, the valid ones too.
+        assert _attrs(html, "thesis-new-title")["value"] == typed["title"]
+        assert _text(html, "thesis-new-body") == typed["body"]
+        assert _text(html, "thesis-new-thesis_breakers") == (
+            typed["thesis_breakers"]
+        )
+        assert ("<html" in html) is not htmx
+        assert html.count('<section id="research"') == 1
+
+    # The summary lists the fields in the form's order, by their labels.
+    response = await _post(
+        client,
+        path,
+        {"title": "", "body": "", "thesis_breakers": "a" * 5001},
+        htmx=htmx,
+    )
+    summary = _between(response.text, 'id="thesis-new-errors"', "</div>")
+    assert re.findall(r'<a href="#([^"]+)">([^<]+)</a>', summary) == [
+        ("thesis-new-title", "Tytuł"),
+        ("thesis-new-body", "Dlaczego kupiłem"),
+        ("thesis-new-thesis_breakers", "Kiedy sprzedam / co złamie tezę"),
+    ]
+
+    payload = {
+        "title": '"' + _SCRIPT,
+        "body": "</textarea>" + _SCRIPT,
+        "thesis_breakers": "</textarea>" + _SCRIPT + "a" * 5000,
+    }
+    response = await _post(client, path, payload, htmx=htmx)
+    assert response.status_code == 422
+    html = response.text
+    assert _SCRIPT not in html
+    assert "</textarea><script>" not in html
+    # The quote cannot end the attribute: it is escaped too.
+    assert f'value="&#34;{_ESCAPED}"' in html
+    assert html.count(f"&lt;/textarea&gt;{_ESCAPED}") == 2
+    assert _attrs(html, "thesis-new-title")["value"] == payload["title"]
+    assert _text(html, "thesis-new-body") == payload["body"]
+    assert _stored_theses(client, company_id) == {}
+
+    at_limit = {
+        "title": "a" * 200,
+        "body": "b" * 10000,
+        "thesis_breakers": "c" * 5000,
+    }
+    saved = await _post(client, path, at_limit, htmx=htmx)
+    assert saved.status_code == (200 if htmx else 303)
+    [thesis] = _stored_theses(client, company_id).values()
+    assert (thesis.title, thesis.body, thesis.thesis_breakers) == (
+        at_limit["title"],
+        at_limit["body"],
+        at_limit["thesis_breakers"],
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("htmx", [False, True])
+async def test_invalid_thesis_edit_keeps_the_values(client, htmx):
+    company_id = _company(client)
+    thesis_id = _thesis(
+        client, company_id, "Stara teza", "2026-10-28T13:05", body="Stary."
+    )
+    path = f"/ui/companies/{company_id}/theses/{thesis_id}/edit"
+    prefix = f"thesis-{thesis_id}"
+    typed = {"title": "Nowa teza", "body": " ", "thesis_breakers": "Próg."}
+    response = await _post(client, path, typed, htmx=htmx)
+    assert response.status_code == 422
+    html = response.text
+    assert _text(html, f"{prefix}-body-error") == "To pole jest wymagane."
+    assert _attrs(html, f"{prefix}-body")["aria-invalid"] == "true"
+    summary = _between(html, f'id="{prefix}-errors"', "</div>")
+    assert f'<a href="#{prefix}-body">Dlaczego kupiłem</a>' in summary
+    assert _focus(response) == f"{prefix}-errors"
+    assert _attrs(html, f"{prefix}-title")["value"] == "Nowa teza"
+    assert _text(html, f"{prefix}-body") == " "
+    assert _text(html, f"{prefix}-thesis_breakers") == "Próg."
+    assert_labeled(html)
+    # The form sits in the thesis's own card.
+    card = _between(html, f'<li id="{prefix}"', "</li>")
+    assert f'action="{path}"' in card
+    assert _stored_theses(client, company_id)[thesis_id].title == "Stara teza"
+
+
+@pytest.mark.asyncio
+async def test_close_and_reopen(client):
+    company_id = _company(client)
+    thesis_id = _thesis(client, company_id, "Teza AI", "2026-10-28T13:05")
+    # Another closed thesis keeps the closed list after the reopen.
+    _thesis(
+        client,
+        company_id,
+        "Inna",
+        "2026-09-01T08:00",
+        closed="2026-09-02T08:00",
+    )
+    base = f"/ui/companies/{company_id}/theses/{thesis_id}"
+    status = f"thesis-{thesis_id}-status"
+
+    page = await client.get(
+        f"/ui/companies/{company_id}/research", headers=_HTMX
+    )
+    assert _text(page.text, status) == "Zamknij tezę"
+    assert _attrs(page.text, status)["type"] == "submit"
+    assert _attrs(page.text, status)["aria-label"] == "Zamknij tezę „Teza AI”"
+    assert f'id="{status}"' in _between(
+        page.text, f'action="{base}/close"', "</form>"
+    )
+
+    closed = await _post(client, f"{base}/close", htmx=True)
+    assert closed.status_code == 200
+    stored = _stored_theses(client, company_id)[thesis_id]
+    assert stored.status == ThesisStatus.CLOSED
+    assert stored.closed_at is not None
+    html = closed.text
+    assert '<details class="research-closed" open>' in html
+    listed = _closed_list(html)
+    assert f'id="thesis-{thesis_id}"' in listed
+    # The same id, now with the other word: HTMX keeps the focus on it.
+    assert _text(html, status) == "Otwórz ponownie"
+    assert _attrs(html, status)["aria-label"] == (
+        "Otwórz ponownie tezę „Teza AI”"
+    )
+    assert f'id="{status}"' in _between(
+        listed, f'action="{base}/reopen"', "</form>"
+    )
+    assert "autofocus" not in html
+    assert "Brak aktywnych tez." in _panel(html)
+    # The closing date takes the place of the "aktywna" badge.
+    card = _between(listed, f'<li id="thesis-{thesis_id}"', "</li>")
+    closed_on = format_local_date(stored.closed_at, "pl")
+    badge = f'<span class="badge badge-closed">zamknięta {closed_on}</span>'
+    assert badge in card
+    assert "aktywna" not in listed
+
+    # A second click changes nothing.
+    for htmx in (True, False):
+        again = await _post(client, f"{base}/close", htmx=htmx)
+        assert again.status_code == (200 if htmx else 303)
+        assert _stored_theses(client, company_id)[thesis_id] == stored
+
+    reopened = await _post(client, f"{base}/reopen", htmx=True)
+    assert reopened.status_code == 200
+    stored = _stored_theses(client, company_id)[thesis_id]
+    assert stored.status == ThesisStatus.ACTIVE
+    assert stored.closed_at is None
+    html = reopened.text
+    # The action concerned a closed thesis, so the list stays unfolded.
+    assert '<details class="research-closed" open>' in html
+    assert f'id="thesis-{thesis_id}"' not in _closed_list(html)
+    assert _text(html, status) == "Zamknij tezę"
+    assert "autofocus" not in html
+    card = _between(html, f'<li id="thesis-{thesis_id}"', "</li>")
+    assert '<span class="badge badge-active">aktywna</span>' in card
+
+    for action, expected in (
+        ("close", ThesisStatus.CLOSED),
+        ("reopen", ThesisStatus.ACTIVE),
+    ):
+        plain = await _post(client, f"{base}/{action}")
+        assert plain.status_code == 303
+        assert plain.headers["location"] == (
+            f"/ui/instruments/{company_id}?research=open#research"
+        )
+        assert _stored_theses(client, company_id)[thesis_id].status == (
+            expected
+        )
+
+
+@pytest.mark.asyncio
+async def test_edit_thesis_keeps_status(client):
+    company_id = _company(client)
+    thesis_id = _thesis(
+        client,
+        company_id,
+        "Stara teza",
+        "2026-10-01T08:00",
+        body="Stary powód.",
+        breakers="Stary próg.",
+        closed="2026-10-20T08:00",
+    )
+    edit = f"/ui/companies/{company_id}/theses/{thesis_id}/edit"
+    before = _stored_theses(client, company_id)[thesis_id]
+
+    for headers in (_HTMX, {}):
+        opened = await client.get(edit, headers=headers)
+        assert opened.status_code == 200
+        html = opened.text
+        assert _focus(opened) == f"thesis-{thesis_id}-title"
+        # The card is in the closed list, unfolded so the form shows.
+        assert '<details class="research-closed" open>' in html
+        assert f'action="{edit}"' in _closed_list(html)
+        assert _attrs(html, f"thesis-{thesis_id}-title")["value"] == (
+            "Stara teza"
+        )
+        assert _text(html, f"thesis-{thesis_id}-body") == "Stary powód."
+        assert _text(html, f"thesis-{thesis_id}-thesis_breakers") == (
+            "Stary próg."
+        )
+        assert 'name="status"' not in html
+        assert_labeled(html)
+        # The title field takes the place of the heading.
+        card = _between(html, f'<li id="thesis-{thesis_id}"', "</li>")
+        assert 'class="thesis-title"' not in card
+    assert "<html" in opened.text
+
+    # A 422 keeps the closed list unfolded too, so its summary shows.
+    invalid = await _post(client, edit, {"title": " "}, htmx=True)
+    assert invalid.status_code == 422
+    assert '<details class="research-closed" open>' in invalid.text
+    assert _focus(invalid) == f"thesis-{thesis_id}-errors"
+    assert _stored_theses(client, company_id)[thesis_id] == before
+
+    saved = await _post(
+        client,
+        edit,
+        {"title": "Nowa teza", "body": "Nowy powód.", "thesis_breakers": ""},
+        htmx=True,
+    )
+    assert saved.status_code == 200
+    after = _stored_theses(client, company_id)[thesis_id]
+    assert (after.title, after.body, after.thesis_breakers) == (
+        "Nowa teza",
+        "Nowy powód.",
+        "",
+    )
+    assert after.status == ThesisStatus.CLOSED
+    assert after.closed_at == before.closed_at
+    html = saved.text
+    assert _focus(saved) == f"thesis-{thesis_id}"
+    assert '<details class="research-closed" open>' in html
+    assert f'id="thesis-{thesis_id}-title"' not in html
+    assert '<h4 class="thesis-title">Nowa teza</h4>' in _closed_list(html)
+
+    # The same values, padded, store nothing: updated_at stays.
+    unchanged = await _post(
+        client,
+        edit,
+        {
+            "title": " Nowa teza ",
+            "body": "Nowy powód.\r\n",
+            "thesis_breakers": " ",
+        },
+        htmx=True,
+    )
+    assert unchanged.status_code == 200
+    assert _stored_theses(client, company_id)[thesis_id] == after
+
+    plain = await _post(client, edit, _NEW_THESIS)
+    assert plain.status_code == 303
+    assert plain.headers["location"] == (
+        f"/ui/instruments/{company_id}?research=open#research"
+    )
+    final = _stored_theses(client, company_id)[thesis_id]
+    assert final.title == "Nowa teza"
+    assert final.thesis_breakers == "Nowy próg."
+    assert (final.status, final.closed_at) == (after.status, after.closed_at)
+
+
+@pytest.mark.asyncio
+async def test_focus_on_a_closed_thesis_unfolds_the_list(client):
+    """ "Anuluj" on a closed thesis must find its card visible.
+
+    It returns with ``focus=thesis-{id}``. When that names a closed
+    thesis of this company, the closed list is unfolded. Any other
+    focus leaves it folded.
+    """
+    company_id = _company(client)
+    active = _thesis(client, company_id, "Aktywna", "2026-10-28T13:05")
+    closed = _thesis(
+        client,
+        company_id,
+        "Zamknięta",
+        "2026-10-01T08:00",
+        closed="2026-10-02T08:00",
+    )
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    other_company = _company(client, name="Other Co", ticker="OTHER")
+    foreign = _thesis(
+        client,
+        other_company,
+        "Cudza",
+        "2026-10-01T08:00",
+        closed="2026-10-02T08:00",
+    )
+    research = f"/ui/companies/{company_id}/research"
+    edit = await client.get(
+        f"/ui/companies/{company_id}/theses/{closed}/edit", headers=_HTMX
+    )
+    cancel = f"{research}?focus=thesis-{closed}"
+    assert _link(edit.text, cancel)["hx-get"] == cancel
+    for headers in (_HTMX, {}):
+        response = await client.get(cancel, headers=headers)
+        assert response.status_code == 200
+        assert '<details class="research-closed" open>' in response.text
+        assert f'id="thesis-{closed}"' in _closed_list(response.text)
+        assert _focus(response) == f"thesis-{closed}"
+    for focus in (
+        f"thesis-{active}",
+        f"thesis-{foreign}",
+        f"note-{note_id}",
+        "thesis-0",
+        "thesis-" + "9" * 20,
+    ):
+        response = await client.get(
+            research, params={"focus": focus}, headers=_HTMX
+        )
+        assert response.status_code == 200, focus
+        assert '<details class="research-closed">' in response.text, focus
+
+
+@pytest.mark.asyncio
+async def test_delete_thesis_asks_inline(client):
+    company_id = _company(client)
+    thesis_id = _thesis(client, company_id, "Teza AI", "2026-10-28T13:05")
+    delete = f"/ui/companies/{company_id}/theses/{thesis_id}/delete"
+    question = f"thesis-{thesis_id}-delete-question"
+    for headers in (_HTMX, {}):
+        response = await client.get(delete, headers=headers)
+        assert response.status_code == 200
+        html = response.text
+        assert _text(html, question) == "Usunąć tę tezę?"
+        assert _attrs(html, question)["tabindex"] == "-1"
+        assert _focus(response) == question
+        card = _between(html, f'<li id="thesis-{thesis_id}"', "</li>")
+        assert f'id="{question}"' in _between(
+            card, f'action="{delete}"', "</form>"
+        )
+        buttons = [attrs for tag, attrs in _tags(card) if tag == "button"]
+        assert len(buttons) == 1
+        assert "autofocus" not in buttons[0]
+        assert buttons[0]["aria-label"] == "Usuń tezę „Teza AI”"
+        assert _between(card, "<button", "</button>").endswith(">Usuń")
+        # The question takes the place of the card's actions.
+        assert f'id="thesis-{thesis_id}-status"' not in card
+        assert "Powód zakupu." in card
+    assert set(_stored_theses(client, company_id)) == {thesis_id}
+
+    plain = await _post(client, delete)
+    assert plain.status_code == 303
+    assert plain.headers["location"] == (
+        f"/ui/instruments/{company_id}?research=open#research"
+    )
+    assert _stored_theses(client, company_id) == {}
+
+    other = _thesis(client, company_id, "Druga", "2026-10-28T14:05")
+    fragment = await _post(
+        client,
+        f"/ui/companies/{company_id}/theses/{other}/delete",
+        htmx=True,
+    )
+    assert fragment.status_code == 200
+    assert f'id="thesis-{other}"' not in fragment.text
+    assert "Brak tez." in _panel(fragment.text)
+    assert _focus(fragment) == "research-title"
+    assert _attrs(fragment.text, "research-toggle-button")["aria-label"] == (
+        "Notatki i tezy"
+    )
+    assert _stored_theses(client, company_id) == {}
+
+
+@pytest.mark.asyncio
+async def test_thesis_focus_rules(client):
+    """Keyboard focus never drops to the top of the page (Review Focus 3).
+
+    The panel shows the three active theses newest first: ``newest``,
+    ``middle``, ``oldest``.
+    """
+    company_id = _company(client)
+    oldest = _thesis(client, company_id, "Najstarsza", "2026-10-26T08:00")
+    middle = _thesis(client, company_id, "Środkowa", "2026-10-27T08:00")
+    newest = _thesis(client, company_id, "Najnowsza", "2026-10-28T08:00")
+    base = f"/ui/companies/{company_id}"
+    thesis = f"{base}/theses/{middle}"
+
+    opened = await client.get(f"{base}/theses/new", headers=_HTMX)
+    assert _focus(opened) == "thesis-new-title"
+    # "Anuluj" carries the id of the "+ Nowa teza" link whose place it
+    # takes, so HTMX puts the focus back on that link (Ruling P2).
+    cancel_new = _attrs(opened.text, "thesis-new-link")
+    assert cancel_new["href"] == f"{base}/research"
+    assert cancel_new["hx-get"] == f"{base}/research"
+    assert _text(opened.text, "thesis-new-link") == "Anuluj"
+    back = await client.get(cancel_new["href"], headers=_HTMX)
+    assert "autofocus" not in back.text
+    assert _attrs(back.text, "thesis-new-link")["href"] == (
+        f"{base}/theses/new"
+    )
+    assert _text(back.text, "thesis-new-link") == "+ Nowa teza"
+
+    added_blank = await _post(client, f"{base}/theses", htmx=True)
+    assert added_blank.status_code == 422
+    assert _focus(added_blank) == "thesis-new-errors"
+
+    edit = await client.get(f"{thesis}/edit", headers=_HTMX)
+    assert _focus(edit) == f"thesis-{middle}-title"
+    cancel = f"{base}/research?focus=thesis-{middle}"
+    assert _link(edit.text, cancel)["hx-get"] == cancel
+
+    invalid = await _post(client, f"{thesis}/edit", htmx=True)
+    assert invalid.status_code == 422
+    assert _focus(invalid) == f"thesis-{middle}-errors"
+    assert _attrs(invalid.text, f"thesis-{middle}-errors")["tabindex"] == "-1"
+
+    cancelled = await client.get(cancel, headers=_HTMX)
+    assert _focus(cancelled) == f"thesis-{middle}"
+
+    saved = await _post(client, f"{thesis}/edit", _NEW_THESIS, htmx=True)
+    assert saved.status_code == 200
+    assert _focus(saved) == f"thesis-{middle}"
+
+    asked = await client.get(f"{thesis}/delete", headers=_HTMX)
+    assert _focus(asked) == f"thesis-{middle}-delete-question"
+    assert _link(asked.text, cancel)["hx-get"] == cancel
+    assert _focus(await client.get(cancel, headers=_HTMX)) == (
+        f"thesis-{middle}"
+    )
+
+    # The two buttons share one id, so they need no autofocus.
+    for action in ("close", "reopen"):
+        answer = await _post(client, f"{thesis}/{action}", htmx=True)
+        assert "autofocus" not in answer.text, action
+        assert _attrs(answer.text, f"thesis-{middle}-status")["type"] == (
+            "submit"
+        )
+
+    # Delete: the next thesis, else the previous one, else the heading.
+    deleted = await _post(client, f"{thesis}/delete", htmx=True)
+    assert _focus(deleted) == f"thesis-{oldest}"
+    deleted = await _post(client, f"{base}/theses/{oldest}/delete", htmx=True)
+    assert _focus(deleted) == f"thesis-{newest}"
+    deleted = await _post(client, f"{base}/theses/{newest}/delete", htmx=True)
+    assert _focus(deleted) == "research-title"
+    assert _stored_theses(client, company_id) == {}
+
+    added = await _post(client, f"{base}/theses", _NEW_THESIS, htmx=True)
+    assert added.status_code == 200
+    [new_id] = _stored_theses(client, company_id)
+    assert _focus(added) == f"thesis-{new_id}"
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_closed_thesis_stays_in_its_list(client):
+    """The neighbour that takes the focus comes from the same list.
+
+    The closed list shows the newest closing first: ``newer``, then
+    ``older``. It stays unfolded, so that neighbour is visible.
+    """
+    company_id = _company(client)
+    active = _thesis(client, company_id, "Aktywna", "2026-10-28T13:05")
+    older = _thesis(
+        client,
+        company_id,
+        "Starsza",
+        "2026-10-01T08:00",
+        closed="2026-10-02T08:00",
+    )
+    newer = _thesis(
+        client,
+        company_id,
+        "Nowsza",
+        "2026-10-03T08:00",
+        closed="2026-10-04T08:00",
+    )
+    base = f"/ui/companies/{company_id}/theses"
+    asked = await client.get(f"{base}/{newer}/delete", headers=_HTMX)
+    assert '<details class="research-closed" open>' in asked.text
+    assert _focus(asked) == f"thesis-{newer}-delete-question"
+
+    deleted = await _post(client, f"{base}/{newer}/delete", htmx=True)
+    assert _focus(deleted) == f"thesis-{older}"
+    assert '<details class="research-closed" open>' in deleted.text
+    deleted = await _post(client, f"{base}/{older}/delete", htmx=True)
+    assert _focus(deleted) == "research-title"
+    assert "<details" not in deleted.text
+    assert set(_stored_theses(client, company_id)) == {active}
+
+
+@pytest.mark.asyncio
+async def test_thesis_draft_and_fallback(client):
+    """Thesis actions keep the note draft, fall back, and name the thesis.
+
+    The "Nowa notatka" wrapper keeps ``hx-preserve`` in every thesis
+    answer. A failed HTMX request is repeated without HTMX
+    (``ui.js``), so a form posts to its own ``action`` and a link
+    opens its own ``href``.
+    """
+    company_id = _company(client)
+    active = _thesis(client, company_id, "Teza AI", "2026-10-28T13:05")
+    closed = _thesis(
+        client,
+        company_id,
+        "Stara teza",
+        "2026-10-01T08:00",
+        closed="2026-10-02T08:00",
+    )
+    base = f"/ui/companies/{company_id}"
+    first = f"{base}/theses/{active}"
+    second = f"{base}/theses/{closed}"
+    states = (
+        await client.get(f"{base}/research", headers=_HTMX),
+        await client.get(f"{base}/theses/new", headers=_HTMX),
+        await _post(client, f"{base}/theses", htmx=True),
+        await client.get(f"{first}/edit", headers=_HTMX),
+        await _post(client, f"{first}/edit", htmx=True),
+        await client.get(f"{first}/delete", headers=_HTMX),
+        await _post(client, f"{first}/close", htmx=True),
+        await _post(client, f"{first}/reopen", htmx=True),
+        await client.get(f"{second}/edit", headers=_HTMX),
+        # The stored values again: a save that changes nothing.
+        await _post(
+            client,
+            f"{second}/edit",
+            {"title": "Stara teza", "body": "Powód zakupu."},
+            htmx=True,
+        ),
+    )
+    actions, links = set(), set()
+    for response in states:
+        assert response.status_code in (200, 422)
+        html = response.text
+        assert '<div id="note-new-field" hx-preserve="true">' in html
+        wrapper = _between(html, 'id="note-new-field"', "</div>")
+        assert 'id="note-new-body"' in wrapper
+        assert "autofocus" not in wrapper
+        for tag, attrs in _panel_actions(html):
+            assert "data-plain-fallback" in attrs, attrs
+            assert attrs["hx-target"] == "#research"
+            assert attrs["hx-swap"] == "outerHTML"
+            if tag == "form":
+                assert attrs["method"] == "post"
+                assert attrs["hx-post"] == attrs["action"]
+                actions.add(attrs["action"])
+            else:
+                assert attrs["hx-get"] == attrs["href"]
+                links.add(attrs["href"])
+    assert actions == {
+        f"{base}/notes",
+        f"{base}/theses",
+        f"{first}/edit",
+        f"{first}/delete",
+        f"{first}/close",
+        f"{first}/reopen",
+        f"{second}/edit",
+        f"{second}/reopen",
+    }
+    assert links == {
+        f"{base}/theses/new",
+        f"{base}/research",
+        f"{base}/research?focus=thesis-{active}",
+        f"{base}/research?focus=thesis-{closed}",
+        f"{first}/edit",
+        f"{first}/delete",
+        f"{second}/edit",
+        f"{second}/delete",
+    }
+
+    html = states[0].text
+    for href, label, text in (
+        (f"{first}/edit", "Edytuj tezę „Teza AI”", "Edytuj"),
+        (f"{first}/delete", "Usuń tezę „Teza AI”", "Usuń"),
+        (f"{second}/edit", "Edytuj tezę „Stara teza”", "Edytuj"),
+        (f"{second}/delete", "Usuń tezę „Stara teza”", "Usuń"),
+    ):
+        assert _link(html, href)["aria-label"] == label
+        assert _between(html, f'href="{href}"', "</a>").endswith(f">{text}")
+    for thesis_id, label, text in (
+        (active, "Zamknij tezę „Teza AI”", "Zamknij tezę"),
+        (closed, "Otwórz ponownie tezę „Stara teza”", "Otwórz ponownie"),
+    ):
+        assert _attrs(html, f"thesis-{thesis_id}-status")["aria-label"] == (
+            label
+        )
+        assert _text(html, f"thesis-{thesis_id}-status") == text
+    assert "aria-label" not in _attrs(html, "thesis-new-link")
+    for card in (active, closed):
+        fields = _text(html, f"thesis-{card}")
+        assert "Dlaczego kupiłem" in fields
+        assert "Kiedy sprzedam / co złamie tezę" in fields
+
+    client.cookies.set("ui_lang", "en")
+    english = (await client.get(f"{base}/research", headers=_HTMX)).text
+    assert _link(english, f"{first}/edit")["aria-label"] == (
+        'Edit the thesis "Teza AI"'
+    )
+    assert _link(english, f"{first}/delete")["aria-label"] == (
+        'Delete the thesis "Teza AI"'
+    )
+    assert _attrs(english, f"thesis-{active}-status")["aria-label"] == (
+        'Close the thesis "Teza AI"'
+    )
+    assert _text(english, f"thesis-{active}-status") == "Close thesis"
+    assert _attrs(english, f"thesis-{closed}-status")["aria-label"] == (
+        'Reopen the thesis "Stara teza"'
+    )
+    assert _text(english, f"thesis-{closed}-status") == "Reopen"
+    assert _text(english, "thesis-new-link") == "+ New thesis"
+    card = _text(english, f"thesis-{active}")
+    assert "Why I bought" in card
+    assert "When I sell / what breaks the thesis" in card
+    assert '<span class="badge badge-active">active</span>' in english
+    new_form = (await client.get(f"{base}/theses/new", headers=_HTMX)).text
+    assert '<label for="thesis-new-title">Title</label>' in new_form
+
+
+@pytest.mark.asyncio
+async def test_thesis_storage_failure(client, monkeypatch):
+    """A write that fails to commit is a 500 that keeps what was typed.
+
+    Ruling P3: the form stays open, and its error summary takes the
+    focus. A failed close or reopen shows its error in the card.
+    """
+    company_id = _company(client)
+    thesis_id = _thesis(client, company_id, "Teza AI", "2026-10-28T13:05")
+    closed_id = _thesis(
+        client,
+        company_id,
+        "Stara teza",
+        "2026-10-01T08:00",
+        closed="2026-10-02T08:00",
+    )
+    base = f"/ui/companies/{company_id}"
+    before = _stored_theses(client, company_id)
+
+    monkeypatch.setattr(ThesisRepository, "create", _fail_storage)
+    plain = await _post(client, f"{base}/theses", _NEW_THESIS)
+    assert plain.status_code == 500
+    html = plain.text
+    assert "<html" in html
+    assert _text(html, "thesis-new-errors").strip() == _NOT_STORED
+    assert _attrs(html, "thesis-new-title")["value"] == "Nowa teza"
+    assert _text(html, "thesis-new-body") == "Nowy powód."
+    assert _text(html, "thesis-new-thesis_breakers") == "Nowy próg."
+    assert "aria-invalid" not in html
+    assert _attrs(html, "thesis-new-errors")["tabindex"] == "-1"
+    assert _focus(plain) == "thesis-new-errors"
+    _assert_ui_headers(plain)
+    fragment = await _post(client, f"{base}/theses", _NEW_THESIS, htmx=True)
+    assert fragment.status_code == 500
+    assert "<html" not in fragment.text
+    assert _attrs(fragment.text, "thesis-new-title")["value"] == "Nowa teza"
+    assert _focus(fragment) == "thesis-new-errors"
+
+    monkeypatch.setattr(ThesisRepository, "update", _fail_storage)
+    errors = f"thesis-{thesis_id}-errors"
+    for htmx in (False, True):
+        response = await _post(
+            client, f"{base}/theses/{thesis_id}/edit", _NEW_THESIS, htmx=htmx
+        )
+        assert response.status_code == 500
+        html = response.text
+        assert _text(html, errors).strip() == _NOT_STORED
+        assert _attrs(html, f"thesis-{thesis_id}-title")["value"] == (
+            "Nowa teza"
+        )
+        assert _text(html, f"thesis-{thesis_id}-body") == "Nowy powód."
+        assert _focus(response) == errors
+
+    monkeypatch.setattr(ThesisRepository, "set_status", _fail_storage)
+    for failed, action in ((thesis_id, "close"), (closed_id, "reopen")):
+        errors = f"thesis-{failed}-errors"
+        for htmx in (False, True):
+            response = await _post(
+                client, f"{base}/theses/{failed}/{action}", htmx=htmx
+            )
+            assert response.status_code == 500, (action, htmx)
+            html = response.text
+            assert _text(html, errors).strip() == _NOT_STORED
+            assert _attrs(html, errors)["tabindex"] == "-1"
+            assert _focus(response) == errors
+            # The error sits in the card, which keeps its button.
+            card = _between(html, f'<li id="thesis-{failed}"', "</li>")
+            assert f'id="{errors}"' in card
+            assert f'id="thesis-{failed}-status"' in card
+            assert ("<html" in html) is not htmx
+    # The thesis that failed to reopen is still closed: its list is open.
+    assert '<details class="research-closed" open>' in html
+
+    monkeypatch.setattr(ThesisRepository, "delete", _fail_storage)
+    question = f"thesis-{thesis_id}-delete-question"
+    for htmx in (False, True):
+        response = await _post(
+            client, f"{base}/theses/{thesis_id}/delete", htmx=htmx
+        )
+        assert response.status_code == 500
+        html = response.text
+        assert _text(html, question) == "Usunąć tę tezę?"
+        assert _NOT_STORED in _text(html, f"thesis-{thesis_id}-errors")
+        assert _focus(response) == f"thesis-{thesis_id}-errors"
+    assert _stored_theses(client, company_id) == before
+
+
+@pytest.mark.asyncio
+async def test_thesis_404s(client, monkeypatch):
+    company_id = _company(client)
+    other_company = _company(client, name="Other Co", ticker="OTHER")
+    foreign = _thesis(client, other_company, "Cudza teza", "2026-10-28T13:05")
+    deleted = _thesis(client, company_id, "Usunięta", "2026-10-28T13:05")
+    session = _session(client)
+    try:
+        assert ThesisRepository(session).delete(company_id, deleted) is True
+    finally:
+        session.close()
+    foreign_before = _stored_theses(client, other_company)
+    base = f"/ui/companies/{company_id}/theses"
+    routes = (
+        ("GET", "edit"),
+        ("POST", "edit"),
+        ("POST", "close"),
+        ("POST", "reopen"),
+        ("GET", "delete"),
+        ("POST", "delete"),
+    )
+    back = f"/ui/instruments/{company_id}?research=open#research"
+    # Another company's thesis, a deleted one, and ids that are no
+    # thesis: the research 404, in HTML.
+    for raw_id in (str(foreign), str(deleted), "abc", "01", "9" * 20):
+        for method, action in routes:
+            for htmx in (False, True):
+                path = f"{base}/{raw_id}/{action}"
+                response = await _request(client, method, path, htmx=htmx)
+                assert response.status_code == 404, (method, path)
+                assert "text/html" in response.headers["content-type"]
+                assert "Nie znaleziono notatki ani tezy" in response.text
+                assert f'href="{back}"' in response.text
+                _assert_ui_headers(response)
+    assert _stored_theses(client, other_company) == foreign_before
+
+    # An unknown company is the instrument 404, checked first.
+    for raw_company in ("999999", "abc"):
+        unknown = f"/ui/companies/{raw_company}/theses"
+        paths = [("GET", f"{unknown}/new"), ("POST", unknown)] + [
+            (method, f"{unknown}/{foreign}/{action}")
+            for method, action in routes
+        ]
+        for method, path in paths:
+            for htmx in (False, True):
+                response = await _request(client, method, path, htmx=htmx)
+                assert response.status_code == 404, (method, path)
+                assert "text/html" in response.headers["content-type"]
+                assert "Nie znaleziono instrumentu" in response.text
+
+    # The company was deleted between the check and the insert.
+    def gone(self, company, thesis):
+        raise CompanyNotFoundError(company)
+
+    monkeypatch.setattr(ThesisRepository, "create", gone)
+    response = await _post(client, base, _NEW_THESIS, htmx=True)
+    assert response.status_code == 404
+    assert "Nie znaleziono instrumentu" in response.text
+
+
+@pytest.mark.asyncio
+async def test_thesis_deleted_during_the_request_is_the_research_404(
+    client, monkeypatch
+):
+    """Another tab can delete the thesis after the route looked it up.
+
+    The repository then finds no row: ``update`` and ``set_status``
+    return None, and ``delete`` returns False.
+    """
+    company_id = _company(client)
+    thesis_id = _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    monkeypatch.setattr(ThesisRepository, "update", lambda *args: None)
+    monkeypatch.setattr(ThesisRepository, "set_status", lambda *args: None)
+    monkeypatch.setattr(ThesisRepository, "delete", lambda *args: False)
+    thesis = f"/ui/companies/{company_id}/theses/{thesis_id}"
+    for action in ("edit", "close", "reopen", "delete"):
+        response = await _post(
+            client, f"{thesis}/{action}", _NEW_THESIS, htmx=True
+        )
+        assert response.status_code == 404, action
+        assert "Nie znaleziono notatki ani tezy" in response.text
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_thesis_post_is_403(client):
+    company_id = _company(client)
+    thesis_id = _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    before = _stored_theses(client, company_id)
+    base = f"/ui/companies/{company_id}/theses"
+    paths = [base] + [
+        f"{base}/{thesis_id}/{action}"
+        for action in ("edit", "close", "reopen", "delete")
+    ]
+    for path in paths:
+        for htmx in (False, True):
+            response = await _post(
+                client,
+                path,
+                _NEW_THESIS,
+                origin="http://evil.example",
+                htmx=htmx,
+            )
+            assert response.status_code == 403, path
+    assert _stored_theses(client, company_id) == before
+
+
+@pytest.mark.asyncio
+async def test_language_path_follows_the_thesis_state(client, monkeypatch):
+    """PL/EN reopens what the panel shows, as for notes.
+
+    The new-thesis form, an edit form, and a delete question have a
+    GET of their own. Close and reopen have none, so they return to
+    the company page with the panel open, as every other answer does.
+    """
+    company_id = _company(client)
+    thesis_id = _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}"
+    thesis = f"{base}/theses/{thesis_id}"
+    opened = f"/ui/instruments/{company_id}?research=open"
+    answers = [
+        (
+            await client.get(f"{base}/theses/new", headers=_HTMX),
+            f"{base}/theses/new",
+        ),
+        (
+            await _post(client, f"{base}/theses", htmx=True),
+            f"{base}/theses/new",
+        ),
+        (await client.get(f"{thesis}/edit", headers=_HTMX), f"{thesis}/edit"),
+        (await _post(client, f"{thesis}/edit", htmx=True), f"{thesis}/edit"),
+        (
+            await client.get(f"{thesis}/delete", headers=_HTMX),
+            f"{thesis}/delete",
+        ),
+        (await _post(client, f"{thesis}/close", htmx=True), opened),
+        (await _post(client, f"{thesis}/reopen", htmx=True), opened),
+        (
+            await _post(client, f"{thesis}/edit", _NEW_THESIS, htmx=True),
+            opened,
+        ),
+        (
+            await _post(client, f"{base}/theses", _NEW_THESIS, htmx=True),
+            opened,
+        ),
+    ]
+    with monkeypatch.context() as patched:
+        patched.setattr(ThesisRepository, "set_status", _fail_storage)
+        answers.append(
+            (await _post(client, f"{thesis}/close", htmx=True), opened)
+        )
+    answers.append(
+        (await _post(client, f"{thesis}/delete", htmx=True), opened)
+    )
+    for response, expected in answers:
+        for code in ("pl", "en"):
+            language_next = _attrs(response.text, f"language-next-{code}")
+            assert language_next["value"] == expected
+            assert language_next["hx-swap-oob"] == "outerHTML"
+    # A plain 422 is a full page built at the POST path. The switch
+    # opens the new-thesis form's GET instead.
+    page = await _post(client, f"{base}/theses")
+    assert page.status_code == 422
+    assert _attrs(page.text, "language-next-pl")["value"] == (
+        f"{base}/theses/new"
+    )

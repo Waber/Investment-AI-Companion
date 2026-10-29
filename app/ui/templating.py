@@ -71,6 +71,19 @@ _NOTE_FORM = re.compile(
     r"^/ui/companies/(?P<company_id>[^/]+)/notes/"
     r"(?P<note_id>[^/]+)/(?:edit|delete)$"
 )
+# A new thesis has its empty form at .../theses/new. Close and reopen
+# are one-click buttons with no form of their own, so they return to
+# the panel. A thesis's inline edit form and delete question have a
+# GET at the same path.
+_THESIS_CREATE = re.compile(r"^/ui/companies/(?P<company_id>[^/]+)/theses$")
+_THESIS_STATUS = re.compile(
+    r"^/ui/companies/(?P<company_id>[^/]+)/theses/"
+    r"(?P<thesis_id>[^/]+)/(?:close|reopen)$"
+)
+_THESIS_FORM = re.compile(
+    r"^/ui/companies/(?P<company_id>[^/]+)/theses/"
+    r"(?P<thesis_id>[^/]+)/(?:edit|delete)$"
+)
 
 
 def _path_with_query(path, query):
@@ -87,8 +100,10 @@ def _get_form_for_post(path):
     ``GET /ui/companies/new``. ``POST /ui/companies/{id}/metrics``
     inserts a period. That form is ``GET .../metrics/new``.
     ``POST /ui/companies/{id}/notes`` adds a note from the research
-    panel, ``GET .../research``. Edit and delete are the same path for
-    GET and POST.
+    panel, ``GET .../research``. ``POST .../theses`` adds a thesis from
+    its form, ``GET .../theses/new``. Closing or reopening a thesis
+    returns to the panel. Edit and delete are the same path for GET
+    and POST.
     """
     if path == "/ui/companies":
         return "/ui/companies/new"
@@ -96,13 +111,18 @@ def _get_form_for_post(path):
     if created is not None:
         company_id = created.group("company_id")
         return f"/ui/companies/{company_id}/metrics/new"
-    note_added = _NOTE_CREATE.match(path)
-    if note_added is not None:
-        company_id = note_added.group("company_id")
-        return f"/ui/companies/{company_id}/research"
+    thesis_added = _THESIS_CREATE.match(path)
+    if thesis_added is not None:
+        company_id = thesis_added.group("company_id")
+        return f"/ui/companies/{company_id}/theses/new"
+    for pattern in (_NOTE_CREATE, _THESIS_STATUS):
+        panel_action = pattern.match(path)
+        if panel_action is not None:
+            company_id = panel_action.group("company_id")
+            return f"/ui/companies/{company_id}/research"
     if any(
         pattern.match(path)
-        for pattern in (_COMPANY_FORM, _METRICS_FORM, _NOTE_FORM)
+        for pattern in (_COMPANY_FORM, _METRICS_FORM, _NOTE_FORM, _THESIS_FORM)
     ):
         return path
     return None

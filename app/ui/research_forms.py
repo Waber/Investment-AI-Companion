@@ -9,15 +9,16 @@ answers in two ways (``_panel_response``):
 - a plain request gets the whole company page in the same state. So
   every panel state also has a GET URL that works without JavaScript.
 
-The note forms post here too. A change that worked answers HTMX with
-the panel, and a plain POST with a 303 to the open panel, so a reload
-does not post again (``_changed``). Invalid text is a 422, and a
-failed save is a 500. Both show the panel again with the typed text
-and the focus on the form's error summary.
+The note and thesis forms post here too. A change that worked answers
+HTMX with the panel, and a plain POST with a 303 to the open panel, so
+a reload does not post again (``_changed``). Invalid text is a 422,
+and a failed save is a 500. Both show the panel again with the typed
+text and the focus on the form's error summary
+(``_panel_with_errors``).
 
 An unknown company is the instrument 404, as on the company page. A
-note that is unknown, or that belongs to another company, is the
-research 404, which links back to the panel.
+note or thesis that is unknown, or that belongs to another company,
+is the research 404, which links back to the panel.
 """
 
 import re
@@ -27,10 +28,17 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.research import NoteCreate, NoteUpdate
+from app.models.research import (
+    NoteCreate,
+    NoteUpdate,
+    ThesisCreate,
+    ThesisStatus,
+    ThesisUpdate,
+)
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.note_repository import NoteRepository
 from app.repositories.research_store import ResearchStorageError
+from app.repositories.thesis_repository import ThesisRepository
 from app.ui.form_fields import errors_from_validation
 from app.ui.forms import _load_company, _not_found, _see_other
 from app.ui.origin import require_same_origin
@@ -71,6 +79,10 @@ _TOO_LONG_KEYS = {
     5000: "error.max_5000",
     10000: "error.max_10000",
 }
+
+# The thesis form's fields, in the order it shows them. Its error
+# summary lists them in the same order.
+_THESIS_FIELDS = ("title", "body", "thesis_breakers")
 
 
 def research_error_key(error: dict) -> str:
@@ -121,6 +133,30 @@ def validate_note(
     return model, {}, None
 
 
+def validate_thesis(
+    values: dict, *, update: bool
+) -> tuple[ThesisCreate | ThesisUpdate | None, dict[str, str], str | None]:
+    """Return ``(model, field_errors, form_error)`` for a posted thesis.
+
+    The same shape as ``validate_note``: a ``ThesisCreate`` for a new
+    thesis, a ``ThesisUpdate`` for an edit, or None when a field is
+    not valid. Only the three text fields are read, so the status is
+    never set here. A new thesis therefore starts active, and an edit
+    keeps the stored status and closing date. "Zamknij tezę" and
+    "Otwórz ponownie" are the only ways to change them.
+    """
+    model_type = ThesisUpdate if update else ThesisCreate
+    fields = {name: values.get(name, "") for name in _THESIS_FIELDS}
+    try:
+        model = model_type.model_validate(fields)
+    except ValidationError as exc:
+        errors, form_error = errors_from_validation(
+            exc, _THESIS_FIELDS, key_for=research_error_key
+        )
+        return None, errors, form_error
+    return model, {}, None
+
+
 def _panel_response(request, db, company, panel, *, status_code=200):
     """Answer with the panel in this state, for HTMX or a plain request.
 
@@ -163,6 +199,40 @@ def _panel_response(request, db, company, panel, *, status_code=200):
     )
 
 
+def _panel_with_errors(
+    request,
+    db,
+    company,
+    prefix,
+    *,
+    status_code,
+    form=None,
+    new_note=None,
+    show_closed=False,
+):
+    """Show one form again with its errors: a 422 or a 500.
+
+    ``status_code`` is 422 for invalid text and 500 for a failed save.
+    ``form`` is the inline form, or ``new_note`` the "Nowa notatka"
+    field, with the typed text and the error keys. ``prefix`` starts
+    that form's ids, such as ``note-new`` or ``thesis-4``. Its error
+    summary, ``{prefix}-errors``, takes the focus: this is the only
+    place the summary gets ``autofocus``. ``show_closed`` unfolds the
+    closed list for a form inside a closed thesis.
+    """
+    panel = build_panel(
+        db,
+        company.id,
+        form=form,
+        new_note=new_note,
+        show_closed=show_closed,
+        focus=f"{prefix}-errors",
+    )
+    return _panel_response(
+        request, db, company, panel, status_code=status_code
+    )
+
+
 def _changed(request, db, company, panel):
     """Answer a change that worked: an add, a save, or a delete.
 
@@ -178,9 +248,9 @@ def _research_not_found(request, company):
     """404 for a note or thesis that this company does not have.
 
     The company exists, so the page links back to its panel. A note
-    deleted in another tab ends here. HTMX does not swap a 404, so
-    ``ui.js`` repeats the request without HTMX, and the browser shows
-    this page.
+    or thesis deleted in another tab ends here. HTMX does not swap a
+    404, so ``ui.js`` repeats the request without HTMX, and the
+    browser shows this page.
     """
     return _with_ui_headers(
         render(
@@ -192,24 +262,68 @@ def _research_not_found(request, company):
     )
 
 
-def _load_note(request, db, company_raw, note_raw):
-    """Return ``(company, note, response)``. ``response`` is None if found.
+def _load_item(request, db, company_raw, item_raw, repository_type):
+    """Return ``(company, item, response)``. ``response`` is None if found.
 
-    An unknown company is the instrument 404. A note id that is not a
-    number, or that names no note of this company, is the research
-    404. The repository only looks inside this company, so another
-    company's note looks missing.
+    ``repository_type`` is ``NoteRepository`` or ``ThesisRepository``.
+    An unknown company is the instrument 404. An id that is not a
+    number, or that names no note or thesis of this company, is the
+    research 404. The repository only looks inside this company, so
+    another company's note or thesis looks missing.
     """
     company, missing = _load_company(request, db, company_raw)
     if missing is not None:
         return None, None, missing
-    note_id = _instrument_id(note_raw)
-    note = None
-    if note_id is not None:
-        note = NoteRepository(db).get(company.id, note_id)
-    if note is None:
+    item_id = _instrument_id(item_raw)
+    item = None
+    if item_id is not None:
+        item = repository_type(db).get(company.id, item_id)
+    if item is None:
         return company, None, _research_not_found(request, company)
-    return company, note, None
+    return company, item, None
+
+
+def _load_note(request, db, company_raw, note_raw):
+    """Return ``(company, note, response)``, as ``_load_item`` does."""
+    return _load_item(request, db, company_raw, note_raw, NoteRepository)
+
+
+def _load_thesis(request, db, company_raw, thesis_raw):
+    """Return ``(company, thesis, response)``, as ``_load_item`` does."""
+    return _load_item(request, db, company_raw, thesis_raw, ThesisRepository)
+
+
+def _in_closed_list(thesis):
+    """True when the panel lists this thesis under "Zamknięte tezy".
+
+    ``build_panel`` splits the theses the same way. After an action
+    on such a thesis the closed list is shown unfolded, so the card
+    that holds the inline form or takes the focus is visible.
+    """
+    return thesis.status != ThesisStatus.ACTIVE
+
+
+def _names_closed_thesis(db, company_id, focus):
+    """True when ``focus`` is ``thesis-{id}`` of a closed thesis here.
+
+    "Anuluj" on a closed thesis comes back with that focus. The
+    closed list must then be unfolded, or the card that takes the
+    focus would stay hidden. ``focus`` already matched ``_FOCUS``, or
+    is None. Its id still goes through ``_instrument_id``, which
+    refuses an id too long for the database.
+    """
+    if focus is None or not focus.startswith("thesis-"):
+        return False
+    thesis_id = _instrument_id(focus.removeprefix("thesis-"))
+    if thesis_id is None:
+        return False
+    thesis = ThesisRepository(db).get(company_id, thesis_id)
+    return thesis is not None and _in_closed_list(thesis)
+
+
+def _thesis_texts(thesis):
+    """The three text fields of a ``Thesis`` or ``ThesisUpdate``, by name."""
+    return {name: getattr(thesis, name) for name in _THESIS_FIELDS}
 
 
 @router.get("/companies/{company_id}/research", include_in_schema=False)
@@ -224,15 +338,20 @@ def show_research_panel(
 
     The sticky note sends ``research``, the state it asks for.
     ``closed`` closes the panel. Any other value, or none, opens it.
-    ``focus`` is ignored unless it names a note or thesis.
+    ``focus`` is ignored unless it names a note or thesis. When it
+    names a closed thesis, the closed list is unfolded.
     """
     company, missing = _load_company(request, db, company_id)
     if missing is not None:
         return missing
     if research == "closed":
         return _panel_response(request, db, company, None)
+    kept = focus if _FOCUS.fullmatch(focus) else None
     panel = build_panel(
-        db, company.id, focus=focus if _FOCUS.fullmatch(focus) else None
+        db,
+        company.id,
+        show_closed=_names_closed_thesis(db, company.id, kept),
+        focus=kept,
     )
     return _panel_response(request, db, company, panel)
 
@@ -257,10 +376,9 @@ def add_note(
         draft = NewNote(
             body=body, errors=errors, form_error=form_error, preserve=False
         )
-        panel = build_panel(
-            db, company.id, new_note=draft, focus="note-new-errors"
+        return _panel_with_errors(
+            request, db, company, "note-new", new_note=draft, status_code=422
         )
-        return _panel_response(request, db, company, panel, status_code=422)
     try:
         NoteRepository(db).create(company.id, note)
     except CompanyNotFoundError:
@@ -268,10 +386,9 @@ def add_note(
         return _not_found(request)
     except ResearchStorageError:
         draft = NewNote(body=body, form_error="error.storage", preserve=False)
-        panel = build_panel(
-            db, company.id, new_note=draft, focus="note-new-errors"
+        return _panel_with_errors(
+            request, db, company, "note-new", new_note=draft, status_code=500
         )
-        return _panel_response(request, db, company, panel, status_code=500)
     panel = build_panel(
         db, company.id, new_note=NewNote(preserve=False), focus="note-new-body"
     )
@@ -320,6 +437,7 @@ def save_note(
     company, note, missing = _load_note(request, db, company_id, note_id)
     if missing is not None:
         return missing
+    prefix = f"note-{note.id}"
     changes, errors, form_error = validate_note({"body": body}, update=True)
     if changes is None:
         form = PanelForm(
@@ -329,10 +447,9 @@ def save_note(
             errors=errors,
             form_error=form_error,
         )
-        panel = build_panel(
-            db, company.id, form=form, focus=f"note-{note.id}-errors"
+        return _panel_with_errors(
+            request, db, company, prefix, form=form, status_code=422
         )
-        return _panel_response(request, db, company, panel, status_code=422)
     if changes.body != note.body:
         try:
             saved = NoteRepository(db).update(company.id, note.id, changes)
@@ -343,16 +460,13 @@ def save_note(
                 values={"body": body},
                 form_error="error.storage",
             )
-            panel = build_panel(
-                db, company.id, form=form, focus=f"note-{note.id}-errors"
-            )
-            return _panel_response(
-                request, db, company, panel, status_code=500
+            return _panel_with_errors(
+                request, db, company, prefix, form=form, status_code=500
             )
         if saved is None:
             # Deleted in another tab after the check above.
             return _research_not_found(request, company)
-    panel = build_panel(db, company.id, focus=f"note-{note.id}")
+    panel = build_panel(db, company.id, focus=prefix)
     return _changed(request, db, company, panel)
 
 
@@ -405,13 +519,319 @@ def delete_note(
         form = PanelForm(
             kind="note_delete", item_id=note.id, form_error="error.storage"
         )
-        panel = build_panel(
-            db, company.id, form=form, focus=f"note-{note.id}-errors"
+        return _panel_with_errors(
+            request, db, company, f"note-{note.id}", form=form, status_code=500
         )
-        return _panel_response(request, db, company, panel, status_code=500)
     if not deleted:
         # Deleted in another tab after the check above.
         return _research_not_found(request, company)
     focus = focus_after_delete(shown, note.id, "note")
     panel = build_panel(db, company.id, focus=focus)
+    return _changed(request, db, company, panel)
+
+
+@router.get("/companies/{company_id}/theses/new", include_in_schema=False)
+def new_thesis_form(
+    request: Request,
+    company_id: str,
+    db: Session = Depends(get_db),
+):
+    """The empty thesis form, in place of the "+ Nowa teza" link."""
+    company, missing = _load_company(request, db, company_id)
+    if missing is not None:
+        return missing
+    form = PanelForm(
+        kind="thesis_new", values=dict.fromkeys(_THESIS_FIELDS, "")
+    )
+    panel = build_panel(db, company.id, form=form, focus="thesis-new-title")
+    return _panel_response(request, db, company, panel)
+
+
+@router.post("/companies/{company_id}/theses", include_in_schema=False)
+def add_thesis(
+    request: Request,
+    company_id: str,
+    title: str = Form(""),
+    body: str = Form(""),
+    thesis_breakers: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Add a thesis from the "+ Nowa teza" form. It always starts active.
+
+    After a success the form closes and the focus goes to the new
+    card. A 422 or a failed save keeps the form open with the typed
+    text.
+    """
+    company, missing = _load_company(request, db, company_id)
+    if missing is not None:
+        return missing
+    values = {"title": title, "body": body, "thesis_breakers": thesis_breakers}
+    thesis, errors, form_error = validate_thesis(values, update=False)
+    if thesis is None:
+        form = PanelForm(
+            kind="thesis_new",
+            values=values,
+            errors=errors,
+            form_error=form_error,
+        )
+        return _panel_with_errors(
+            request, db, company, "thesis-new", form=form, status_code=422
+        )
+    try:
+        created = ThesisRepository(db).create(company.id, thesis)
+    except CompanyNotFoundError:
+        # The company was deleted after the check above.
+        return _not_found(request)
+    except ResearchStorageError:
+        form = PanelForm(
+            kind="thesis_new", values=values, form_error="error.storage"
+        )
+        return _panel_with_errors(
+            request, db, company, "thesis-new", form=form, status_code=500
+        )
+    panel = build_panel(db, company.id, focus=f"thesis-{created.id}")
+    return _changed(request, db, company, panel)
+
+
+@router.get(
+    "/companies/{company_id}/theses/{thesis_id}/edit", include_in_schema=False
+)
+def edit_thesis_form(
+    request: Request,
+    company_id: str,
+    thesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """The thesis's fields in an inline form, in place of its card text."""
+    company, thesis, missing = _load_thesis(request, db, company_id, thesis_id)
+    if missing is not None:
+        return missing
+    form = PanelForm(
+        kind="thesis_edit", item_id=thesis.id, values=_thesis_texts(thesis)
+    )
+    panel = build_panel(
+        db,
+        company.id,
+        form=form,
+        show_closed=_in_closed_list(thesis),
+        focus=f"thesis-{thesis.id}-title",
+    )
+    return _panel_response(request, db, company, panel)
+
+
+@router.post(
+    "/companies/{company_id}/theses/{thesis_id}/edit", include_in_schema=False
+)
+def save_thesis(
+    request: Request,
+    company_id: str,
+    thesis_id: str,
+    title: str = Form(""),
+    body: str = Form(""),
+    thesis_breakers: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Save the inline form. Saving the same text stores nothing.
+
+    As for a note, ``update`` would move ``updated_at`` even for the
+    same text, so the three validated fields are compared with the
+    stored ones first. The status and the closing date stay as they
+    are: ``validate_thesis`` never sets them.
+    """
+    company, thesis, missing = _load_thesis(request, db, company_id, thesis_id)
+    if missing is not None:
+        return missing
+    prefix = f"thesis-{thesis.id}"
+    show_closed = _in_closed_list(thesis)
+    values = {"title": title, "body": body, "thesis_breakers": thesis_breakers}
+    changes, errors, form_error = validate_thesis(values, update=True)
+    if changes is None:
+        form = PanelForm(
+            kind="thesis_edit",
+            item_id=thesis.id,
+            values=values,
+            errors=errors,
+            form_error=form_error,
+        )
+        return _panel_with_errors(
+            request,
+            db,
+            company,
+            prefix,
+            form=form,
+            show_closed=show_closed,
+            status_code=422,
+        )
+    if _thesis_texts(changes) != _thesis_texts(thesis):
+        try:
+            saved = ThesisRepository(db).update(company.id, thesis.id, changes)
+        except ResearchStorageError:
+            form = PanelForm(
+                kind="thesis_edit",
+                item_id=thesis.id,
+                values=values,
+                form_error="error.storage",
+            )
+            return _panel_with_errors(
+                request,
+                db,
+                company,
+                prefix,
+                form=form,
+                show_closed=show_closed,
+                status_code=500,
+            )
+        if saved is None:
+            # Deleted in another tab after the check above.
+            return _research_not_found(request, company)
+    panel = build_panel(db, company.id, show_closed=show_closed, focus=prefix)
+    return _changed(request, db, company, panel)
+
+
+def _set_thesis_status(request, db, company_id, thesis_id, status):
+    """Close or reopen a thesis: "Zamknij tezę" or "Otwórz ponownie".
+
+    ``set_status`` is repeat-safe. A thesis that already has this
+    status, after a second click or one in another tab, stays as it
+    is, and the answer is the same. The answer sets no ``autofocus``:
+    both buttons have the id ``thesis-{id}-status``, so HTMX puts the
+    focus back on the button, now with the other word. A failed save
+    shows its message in the thesis's card.
+    """
+    company, thesis, missing = _load_thesis(request, db, company_id, thesis_id)
+    if missing is not None:
+        return missing
+    try:
+        changed = ThesisRepository(db).set_status(
+            company.id, thesis.id, status
+        )
+    except ResearchStorageError:
+        form = PanelForm(
+            kind="thesis_status", item_id=thesis.id, form_error="error.storage"
+        )
+        return _panel_with_errors(
+            request,
+            db,
+            company,
+            f"thesis-{thesis.id}",
+            form=form,
+            show_closed=_in_closed_list(thesis),
+            status_code=500,
+        )
+    if changed is None:
+        # Deleted in another tab after the check above.
+        return _research_not_found(request, company)
+    # The thesis was closed before or after the click, so the action
+    # concerned the closed list: it stays unfolded.
+    show_closed = _in_closed_list(thesis) or _in_closed_list(changed)
+    panel = build_panel(db, company.id, show_closed=show_closed)
+    return _changed(request, db, company, panel)
+
+
+@router.post(
+    "/companies/{company_id}/theses/{thesis_id}/close",
+    include_in_schema=False,
+)
+def close_thesis(
+    request: Request,
+    company_id: str,
+    thesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """Close the thesis with one click. See ``_set_thesis_status``."""
+    return _set_thesis_status(
+        request, db, company_id, thesis_id, ThesisStatus.CLOSED
+    )
+
+
+@router.post(
+    "/companies/{company_id}/theses/{thesis_id}/reopen",
+    include_in_schema=False,
+)
+def reopen_thesis(
+    request: Request,
+    company_id: str,
+    thesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """Make a closed thesis active again. See ``_set_thesis_status``."""
+    return _set_thesis_status(
+        request, db, company_id, thesis_id, ThesisStatus.ACTIVE
+    )
+
+
+@router.get(
+    "/companies/{company_id}/theses/{thesis_id}/delete",
+    include_in_schema=False,
+)
+def delete_thesis_question(
+    request: Request,
+    company_id: str,
+    thesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """Ask inline before deleting. This GET deletes nothing.
+
+    The focus goes to the question, never to the "Usuń" button, so a
+    stray Enter cannot delete the thesis.
+    """
+    company, thesis, missing = _load_thesis(request, db, company_id, thesis_id)
+    if missing is not None:
+        return missing
+    form = PanelForm(kind="thesis_delete", item_id=thesis.id)
+    panel = build_panel(
+        db,
+        company.id,
+        form=form,
+        show_closed=_in_closed_list(thesis),
+        focus=f"thesis-{thesis.id}-delete-question",
+    )
+    return _panel_response(request, db, company, panel)
+
+
+@router.post(
+    "/companies/{company_id}/theses/{thesis_id}/delete",
+    include_in_schema=False,
+)
+def delete_thesis(
+    request: Request,
+    company_id: str,
+    thesis_id: str,
+    db: Session = Depends(get_db),
+):
+    """Delete the thesis for good. The focus moves to a neighbour.
+
+    The neighbour comes from the thesis's own list, active or closed.
+    A failed delete keeps the question open, with the error.
+    """
+    company, thesis, missing = _load_thesis(request, db, company_id, thesis_id)
+    if missing is not None:
+        return missing
+    # The list the panel showed the thesis in, top to bottom, to find
+    # the neighbour that takes the focus. It is looked up in the panel
+    # itself, so a thesis closed in another tab meanwhile is still
+    # found in its list.
+    shown = build_panel(db, company.id)
+    in_closed = thesis.id in {item.id for item in shown.closed_theses}
+    siblings = shown.closed_theses if in_closed else shown.active_theses
+    try:
+        deleted = ThesisRepository(db).delete(company.id, thesis.id)
+    except ResearchStorageError:
+        form = PanelForm(
+            kind="thesis_delete", item_id=thesis.id, form_error="error.storage"
+        )
+        return _panel_with_errors(
+            request,
+            db,
+            company,
+            f"thesis-{thesis.id}",
+            form=form,
+            show_closed=in_closed,
+            status_code=500,
+        )
+    if not deleted:
+        # Deleted in another tab after the check above.
+        return _research_not_found(request, company)
+    focus = focus_after_delete(siblings, thesis.id, "thesis")
+    panel = build_panel(db, company.id, show_closed=in_closed, focus=focus)
     return _changed(request, db, company, panel)
