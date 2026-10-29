@@ -701,6 +701,21 @@ async def test_research_text_keeps_breaks_and_wraps(client):
     assert ("overflow-wrap", "anywhere") in _css_declarations(".thesis-title")
 
 
+def test_thesis_actions_are_spaced_like_note_actions():
+    """A thesis card's actions row is a form; a note's is a ``<p>``.
+
+    The browser gives a ``<p>`` ``margin: 1em 0``, and ui.css sets no
+    paragraph margin. The form rule repeats that margin, so both rows
+    sit the same distance under their text.
+    """
+    assert ("margin", "1em 0") in _css_declarations(
+        ".research-item form.form-actions"
+    )
+    assert not any(
+        name.startswith("margin") for name, _ in _css_declarations("p")
+    )
+
+
 @pytest.mark.asyncio
 async def test_panel_in_english(client):
     company_id = _company(client)
