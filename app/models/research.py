@@ -331,6 +331,10 @@ class Thesis(BaseModel):
     This is an output model. Title, body, and thesis-breakers are
     returned as stored. They are not stripped and they are not
     checked against the write-model length limits.
+
+    ``closed_at`` is when the thesis was closed. It is None while the
+    thesis is active. A thesis that was already closed before
+    revision 0008 has the time of its last edit.
     """
 
     id: int
@@ -341,6 +345,7 @@ class Thesis(BaseModel):
     status: ThesisStatus
     created_at: datetime
     updated_at: datetime
+    closed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

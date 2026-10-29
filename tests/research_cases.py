@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.models.database_models import (
@@ -79,6 +79,20 @@ def _pin_updated_at(session, model, row_id, moment):
     return stored.updated_at
 
 
+def _pin_closed_at(session, thesis_id, moment):
+    """Write ``closed_at`` with an SQL UPDATE, past the repository.
+
+    The repository sets ``closed_at`` from its own clock. A fixed old
+    value shows whether a later call moved it.
+    """
+    session.execute(
+        update(ThesisDB)
+        .where(ThesisDB.id == thesis_id)
+        .values(closed_at=moment)
+    )
+    session.commit()
+
+
 class ResearchBehavior:
     """CRUD, scoping, validation, and cascade for notes and theses."""
 
@@ -116,6 +130,10 @@ class ResearchBehavior:
         sql = str(checks[0].sqltext)
         assert "active" in sql
         assert "closed" in sql
+        assert ThesisDB.__table__.c.closed_at.nullable is True
+        # Revision 0008 appends closed_at with ADD COLUMN. create_all
+        # must build the same column order as the upgrade.
+        assert list(ThesisDB.__table__.c.keys())[-1] == "closed_at"
 
     def test_note_crud_orders_by_edit_then_id(self, session):
         company = _company(session, "ACME")
@@ -335,6 +353,84 @@ class ResearchBehavior:
         again = repo.update(company.id, thesis.id, ThesisUpdate())
         assert again.updated_at == _OLD
         assert again.title == "T"
+
+    def test_closing_sets_closed_at_and_reopening_clears_it(self, session):
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(company.id, ThesisCreate(title="T", body="B"))
+        assert thesis.closed_at is None
+
+        closed = repo.set_status(company.id, thesis.id, ThesisStatus.CLOSED)
+        assert closed.closed_at.utcoffset() == timedelta(0)
+        # One clock: the close is the edit that moved updated_at.
+        assert closed.closed_at == closed.updated_at
+
+        reopened = repo.set_status(company.id, thesis.id, ThesisStatus.ACTIVE)
+        assert reopened.closed_at is None
+        assert repo.get(company.id, thesis.id).closed_at is None
+
+    def test_update_that_changes_status_sets_closed_at(self, session):
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(company.id, ThesisCreate(title="T", body="B"))
+        assert thesis.closed_at is None
+
+        closed = repo.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(status=ThesisStatus.CLOSED),
+        )
+        assert closed.closed_at.utcoffset() == timedelta(0)
+        assert closed.closed_at == closed.updated_at
+
+        reopened = repo.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(status=ThesisStatus.ACTIVE),
+        )
+        assert reopened.closed_at is None
+        assert repo.get(company.id, thesis.id).closed_at is None
+
+    def test_same_status_keeps_closed_at(self, session):
+        """Only a change of status moves ``closed_at``.
+
+        ``updated_at`` is pinned too, so the edit below can show that
+        it moved one clock and left the other.
+        """
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(company.id, ThesisCreate(title="T", body="B"))
+        repo.set_status(company.id, thesis.id, ThesisStatus.CLOSED)
+        _pin_closed_at(session, thesis.id, _OLD)
+        _pin_updated_at(session, ThesisDB, thesis.id, _OLD)
+
+        again = repo.set_status(company.id, thesis.id, ThesisStatus.CLOSED)
+        assert again.closed_at == _OLD
+
+        edited = repo.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(status=ThesisStatus.CLOSED, title="x"),
+        )
+        assert edited.title == "x"
+        assert edited.updated_at > _OLD
+        assert edited.closed_at == _OLD
+
+        # An edit that does not send a status keeps it, and the date.
+        text_only = repo.update(company.id, thesis.id, ThesisUpdate(body="y"))
+        assert text_only.status is ThesisStatus.CLOSED
+        assert text_only.closed_at == _OLD
+
+    def test_create_closed_sets_closed_at(self, session):
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        closed = repo.create(
+            company.id,
+            ThesisCreate(title="Old", body="done", status=ThesisStatus.CLOSED),
+        )
+        assert closed.closed_at.utcoffset() == timedelta(0)
+        active = repo.create(company.id, ThesisCreate(title="New", body="go"))
+        assert active.closed_at is None
 
     def test_deleting_the_company_removes_notes_and_theses(self, session):
         company = _company(session, "ACME")
