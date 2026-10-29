@@ -1,5 +1,43 @@
 # Current Work State
 
+## Notes and theses (#33): 2026-10-29, work in progress
+
+- Branch `feat/notes-theses-33`, from `master` `3c40413`. Not pushed;
+  no pull request yet.
+- Design: `docs/superpowers/specs/2026-10-28-notes-theses-design.md`.
+  Plan: `docs/superpowers/plans/2026-10-28-notes-theses.md`, 10 tasks,
+  run with subagent-driven development. The per-task ledger (rulings,
+  deferred review findings, status) is the git-ignored
+  `.superpowers/sdd/2026-10-28-notes-theses/progress.md`.
+- Completed, each task reviewed (`15b5afb`..`d320dd0`):
+  - Task 1: `theses.closed_at` (revision `0008`);
+  - Task 2: startup refuses a `theses` table without `closed_at` and
+    names the Alembic commands;
+  - Task 3: a failed note or thesis insert is `ResearchStorageError`;
+  - Task 4: the JSON API under `/api/v1/instruments/{id}/notes` and
+    `/theses`;
+  - Task 5: note and thesis times in Polish time (`Europe/Warsaw`);
+  - Task 6: HTMX swaps a 422, marked links fall back to a plain
+    request, and a stale `autofocus` is cleared;
+  - Task 7: the sticky-note button and the read-only panel on
+    `/ui/instruments/{id}`.
+- Incomplete: Task 8 (note forms), Task 9 (thesis forms), Task 10
+  (company delete warning, persistence tests, docs, Chrome check),
+  then the final whole-branch review and the pull request.
+- Tests: after Task 7 the CI command gives 1937 passed and the 3 known
+  local failures, coverage 96.53%. The known failures are the two
+  `0006` float boundary tests on local SQLite 3.54, and
+  `tests/test_run_demo.py::test_child_process_does_not_inherit_dotenv_database`,
+  which fails because a local git-ignored `demo/` directory exists.
+  Not run: the PostgreSQL job (no local server) and GitHub Actions.
+- Checkpoint reason: on 2026-10-29 the controlling session lost its
+  terminal view in IntelliJ while its process kept running. A new
+  session took over from the ledger at Task 7. The old process is idle
+  and does no work.
+- Active agents: none at this checkpoint. Blockers: none. Account
+  usage was not available in this session.
+- Next action: Task 8, note forms in the panel.
+
 ## Company name on `clean_text` (#86 remainder): 2026-10-30
 
 - Branch `cursor/ui-company-name-clean-text-86`, rebased onto
@@ -102,9 +140,9 @@
 
 ## Open work elsewhere
 
-- #33: notes and theses are on master (revision `0005`). Master's
-  work-state still lists the `/ui` forms and any HTTP API as
-  incomplete. Those belong to the Frontend Developer.
+- #33: the notes and theses tables and repositories are on master
+  (revision `0005`). The API and the `/ui` panel are on
+  `feat/notes-theses-33` (above).
 - #32: the watchlist backend is on master (revision `0004`).
   The `/ui` page from #96 is on master. The N+1 follow-up merged
   in #108.
