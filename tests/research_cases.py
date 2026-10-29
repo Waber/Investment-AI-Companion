@@ -912,9 +912,8 @@ class ResearchBehavior:
     def test_write_models_reject_surrogates_without_echoing_them(self):
         """A lone surrogate is rejected on every write field.
 
-        There is no HTTP route for notes or theses. These models are
-        the boundary that route will use. The message does not
-        repeat the character.
+        These models are the boundary of the notes and theses API.
+        The message does not repeat the character.
         """
         raw = "A\ud800B"
         cases = (
