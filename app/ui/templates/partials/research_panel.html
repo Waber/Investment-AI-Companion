@@ -1,0 +1,100 @@
+{# The research panel, right under the company name: theses first,
+   then notes. The full page and every HTMX answer render this file.
+   ``research_panel`` None is the closed panel: an empty element that
+   keeps the id, so the sticky note's hx-target and hx-sync always
+   find it.
+
+   User text sits flush against its tags. ui.css gives .research-text
+   ``white-space: pre-wrap``, so a space or newline between the tag
+   and the value would show on the page. Autoescape shows HTML as
+   text.
+
+   ``panel.focus`` names the one element that gets ``autofocus``.
+   The heading and every note and thesis have ``tabindex="-1"``, so
+   they can take the focus without joining the Tab order.
+
+   Only HTMX answers set ``research_oob``. They also bring the
+   sticky-note form and the language switch's return path out of
+   band, as the instrument list does for its filters. #}
+{% macro thesis_card(thesis, panel) %}
+<li id="thesis-{{ thesis.id }}" class="research-item" tabindex="-1"{% if panel.focus == ('thesis-' ~ thesis.id) %} autofocus{% endif %}>
+  <h4 class="thesis-title">{{ thesis.title }}</h4>
+  <p class="research-meta">
+    {% if thesis.status == 'closed' %}
+    <span class="badge badge-closed">{{ t['research.status_closed'] }}</span>
+    {% else %}
+    <span class="badge badge-active">{{ t['research.status_active'] }}</span>
+    {% endif %}
+    <span>{{ t['research.since'].replace('{date}', format_local_date(thesis.created_at, language)) }}</span>
+    {# A closed thesis written past the repository can lack
+       closed_at. It still shows as closed, without a date. #}
+    {% if thesis.status == 'closed' and thesis.closed_at %}
+    <span>{{ t['research.closed_on'].replace('{date}', format_local_date(thesis.closed_at, language)) }}</span>
+    {% endif %}
+  </p>
+  <dl class="research-fields">
+    <dt>{{ t['field.thesis_body'] }}</dt>
+    <dd><p class="research-text">{{ thesis.body }}</p></dd>
+    <dt>{{ t['field.thesis_breakers'] }}</dt>
+    {% if thesis.thesis_breakers|trim %}
+    <dd><p class="research-text">{{ thesis.thesis_breakers }}</p></dd>
+    {% else %}
+    <dd><span class="missing">{{ t['missing'] }}</span></dd>
+    {% endif %}
+  </dl>
+</li>
+{% endmacro %}
+{% set panel = research_panel %}
+{% if panel %}
+<section id="research" class="research-panel" hx-sync="this:drop" aria-labelledby="research-title">
+  <h2 id="research-title" tabindex="-1"{% if panel.focus == 'research-title' %} autofocus{% endif %}>{{ t['research.toggle'] }}</h2>
+  <h3>{{ t['research.theses'] }}</h3>
+  {% if panel.active_theses %}
+  <ul class="research-list">
+    {% for thesis in panel.active_theses %}
+    {{ thesis_card(thesis, panel) }}
+    {% endfor %}
+  </ul>
+  {% elif panel.closed_theses %}
+  <p class="muted">{{ t['research.no_active_theses'] }}</p>
+  {% else %}
+  <p class="muted">{{ t['research.no_theses'] }}</p>
+  {% endif %}
+  {% if panel.closed_theses %}
+  <details class="research-closed"{% if panel.show_closed %} open{% endif %}>
+    <summary>{{ t['research.closed_theses'].replace('{count}', panel.closed_theses|length|string) }}</summary>
+    <ul class="research-list">
+      {% for thesis in panel.closed_theses %}
+      {{ thesis_card(thesis, panel) }}
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  <h3>{{ t['research.notes'] }}</h3>
+  {% if panel.notes %}
+  <ul class="research-list">
+    {% for note in panel.notes %}
+    <li id="note-{{ note.id }}" class="research-item" tabindex="-1"{% if panel.focus == ('note-' ~ note.id) %} autofocus{% endif %}>
+      <p class="research-meta">
+        <span>{{ format_local_datetime(note.created_at, language) }}</span>
+        {# Saving an edit moves only updated_at. #}
+        {% if note.updated_at > note.created_at %}
+        <span>{{ t['research.edited'].replace('{datetime}', format_local_datetime(note.updated_at, language)) }}</span>
+        {% endif %}
+      </p>
+      <p class="research-text">{{ note.body }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">{{ t['research.no_notes'] }}</p>
+  {% endif %}
+</section>
+{% else %}
+<div id="research"></div>
+{% endif %}
+{% if research_oob %}
+{% include "partials/research_toggle.html" %}
+<input type="hidden" name="next" value="{{ research_state_path }}" id="language-next-pl" hx-swap-oob="outerHTML">
+<input type="hidden" name="next" value="{{ research_state_path }}" id="language-next-en" hx-swap-oob="outerHTML">
+{% endif %}

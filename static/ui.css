@@ -347,12 +347,137 @@ textarea[aria-invalid="true"] {
 /* The global form rule is for filters and editors. These one-button
    forms sit inside a table cell or next to a heading. */
 .watchlist form,
-form.watchlist-heart {
+form.watchlist-heart,
+form.research-toggle {
   display: inline-flex;
   margin: 0;
 }
 
-form.watchlist-heart {
+form.watchlist-heart,
+form.research-toggle {
   margin-left: 0.5rem;
   vertical-align: middle;
+}
+
+/* Notes and theses (#33). The sticky note sits beside the heart. The
+   icon is drawn in the button's text colour (stroke="currentColor"),
+   so the open state only changes the colour. */
+.research-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.45rem;
+  background: none;
+  border: 1px solid #d8d4cc;
+  border-radius: 999px;
+  color: #6b675f;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.research-button[aria-expanded="true"] {
+  color: #0b4f8a;
+  border-color: #0b4f8a;
+}
+
+.research-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+}
+
+.research-count {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.research-panel {
+  max-width: 48rem;
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid #ddd8d0;
+  border-radius: 0.4rem;
+}
+
+.research-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.research-panel h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 1rem;
+}
+
+.research-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.research-item {
+  padding: 0.6rem 0;
+  border-top: 1px solid #ece8e1;
+}
+
+.research-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  align-items: center;
+  margin: 0 0 0.35rem;
+  color: #6b675f;
+  font-size: 0.85rem;
+}
+
+.research-meta .badge {
+  margin-left: 0;
+}
+
+.badge-active {
+  background: #dff3e4;
+  color: #1a5c2e;
+}
+
+.badge-closed {
+  background: #ece8e1;
+  color: #4e4944;
+}
+
+/* User text: line breaks show, and a long word wraps instead of
+   widening the page. The templates put the text flush against its
+   tags, so pre-wrap adds no blank line or indentation. */
+.research-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thesis-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+/* The page's dl is a two-column grid. In a card the label sits above
+   its text. */
+dl.research-fields {
+  display: block;
+  margin: 0;
+}
+
+.research-fields dt {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.research-closed {
+  margin-top: 0.75rem;
+}
+
+.research-closed summary {
+  cursor: pointer;
 }
