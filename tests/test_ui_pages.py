@@ -342,6 +342,7 @@ async def test_pages_render_in_polish_by_default(seeded):
     assert "includeIndicatorStyles" in page.text
     assert '"allowEval":false' in page.text
     assert '"allowScriptTags":false' in page.text
+    assert '{"code":"422","swap":true}' in page.text
     assert config_at < script_at
     assert 'href="/static/ui.css"' in page.text
     assert_no_dangerous_href(page.text)
