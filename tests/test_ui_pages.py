@@ -164,6 +164,28 @@ def test_language_next_path_for_research_posts():
     )
 
 
+def test_language_next_path_for_thesis_posts():
+    """A plain 422 or 500 of a thesis form returns to a GET of that state.
+
+    A new thesis has its empty form at ``.../theses/new``. Close and
+    reopen have no form, so they return to the panel. Edit and delete
+    have a GET at the same path.
+    """
+    from app.ui.templating import language_next_path
+
+    for posted, expected in (
+        ("/ui/companies/7/theses", "/ui/companies/7/theses/new"),
+        ("/ui/companies/7/theses/4/close", "/ui/companies/7/research"),
+        ("/ui/companies/7/theses/4/reopen", "/ui/companies/7/research"),
+        ("/ui/companies/7/theses/4/edit", "/ui/companies/7/theses/4/edit"),
+        (
+            "/ui/companies/7/theses/4/delete",
+            "/ui/companies/7/theses/4/delete",
+        ),
+    ):
+        assert language_next_path(_page_request("POST", posted)) == expected
+
+
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
     """The scheme check stays even when the prefix check already passed."""
     from types import SimpleNamespace
