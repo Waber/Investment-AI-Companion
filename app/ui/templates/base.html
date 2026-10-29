@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t['app_name'] }}</title>
   <link rel="stylesheet" href="/static/ui.css">
-  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'>
+  {# responseHandling is HTMX's default list with 422 inserted before
+     [45]..: a validation error is swapped in, so the form shows the
+     error and the typed text. The list replaces HTMX's own list, and
+     the first code that matches wins. Any other 4xx or 5xx is not
+     swapped and fires htmx:responseError (see static/ui.js). #}
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
   <script src="/static/vendor/htmx-2.0.10.min.js"></script>
   <script src="/static/ui.js" defer></script>
 </head>
