@@ -31,6 +31,7 @@ from app.models.research import NoteCreate, NoteUpdate
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.note_repository import NoteRepository
 from app.repositories.research_store import ResearchStorageError
+from app.ui.form_fields import errors_from_validation
 from app.ui.forms import _load_company, _not_found, _see_other
 from app.ui.origin import require_same_origin
 from app.ui.research_view import (
@@ -96,28 +97,6 @@ def research_error_key(error: dict) -> str:
     return "error.invalid"
 
 
-def _errors_from(exc: ValidationError):
-    """``(field_errors, form_error)`` from a write model's ValidationError.
-
-    ``field_errors`` maps a field to the catalog key of its first
-    error. Pydantic reports the errors in the model's field order,
-    which is the form's order. An error that names no field becomes
-    the form error.
-    """
-    errors = {}
-    form_error = None
-    for error in exc.errors():
-        loc = error.get("loc") or ()
-        field = loc[-1] if loc else None
-        key = research_error_key(error)
-        if isinstance(field, str):
-            errors.setdefault(field, key)
-        else:
-            # The first error that names no field wins, like a field's.
-            form_error = form_error or key
-    return errors, form_error
-
-
 def validate_note(
     values: dict, *, update: bool
 ) -> tuple[NoteCreate | NoteUpdate | None, dict[str, str], str | None]:
@@ -127,13 +106,17 @@ def validate_note(
     edit, or None when the text is not valid. The write models own
     every rule: blank text, the length after the CRLF fold, and
     control characters. The errors are catalog keys, so the panel
-    shows them in either language.
+    shows them in either language. ``errors_from_validation`` is the
+    rule the company and metrics forms use; ``research_error_key``
+    only picks the keys.
     """
     model_type = NoteUpdate if update else NoteCreate
     try:
         model = model_type.model_validate({"body": values.get("body", "")})
     except ValidationError as exc:
-        errors, form_error = _errors_from(exc)
+        errors, form_error = errors_from_validation(
+            exc, ("body",), key_for=research_error_key
+        )
         return None, errors, form_error
     return model, {}, None
 

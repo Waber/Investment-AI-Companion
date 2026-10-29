@@ -54,9 +54,13 @@
 {# The error summary of one panel form. ``form`` is panel.new_note or
    panel.form. Each invalid field links to its control, and ``labels``
    maps a field to the catalog key of its label. A failed save has
-   no field to correct, only its message. #}
+   no field to correct, only its message.
+
+   Unlike partials/error_summary.html it has no role="alert". The
+   summary takes the focus when it appears, and in this slice focus
+   replaces status messages; an alert on top would be read twice. #}
 {% if form.errors or form.form_error %}
-<div id="{{ prefix }}-errors" class="error-summary" role="alert" tabindex="-1"{% if panel.focus == prefix ~ '-errors' %} autofocus{% endif %}>
+<div id="{{ prefix }}-errors" class="error-summary" tabindex="-1"{% if panel.focus == prefix ~ '-errors' %} autofocus{% endif %}>
   {% if form.errors %}
   <p>{{ t['form.error_summary'] }}</p>
   {% endif %}
