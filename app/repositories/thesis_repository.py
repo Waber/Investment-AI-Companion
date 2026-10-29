@@ -3,15 +3,19 @@
 The methods match ``NoteRepository``: every read and write is
 limited to one ``company_id``. A thesis that belongs to another
 company looks missing. ``create`` raises ``CompanyNotFoundError``
-when that company is not stored.
+when that company is not stored, and ``ResearchStorageError`` when
+the insert fails for another reason.
 
 ``set_status`` closes or reopens a thesis without editing the text.
 ``list_for_company`` can return every status, or only one.
 
 ``closed_at`` follows the status. Closing sets it to the same instant
 as ``updated_at``. Reopening clears it. Saving the status a thesis
-already has leaves it alone. That holds for ``set_status``, for an
-``update`` that sends a status, and for a ``create`` that is closed.
+already has leaves it alone. That holds for ``set_status`` and for an
+``update`` that sends a status. ``create`` is different: a thesis
+created closed takes ``closed_at`` from the Python clock, while
+``updated_at`` keeps the database default, so the two can differ
+slightly.
 """
 
 from datetime import datetime, timezone
@@ -28,7 +32,6 @@ from app.models.research import (
 from app.repositories.research_store import (
     commit_company_scoped,
     commit_research_change,
-    ensure_company_exists,
 )
 
 
@@ -89,8 +92,8 @@ class ThesisRepository:
 
         Raises:
             CompanyNotFoundError: ``company_id`` is not in ``companies``.
+            ResearchStorageError: the insert failed and was rolled back.
         """
-        ensure_company_exists(self.db, company_id)
         status = _status_value(thesis.status)
         closed_at = None
         if status == ThesisStatus.CLOSED.value:
@@ -103,9 +106,7 @@ class ThesisRepository:
             status=status,
             closed_at=closed_at,
         )
-        self.db.add(row)
-        commit_company_scoped(self.db, company_id)
-        self.db.refresh(row)
+        commit_company_scoped(self.db, company_id, row)
         return Thesis.model_validate(row)
 
     def update(
