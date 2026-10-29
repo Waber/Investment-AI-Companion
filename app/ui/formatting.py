@@ -4,13 +4,15 @@
 change the format used by a Polish request running in the same
 process, and a missing locale on the machine would raise. These
 functions take the language as an argument and do not touch the
-process locale. Dates are the UTC calendar date. The API still
-returns ISO strings; this module is only for HTML.
+process locale. Dates are the UTC calendar date, except note and
+thesis times, which are Polish time (``DISPLAY_TIMEZONE``). The API
+still returns ISO strings; this module is only for HTML.
 """
 
 import math
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal
+from zoneinfo import ZoneInfo
 
 from app.core.utc_datetime import as_utc
 
@@ -41,6 +43,10 @@ _ENGLISH_MONTHS = (
     "Nov",
     "Dec",
 )
+# Note and thesis times are shown in Polish time in both languages.
+# ZoneInfo reads the operating system's IANA time zone database, which
+# knows when Poland moves between UTC+1 in winter and UTC+2 in summer.
+DISPLAY_TIMEZONE = ZoneInfo("Europe/Warsaw")
 
 
 def format_number(value, language):
@@ -169,3 +175,41 @@ def format_day(value, language):
         month = _ENGLISH_MONTHS[value.month - 1]
         return f"{month} {value.day}, {value.year}"
     return f"{value.day:02d}.{value.month:02d}.{value.year}"
+
+
+def _to_display_timezone(value):
+    """Return ``value`` on the Polish clock. A naive value is UTC.
+
+    ``as_utc`` runs first because ``astimezone`` reads a naive value
+    as the machine's own time zone, which is Polish time on a laptop
+    in Poland and usually UTC on a server. The result must not depend
+    on the machine.
+    """
+    return as_utc(value).astimezone(DISPLAY_TIMEZONE)
+
+
+def format_local_datetime(value, language):
+    """Format a datetime in Polish time with a 24-hour clock, or None.
+
+    Polish is ``28.10.2026, 14:05``. English writes the date its own
+    way but keeps the Polish clock: ``Oct 28, 2026, 14:05``. "Local"
+    always means ``DISPLAY_TIMEZONE``, never the machine's time zone.
+    The date part comes from ``format_day``. Seconds are cut off. A
+    ``date`` or any other value that is not a ``datetime`` is None.
+    """
+    if not isinstance(value, datetime):
+        return None
+    local = _to_display_timezone(value)
+    day = format_day(local.date(), language)
+    return f"{day}, {local.hour:02d}:{local.minute:02d}"
+
+
+def format_local_date(value, language):
+    """Format the Polish calendar date of a datetime, or return None.
+
+    It can differ from ``format_date``, which keeps the UTC date:
+    23:30 UTC on 28 October is already 29 October in Warsaw.
+    """
+    if not isinstance(value, datetime):
+        return None
+    return format_day(_to_display_timezone(value).date(), language)
