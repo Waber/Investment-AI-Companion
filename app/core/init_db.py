@@ -70,14 +70,15 @@ def require_thesis_closed_at_column(db_engine) -> None:
         "`alembic upgrade head`. A database created by an older startup "
         "create_all is first stamped with the Alembic head of the version "
         "that created it (`alembic stamp 0007` for a database created on "
-        "or after 2026-10-22), then runs `alembic upgrade head`."
+        "or after 2026-10-24), then runs `alembic upgrade head`."
     )
 
 
 def init_db():
     """
     Initialize the database by creating all tables.
-    This function should be called when the application starts for the first time.
+    This function should be called when the application starts for the
+    first time.
     """
     # Create all tables defined in our models.
     # This creates companies, financial_metrics, price_bars,
@@ -109,7 +110,11 @@ def seed_sample_data(db: Session):
             ticker="AAPL",
             sector="Technology",
             industry="Consumer Electronics",
-            description="Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide.",
+            description=(
+                "Apple Inc. designs, manufactures, and markets smartphones, "
+                "personal computers, tablets, wearables, and accessories "
+                "worldwide."
+            ),
             website="https://www.apple.com",
             country="USA",
             exchange="NASDAQ",
@@ -120,7 +125,10 @@ def seed_sample_data(db: Session):
             ticker="MSFT",
             sector="Technology",
             industry="Software",
-            description="Microsoft Corporation develops, licenses, and supports software, services, devices, and solutions worldwide.",
+            description=(
+                "Microsoft Corporation develops, licenses, and supports "
+                "software, services, devices, and solutions worldwide."
+            ),
             website="https://www.microsoft.com",
             country="USA",
             exchange="NASDAQ",
@@ -131,7 +139,11 @@ def seed_sample_data(db: Session):
             ticker="TSLA",
             sector="Consumer Discretionary",
             industry="Automobiles",
-            description="Tesla, Inc. designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems.",
+            description=(
+                "Tesla, Inc. designs, develops, manufactures, leases, and "
+                "sells electric vehicles, and energy generation and storage "
+                "systems."
+            ),
             website="https://www.tesla.com",
             country="USA",
             exchange="NASDAQ",
