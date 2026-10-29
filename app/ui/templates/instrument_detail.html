@@ -8,7 +8,7 @@
   <a href="/ui/companies/{{ instrument.id }}/metrics/new">{{ t['action.add_metrics'] }}</a>
 </p>
 {# A div, not a p: a form inside a p would close the p and push the
-   heart onto its own line. #}
+   heart and the sticky note onto their own line. #}
 <div class="instrument-name">
   {{ instrument.name if instrument.name else t['missing'] }}
   {% if instrument.is_synthetic %}
@@ -16,8 +16,10 @@
   {% endif %}
   {% with company_id=instrument.id %}
   {% include "partials/watchlist_heart.html" %}
+  {% include "partials/research_toggle.html" %}
   {% endwith %}
 </div>
+{% include "partials/research_panel.html" %}
 <dl>
   {% macro text_field(code, value) %}
   <dt>{{ t['field.' ~ code] }}</dt>

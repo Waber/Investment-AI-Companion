@@ -7,7 +7,6 @@ so the stale marker does not depend on the day the suite runs.
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from html.parser import HTMLParser
 
 import pytest
 from sqlalchemy import event, text
@@ -16,6 +15,7 @@ from app.models.database_models import CompanyDB, PriceBarDB
 from app.repositories.price_bar_repository import PriceBarRepository
 from app.repositories.watchlist_repository import WatchlistRepository
 from app.ui import watchlist_view
+from tests.ui_html import FormInParagraph
 
 TODAY = date(2026, 10, 27)
 RETRIEVED = datetime(2026, 10, 27, 6, 0, tzinfo=timezone.utc)
@@ -341,34 +341,11 @@ async def test_unknown_from_value_returns_to_the_detail_page(client):
     assert response.headers["location"] == f"/ui/instruments/{company_id}"
 
 
-class _FormInParagraph(HTMLParser):
-    """Records a <form> that starts while a <p> is still open.
-
-    The HTML parser in a browser closes the <p> at that point, which
-    pushes the heart onto its own line under the company name.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.open_paragraphs = 0
-        self.nested = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "p":
-            self.open_paragraphs += 1
-        if tag == "form" and self.open_paragraphs:
-            self.nested = True
-
-    def handle_endtag(self, tag):
-        if tag == "p" and self.open_paragraphs:
-            self.open_paragraphs -= 1
-
-
 @pytest.mark.asyncio
 async def test_heart_is_not_inside_a_paragraph(client):
     company_id = _company(client)
     html = (await client.get(f"/ui/instruments/{company_id}")).text
-    parser = _FormInParagraph()
+    parser = FormInParagraph()
     parser.feed(html)
     assert 'class="watchlist-heart"' in html
     assert parser.nested is False

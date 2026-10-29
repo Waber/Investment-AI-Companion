@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.repositories.watchlist_repository import WatchlistRepository
-from app.ui import watchlist_view
+from app.ui import research_view, watchlist_view
 from app.ui.catalog import LANGUAGE_COOKIE, SUPPORTED_LANGUAGES
 from app.ui.origin import require_same_origin
 from app.ui.queries import ListFilters, get_instrument, list_instruments
@@ -236,29 +236,58 @@ def instrument_list(
     )
 
 
+def detail_page(
+    request, db, instrument, *, research_panel=None, status_code=200
+):
+    """The company page, with the research panel open or closed.
+
+    ``research_panel`` is a ``ResearchPanel`` for an open panel, or
+    None for a closed one. The research routes call this too, so a
+    plain request in any panel state gets this same page.
+    """
+    if research_panel is None:
+        count = research_view.research_count(db, instrument.id)
+    else:
+        count = research_panel.count
+    return _with_ui_headers(
+        render(
+            request,
+            "instrument_detail.html",
+            status_code=status_code,
+            instrument=instrument,
+            metric_fields=METRIC_FIELDS,
+            monetary_fields=MONETARY_FIELDS,
+            on_watchlist=WatchlistRepository(db).contains(instrument.id),
+            research_panel=research_panel,
+            research_count=count,
+            research_open=research_panel is not None,
+        )
+    )
+
+
 @router.get("/instruments/{instrument_id}", include_in_schema=False)
 def instrument_detail(
     request: Request,
     instrument_id: str,
+    research: str = "",
     db: Session = Depends(get_db),
 ):
-    """One instrument, or a translated HTML 404."""
+    """One instrument, or a translated HTML 404.
+
+    ``?research=open`` opens the notes and theses panel. The sticky
+    note sends it when the page is loaded without JavaScript. Any
+    other value leaves the panel closed.
+    """
     parsed_id = _instrument_id(instrument_id)
     instrument = None if parsed_id is None else get_instrument(db, parsed_id)
     if instrument is None:
         return _with_ui_headers(
             render(request, "not_found.html", status_code=404)
         )
-    return _with_ui_headers(
-        render(
-            request,
-            "instrument_detail.html",
-            instrument=instrument,
-            metric_fields=METRIC_FIELDS,
-            monetary_fields=MONETARY_FIELDS,
-            on_watchlist=WatchlistRepository(db).contains(instrument.id),
-        )
-    )
+    panel = None
+    if research == "open":
+        panel = research_view.build_panel(db, instrument.id)
+    return detail_page(request, db, instrument, research_panel=panel)
 
 
 @router.get("/watchlist", include_in_schema=False)
