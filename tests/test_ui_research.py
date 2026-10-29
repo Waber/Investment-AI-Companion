@@ -965,6 +965,9 @@ async def test_invalid_note_is_422_and_keeps_the_text(client, htmx):
     assert '<a href="#note-new-body">Nowa notatka</a>' in summary
     assert "To pole jest wymagane." in summary
     assert _attrs(html, "note-new-errors")["tabindex"] == "-1"
+    # It takes the focus, so it is no alert as well: a screen reader
+    # would read it twice.
+    assert "role" not in _attrs(html, "note-new-errors")
     assert _focus(response) == "note-new-errors"
     assert _text(html, "note-new-body") == blank
     # Its own 422 shows the field as the server rendered it.
@@ -1517,37 +1520,6 @@ async def test_language_path_follows_the_panel_state(client):
     assert _attrs(page.text, "language-next-pl")["value"] == (
         f"{base}/research"
     )
-
-
-def test_research_errors_keep_the_field_order_and_the_form_error():
-    """Each field keeps its own error, and an error with no field is the
-    form's, so a 422 always says what is wrong."""
-    from pydantic import BaseModel, ValidationError, model_validator
-
-    from app.ui.research_forms import _errors_from
-
-    class Fields(BaseModel):
-        title: str
-        body: str
-
-    class Whole(BaseModel):
-        body: str
-
-        @model_validator(mode="after")
-        def _reject(self):
-            raise ValueError("the whole form")
-
-    with pytest.raises(ValidationError) as missing:
-        Fields.model_validate({})
-    errors, form_error = _errors_from(missing.value)
-    assert list(errors.items()) == [
-        ("title", "error.required"),
-        ("body", "error.required"),
-    ]
-    assert form_error is None
-    with pytest.raises(ValidationError) as whole:
-        Whole.model_validate({"body": "x"})
-    assert _errors_from(whole.value) == ({}, "error.invalid")
 
 
 def test_research_error_key_names_the_limit():

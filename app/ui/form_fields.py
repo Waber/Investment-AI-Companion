@@ -353,11 +353,16 @@ def catalog_key_for(field, kind, message):
     return "error.invalid"
 
 
-def errors_from_validation(exc, field_order):
+def errors_from_validation(exc, field_order, *, key_for=None):
     """Return ``(field_errors, form_error_key)``.
 
     ``field_errors`` keeps the form's field order. The value is a
     catalog key. The first error for a field wins.
+
+    ``key_for`` picks the key for one item of ``exc.errors()``. The
+    notes and theses panel passes ``research_error_key``. Without it,
+    ``catalog_key_for`` decides from the field, the error type, and
+    the message, as the company and metrics forms need.
     """
     found = {}
     form_key = None
@@ -366,11 +371,14 @@ def errors_from_validation(exc, field_order):
         field = loc[-1] if loc else None
         if not isinstance(field, str):
             field = None
-        key = catalog_key_for(
-            field,
-            str(error.get("type") or ""),
-            str(error.get("msg") or ""),
-        )
+        if key_for is not None:
+            key = key_for(error)
+        else:
+            key = catalog_key_for(
+                field,
+                str(error.get("type") or ""),
+                str(error.get("msg") or ""),
+            )
         if field is None:
             if form_key is None:
                 form_key = key
