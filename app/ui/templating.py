@@ -20,6 +20,8 @@ from app.ui.formatting import (
     format_change,
     format_date,
     format_day,
+    format_local_date,
+    format_local_datetime,
     format_number,
     format_price,
 )
@@ -117,6 +119,8 @@ def render(request, template_name, *, status_code=200, **extra):
         "format_number": format_number,
         "format_date": format_date,
         "format_day": format_day,
+        "format_local_datetime": format_local_datetime,
+        "format_local_date": format_local_date,
         "format_price": format_price,
         "format_change": format_change,
         "next_path": language_next_path(request),
