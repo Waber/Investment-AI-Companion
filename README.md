@@ -153,9 +153,10 @@ of http(s) origins. A JSON list works too. The code default for
 `postgresql://investment_ai@localhost:5432/investment_ai`.
 
 Startup creates missing tables with `create_all`. It does not add
-columns to a `companies` table that is already there. `instrument_type`
-and `isin` are revision `0001`. If those columns are absent, the
-process stops before it serves and names the missing columns.
+columns to a table that is already there. `instrument_type` and
+`isin` on `companies` are revision `0001`. `closed_at` on `theses` is
+revision `0008`. If one of those columns is absent, the process stops
+before it serves and names the missing columns.
 
 - An Alembic-managed database runs `alembic upgrade head`. That
   applies revision `0001` (the columns, the
@@ -184,14 +185,25 @@ process stops before it serves and names the missing columns.
   argument still overrides the variable when you pass one. A SQLite
   file that is not on disk is reported and is not created.
 - A database created by an older startup `create_all` has `companies`
-  and not those columns. Run `alembic upgrade head` before starting
-  this version. Adding the columns by hand skips the CHECK, the
-  `uq_companies_isin` unique index, and `alembic stamp head`, so the
-  next upgrade and the application disagree about the schema.
+  without `instrument_type` and `isin`. Run `alembic upgrade head`
+  before starting this version. Adding the columns by hand skips the
+  CHECK, the `uq_companies_isin` unique index, and
+  `alembic stamp head`, so the next upgrade and the application
+  disagree about the schema.
+- A database that an older startup `create_all` built after notes
+  and theses arrived has `theses` without `closed_at`. Stamp it with
+  the Alembic head of the version that built it, then run
+  `alembic upgrade head`. For a database created on or after
+  2026-10-22 that is `alembic stamp 0007`. The notes and theses
+  tables reached `create_all` on 2026-10-21, before `0006` and
+  `0007`, so an earlier file needs an earlier stamp.
 - A database that this version's `create_all` just built already has
   the columns and `uq_companies_ticker`. Record that with
   `alembic stamp head`. Do not run `alembic upgrade head` on it: the
   upgrade alters a table that already has the columns and fails.
+  `alembic stamp head` is only for a database the current version
+  built. On a database an older version built it would skip the
+  revisions added since, such as `0008`.
 
 4. Start the API on loopback:
 
