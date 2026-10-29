@@ -7,7 +7,6 @@ market-data provider.
 
 import re
 import unicodedata
-from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 import pytest
@@ -34,7 +33,7 @@ from app.ui.form_fields import (
 )
 from app.ui.origin import OriginRejected
 from app.validation.text import TextValidationError
-from tests.ui_html import parse_page, plain
+from tests.ui_html import assert_labeled, parse_form, parse_page, plain
 
 _ORIGIN = "http://127.0.0.1"
 _SCRIPT = "<script>alert(1)</script>"
@@ -50,56 +49,6 @@ _NEW_KEY_PREFIXES = (
     "field.period_",
     "field.updated_at",
 )
-
-
-class _FormParser(HTMLParser):
-    """Ids, labels, and inputs for the accessibility checks."""
-
-    def __init__(self):
-        super().__init__()
-        self.ids = set()
-        self.labels = []
-        self.controls = []
-
-    def handle_starttag(self, tag, attrs):
-        attr = dict(attrs)
-        element_id = attr.get("id")
-        if element_id:
-            self.ids.add(element_id)
-        if tag == "label" and attr.get("for"):
-            self.labels.append(attr["for"])
-        if tag in {"input", "textarea", "select"}:
-            self.controls.append(attr)
-
-
-def _parse_form(html):
-    parser = _FormParser()
-    parser.feed(html)
-    return parser
-
-
-def _assert_labeled(html):
-    """Every visible input has a label, and error ids point at real elements.
-
-    A hidden field is not a control the user labels. The language
-    switch posts ``next`` that way.
-    """
-    parsed = _parse_form(html)
-    visible = [
-        control
-        for control in parsed.controls
-        if control.get("type") != "hidden"
-    ]
-    assert visible
-    for control in visible:
-        element_id = control.get("id")
-        assert element_id
-        assert element_id in parsed.labels
-        described = control.get("aria-describedby", "")
-        if control.get("aria-invalid") == "true":
-            assert described
-        for token in described.split():
-            assert token in parsed.ids
 
 
 def _assert_ui_headers(response):
@@ -358,7 +307,7 @@ async def test_create_edit_and_delete_company_round_trip(client):
     assert 'method="post"' in page.text
     assert 'action="/ui/companies"' in page.text
     assert "hx-post" not in page.text
-    _assert_labeled(page.text)
+    assert_labeled(page.text)
     _assert_ui_headers(page)
     listing = await client.get("/ui")
     assert 'href="/ui/companies/new"' in listing.text
@@ -388,7 +337,7 @@ async def test_create_edit_and_delete_company_round_trip(client):
     assert "Edycja instrumentu" in edit.text
     assert "Ostatnia zmiana" in edit.text
     assert 'value="ROUND"' in edit.text
-    _assert_labeled(edit.text)
+    assert_labeled(edit.text)
     _assert_ui_headers(edit)
 
     renamed = await _post(
@@ -537,7 +486,7 @@ async def test_validation_errors_rerender_in_both_languages(client):
     assert 'aria-invalid="true"' in polish.text
     assert 'role="alert"' in polish.text
     assert 'href="#field-ticker"' in polish.text
-    _assert_labeled(polish.text)
+    assert_labeled(polish.text)
     _assert_ui_headers(polish)
     assert _counts(client) == before
 
@@ -559,7 +508,7 @@ async def test_validation_errors_rerender_in_both_languages(client):
     assert "Currency must be exactly three letters." in english.text
     assert "javascript:alert(1)" in english.text
     assert 'value="BAD TICKER"' in english.text
-    _assert_labeled(english.text)
+    assert_labeled(english.text)
     assert _counts(client) == before
 
 
@@ -650,7 +599,7 @@ async def test_duplicate_name_or_ticker_is_an_inline_400(client):
     assert "Istnieje już spółka o tym tickerze." in same_ticker.text
     assert 'value="Other Co"' in same_ticker.text
     assert 'aria-invalid="true"' in same_ticker.text
-    _assert_labeled(same_ticker.text)
+    assert_labeled(same_ticker.text)
     assert _counts(client) == (1, 0)
 
     same_name = await _post(
@@ -710,7 +659,7 @@ def _assert_field_message(html, field, message):
     assert message in html
     assert f'id="field-{field}-error"' in html
     assert f'href="#field-{field}"' in html
-    parsed = _parse_form(html)
+    parsed = parse_form(html)
     invalid = [
         control.get("name")
         for control in parsed.controls
@@ -1009,7 +958,7 @@ async def test_duplicate_of_both_ticker_and_isin_marks_only_the_ticker(
     assert 'id="field-ticker-error"' in response.text
     assert 'id="field-isin-error"' not in response.text
     assert _ISIN_PL not in response.text
-    parsed = _parse_form(response.text)
+    parsed = parse_form(response.text)
     isin_invalid = [
         control
         for control in parsed.controls
@@ -1550,7 +1499,7 @@ async def test_metrics_create_edit_and_delete(client):
     assert "Nowe wskaźniki" in form.text
     assert "Czas bez strefy jest zapisywany jako UTC" in form.text
     assert 'name="period_type"' in form.text
-    _assert_labeled(form.text)
+    assert_labeled(form.text)
     _assert_ui_headers(form)
 
     created = await _post(
@@ -1599,7 +1548,7 @@ async def test_metrics_create_edit_and_delete(client):
     assert 'value="2024-12-31T00:00:00"' in edit.text
     assert 'value="1000"' in edit.text
     assert 'value="0"' in edit.text
-    _assert_labeled(edit.text)
+    assert_labeled(edit.text)
 
     client.cookies.set("ui_lang", "en")
     english_edit = await client.get(
@@ -1901,7 +1850,7 @@ async def test_instrument_type_round_trip_in_both_languages(
         assert f'<option value="STOCK" selected>{label}</option>' in form.text
     else:
         assert f'<option value="{code}">{label}</option>' in form.text
-    _assert_labeled(form.text)
+    assert_labeled(form.text)
 
     company_id, _data = await _create(
         client,
@@ -1924,7 +1873,7 @@ async def test_instrument_type_round_trip_in_both_languages(
     assert f'<label for="field-instrument_type">{type_label}</label>' in (
         edit.text
     )
-    _assert_labeled(edit.text)
+    assert_labeled(edit.text)
     renamed = await _post(
         client,
         f"/ui/companies/{company_id}/edit",
@@ -2138,7 +2087,7 @@ async def test_unknown_instrument_type_is_422_on_the_select(client, language):
     assert 'id="field-instrument_type-error"' in response.text
     assert sentence in response.text
     assert 'value="EQUITY" selected' in response.text
-    _assert_labeled(response.text)
+    assert_labeled(response.text)
     assert _counts(client) == (0, 0)
 
     hostile = await _post(

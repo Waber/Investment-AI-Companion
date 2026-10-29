@@ -1,6 +1,7 @@
 """The sticky note beside the heart, and the research panel it opens.
 
-Notes and theses are stored through ``NoteRepository`` and
+The panel lists theses and notes, and its forms add, edit, and delete
+notes. Notes and theses are stored through ``NoteRepository`` and
 ``ThesisRepository`` on the test database. The database stamps an
 insert with the current time, so every timestamp a test asserts is
 pinned on the table row afterwards. No market-data provider is called.
@@ -19,23 +20,29 @@ import pytest
 
 from app.models.database_models import CompanyDB, NoteDB, ThesisDB
 from app.models.research import (
+    Note,
     NoteCreate,
     NoteUpdate,
     Thesis,
     ThesisCreate,
     ThesisStatus,
 )
+from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.note_repository import NoteRepository
+from app.repositories.research_store import ResearchStorageError
 from app.repositories.thesis_repository import ThesisRepository
+from app.ui.catalog import CATALOGS
 from app.ui.formatting import format_local_date, format_local_datetime
-from app.ui.research_view import NewNote, ResearchPanel
+from app.ui.research_view import NewNote, PanelForm, ResearchPanel
 from app.ui.templating import MessageCatalog, templates
-from tests.ui_html import FormInParagraph
+from tests.ui_html import FormInParagraph, assert_labeled
 
 UI_CSS = Path(__file__).resolve().parents[1] / "static" / "ui.css"
 _SCRIPT = "<script>alert(1)</script>"
 _ESCAPED = "&lt;script&gt;alert(1)&lt;/script&gt;"
 _HTMX = {"hx-request": "true"}
+_ORIGIN = "http://127.0.0.1"
+_NOT_STORED = "Nie udało się zapisać. Spróbuj ponownie."
 # Elements without an end tag. The text parser below must not wait
 # for one.
 _VOID = frozenset(
@@ -274,6 +281,74 @@ def _css_declarations(selector):
             if value.strip():
                 found.add((name.strip(), " ".join(value.split())))
     return found
+
+
+async def _post(client, path, data=None, *, origin=_ORIGIN, htmx=False):
+    """POST a panel form the way the browser does: same origin, form data."""
+    headers = {}
+    if origin is not None:
+        headers["origin"] = origin
+    if htmx:
+        headers.update(_HTMX)
+    return await client.post(path, data=data or {}, headers=headers)
+
+
+def _stored_notes(client, company_id):
+    """``{id: body}`` of the company's notes, read from the table."""
+    session = _session(client)
+    try:
+        rows = session.query(NoteDB).filter(NoteDB.company_id == company_id)
+        return {row.id: row.body for row in rows}
+    finally:
+        session.close()
+
+
+def _updated_at(client, note_id):
+    session = _session(client)
+    try:
+        return session.get(NoteDB, note_id).updated_at
+    finally:
+        session.close()
+
+
+def _autofocus_ids(html):
+    """Ids of the elements that carry ``autofocus``, in page order."""
+    return [
+        attrs.get("id") for _, attrs in _tags(html) if "autofocus" in attrs
+    ]
+
+
+def _focus(response):
+    """The id of the one element that takes the focus in this answer."""
+    focused = _autofocus_ids(response.text)
+    assert response.text.count("autofocus") == 1, focused
+    [element_id] = focused
+    return element_id
+
+
+def _panel_actions(html):
+    """Every form and every HTMX link inside the open panel."""
+    return [
+        (tag, attrs)
+        for tag, attrs in _tags(_panel(html))
+        if tag == "form" or (tag == "a" and "hx-get" in attrs)
+    ]
+
+
+def _link(html, href):
+    """The attributes of the one link to ``href`` inside the panel."""
+    found = [
+        attrs
+        for tag, attrs in _tags(_panel(html))
+        if tag == "a" and attrs.get("href") == href
+    ]
+    assert len(found) == 1, (href, len(found))
+    return found[0]
+
+
+def _fail_storage(*args, **kwargs):
+    """Stands in for a repository write whose commit failed."""
+    raise ResearchStorageError()
 
 
 @pytest.mark.asyncio
@@ -739,6 +814,28 @@ def test_panel_focus_can_name_the_heading():
     assert "autofocus" in _attrs(html, "research-title")
 
 
+def test_a_thesis_form_does_not_open_a_note_form():
+    """Notes and theses have separate ids, so thesis 3 and note 3 exist.
+
+    An inline form opens on a note only when its kind is a note kind.
+    """
+    note = Note(
+        id=3,
+        company_id=1,
+        body="Notatka",
+        created_at=_utc("2026-10-28T13:05"),
+        updated_at=_utc("2026-10-28T13:05"),
+    )
+    for kind in ("thesis_edit", "thesis_delete"):
+        html = _render_panel(
+            notes=[note], form=PanelForm(kind=kind, item_id=3)
+        )
+        assert 'id="note-3-body"' not in html
+        assert 'id="note-3-delete-question"' not in html
+        assert 'href="/ui/companies/1/notes/3/edit"' in html
+        assert 'href="/ui/companies/1/notes/3/delete"' in html
+
+
 def test_show_closed_unfolds_the_closed_theses():
     closed = Thesis(
         id=4,
@@ -778,3 +875,703 @@ async def test_blank_breakers_show_no_data(client):
     card = _between(html, f'id="thesis-{thesis_id}"', "</li>")
     assert "brak danych" in card
     assert card.count('class="research-text"') == 1
+
+
+@pytest.mark.asyncio
+async def test_add_note_plain_and_htmx(client):
+    company_id = _company(client)
+    path = f"/ui/companies/{company_id}/notes"
+
+    fragment = await _post(
+        client, path, {"body": " Pierwsza notatka "}, htmx=True
+    )
+    assert fragment.status_code == 200
+    html = fragment.text
+    assert "<html" not in html
+    [note_id] = _stored_notes(client, company_id)
+    assert _stored_notes(client, company_id) == {note_id: "Pierwsza notatka"}
+    assert "Pierwsza notatka" in _text(html, f"note-{note_id}")
+    # Its own success clears the field: the answer's copy replaces the
+    # browser's, because the wrapper has no hx-preserve.
+    assert _text(html, "note-new-body") == ""
+    assert "hx-preserve" not in _attrs(html, "note-new-field")
+    assert 'id="note-new-body"' in _between(
+        html, 'id="note-new-field"', "</div>"
+    )
+    assert _focus(fragment) == "note-new-body"
+    _assert_toggle(
+        html,
+        company_id,
+        expanded="true",
+        next_state="closed",
+        label="Notatki i tezy (1)",
+    )
+    assert _text(html, "research-toggle-button").strip() == "1"
+    _assert_ui_headers(fragment)
+
+    plain = await _post(client, path, {"body": "Druga notatka"})
+    assert plain.status_code == 303
+    assert plain.headers["location"] == (
+        f"/ui/instruments/{company_id}?research=open#research"
+    )
+    _assert_ui_headers(plain)
+    assert sorted(_stored_notes(client, company_id).values()) == [
+        "Druga notatka",
+        "Pierwsza notatka",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_crlf_note_at_the_limit_is_saved(client):
+    """A Windows newline counts as one character (Review Focus 2)."""
+    company_id = _company(client)
+    path = f"/ui/companies/{company_id}/notes"
+    at_limit = "a" * 4999 + "\r\n" + "a" * 5000
+    assert len(at_limit) == 10001
+    saved = await _post(client, path, {"body": at_limit})
+    assert saved.status_code == 303
+    [body] = _stored_notes(client, company_id).values()
+    assert len(body) == 10000
+    assert body.count("\n") == 1
+    assert "\r" not in body
+
+    over = "a" * 5000 + "\r\n" + "a" * 5000
+    for htmx in (False, True):
+        response = await _post(client, path, {"body": over}, htmx=htmx)
+        assert response.status_code == 422
+        html = response.text
+        assert "Najwyżej 10 000 znaków." in _text(html, "note-new-body-error")
+        assert "Najwyżej 10 000 znaków." in _text(html, "note-new-errors")
+        assert _text(html, "note-new-body") == over
+    assert len(_stored_notes(client, company_id)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("htmx", [False, True])
+async def test_invalid_note_is_422_and_keeps_the_text(client, htmx):
+    company_id = _company(client)
+    path = f"/ui/companies/{company_id}/notes"
+    blank = " \r\n\t "
+    response = await _post(client, path, {"body": blank}, htmx=htmx)
+    assert response.status_code == 422
+    html = response.text
+    assert _text(html, "note-new-body-error") == "To pole jest wymagane."
+    textarea = _attrs(html, "note-new-body")
+    assert textarea["aria-invalid"] == "true"
+    assert textarea["aria-describedby"] == "note-new-body-error"
+    assert_labeled(html)
+    summary = _between(html, 'id="note-new-errors"', "</div>")
+    # The link reads like the field's own label.
+    assert '<a href="#note-new-body">Nowa notatka</a>' in summary
+    assert "To pole jest wymagane." in summary
+    assert _attrs(html, "note-new-errors")["tabindex"] == "-1"
+    assert _focus(response) == "note-new-errors"
+    assert _text(html, "note-new-body") == blank
+    # Its own 422 shows the field as the server rendered it.
+    assert "hx-preserve" not in _attrs(html, "note-new-field")
+    if htmx:
+        assert "<html" not in html
+    else:
+        assert "<html" in html
+        assert _attrs(html, "research-toggle-button")["aria-expanded"] == (
+            "true"
+        )
+    assert html.count('<section id="research"') == 1
+
+    payload = "</textarea>" + _SCRIPT + "a" * 10000
+    response = await _post(client, path, {"body": payload}, htmx=htmx)
+    assert response.status_code == 422
+    html = response.text
+    assert "</textarea><script>" not in html
+    assert _SCRIPT not in html
+    assert "&lt;/textarea&gt;&lt;script&gt;" in html
+    assert _text(html, "note-new-body") == payload
+    assert _stored_notes(client, company_id) == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("htmx", [False, True])
+async def test_invalid_note_edit_keeps_the_text(client, htmx):
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Stara treść", "2026-10-28T13:05")
+    path = f"/ui/companies/{company_id}/notes/{note_id}/edit"
+    typed = "a" * 10001
+    response = await _post(client, path, {"body": typed}, htmx=htmx)
+    assert response.status_code == 422
+    html = response.text
+    field = f"note-{note_id}-body"
+    assert _text(html, field) == typed
+    assert _attrs(html, field)["aria-invalid"] == "true"
+    assert _attrs(html, field)["aria-describedby"] == f"{field}-error"
+    assert _text(html, f"{field}-error") == "Najwyżej 10 000 znaków."
+    assert_labeled(html)
+    summary = _between(html, f'id="note-{note_id}-errors"', "</div>")
+    assert f'<a href="#{field}">Treść notatki</a>' in summary
+    assert "Najwyżej 10 000 znaków." in summary
+    assert _focus(response) == f"note-{note_id}-errors"
+    # The form sits in the note's own item.
+    item = _between(html, f'<li id="note-{note_id}"', "</li>")
+    assert f'action="{path}"' in item
+    assert _stored_notes(client, company_id) == {note_id: "Stara treść"}
+
+
+@pytest.mark.asyncio
+async def test_draft_survives_other_actions(client):
+    """Text typed in "Nowa notatka" outlives the other panel actions.
+
+    HTMX keeps the browser's copy of an element when the answer's copy
+    has ``hx-preserve``. The wrapper holds the field and its error.
+    """
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    research = f"/ui/companies/{company_id}/research"
+    note = f"/ui/companies/{company_id}/notes/{note_id}"
+    answers = (
+        await client.get(research, headers=_HTMX),
+        await client.get(f"{note}/edit", headers=_HTMX),
+        await client.get(f"{note}/delete", headers=_HTMX),
+        await client.get(
+            research, params={"focus": f"note-{note_id}"}, headers=_HTMX
+        ),
+        await _post(client, f"{note}/edit", {"body": ""}, htmx=True),
+        await _post(client, f"{note}/edit", {"body": "Zmiana"}, htmx=True),
+        await _post(client, f"{note}/delete", htmx=True),
+    )
+    for response in answers:
+        assert response.status_code in (200, 422)
+        html = response.text
+        assert '<div id="note-new-field" hx-preserve="true">' in html
+        wrapper = _between(html, 'id="note-new-field"', "</div>")
+        assert 'id="note-new-body"' in wrapper
+        assert "autofocus" not in wrapper
+
+
+@pytest.mark.asyncio
+async def test_full_pages_put_no_autofocus_in_the_draft(client, monkeypatch):
+    """A full page never focuses inside the preserved wrapper.
+
+    ``ui.js`` removes a stale ``autofocus`` only after an HTMX swap.
+    A full page that focused inside the wrapper would carry that
+    attribute into the next HTMX answer, which keeps the wrapper.
+    """
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    note = f"/ui/companies/{company_id}/notes/{note_id}"
+    pages = [
+        await client.get(f"/ui/instruments/{company_id}?research=open"),
+        await client.get(f"{note}/edit"),
+        await client.get(f"{note}/delete"),
+        await client.get(
+            f"/ui/companies/{company_id}/research",
+            params={"focus": f"note-{note_id}"},
+        ),
+        await _post(client, f"/ui/companies/{company_id}/notes"),
+        await _post(client, f"{note}/edit"),
+    ]
+    monkeypatch.setattr(NoteRepository, "create", _fail_storage)
+    pages.append(
+        await _post(
+            client, f"/ui/companies/{company_id}/notes", {"body": "Nowa"}
+        )
+    )
+    for page in pages:
+        assert "<html" in page.text
+        wrapper = _between(page.text, 'id="note-new-field"', "</div>")
+        assert "autofocus" not in wrapper
+
+
+@pytest.mark.asyncio
+async def test_edit_note_inline(client):
+    company_id = _company(client)
+    first = _note(client, company_id, "Pierwsza", "2026-10-28T13:05")
+    second = _note(client, company_id, "Druga", "2026-10-28T14:05")
+    edit = f"/ui/companies/{company_id}/notes/{first}/edit"
+    field = f"note-{first}-body"
+
+    fragment = await client.get(edit, headers=_HTMX)
+    assert fragment.status_code == 200
+    html = fragment.text
+    assert "<html" not in html
+    assert _text(html, field) == "Pierwsza"
+    assert _focus(fragment) == field
+    item = _between(html, f'<li id="note-{first}"', "</li>")
+    assert f'action="{edit}"' in item
+    assert "Zapisz" in item
+    assert_labeled(html)
+
+    page = await client.get(edit)
+    assert page.status_code == 200
+    assert "<html" in page.text
+    assert _attrs(page.text, "research-toggle-button")["aria-expanded"] == (
+        "true"
+    )
+    assert _text(page.text, field) == "Pierwsza"
+    assert _focus(page) == field
+
+    # Only one inline form is open at a time.
+    other = await client.get(
+        f"/ui/companies/{company_id}/notes/{second}/edit", headers=_HTMX
+    )
+    assert f'id="note-{second}-body"' in other.text
+    assert f'id="{field}"' not in other.text
+    assert other.text.count("<textarea") == 2
+
+    saved = await _post(client, edit, {"body": "Poprawiona"})
+    assert saved.status_code == 303
+    assert saved.headers["location"] == (
+        f"/ui/instruments/{company_id}?research=open#research"
+    )
+    assert _stored_notes(client, company_id)[first] == "Poprawiona"
+
+    saved = await _post(client, edit, {"body": "Jeszcze raz"}, htmx=True)
+    assert saved.status_code == 200
+    assert "Jeszcze raz" in _text(saved.text, f"note-{first}")
+    assert "edytowano" in _text(saved.text, f"note-{first}")
+    assert f'id="{field}"' not in saved.text
+
+    # The same text, padded, stores nothing, so no "edytowano".
+    before = _updated_at(client, second)
+    unchanged = await _post(
+        client,
+        f"/ui/companies/{company_id}/notes/{second}/edit",
+        {"body": "  Druga \r\n"},
+        htmx=True,
+    )
+    assert unchanged.status_code == 200
+    assert "edytowano" not in _text(unchanged.text, f"note-{second}")
+    assert _updated_at(client, second) == before
+    assert _stored_notes(client, company_id)[second] == "Druga"
+
+
+@pytest.mark.asyncio
+async def test_delete_note_asks_inline_then_deletes(client):
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Do usunięcia", "2026-10-28T13:05")
+    delete = f"/ui/companies/{company_id}/notes/{note_id}/delete"
+    question = f"note-{note_id}-delete-question"
+    for headers in (_HTMX, {}):
+        response = await client.get(delete, headers=headers)
+        assert response.status_code == 200
+        html = response.text
+        assert _text(html, question) == "Usunąć tę notatkę?"
+        assert _attrs(html, question)["tabindex"] == "-1"
+        assert _focus(response) == question
+        item = _between(html, f'<li id="note-{note_id}"', "</li>")
+        assert f'id="{question}"' in item
+        form = _between(item, f'action="{delete}"', "</form>")
+        assert "Usuń" in form
+        buttons = [attrs for tag, attrs in _tags(item) if tag == "button"]
+        assert len(buttons) == 1
+        assert "autofocus" not in buttons[0]
+    assert _stored_notes(client, company_id) == {note_id: "Do usunięcia"}
+
+    plain = await _post(client, delete)
+    assert plain.status_code == 303
+    assert plain.headers["location"] == (
+        f"/ui/instruments/{company_id}?research=open#research"
+    )
+    assert _stored_notes(client, company_id) == {}
+
+    other = _note(client, company_id, "Druga", "2026-10-28T14:05")
+    fragment = await _post(
+        client, f"/ui/companies/{company_id}/notes/{other}/delete", htmx=True
+    )
+    assert fragment.status_code == 200
+    assert f'id="note-{other}"' not in fragment.text
+    assert "Brak notatek." in _panel(fragment.text)
+    assert _attrs(fragment.text, "research-toggle-button")["aria-label"] == (
+        "Notatki i tezy"
+    )
+    assert _stored_notes(client, company_id) == {}
+
+
+@pytest.mark.asyncio
+async def test_note_focus_rules(client):
+    """Keyboard focus never drops to the top of the page (Review Focus 3).
+
+    The panel shows the three notes newest first: ``newest``,
+    ``middle``, ``oldest``.
+    """
+    company_id = _company(client)
+    oldest = _note(client, company_id, "Najstarsza", "2026-10-26T08:00")
+    middle = _note(client, company_id, "Środkowa", "2026-10-27T08:00")
+    newest = _note(client, company_id, "Najnowsza", "2026-10-28T08:00")
+    base = f"/ui/companies/{company_id}"
+    note = f"{base}/notes/{middle}"
+
+    added_blank = await _post(client, f"{base}/notes", htmx=True)
+    assert added_blank.status_code == 422
+    assert _focus(added_blank) == "note-new-errors"
+
+    opened = await client.get(f"{note}/edit", headers=_HTMX)
+    assert _focus(opened) == f"note-{middle}-body"
+    cancel = f"{base}/research?focus=note-{middle}"
+    assert _link(opened.text, cancel)["hx-get"] == cancel
+
+    invalid = await _post(client, f"{note}/edit", htmx=True)
+    assert invalid.status_code == 422
+    assert _focus(invalid) == f"note-{middle}-errors"
+    assert _attrs(invalid.text, f"note-{middle}-errors")["tabindex"] == "-1"
+
+    cancelled = await client.get(cancel, headers=_HTMX)
+    assert _focus(cancelled) == f"note-{middle}"
+
+    saved = await _post(client, f"{note}/edit", {"body": "Inna"}, htmx=True)
+    assert saved.status_code == 200
+    assert _focus(saved) == f"note-{middle}"
+
+    asked = await client.get(f"{note}/delete", headers=_HTMX)
+    assert _focus(asked) == f"note-{middle}-delete-question"
+    assert _link(asked.text, cancel)["hx-get"] == cancel
+    assert _focus(await client.get(cancel, headers=_HTMX)) == f"note-{middle}"
+
+    # Delete: the next note, else the previous one, else the heading.
+    deleted = await _post(client, f"{note}/delete", htmx=True)
+    assert _focus(deleted) == f"note-{oldest}"
+    deleted = await _post(client, f"{base}/notes/{oldest}/delete", htmx=True)
+    assert _focus(deleted) == f"note-{newest}"
+    deleted = await _post(client, f"{base}/notes/{newest}/delete", htmx=True)
+    assert _focus(deleted) == "research-title"
+    assert _stored_notes(client, company_id) == {}
+
+    added = await _post(client, f"{base}/notes", {"body": "Nowa"}, htmx=True)
+    assert added.status_code == 200
+    assert _focus(added) == "note-new-body"
+
+
+@pytest.mark.asyncio
+async def test_note_actions_fall_back_and_are_named(client):
+    """Every panel action works without HTMX and names its note.
+
+    A failed HTMX request is repeated without HTMX (``ui.js``), so a
+    form posts to its own ``action`` and a link opens its own ``href``.
+    """
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}"
+    note = f"{base}/notes/{note_id}"
+    states = (
+        await client.get(f"/ui/instruments/{company_id}?research=open"),
+        await client.get(f"{base}/research", headers=_HTMX),
+        await client.get(f"{note}/edit", headers=_HTMX),
+        await client.get(f"{note}/delete", headers=_HTMX),
+    )
+    actions, links = set(), set()
+    for response in states:
+        for tag, attrs in _panel_actions(response.text):
+            assert "data-plain-fallback" in attrs, attrs
+            assert attrs["hx-target"] == "#research"
+            assert attrs["hx-swap"] == "outerHTML"
+            if tag == "form":
+                assert attrs["method"] == "post"
+                assert attrs["hx-post"] == attrs["action"]
+                actions.add(attrs["action"])
+            else:
+                assert attrs["hx-get"] == attrs["href"]
+                links.add(attrs["href"])
+    assert actions == {f"{base}/notes", f"{note}/edit", f"{note}/delete"}
+    assert links == {
+        f"{note}/edit",
+        f"{note}/delete",
+        f"{base}/research?focus=note-{note_id}",
+    }
+
+    html = states[0].text
+    edit = _link(html, f"{note}/edit")
+    assert edit["aria-label"] == "Edytuj notatkę z 28.10.2026, 14:05"
+    assert _between(html, f'href="{note}/edit"', "</a>").endswith(">Edytuj")
+    remove = _link(html, f"{note}/delete")
+    assert remove["aria-label"] == "Usuń notatkę z 28.10.2026, 14:05"
+    assert _between(html, f'href="{note}/delete"', "</a>").endswith(">Usuń")
+
+    client.cookies.set("ui_lang", "en")
+    english = (await client.get(f"{base}/research", headers=_HTMX)).text
+    assert _link(english, f"{note}/edit")["aria-label"] == (
+        "Edit the note from Oct 28, 2026, 14:05"
+    )
+    assert _link(english, f"{note}/delete")["aria-label"] == (
+        "Delete the note from Oct 28, 2026, 14:05"
+    )
+
+
+@pytest.mark.asyncio
+async def test_saving_a_deleted_note_is_the_research_404(client):
+    """A stale tab gets the research 404 (Review Focus 5)."""
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    session = _session(client)
+    try:
+        assert NoteRepository(session).delete(company_id, note_id) is True
+    finally:
+        session.close()
+    path = f"/ui/companies/{company_id}/notes/{note_id}/edit"
+    for htmx in (False, True):
+        response = await _post(client, path, {"body": "Zmiana"}, htmx=htmx)
+        assert response.status_code == 404
+        assert "text/html" in response.headers["content-type"]
+        html = response.text
+        assert "<html" in html
+        assert "Nie znaleziono notatki ani tezy" in html
+        back = f"/ui/instruments/{company_id}?research=open#research"
+        hrefs = [attrs.get("href") for tag, attrs in _tags(html) if tag == "a"]
+        assert back in hrefs
+        assert _between(html, f'href="{back}"', "</a>").endswith(
+            ">Wróć do notatek i tez"
+        )
+        _assert_ui_headers(response)
+    assert _stored_notes(client, company_id) == {}
+
+
+@pytest.mark.asyncio
+async def test_note_deleted_during_the_request_is_the_research_404(
+    client, monkeypatch
+):
+    """Another tab can delete the note after the route looked it up.
+
+    The repository then finds no row to change: ``update`` returns
+    None and ``delete`` returns False.
+    """
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    monkeypatch.setattr(NoteRepository, "update", lambda *args: None)
+    monkeypatch.setattr(NoteRepository, "delete", lambda *args: False)
+    note = f"/ui/companies/{company_id}/notes/{note_id}"
+    for path in (f"{note}/edit", f"{note}/delete"):
+        response = await _post(client, path, {"body": "Zmiana"}, htmx=True)
+        assert response.status_code == 404, path
+        assert "Nie znaleziono notatki ani tezy" in response.text
+
+
+async def _request(client, method, path, *, htmx):
+    if method == "GET":
+        return await client.get(path, headers=_HTMX if htmx else {})
+    return await _post(client, path, {"body": "Zmiana"}, htmx=htmx)
+
+
+@pytest.mark.asyncio
+async def test_note_404s(client, monkeypatch):
+    company_id = _company(client)
+    other_company = _company(client, name="Other Co", ticker="OTHER")
+    foreign = _note(client, other_company, "Cudza notatka", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}/notes"
+    routes = (
+        ("GET", "edit"),
+        ("POST", "edit"),
+        ("GET", "delete"),
+        ("POST", "delete"),
+    )
+    # Another company's note, and ids that are no note: the research 404.
+    for raw_id in (str(foreign), "abc", "01", "9" * 20):
+        for method, action in routes:
+            for htmx in (False, True):
+                path = f"{base}/{raw_id}/{action}"
+                response = await _request(client, method, path, htmx=htmx)
+                assert response.status_code == 404, (method, path)
+                assert "text/html" in response.headers["content-type"]
+                assert "Nie znaleziono notatki ani tezy" in response.text
+                _assert_ui_headers(response)
+    assert _stored_notes(client, other_company) == {foreign: "Cudza notatka"}
+
+    # An unknown company is the instrument 404, checked first.
+    for raw_company in ("999999", "abc"):
+        unknown = f"/ui/companies/{raw_company}/notes"
+        paths = [("POST", unknown)] + [
+            (method, f"{unknown}/{foreign}/{action}")
+            for method, action in routes
+        ]
+        for method, path in paths:
+            for htmx in (False, True):
+                response = await _request(client, method, path, htmx=htmx)
+                assert response.status_code == 404, (method, path)
+                assert "text/html" in response.headers["content-type"]
+                assert "Nie znaleziono instrumentu" in response.text
+
+    # The company was deleted between the check and the insert.
+    def gone(self, company, note):
+        raise CompanyNotFoundError(company)
+
+    monkeypatch.setattr(NoteRepository, "create", gone)
+    response = await _post(client, base, {"body": "Nowa"}, htmx=True)
+    assert response.status_code == 404
+    assert "Nie znaleziono instrumentu" in response.text
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_note_post_is_403(client):
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}/notes"
+    for path in (base, f"{base}/{note_id}/edit", f"{base}/{note_id}/delete"):
+        for htmx in (False, True):
+            response = await _post(
+                client,
+                path,
+                {"body": "Obca"},
+                origin="http://evil.example",
+                htmx=htmx,
+            )
+            assert response.status_code == 403, path
+    assert _stored_notes(client, company_id) == {note_id: "Notatka"}
+
+
+@pytest.mark.asyncio
+async def test_storage_failure_keeps_the_text(client, monkeypatch):
+    """A write that fails to commit is a 500 with the typed text kept."""
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Stara treść", "2026-10-28T13:05")
+
+    monkeypatch.setattr(NoteRepository, "create", _fail_storage)
+    path = f"/ui/companies/{company_id}/notes"
+    plain = await _post(client, path, {"body": "Nowa treść"})
+    assert plain.status_code == 500
+    html = plain.text
+    assert "<html" in html
+    assert _text(html, "note-new-errors").strip() == _NOT_STORED
+    assert _text(html, "note-new-body") == "Nowa treść"
+    assert "aria-invalid" not in _attrs(html, "note-new-body")
+    # Its own failed save shows the field as the server rendered it.
+    assert "hx-preserve" not in _attrs(html, "note-new-field")
+    assert _attrs(html, "note-new-errors")["tabindex"] == "-1"
+    assert _focus(plain) == "note-new-errors"
+    _assert_ui_headers(plain)
+    fragment = await _post(client, path, {"body": "Nowa treść"}, htmx=True)
+    assert fragment.status_code == 500
+    assert "<html" not in fragment.text
+    assert _text(fragment.text, "note-new-body") == "Nowa treść"
+    assert _focus(fragment) == "note-new-errors"
+
+    monkeypatch.setattr(NoteRepository, "update", _fail_storage)
+    path = f"/ui/companies/{company_id}/notes/{note_id}/edit"
+    errors = f"note-{note_id}-errors"
+    for htmx in (False, True):
+        response = await _post(client, path, {"body": "Zmieniona"}, htmx=htmx)
+        assert response.status_code == 500
+        assert _NOT_STORED in _text(response.text, errors)
+        assert _text(response.text, f"note-{note_id}-body") == "Zmieniona"
+        assert _focus(response) == errors
+    assert _stored_notes(client, company_id) == {note_id: "Stara treść"}
+
+
+@pytest.mark.asyncio
+async def test_failed_delete_keeps_the_question(client, monkeypatch):
+    """Ruling P3: the question stays open, with the error focused."""
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    monkeypatch.setattr(NoteRepository, "delete", _fail_storage)
+    delete = f"/ui/companies/{company_id}/notes/{note_id}/delete"
+    for htmx in (False, True):
+        response = await _post(client, delete, htmx=htmx)
+        assert response.status_code == 500
+        html = response.text
+        item = _between(html, f'<li id="note-{note_id}"', "</li>")
+        assert "Usunąć tę notatkę?" in item
+        assert _NOT_STORED in _text(html, f"note-{note_id}-errors")
+        assert _focus(response) == f"note-{note_id}-errors"
+    assert _stored_notes(client, company_id) == {note_id: "Notatka"}
+
+
+@pytest.mark.asyncio
+async def test_language_path_follows_the_panel_state(client):
+    """PL/EN reopens what the panel shows.
+
+    An inline form or question has a GET of its own. Every other
+    answer returns to the company page with the panel open.
+    """
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}"
+    note = f"{base}/notes/{note_id}"
+    opened = f"/ui/instruments/{company_id}?research=open"
+    answers = (
+        (await client.get(f"{note}/edit", headers=_HTMX), f"{note}/edit"),
+        (await _post(client, f"{note}/edit", htmx=True), f"{note}/edit"),
+        (await client.get(f"{note}/delete", headers=_HTMX), f"{note}/delete"),
+        (
+            await client.get(
+                f"{base}/research",
+                params={"focus": f"note-{note_id}"},
+                headers=_HTMX,
+            ),
+            opened,
+        ),
+        (await _post(client, f"{base}/notes", htmx=True), opened),
+        (
+            await _post(client, f"{note}/edit", {"body": "Inna"}, htmx=True),
+            opened,
+        ),
+        (
+            await _post(client, f"{base}/notes", {"body": "Nowa"}, htmx=True),
+            opened,
+        ),
+        (await _post(client, f"{note}/delete", htmx=True), opened),
+    )
+    for response, expected in answers:
+        for code in ("pl", "en"):
+            language_next = _attrs(response.text, f"language-next-{code}")
+            assert language_next["value"] == expected
+            assert language_next["hx-swap-oob"] == "outerHTML"
+    # A plain 422 is a full page built at the POST path. The switch
+    # opens the panel's GET instead.
+    page = await _post(client, f"{base}/notes")
+    assert page.status_code == 422
+    assert _attrs(page.text, "language-next-pl")["value"] == (
+        f"{base}/research"
+    )
+
+
+def test_research_errors_keep_the_field_order_and_the_form_error():
+    """Each field keeps its own error, and an error with no field is the
+    form's, so a 422 always says what is wrong."""
+    from pydantic import BaseModel, ValidationError, model_validator
+
+    from app.ui.research_forms import _errors_from
+
+    class Fields(BaseModel):
+        title: str
+        body: str
+
+    class Whole(BaseModel):
+        body: str
+
+        @model_validator(mode="after")
+        def _reject(self):
+            raise ValueError("the whole form")
+
+    with pytest.raises(ValidationError) as missing:
+        Fields.model_validate({})
+    errors, form_error = _errors_from(missing.value)
+    assert list(errors.items()) == [
+        ("title", "error.required"),
+        ("body", "error.required"),
+    ]
+    assert form_error is None
+    with pytest.raises(ValidationError) as whole:
+        Whole.model_validate({"body": "x"})
+    assert _errors_from(whole.value) == ({}, "error.invalid")
+
+
+def test_research_error_key_names_the_limit():
+    from app.ui.research_forms import research_error_key
+    from app.validation.text import TextValidationError
+
+    def too_long(limit):
+        return {"type": "string_too_long", "ctx": {"max_length": limit}}
+
+    def value_error(error):
+        return {"type": "value_error", "ctx": {"error": error}}
+
+    assert research_error_key({"type": "missing"}) == "error.required"
+    assert research_error_key(too_long(200)) == "error.max_200"
+    assert research_error_key(too_long(5000)) == "error.max_5000"
+    assert research_error_key(too_long(10000)) == "error.max_10000"
+    assert research_error_key(too_long(20)) == "error.too_long"
+    blank = TextValidationError("blank", "body")
+    assert research_error_key(value_error(blank)) == "error.required"
+    control = TextValidationError("control_char", "body")
+    assert research_error_key(value_error(control)) == "error.invalid"
+    plain = ValueError("body cannot be null")
+    assert research_error_key(value_error(plain)) == "error.invalid"
+    assert research_error_key({"type": "string_type"}) == "error.invalid"
+    for key in ("error.max_200", "error.max_5000", "error.max_10000"):
+        assert CATALOGS["pl"][key].startswith("Najwyżej ")
+        assert CATALOGS["en"][key].startswith("At most ")

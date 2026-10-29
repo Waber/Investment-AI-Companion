@@ -138,6 +138,32 @@ def test_language_next_path_uses_the_get_form_for_a_post():
     )
 
 
+def test_language_next_path_for_research_posts():
+    """A plain 422 or 500 of a panel form returns to a GET of that state.
+
+    Adding a note has no GET form of its own: the "Nowa notatka" field
+    lives in the panel. Edit and delete have a GET at the same path.
+    """
+    from app.ui.templating import language_next_path
+
+    assert (
+        language_next_path(_page_request("POST", "/ui/companies/7/notes"))
+        == "/ui/companies/7/research"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/notes/3/edit")
+        )
+        == "/ui/companies/7/notes/3/edit"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/notes/3/delete")
+        )
+        == "/ui/companies/7/notes/3/delete"
+    )
+
+
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
     """The scheme check stays even when the prefix check already passed."""
     from types import SimpleNamespace

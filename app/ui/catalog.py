@@ -57,8 +57,12 @@ _POLISH = {
     "research.status_active": "aktywna",
     "research.status_closed": "zamknięta",
     "research.closed_theses": "Zamknięte tezy ({count})",
+    "research.new_note": "Nowa notatka",
+    "research.edit_note_named": "Edytuj notatkę z {datetime}",
+    "research.delete_note_named": "Usuń notatkę z {datetime}",
     "field.thesis_body": "Dlaczego kupiłem",
     "field.thesis_breakers": "Kiedy sprzedam / co złamie tezę",
+    "field.note_body": "Treść notatki",
     "page.list_title": "Instrumenty",
     "page.detail_title": "Szczegóły instrumentu",
     "filter.search": "Szukaj",
@@ -103,6 +107,8 @@ _POLISH = {
     "not_found.body": (
         "Ten identyfikator nie wskazuje zapisanego instrumentu."
     ),
+    "research_not_found.title": "Nie znaleziono notatki ani tezy",
+    "research_not_found.back": "Wróć do notatek i tez",
     "metric.revenue": "Przychody",
     "metric.net_income": "Zysk netto",
     "metric.total_assets": "Aktywa razem",
@@ -132,6 +138,9 @@ _POLISH = {
     "action.save": "Zapisz",
     "action.confirm_delete": "Usuń",
     "action.cancel": "Anuluj",
+    "action.add_note": "Dodaj notatkę",
+    "action.edit": "Edytuj",
+    "action.delete": "Usuń",
     "page.create_company": "Nowy instrument",
     "page.edit_company": "Edycja instrumentu",
     "page.delete_company": "Usuwanie instrumentu",
@@ -148,6 +157,7 @@ _POLISH = {
     "delete.company_question": "Usunąć tę spółkę?",
     "delete.metrics_warning": ("Usunięcie tych wskaźników nie usuwa spółki."),
     "delete.metrics_question": "Usunąć te wskaźniki?",
+    "delete.note_question": "Usunąć tę notatkę?",
     "hint.period_end": (
         "Czas bez strefy jest zapisywany jako UTC. "
         "Przykład: 2024-12-31T00:00:00."
@@ -165,6 +175,9 @@ _POLISH = {
     ),
     "error.required": "To pole jest wymagane.",
     "error.too_long": "Za długa wartość.",
+    "error.max_200": "Najwyżej 200 znaków.",
+    "error.max_5000": "Najwyżej 5000 znaków.",
+    "error.max_10000": "Najwyżej 10 000 znaków.",
     "error.too_short": "Za krótka wartość.",
     "error.ticker": (
         "Ticker musi mieć od 1 do 20 znaków ASCII: "
@@ -189,6 +202,7 @@ _POLISH = {
     "error.constraint": (
         "Nie można zapisać tych danych, bo naruszają regułę unikalności."
     ),
+    "error.storage": "Nie udało się zapisać. Spróbuj ponownie.",
     "error.method_title": "Metoda niedozwolona",
     "error.method_body": "Ta strona nie obsługuje tej metody.",
     "error.forbidden_title": "Żądanie zostało odrzucone",
@@ -240,8 +254,12 @@ _ENGLISH = {
     "research.status_active": "active",
     "research.status_closed": "closed",
     "research.closed_theses": "Closed theses ({count})",
+    "research.new_note": "New note",
+    "research.edit_note_named": "Edit the note from {datetime}",
+    "research.delete_note_named": "Delete the note from {datetime}",
     "field.thesis_body": "Why I bought",
     "field.thesis_breakers": "When I sell / what breaks the thesis",
+    "field.note_body": "Note text",
     "page.list_title": "Instruments",
     "page.detail_title": "Instrument details",
     "filter.search": "Search",
@@ -284,6 +302,8 @@ _ENGLISH = {
     "metrics.none": "No reports",
     "not_found.title": "Instrument not found",
     "not_found.body": "This identifier does not match a stored instrument.",
+    "research_not_found.title": "Note or thesis not found",
+    "research_not_found.back": "Back to notes and theses",
     "metric.revenue": "Revenue",
     "metric.net_income": "Net income",
     "metric.total_assets": "Total assets",
@@ -313,6 +333,9 @@ _ENGLISH = {
     "action.save": "Save",
     "action.confirm_delete": "Delete",
     "action.cancel": "Cancel",
+    "action.add_note": "Add note",
+    "action.edit": "Edit",
+    "action.delete": "Delete",
     "page.create_company": "New instrument",
     "page.edit_company": "Edit instrument",
     "page.delete_company": "Delete instrument",
@@ -331,6 +354,7 @@ _ENGLISH = {
         "Deleting these metrics does not delete the company."
     ),
     "delete.metrics_question": "Delete these metrics?",
+    "delete.note_question": "Delete this note?",
     "hint.period_end": (
         "A time with no zone is stored as UTC. "
         "Example: 2024-12-31T00:00:00."
@@ -348,6 +372,9 @@ _ENGLISH = {
     ),
     "error.required": "This field is required.",
     "error.too_long": "This value is too long.",
+    "error.max_200": "At most 200 characters.",
+    "error.max_5000": "At most 5,000 characters.",
+    "error.max_10000": "At most 10,000 characters.",
     "error.too_short": "This value is too short.",
     "error.ticker": (
         "Ticker must be 1 to 20 ASCII characters: "
@@ -373,6 +400,7 @@ _ENGLISH = {
     "error.constraint": (
         "These values cannot be saved because they are not unique."
     ),
+    "error.storage": "Could not save. Try again.",
     "error.method_title": "Method not allowed",
     "error.method_body": "This page does not accept this method.",
     "error.forbidden_title": "Request rejected",

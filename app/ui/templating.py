@@ -63,6 +63,14 @@ _METRICS_FORM = re.compile(
     r"^/ui/companies/(?P<company_id>[^/]+)/metrics/"
     r"(?P<metrics_id>[^/]+)/(?:edit|delete)$"
 )
+# The "Nowa notatka" field lives in the research panel, so a note add
+# returns to the panel. A note's inline edit form and delete question
+# have a GET at the same path.
+_NOTE_CREATE = re.compile(r"^/ui/companies/(?P<company_id>[^/]+)/notes$")
+_NOTE_FORM = re.compile(
+    r"^/ui/companies/(?P<company_id>[^/]+)/notes/"
+    r"(?P<note_id>[^/]+)/(?:edit|delete)$"
+)
 
 
 def _path_with_query(path, query):
@@ -77,8 +85,10 @@ def _get_form_for_post(path):
 
     ``POST /ui/companies`` inserts a company. The blank form is
     ``GET /ui/companies/new``. ``POST /ui/companies/{id}/metrics``
-    inserts a period. That form is ``GET .../metrics/new``. Edit and
-    delete are the same path for GET and POST.
+    inserts a period. That form is ``GET .../metrics/new``.
+    ``POST /ui/companies/{id}/notes`` adds a note from the research
+    panel, ``GET .../research``. Edit and delete are the same path for
+    GET and POST.
     """
     if path == "/ui/companies":
         return "/ui/companies/new"
@@ -86,7 +96,14 @@ def _get_form_for_post(path):
     if created is not None:
         company_id = created.group("company_id")
         return f"/ui/companies/{company_id}/metrics/new"
-    if _COMPANY_FORM.match(path) or _METRICS_FORM.match(path):
+    note_added = _NOTE_CREATE.match(path)
+    if note_added is not None:
+        company_id = note_added.group("company_id")
+        return f"/ui/companies/{company_id}/research"
+    if any(
+        pattern.match(path)
+        for pattern in (_COMPANY_FORM, _METRICS_FORM, _NOTE_FORM)
+    ):
         return path
     return None
 

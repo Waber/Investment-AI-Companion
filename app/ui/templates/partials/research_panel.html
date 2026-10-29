@@ -6,12 +6,18 @@
 
    User text sits flush against its tags. ui.css gives .research-text
    ``white-space: pre-wrap``, so a space or newline between the tag
-   and the value would show on the page. Autoescape shows HTML as
-   text.
+   and the value would show on the page. A textarea shows its value
+   the same way. Autoescape shows HTML as text.
 
    ``panel.focus`` names the one element that gets ``autofocus``.
-   The heading and every note and thesis have ``tabindex="-1"``, so
-   they can take the focus without joining the Tab order.
+   The heading, every note and thesis, each error summary, and the
+   delete question have ``tabindex="-1"``, so they can take the focus
+   without joining the Tab order.
+
+   Every form and HTMX link in the panel replaces the whole panel
+   (hx-target, hx-swap) and carries data-plain-fallback: when the
+   HTMX request fails, ui.js repeats it without HTMX, so a form posts
+   to its own action and a link opens its own href.
 
    Only HTMX answers set ``research_oob``. They also bring the
    sticky-note form and the language switch's return path out of
@@ -44,6 +50,94 @@
   </dl>
 </li>
 {% endmacro %}
+{% macro form_errors(panel, prefix, form, labels) %}
+{# The error summary of one panel form. ``form`` is panel.new_note or
+   panel.form. Each invalid field links to its control, and ``labels``
+   maps a field to the catalog key of its label. A failed save has
+   no field to correct, only its message. #}
+{% if form.errors or form.form_error %}
+<div id="{{ prefix }}-errors" class="error-summary" role="alert" tabindex="-1"{% if panel.focus == prefix ~ '-errors' %} autofocus{% endif %}>
+  {% if form.errors %}
+  <p>{{ t['form.error_summary'] }}</p>
+  {% endif %}
+  {% if form.form_error %}
+  <p>{{ t[form.form_error] }}</p>
+  {% endif %}
+  {% if form.errors %}
+  <ul>
+    {% for field, key in form.errors.items() %}
+    <li><a href="#{{ prefix }}-{{ field }}">{{ t[labels[field]] }}</a> {{ t[key] }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+{% macro textarea_field(panel, prefix, field, value, errors) %}
+{# A textarea and its field error, with the ids {prefix}-{field} and
+   {prefix}-{field}-error. #}
+{% set field_id = prefix ~ '-' ~ field %}
+<textarea id="{{ field_id }}" name="{{ field }}" rows="4"{% if field in errors %} aria-invalid="true" aria-describedby="{{ field_id }}-error"{% endif %}{% if panel.focus == field_id %} autofocus{% endif %}>{{ value }}</textarea>
+{% if field in errors %}
+<p id="{{ field_id }}-error" class="field-error">{{ t[errors[field]] }}</p>
+{% endif %}
+{% endmacro %}
+{% macro panel_link(href, text, label=none) %}
+{# A link that opens another panel state. ``label`` names the item for
+   a screen reader, for example "Usuń notatkę z 28.10.2026, 14:05". #}
+<a href="{{ href }}" hx-get="{{ href }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback{% if label %} aria-label="{{ label }}"{% endif %}>{{ text }}</a>
+{% endmacro %}
+{% macro note_item(note, panel) %}
+{# One note. Its inline edit form or delete question, when open,
+   takes the place of its "Edytuj" and "Usuń" links. "Anuluj" puts
+   the focus back on the note. #}
+{% set prefix = 'note-' ~ note.id %}
+{% set created = format_local_datetime(note.created_at, language) %}
+{% set action = '/ui/companies/' ~ panel.company_id ~ '/notes/' ~ note.id %}
+{% set cancel = '/ui/companies/' ~ panel.company_id ~ '/research?focus=' ~ prefix %}
+{% set editing = panel.form and panel.form.kind == 'note_edit' and panel.form.item_id == note.id %}
+{% set asking = panel.form and panel.form.kind == 'note_delete' and panel.form.item_id == note.id %}
+<li id="{{ prefix }}" class="research-item" tabindex="-1"{% if panel.focus == prefix %} autofocus{% endif %}>
+  <p class="research-meta">
+    <span>{{ created }}</span>
+    {# Saving an edit moves only updated_at. #}
+    {% if note.updated_at > note.created_at %}
+    <span>{{ t['research.edited'].replace('{datetime}', format_local_datetime(note.updated_at, language)) }}</span>
+    {% endif %}
+  </p>
+  {% if editing %}
+  <form method="post" class="stacked-form" action="{{ action }}/edit" hx-post="{{ action }}/edit" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ form_errors(panel, prefix, panel.form, {'body': 'field.note_body'}) }}
+    <div class="form-field">
+      <label for="{{ prefix }}-body">{{ t['field.note_body'] }}</label>
+      {{ textarea_field(panel, prefix, 'body', panel.form.values['body'], panel.form.errors) }}
+    </div>
+    <div class="form-actions">
+      <button type="submit">{{ t['action.save'] }}</button>
+      {{ panel_link(cancel, t['action.cancel']) }}
+    </div>
+  </form>
+  {% else %}
+  <p class="research-text">{{ note.body }}</p>
+  {% if asking %}
+  <form method="post" class="stacked-form" action="{{ action }}/delete" hx-post="{{ action }}/delete" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ form_errors(panel, prefix, panel.form, {}) }}
+    {# The question takes the focus, never the "Usuń" button. #}
+    <p id="{{ prefix }}-delete-question" tabindex="-1"{% if panel.focus == prefix ~ '-delete-question' %} autofocus{% endif %}>{{ t['delete.note_question'] }}</p>
+    <div class="form-actions">
+      <button type="submit" aria-label="{{ t['research.delete_note_named'].replace('{datetime}', created) }}">{{ t['action.confirm_delete'] }}</button>
+      {{ panel_link(cancel, t['action.cancel']) }}
+    </div>
+  </form>
+  {% else %}
+  <p class="form-actions">
+    {{ panel_link(action ~ '/edit', t['action.edit'], t['research.edit_note_named'].replace('{datetime}', created)) }}
+    {{ panel_link(action ~ '/delete', t['action.delete'], t['research.delete_note_named'].replace('{datetime}', created)) }}
+  </p>
+  {% endif %}
+  {% endif %}
+</li>
+{% endmacro %}
 {% set panel = research_panel %}
 {% if panel %}
 <section id="research" class="research-panel" hx-sync="this:drop" aria-labelledby="research-title">
@@ -71,19 +165,27 @@
   </details>
   {% endif %}
   <h3>{{ t['research.notes'] }}</h3>
+  {% set notes_action = '/ui/companies/' ~ panel.company_id ~ '/notes' %}
+  <form method="post" class="stacked-form" action="{{ notes_action }}" hx-post="{{ notes_action }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ form_errors(panel, 'note-new', panel.new_note, {'body': 'research.new_note'}) }}
+    <div class="form-field">
+      <label for="note-new-body">{{ t['research.new_note'] }}</label>
+      {# The draft wrapper. While the answer's copy has hx-preserve,
+         HTMX keeps the browser's copy instead: the text typed so far
+         and its own error. Only the answers to its own add leave the
+         attribute out. #}
+      <div id="note-new-field"{% if panel.new_note.preserve %} hx-preserve="true"{% endif %}>
+        {{ textarea_field(panel, 'note-new', 'body', panel.new_note.body, panel.new_note.errors) }}
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit">{{ t['action.add_note'] }}</button>
+    </div>
+  </form>
   {% if panel.notes %}
   <ul class="research-list">
     {% for note in panel.notes %}
-    <li id="note-{{ note.id }}" class="research-item" tabindex="-1"{% if panel.focus == ('note-' ~ note.id) %} autofocus{% endif %}>
-      <p class="research-meta">
-        <span>{{ format_local_datetime(note.created_at, language) }}</span>
-        {# Saving an edit moves only updated_at. #}
-        {% if note.updated_at > note.created_at %}
-        <span>{{ t['research.edited'].replace('{datetime}', format_local_datetime(note.updated_at, language)) }}</span>
-        {% endif %}
-      </p>
-      <p class="research-text">{{ note.body }}</p>
-    </li>
+    {{ note_item(note, panel) }}
     {% endfor %}
   </ul>
   {% else %}

@@ -70,6 +70,56 @@ def plain(text):
     return text.replace("\u00a0", " ")
 
 
+class FormParser(HTMLParser):
+    """Ids, labels, and inputs for the accessibility checks."""
+
+    def __init__(self):
+        super().__init__()
+        self.ids = set()
+        self.labels = []
+        self.controls = []
+
+    def handle_starttag(self, tag, attrs):
+        attr = dict(attrs)
+        element_id = attr.get("id")
+        if element_id:
+            self.ids.add(element_id)
+        if tag == "label" and attr.get("for"):
+            self.labels.append(attr["for"])
+        if tag in {"input", "textarea", "select"}:
+            self.controls.append(attr)
+
+
+def parse_form(html):
+    parser = FormParser()
+    parser.feed(html)
+    return parser
+
+
+def assert_labeled(html):
+    """Every visible input has a label, and error ids point at real elements.
+
+    A hidden field is not a control the user labels. The language
+    switch posts ``next`` that way.
+    """
+    parsed = parse_form(html)
+    visible = [
+        control
+        for control in parsed.controls
+        if control.get("type") != "hidden"
+    ]
+    assert visible
+    for control in visible:
+        element_id = control.get("id")
+        assert element_id
+        assert element_id in parsed.labels
+        described = control.get("aria-describedby", "")
+        if control.get("aria-invalid") == "true":
+            assert described
+        for token in described.split():
+            assert token in parsed.ids
+
+
 class FormInParagraph(HTMLParser):
     """Records a <form> that starts while a <p> is still open.
 
