@@ -10,6 +10,7 @@ import unicodedata
 from urllib.parse import urlsplit
 
 import pytest
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy.exc import IntegrityError
 
 from app.models.company import COMPANY_NAME_MAX, normalize_name
@@ -27,11 +28,13 @@ from app.ui.form_fields import (
     catalog_key_for,
     catalog_key_for_repository_error,
     company_payload,
+    errors_from_validation,
     metrics_payload,
     normalized_company_name,
     validate_company,
 )
 from app.ui.origin import OriginRejected
+from app.ui.research_forms import research_error_key
 from app.validation.text import TextValidationError
 from tests.ui_html import assert_labeled, parse_form, parse_page, plain
 
@@ -297,6 +300,51 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     assert kept["name"] == normalize_name(" \u200bKept\u200b ")
     assert kept["name"] == "\u200bKept\u200b"
     assert kept["isin"] is None
+
+
+def test_errors_from_validation_takes_a_key_function():
+    """One rule builds every 422 summary; only the key mapper differs.
+
+    The notes and theses panel passes ``research_error_key``. The
+    company and metrics forms pass nothing and keep
+    ``catalog_key_for``. Either way the form's field order wins over
+    the model's, each field keeps its first error, and an error that
+    names no field is the form error.
+    """
+
+    class Fields(BaseModel):
+        title: str
+        body: str = Field(max_length=10000)
+
+    class Whole(BaseModel):
+        body: str
+
+        @model_validator(mode="after")
+        def _reject(self):
+            raise ValueError("the whole form")
+
+    with pytest.raises(ValidationError) as caught:
+        Fields.model_validate({"body": "a" * 10001})
+    order = ("body", "title")
+    errors, form_key = errors_from_validation(
+        caught.value, order, key_for=research_error_key
+    )
+    assert list(errors.items()) == [
+        ("body", "error.max_10000"),
+        ("title", "error.required"),
+    ]
+    assert form_key is None
+    errors, form_key = errors_from_validation(caught.value, order)
+    assert list(errors.items()) == [
+        ("body", "error.too_long"),
+        ("title", "error.required"),
+    ]
+    assert form_key is None
+    with pytest.raises(ValidationError) as whole:
+        Whole.model_validate({"body": "x"})
+    assert errors_from_validation(
+        whole.value, ("body",), key_for=research_error_key
+    ) == ({}, "error.invalid")
 
 
 @pytest.mark.asyncio
