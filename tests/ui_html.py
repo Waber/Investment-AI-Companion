@@ -70,6 +70,30 @@ def plain(text):
     return text.replace("\u00a0", " ")
 
 
+class FormInParagraph(HTMLParser):
+    """Records a <form> that starts while a <p> is still open.
+
+    The HTML parser in a browser closes the <p> at that point. A
+    one-button form meant to sit beside the company name (the heart,
+    the sticky note) would then drop onto its own line.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.open_paragraphs = 0
+        self.nested = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "p":
+            self.open_paragraphs += 1
+        if tag == "form" and self.open_paragraphs:
+            self.nested = True
+
+    def handle_endtag(self, tag):
+        if tag == "p" and self.open_paragraphs:
+            self.open_paragraphs -= 1
+
+
 def assert_no_dangerous_href(html):
     """No anchor may use a scheme other than http(s) or a relative path."""
     lowered = html.casefold()

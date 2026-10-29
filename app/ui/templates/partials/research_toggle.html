@@ -1,0 +1,33 @@
+{# The sticky note beside the heart. It is a GET form, so without
+   JavaScript it opens /ui/instruments/{id}?research=open#research,
+   the page with the panel open. With HTMX it fetches only the panel.
+
+   The hidden ``research`` value is the state the next click asks
+   for. Every HTMX panel answer sets ``research_oob`` and brings this
+   whole form out of band, so the count, aria-expanded, and that
+   value stay current. The button keeps its id, so HTMX puts the
+   focus back on it after the swap. hx-sync drops a second click
+   while a panel request is still running. #}
+{% if research_count %}
+{% set research_label = t['research.toggle_count'].replace('{count}', research_count|string) %}
+{% else %}
+{% set research_label = t['research.toggle'] %}
+{% endif %}
+<form
+  id="research-toggle"
+  class="research-toggle"
+  method="get"
+  action="/ui/instruments/{{ company_id }}#research"
+  hx-get="/ui/companies/{{ company_id }}/research"
+  hx-target="#research"
+  hx-swap="outerHTML"
+  hx-sync="#research:drop"
+  data-plain-fallback
+  {% if research_oob %}hx-swap-oob="true"{% endif %}
+>
+  <input type="hidden" name="research" value="{{ 'closed' if research_open else 'open' }}">
+  <button type="submit" id="research-toggle-button" class="research-button" aria-expanded="{{ 'true' if research_open else 'false' }}" aria-controls="research" aria-label="{{ research_label }}" title="{{ research_label }}">
+    <svg class="research-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v10l-6 6H4z"/><path d="M20 14h-6v6"/><path d="M8 9h8M8 13h3"/></svg>
+    {% if research_count %}<span class="research-count">{{ research_count }}</span>{% endif %}
+  </button>
+</form>
