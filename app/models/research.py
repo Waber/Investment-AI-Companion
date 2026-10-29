@@ -40,8 +40,8 @@ written past the repository, can still be listed. Re-checking it
 here would turn one bad row into an error for the whole list.
 
 Failures on a write model are Pydantic's ``ValidationError``. The
-UI maps that exception to HTTP 422. There is no HTTP route for
-notes or theses yet.
+UI maps that exception to HTTP 422. The JSON API in
+``app/api/research.py`` answers it with FastAPI's 422.
 """
 
 from datetime import datetime
