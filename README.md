@@ -191,12 +191,16 @@ before it serves and names the missing columns.
   `alembic stamp head`, so the next upgrade and the application
   disagree about the schema.
 - A database that an older startup `create_all` built after notes
-  and theses arrived has `theses` without `closed_at`. Stamp it with
-  the Alembic head of the version that built it, then run
-  `alembic upgrade head`. For a database created on or after
-  2026-10-22 that is `alembic stamp 0007`. The notes and theses
-  tables reached `create_all` on 2026-10-21, before `0006` and
-  `0007`, so an earlier file needs an earlier stamp.
+  and theses arrived has `theses` without `closed_at`. A file from
+  before 2026-10-21 19:35 CEST has no `theses` table, so this check
+  does not apply to it. Stamp the database with the Alembic head of
+  the version that built it, then run `alembic upgrade head` in every
+  case. For a file built from `master`, the head depends on when it
+  was created (CEST; each time is when that revision reached
+  `master`):
+  - from 2026-10-21 19:35 until 2026-10-22 12:08: `alembic stamp 0005`;
+  - from 2026-10-22 12:08 until 2026-10-23 13:02: `alembic stamp 0006`;
+  - after 2026-10-23 13:02: `alembic stamp 0007`.
 - A database that this version's `create_all` just built already has
   the columns and `uq_companies_ticker`. Record that with
   `alembic stamp head`. Do not run `alembic upgrade head` on it: the
