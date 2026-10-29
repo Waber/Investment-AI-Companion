@@ -474,6 +474,14 @@ dl.research-fields {
   font-size: 0.9rem;
 }
 
+/* A thesis card's actions row is a form, because its button closes or
+   reopens the thesis. A note's actions row is a <p>, which the browser
+   gives margin: 1em 0; this file sets no paragraph margin. The same
+   margin here puts both rows the same distance under their text. */
+.research-item form.form-actions {
+  margin: 1em 0;
+}
+
 .research-closed {
   margin-top: 0.75rem;
 }
