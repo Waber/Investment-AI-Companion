@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{# A note or thesis that this company does not have, for example one
+   deleted in another tab. The company exists, so the link opens its
+   panel again. #}
+{% block content %}
+<h1>{{ t['research_not_found.title'] }}</h1>
+<p><a href="{{ back_href }}">{{ t['research_not_found.back'] }}</a></p>
+{% endblock %}

@@ -50,9 +50,11 @@ class PanelForm:
 class NewNote:
     """The "Nowa notatka" field, which keeps its draft across actions.
 
-    ``preserve`` is False only for the answer to its own add and to
-    its own 422. Every other answer lets HTMX keep the text typed in
-    the browser.
+    ``preserve`` is False only in the answers to its own add: the
+    success, the 422, and a failed save. Those show the field as the
+    server rendered it, empty after a success and with the typed text
+    otherwise. Every other answer lets HTMX keep the text typed in the
+    browser.
     """
 
     body: str = ""
@@ -86,6 +88,51 @@ class ResearchPanel:
         return (
             len(self.notes) + len(self.active_theses) + len(self.closed_theses)
         )
+
+
+# The GET route of each inline form. It renders the company page with
+# that form open. Without JavaScript the "Edytuj" and "Usuń" links
+# open it, and with HTMX the language switch returns there.
+_FORM_PATHS = {
+    "note_edit": "/ui/companies/{company_id}/notes/{item_id}/edit",
+    "note_delete": "/ui/companies/{company_id}/notes/{item_id}/delete",
+}
+
+
+def panel_state_path(
+    company_id: int, *, form: PanelForm | None = None, closed: bool = False
+) -> str:
+    """The GET URL that shows the company page in one panel state.
+
+    The language switch returns there, so PL/EN keeps the panel as it
+    is. ``closed`` is the page with the panel closed. An inline form
+    or question opens at its own GET route. Every other state is the
+    page with the panel open, which is also where a plain POST lands.
+    """
+    if closed:
+        return f"/ui/instruments/{company_id}"
+    path = _FORM_PATHS.get(form.kind) if form is not None else None
+    if path is None:
+        return f"/ui/instruments/{company_id}?research=open"
+    return path.format(company_id=company_id, item_id=form.item_id)
+
+
+def focus_after_delete(items, deleted_id: int, prefix: str) -> str:
+    """The id that takes the focus once an item is deleted.
+
+    ``items`` is the list the panel showed before the delete, top to
+    bottom, and it holds ``deleted_id``. The focus moves to the next
+    item, else to the previous one, else to the panel heading, so it
+    never drops to the top of the page. ``prefix`` is ``note`` or
+    ``thesis``, as in the item ids.
+    """
+    ids = [item.id for item in items]
+    position = ids.index(deleted_id)
+    if position + 1 < len(ids):
+        return f"{prefix}-{ids[position + 1]}"
+    if position > 0:
+        return f"{prefix}-{ids[position - 1]}"
+    return "research-title"
 
 
 def research_count(db: Session, company_id: int) -> int:
@@ -129,20 +176,17 @@ def build_panel(
     new_note: NewNote | None = None,
     show_closed: bool = False,
     focus: str | None = None,
-    state_path: str | None = None,
 ) -> ResearchPanel:
     """Load one company's notes and theses into an open panel.
 
-    The company must exist; the routes check that first. Without a
-    ``state_path`` the language switch returns to the company page
-    with the panel open.
+    The company must exist; the routes check that first. The state
+    path follows ``form``: the inline form's own GET, or the company
+    page with the panel open (``panel_state_path``).
     """
     notes = NoteRepository(db).list_for_company(company_id)
     theses = ThesisRepository(db).list_for_company(company_id)
     active = [item for item in theses if item.status == ThesisStatus.ACTIVE]
     closed = [item for item in theses if item.status != ThesisStatus.ACTIVE]
-    if state_path is None:
-        state_path = f"/ui/instruments/{company_id}?research=open"
     return ResearchPanel(
         company_id=company_id,
         notes=_newest_created_first(notes),
@@ -152,5 +196,5 @@ def build_panel(
         new_note=new_note if new_note is not None else NewNote(),
         show_closed=show_closed,
         focus=focus,
-        state_path=state_path,
+        state_path=panel_state_path(company_id, form=form),
     )
