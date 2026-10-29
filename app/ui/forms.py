@@ -2,8 +2,9 @@
 
 HTML forms only send GET and POST, so an edit is a POST and not a PUT.
 The path is still under /ui. HTMX is not required: a 4xx response is
-the whole form again, and HTMX does not swap error pages unless the
-shared htmx-config meta is changed. The list filter keeps using HTMX.
+the whole form again, and these forms post without HTMX. The shared
+htmx-config meta lets HTMX swap a 422, but no other error page. The
+list filter keeps using HTMX.
 
 Successful posts answer 303 and send the browser to a GET page, so a
 refresh does not save a second time. Invalid input is 422. A
