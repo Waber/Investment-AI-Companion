@@ -22,9 +22,10 @@
   those tests `create_all` (the expression index already exists),
   then revision 0006 batch-alters `price_bars` and reflects
   `companies` through the foreign key. SQLAlchemy 2.0.23 cannot
-  reflect `upper(ticker)`. Fix is test-helper only:
+  reflect `upper(ticker)`. This is a scoped ignore, not a fix:
   `upgrade_head_over_create_all` ignores that one message and turns
-  any other `SAWarning` into an error. No Alembic revision.
+  any other `SAWarning` into an error. `upgrade_head` on a
+  `create_all` database still emits it. No Alembic revision.
   `-W error::DeprecationWarning` is unchanged.
 - Decisions: batch method is new, not a rewrite of `recent_closes`.
   Company eager-load is opt-in so the watchlist API query stays a
@@ -34,14 +35,20 @@
 - Not in scope: PR #104, PR #106 (`form_fields.py`, `text.py`),
   PR #107's edits to `upsert_many`, `_default_source`, the log-once
   cap, and the currency check. Templates and static files.
+- QA Lows on #108, tests and docs only. A long series inserted
+  out of date order must match `recent_closes`. Empty page is 1
+  statement, a barless row is 2, a priced page is 4 on SQLite and
+  5 on PostgreSQL (`SET TIME ZONE`). The warning wording is
+  scoped ignore.
 - Tests: no `.env`, `DATABASE_URL` unset. CI command on local
-  SQLite 3.45.1: 1880 passed, 222 deselected, coverage 96.40%.
-  No warnings summary. No local PostgreSQL; GitHub Actions runs
-  that job. No live market-data calls. black, isort, and flake8
-  passed on the changed Python files.
+  SQLite 3.45.1 before the QA tests: 1880 passed, 222 deselected,
+  coverage 96.40%. The new tests passed locally. No local
+  PostgreSQL; GitHub Actions runs that job. No live market-data
+  calls. black, isort, and flake8 passed on the changed Python
+  files.
 - Active agents: this run. Blockers: none. Account usage was not
   available in this session.
-- Next action: GitHub Actions on this pull request (SQLite and
+- Next action: GitHub Actions on each new commit (SQLite and
   PostgreSQL). Do not merge. Raul merges with "Rebase and merge".
   A later rebase onto PR #107 should stay small because the new
   price method does not edit `_default_source` or `upsert_many`.

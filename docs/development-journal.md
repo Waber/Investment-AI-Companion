@@ -1,5 +1,48 @@
 # Development Journal
 
+## 2026-10-30 - QA Lows on the watchlist batch read
+
+- Scope: QA approved pull request #108 at `35847c5` with Lows.
+  Tests and docs only. No production behaviour change. No rebase:
+  `origin/master` was still `3c40413`.
+- What changed: an equivalence test with six closes per instrument,
+  inserted out of date order, interleaved across two instruments,
+  a newest close that does not parse, and a newer bar on source
+  `stale` in EUR. Empty page and a barless row have fixed
+  statement counts. PostgreSQL asserts 5 statements, not `<= 8`.
+  The company id is in the batch-versus-per-row failure message.
+  The warning is described as a scoped ignore.
+- Mutations, each reverted, against
+  `test_recent_closes_for_matches_a_long_series_inserted_out_of_order`.
+  `limit=5` failed: company 1 kept a previous close of 2026-08-31;
+  `recent_closes` has no previous, because it only reads two bars
+  and drops the unreadable newest one. `order_by` id ascending
+  failed: the rank SQL no longer orders by `bar_date DESC`, and
+  the lowest ids are the June and August bars, so the latest close
+  became 2026-08-03 instead of 2026-09-14. Partition by
+  `instrument_id` only failed the statement check. The closes
+  still matched, because the WHERE already keeps one source per
+  instrument. That is why the test also requires `PARTITION BY`
+  to name `price_bars.source`.
+- For a Java developer: `row_number() OVER (PARTITION BY ...)` is
+  an analytic function. `PARTITION BY instrument_id, source` is
+  the grouping key, like numbering rows inside each pair rather
+  than inside the instrument alone. `ORDER BY bar_date DESC` with
+  a cutoff of 2 is `LIMIT 2` after that order. Sorting the same
+  rows by the surrogate id instead follows insert order, which
+  this fixture deliberately does not match the session date.
+  `warnings.catch_warnings` is still only a scoped ignore.
+- Verification: the three mutations failed as above and the file
+  was restored. The new tests then passed. black and flake8
+  passed on the changed test files. No live market-data calls.
+  GitHub Actions run 41038673557 on test commit `6a85f86`:
+  SQLite and PostgreSQL both success. The PostgreSQL job accepted
+  the exact count of 5.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 40 minutes, from 10:04.
+- Next: GitHub Actions on this docs commit. Do not merge.
+
 ## 2026-10-30 - Watchlist query batch and ticker-index warning
 
 - Scope: two follow-ups from the watchlist page review, on
@@ -19,9 +62,10 @@
   sorts last in Python) instead of calling `_default_source`, so a
   rebase onto PR #107 does not have to merge that function. The
   API list does not pass `with_company`, so its SELECT stays a
-  single table. The warning is silenced in the test helper, not by
-  a new migration and not by weakening `-W error::DeprecationWarning`.
-  Any other `SAWarning` during that upgrade is an error.
+  single table. The warning is a scoped ignore in the test helper,
+  not a fix and not a weaker `-W error::DeprecationWarning`.
+  `upgrade_head` on a `create_all` database still emits it. Any
+  other `SAWarning` during the wrapped upgrade is an error.
 - For a Java developer: a lazy `item.company` is the ORM default,
   the same idea as a JPA association that is not `JOIN FETCH`.
   Touching it in a loop is the N+1. `joinedload` is that JOIN
@@ -51,7 +95,8 @@
   `companies`. SQLAlchemy 2.0.23 cannot reflect an expression index,
   warns, and skips it. A legacy upgrade does not warn: 0007 creates
   that index after 0006. The price-bar copy does not need the
-  index. The filter hides that message only.
+  index. The helper's scoped ignore hides that message only.
+  `upgrade_head` itself does not.
 - Query counts, SQLite, each row two closes, listener
   `before_cursor_execute` around `GET /ui/watchlist`. Before: 6
   statements for 1 row, 51 for 10 (`5N+1`: the list, then per row
