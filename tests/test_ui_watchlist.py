@@ -10,7 +10,7 @@ from decimal import Decimal
 from html.parser import HTMLParser
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, text
 
 from app.models.database_models import CompanyDB, PriceBarDB
 from app.repositories.price_bar_repository import PriceBarRepository
@@ -581,6 +581,26 @@ async def test_watchlist_query_count_does_not_grow_with_rows(client):
     assert count == 4, count
 
 
+@pytest.mark.asyncio
+async def test_watchlist_query_count_for_empty_and_barless(client):
+    """An empty list is one statement. One row with no bars is two.
+
+    The list query always runs. The source query runs only when a
+    row exists. With no bars it returns nothing, and the close
+    queries are skipped. A priced row is the separate test above.
+    """
+    html, empty = await _watchlist_page(client)
+    assert "Watchlista jest pusta" in html
+    assert len(empty) == 1, empty
+
+    company_id = _company(client, ticker="BARE", name="Bare Co")
+    _watch(client, company_id)
+    html, barless = await _watchlist_page(client)
+    assert "brak notowań" in html
+    assert "BARE" in html
+    assert len(barless) == 2, barless
+
+
 def _add_bar(
     client,
     company_id,
@@ -588,6 +608,7 @@ def _add_bar(
     close,
     source="fake",
     retrieved_at=RETRIEVED,
+    currency="USD",
 ):
     session = _session(client)
     try:
@@ -596,10 +617,36 @@ def _add_bar(
                 instrument_id=company_id,
                 bar_date=day,
                 close_price=None if close is None else Decimal(close),
-                currency="USD",
+                currency=currency,
                 source=source,
                 retrieved_at=retrieved_at,
             )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
+def _make_close_unreadable(client, company_id, day, source="fake"):
+    """Store a close that does not parse as a decimal.
+
+    The ORM rejects that text on insert. The column is updated after
+    a normal row exists. SQLite keeps the text. Reading it back is
+    ``UnreadablePrice``, and the repository skips that bar.
+    """
+    session = _session(client)
+    try:
+        session.execute(
+            text(
+                "UPDATE price_bars SET close_price = 'not-a-price' "
+                "WHERE instrument_id = :instrument_id "
+                "AND bar_date = :bar_date AND source = :source"
+            ),
+            {
+                "instrument_id": company_id,
+                "bar_date": day.isoformat(),
+                "source": source,
+            },
         )
         session.commit()
     finally:
@@ -699,17 +746,114 @@ async def test_recent_closes_for_matches_one_query_per_company(client):
         batched = repo.recent_closes_for(ids + [inside])
         for instrument_id in ids:
             single_recent = repo.recent_closes(instrument_id)
-            if single_recent is None:
-                assert instrument_id not in batched
-            else:
-                assert _recent_signature(batched[instrument_id]) == (
-                    _recent_signature(single_recent)
-                )
+            got = _recent_signature(batched.get(instrument_id))
+            expected = _recent_signature(single_recent)
+            assert (
+                got == expected
+            ), f"company_id={instrument_id}: batch {got} != {expected}"
         assert set(batched) == {
             instrument_id
             for instrument_id in ids
             if instrument_id not in (empty, null_only)
         }
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_recent_closes_for_matches_a_long_series_inserted_out_of_order(
+    client,
+):
+    """A long series still matches ``recent_closes`` when ids are not dates.
+
+    Each instrument has six closes on ``fake``, inserted out of date
+    order, plus one newer bar on another source. The two instruments
+    take turns, so their bar ids are interleaved. The newest ``fake``
+    close does not parse. ``recent_closes`` asks for two bars, drops
+    that one, and keeps no ``previous``. A wider limit or a rank
+    ordered by id picks different bars. Numbering by instrument
+    alone does not, because the WHERE already keeps one source, so
+    the test also checks that ``PARTITION BY`` names the source.
+    """
+    first = _company(client, ticker="LONG", name="Long Series")
+    second = _company(client, ticker="ALSO", name="Also Long")
+    # Not date order. The first inserts are the oldest, so the lowest
+    # ids are not the newest sessions. June is outside the 92-day
+    # window that ends on the latest readable close.
+    series = (
+        (
+            first,
+            [
+                (date(2026, 6, 1), "1"),
+                (date(2026, 8, 3), "3"),
+                (date(2026, 10, 27), "9"),
+                (date(2026, 7, 6), "2"),
+                (date(2026, 9, 14), "5"),
+                (date(2026, 8, 31), "4"),
+            ],
+        ),
+        (
+            second,
+            [
+                (date(2026, 6, 2), "11"),
+                (date(2026, 8, 4), "13"),
+                (date(2026, 10, 27), "19"),
+                (date(2026, 7, 7), "12"),
+                (date(2026, 9, 15), "15"),
+                (date(2026, 9, 1), "14"),
+            ],
+        ),
+    )
+    steps = max(len(bars) for _company_id, bars in series)
+    for step in range(steps):
+        for company_id, bars in series:
+            day, close = bars[step]
+            _add_bar(client, company_id, day, close)
+    for company_id, _bars_for_company in series:
+        _make_close_unreadable(client, company_id, date(2026, 10, 27))
+        # Newer session, older retrieval, other currency. Not the
+        # default series. It must not become the latest close.
+        _add_bar(
+            client,
+            company_id,
+            date(2026, 10, 28),
+            "99",
+            source="stale",
+            currency="EUR",
+            retrieved_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+
+    ids = [first, second]
+    session = _session(client)
+    try:
+        repo = PriceBarRepository(session)
+        found = {}
+
+        def read():
+            found["batched"] = repo.recent_closes_for(ids)
+
+        statements = _statements(_engine(client), read)
+        # The WHERE already keeps one source per instrument, so
+        # numbering by instrument alone returns the same closes.
+        # The statement is what rejects that edit.
+        ranked = next(
+            statement
+            for statement in statements
+            if "row_number()" in statement.lower()
+        )
+        assert (
+            "partition by price_bars.instrument_id, price_bars.source "
+            "order by price_bars.bar_date desc"
+        ) in ranked.lower(), ranked
+        batched = found["batched"]
+        for instrument_id in ids:
+            got = _recent_signature(batched.get(instrument_id))
+            expected = _recent_signature(repo.recent_closes(instrument_id))
+            assert (
+                got == expected
+            ), f"company_id={instrument_id}: batch {got} != {expected}"
+            assert got[1] in (date(2026, 9, 14), date(2026, 9, 15))
+            assert got[3] is None
     finally:
         session.close()
 
