@@ -54,10 +54,11 @@ def normalize_name(value: object) -> object:
 
     A name longer than ``COMPANY_NAME_MAX`` is returned stripped.
     ``Field(max_length=...)`` then reports ``string_too_long``.
-    Raising here would make the /ui form call the name "required":
-    that form treats every ``ValueError`` from this function as an
-    empty name. The helper itself still raises ``too_long`` when a
-    caller uses ``clean_text`` directly.
+    Raising ``too_long`` here would change that HTTP error to
+    ``value_error``. The ``/ui`` form does not use this swallow. It
+    calls ``clean_text`` and maps ``too_long`` to its catalog key.
+    The helper itself still raises ``too_long`` when a caller uses
+    ``clean_text`` directly.
 
     A blank name keeps the sentence from before the shared helper:
     ``name must contain a visible character``. The error code is

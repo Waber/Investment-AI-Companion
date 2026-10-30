@@ -116,6 +116,68 @@
 - Next: GitHub Actions on pull request #108, both jobs, on the
   head commit. Do not merge.
 
+## 2026-10-30 - `/ui` company name uses `clean_text` (#86 remainder)
+
+- Scope: move `normalized_company_name` in `app/ui/form_fields.py`
+  onto `app.validation.text.clean_text` (`COMPANY_NAME_MAX` is 255).
+  The form maps `exc.code` to catalog keys that already exist:
+  `blank` → `error.required`, `too_long` → `error.too_long`,
+  `control_char` / `bidi` / `surrogate` → `error.invalid`. No new
+  Polish or English string. No template or CSS change. The HTTP
+  API still reports a too-long name as Pydantic `string_too_long`,
+  because `normalize_name` returns that stripped text and the
+  field's `max_length` reports it. Refs #86. The issue stays open.
+- Decision: a name made only of combining marks is blank. Mn
+  (U+0301), Mc (U+093E), and Me (U+20DD) joined the blank step in
+  `clean_text`, which already treated whitespace, Cf, Co, and Cn
+  that way. The step stays after surrogate, bidi, and control, and
+  before the length check, so a long run of marks is `blank`, not
+  `too_long`, and a control before a mark is still `control_char`.
+  A letter keeps its mark (`e` + U+0301, `A` + U+093E + U+20DD).
+  The form used to reject marks-only names and the API used to
+  store them. Both reject them now. Watchlist labels and notes
+  share the checker, so a marks-only label becomes null and a
+  marks-only note or thesis field is blank.
+- Form copy that changed: a control or a bidi mark in the company
+  name used to show "this field is required". It now shows "this
+  value is not valid". A blank or whitespace-only name still shows
+  required. 256 characters still shows too long. `"\n\t"` is a
+  control (checked before strip), so the form shows invalid, not
+  required.
+- Left alone: `instrument_type_for_payload` still rejects ASCII
+  controls itself (code points under 32, and DEL) so `strip` cannot
+  hide a trailing newline and store ETF. Exchange, country, sector,
+  industry, website, and description are not on `clean_text`.
+- For a Java developer learning Python: `clean_text` takes
+  `field` and `max_len` as keyword-only arguments (the `*` in the
+  signature). The caller must name them, the way a Java builder
+  forces named setters instead of a long positional list.
+  `TextValidationError` extends `ValueError`. That is a subclass,
+  like a custom exception extending `IllegalArgumentException`.
+  `except ValueError` on the API still catches it. The form catches
+  the subclass and reads `.code` instead of parsing the English
+  sentence. The code-to-catalog map is a dict, the same idea as
+  `Map<String, String>`. `unicodedata.category` returns a two-letter
+  general category (`"Mn"`, `"Cf"`). Membership in a frozenset is
+  an `EnumSet` check. `str.strip` removes Unicode whitespace only.
+  It does not remove a zero-width character or a combining mark,
+  which is why blank is a separate walk after strip. The old helper
+  returned `None` for every failure and threw the reason away.
+  Raising keeps the code, the way a typed exception is more useful
+  than a null.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  CI pytest command, local SQLite 3.45.1: 1896 passed, 224
+  deselected, coverage 96.42%. Two existing SQLAlchemy warnings
+  about reflecting `uq_companies_ticker`. The known `0006` float
+  boundary failures belong to SQLite 3.54; this machine is 3.45.1,
+  so they passed. No local PostgreSQL. black, isort, and flake8
+  passed on the changed Python files. No live market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 1 hour.
+- Next: GitHub Actions, SQLite and PostgreSQL, on the pull request.
+  Do not merge.
+
 ## 2026-10-27 - Watchlist `/ui` page (#96)
 
 - Scope: the UI part of #32. `/ui/watchlist` table and the heart

@@ -94,7 +94,9 @@ sentence. The other text failures are `value_error`. `ctx.error` is
 `{code, field}` (`code` is `blank`, `control_char`, `bidi`, or
 `surrogate`). It used to be `{}`. `type` and `msg` are unchanged in
 shape. A blank company name still says `Value error, name must
-contain a visible character`.
+contain a visible character`. A value made only of combining marks
+(`Mn`, `Mc`, `Me`, for example U+0301) is blank too, on a company
+name, a watchlist label, and a note. A letter keeps its mark.
 
 What differs from the previous write rules:
 
@@ -109,12 +111,10 @@ What differs from the previous write rules:
   beside a letter used to make the error encoder raise
   `UnicodeEncodeError`, so the client saw 500, not 201. It is now
   422 `surrogate`, and `input` shows the ASCII `\u` escape.
-- The `/ui` company form calls `normalize_name`. LRM, RLM, and ALM
-  (U+200E, U+200F, U+061C), U+206A–U+206F, tag characters, and a
-  trailing newline now fail in that function. The form catches
-  `ValueError` and shows `error.required`. Mapping `exc.code` to a
-  catalog key is a Frontend Developer follow-up. `app/ui/` was not
-  edited for that.
+- The `/ui` company name calls `clean_text`. `blank` shows
+  `error.required`, `too_long` shows `error.too_long`, and
+  `control_char`, `bidi`, and `surrogate` show `error.invalid`.
+  The HTTP API still reports a too-long name as `string_too_long`.
 - Note bodies, thesis bodies, and thesis-breakers now reject bidi
   marks and tag characters. On master only the title did.
 - A watchlist label made only of private-use (Co) or unassigned (Cn)

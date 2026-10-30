@@ -1,10 +1,52 @@
 # Current Work State
 
-## Watchlist N+1 and ticker-index SAWarning: 2026-10-30
+## Company name on `clean_text` (#86 remainder): 2026-10-30
 
-- Branch `cursor/watchlist-nplus1-sawarnings`, from `origin/master`
-  `3c40413`. Pull request #108 to `master`. Refs, no closing keyword
-  (there is no issue). Not merged.
+- Branch `cursor/ui-company-name-clean-text-86`, rebased onto
+  `origin/master` `67974c5`. Pull request #106 is in review.
+  Refs #86. Not merged. #86 stays open. See the #86 bullet under
+  Open work elsewhere.
+- #108 merged on `67974c5`: the watchlist page loads companies and
+  prices in a batch, and the ticker-index `SAWarning` is a scoped
+  ignore in the autogenerate tests. Details are in the section
+  below.
+- Completed: `normalized_company_name` in `app/ui/form_fields.py`
+  calls `app.validation.text.clean_text` with `COMPANY_NAME_MAX`
+  (255). The form maps `exc.code` to catalog keys that already
+  exist in Polish and English: `blank` is `error.required`,
+  `too_long` is `error.too_long`, and `control_char`, `bidi`, and
+  `surrogate` are `error.invalid`. No template or CSS changes. No
+  new catalog key. The HTTP API still reports a too-long company
+  name as Pydantic `string_too_long`.
+- Decision: a name made only of combining marks (Mn U+0301, Mc
+  U+093E, Me U+20DD) is blank. That check is step 3 of `clean_text`,
+  after surrogate, bidi, and control, and before the length check.
+  The form and the API both reject it. A letter keeps its mark.
+  Watchlist labels and note or thesis text share the checker, so a
+  marks-only label is stored as null and a marks-only note is blank.
+- Not in this slice: `instrument_type_for_payload` still rejects
+  ASCII controls (code points below 32, and DEL) on its own.
+  Exchange, country, sector, industry, website, and description are
+  not on `clean_text`.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
+  command on local SQLite 3.45.1: 1896 passed, 224 deselected,
+  coverage 96.42%. Two SQLAlchemy reflection warnings, unchanged.
+  The known `0006` float failures show up on SQLite 3.54; this
+  machine has 3.45.1, so those two tests passed. No local
+  PostgreSQL. GitHub Actions runs both jobs. No live market-data
+  calls. black, isort, and flake8 passed on the changed Python
+  files.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: GitHub Actions on the pull request, SQLite and
+  PostgreSQL, both green on the head commit. Raul merges with
+  "Rebase and merge". The agent does not merge.
+
+## Watchlist N+1 and ticker-index SAWarning (#108, merged)
+
+- Merged in #108 at `67974c5`. Branch was
+  `cursor/watchlist-nplus1-sawarnings`, from `3c40413`. Refs, no
+  closing keyword (there is no issue).
 - Completed: `GET /ui/watchlist` no longer runs one price query and
   one company query per row. `list_items(with_company=True)` uses
   `joinedload`. New `PriceBarRepository.recent_closes_for` loads
@@ -32,26 +74,14 @@
   plain list. Default source is still latest `retrieved_at`, then
   the source name that sorts last in Python (`fake` beats
   `[IAC-DEMO-V2]`).
-- Not in scope: PR #104, PR #106 (`form_fields.py`, `text.py`),
-  PR #107's edits to `upsert_many`, `_default_source`, the log-once
-  cap, and the currency check. Templates and static files.
 - QA Lows on #108, tests and docs only. A long series inserted
   out of date order must match `recent_closes`. Empty page is 1
   statement, a barless row is 2, a priced page is 4 on SQLite and
   5 on PostgreSQL (`SET TIME ZONE`). The warning wording is
   scoped ignore.
-- Tests: no `.env`, `DATABASE_URL` unset. CI command on local
-  SQLite 3.45.1 before the QA tests: 1880 passed, 222 deselected,
-  coverage 96.40%. The new tests passed locally. No local
-  PostgreSQL; GitHub Actions runs that job. No live market-data
-  calls. black, isort, and flake8 passed on the changed Python
-  files.
-- Active agents: this run. Blockers: none. Account usage was not
-  available in this session.
-- Next action: GitHub Actions on each new commit (SQLite and
-  PostgreSQL). Do not merge. Raul merges with "Rebase and merge".
-  A later rebase onto PR #107 should stay small because the new
-  price method does not edit `_default_source` or `upsert_many`.
+- Tests on that branch: no `.env`, `DATABASE_URL` unset. CI command
+  on local SQLite 3.45.1 before the QA tests: 1880 passed, 222
+  deselected, coverage 96.40%.
 
 ## Open work elsewhere
 
@@ -59,8 +89,8 @@
   work-state still lists the `/ui` forms and any HTTP API as
   incomplete. Those belong to the Frontend Developer.
 - #32: the watchlist backend is on master (revision `0004`).
-  The `/ui` page from #96 is on master (`3c40413`). The N+1 follow-up
-  is this branch.
+  The `/ui` page from #96 is on master. The N+1 follow-up merged
+  in #108.
 - #8 and #10: the instrument Alembic baseline is still open,
   and `init_db` still uses `create_all`.
 - #54: the real Yahoo adapter, and the case where a Yahoo HTTP
@@ -81,11 +111,12 @@
   (`demo_source_label` in `app/ui/view_models.py`).
 - #99: named watchlists (several lists per company).
 - #100: on-demand AI summary of recent moves in a watchlist row.
-- #86: the shared validator is on master (#98). The `/ui` helper
-  (`normalized_company_name` in `app/ui/form_fields.py`) moves
-  onto it with the Frontend Developer, and the form maps
-  `exc.code` to a catalog key. A name made only of combining
-  marks is still rejected by the form and accepted by the API.
+- #86 stays open. The `/ui` company name now uses `clean_text`
+  (branch `cursor/ui-company-name-clean-text-86`). Still open:
+  when the ticker and the ISIN are both duplicates, report both;
+  `watchlist_stale_price_days` still has no `ge=1` check. Stripping
+  Cf characters at the edges stays undone on purpose: a format
+  character beside a letter is kept, including at an edge.
 - #28: ETF/ETC attribute columns, fund attributes, and the
   attribute forms. Yahoo still does not implement
   `FundAttributes`.

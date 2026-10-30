@@ -43,6 +43,12 @@ def test_name_is_stripped_and_a_blank_name_is_rejected():
             CompanyCreate(name=invisible, ticker="AAA")
         with pytest.raises(ValidationError):
             CompanyUpdate(name=invisible)
+    for marks_only in ("\u0301", "\u093e", "\u20dd"):
+        with pytest.raises(ValidationError) as marks:
+            CompanyCreate(name=marks_only, ticker="AAA")
+        assert marks.value.errors()[0]["ctx"]["error"].code == "blank"
+    based = CompanyCreate(name="A\u093e\u20dd", ticker="AAA")
+    assert based.name == "A\u093e\u20dd"
     kept = CompanyCreate(name="Acme\u200b", ticker="AAA")
     assert kept.name == "Acme\u200b"
     beside = CompanyCreate(name="A\u200bB", ticker="AAA")
@@ -96,6 +102,35 @@ async def test_blank_name_is_422_on_create_and_update(client):
         assert rejected_update.status_code == 422
     fetched = await client.get(f"/api/v1/companies/{company_id}")
     assert fetched.json()["name"] == "Renamed"
+    for marks_only in ("\u0301", "\u093e", "\u20dd", "\u200b\u0301"):
+        rejected = await client.post(
+            "/api/v1/companies/",
+            json={"name": marks_only, "ticker": "MARKS"},
+        )
+        assert rejected.status_code == 422, repr(marks_only)
+        _assert_text_contract(
+            rejected,
+            "name",
+            "blank",
+            "Value error, name must contain a visible character",
+        )
+        rejected_update = await client.put(
+            f"/api/v1/companies/{company_id}",
+            json={"name": marks_only},
+        )
+        assert rejected_update.status_code == 422, repr(marks_only)
+        _assert_text_contract(
+            rejected_update,
+            "name",
+            "blank",
+            "Value error, name must contain a visible character",
+        )
+    # A letter keeps a combining mark. That name is not blank.
+    accented = await client.put(
+        f"/api/v1/companies/{company_id}", json={"name": "e\u0301"}
+    )
+    assert accented.status_code == 200
+    assert accented.json()["name"] == "e\u0301"
     kept = await client.put(
         f"/api/v1/companies/{company_id}", json={"name": "A\u200bB"}
     )
@@ -179,8 +214,9 @@ def _assert_text_contract(response, field, code, msg, max_length=None):
 def test_company_name_length_stays_a_max_length_error():
     """A too-long name stays Pydantic's string_too_long error.
 
-    The /ui form maps that type to the "too long" sentence. Raising
-    inside normalize_name would make the form call the name required.
+    Raising ``too_long`` inside ``normalize_name`` would change this
+    HTTP error to ``value_error``. The ``/ui`` form calls
+    ``clean_text`` and maps ``too_long`` on its own.
     """
     with pytest.raises(ValidationError) as caught:
         CompanyCreate(name="N" * (COMPANY_NAME_MAX + 1), ticker="AAA")

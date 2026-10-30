@@ -150,6 +150,9 @@ _BLANK_LABELS = (
     "\ufeff\u200b",
     "\ue000",
     "\u0378",
+    "\u0301",
+    "\u093e",
+    "\u20dd",
 )
 
 
@@ -166,10 +169,13 @@ _BLANK_LABELS = (
         "U+FEFF-U+200B",
         "U+E000",
         "U+0378",
+        "U+0301",
+        "U+093E",
+        "U+20DD",
     ],
 )
 def test_create_model_treats_blank_and_format_only_labels_as_null(label):
-    """Whitespace, Cf, Co, and Cn notes are the same as omitting the label."""
+    """Whitespace, marks, Cf, Co, and Cn are the same as omitting the label."""
     created = WatchlistItemCreate(company_id=1, label=label)
     assert created.label is None
 

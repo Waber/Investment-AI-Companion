@@ -4,9 +4,11 @@ The browser posts strings. Empty optional company fields become
 ``None`` (a blank website is "no website", not the empty string).
 Empty metric numbers become ``None``, which is "no data" on the
 detail page. ``normalized_company_name`` is the one name rule for
-create and for edit. It reuses ``normalize_name``, and it still
-rejects a control left in the middle, a bidi control, or a name
-made only of invisible characters or marks.
+create and for edit. It calls ``clean_text`` with
+``COMPANY_NAME_MAX``. ``TextValidationError.code`` is mapped to a
+catalog key: ``blank`` is ``error.required``, ``too_long`` is
+``error.too_long``, and ``control_char``, ``bidi``, and
+``surrogate`` are ``error.invalid``.
 The text the user typed is kept for the
 other fields and handed to ``CompanyCreate``, ``CompanyUpdate``,
 ``FinancialMetricsCreate``, or ``FinancialMetricsUpdate``. Those
@@ -26,23 +28,23 @@ raw strings are returned unchanged for the inputs.
 """
 
 import math
-import unicodedata
 from datetime import datetime
 
 from pydantic import ValidationError
 
 from app.core.utc_datetime import as_utc
 from app.models.company import (
+    COMPANY_NAME_MAX,
     CompanyCreate,
     CompanyUpdate,
     InstrumentType,
-    normalize_name,
 )
 from app.models.financial_metrics import (
     FinancialMetricsCreate,
     FinancialMetricsUpdate,
 )
 from app.ui.view_models import METRIC_FIELDS
+from app.validation.text import TextValidationError, clean_text
 
 # The option values are the enum the write models already accept.
 # The visible words are the ``type.*`` catalog entries.
@@ -167,76 +169,65 @@ def metrics_values(row):
     return values
 
 
-# Bidi overrides (U+202A–U+202E) and isolates (U+2066–U+2069) can
-# reorder the letters around them. They are format characters, so
-# ``normalize_name`` would keep one that sits beside a letter.
-# The form rejects them anywhere in the original name instead.
-_BIDI_CONTROLS = frozenset(
-    chr(codepoint)
-    for codepoint in (*range(0x202A, 0x202F), *range(0x2066, 0x206A))
-)
-
-
-def _has_visible_character(text):
-    """True when ``text`` has a letter, number, punctuation, or symbol.
-
-    Whitespace, category C, and every M* mark are invisible here.
-    Mn (U+0301), Mc (U+093E), and Me (U+20DD) all count. A letter
-    with one of those marks is visible because of the letter.
-    """
-    for char in text:
-        category = unicodedata.category(char)
-        if (
-            char.isspace()
-            or category.startswith("C")
-            or category.startswith("M")
-        ):
-            continue
-        return True
-    return False
+# clean_text codes for the company name, and the catalog key the
+# form already has for that kind of failure. blank is "required":
+# an empty name is a missing name. too_long is the sentence a
+# 256-character name already showed. The other three are invalid
+# characters. There is no separate sentence for each of them.
+# A code that is not in this map uses error.invalid, so a new code
+# cannot turn the page into a 500.
+_NAME_ERROR_KEYS = {
+    "blank": "error.required",
+    "too_long": "error.too_long",
+    "control_char": "error.invalid",
+    "bidi": "error.invalid",
+    "surrogate": "error.invalid",
+}
 
 
 def normalized_company_name(value):
-    """Return the name ``normalize_name`` would store, or None.
+    """Return the name ``clean_text`` stores, or raise.
 
-    Create and edit both call this. None means the form answers 422
-    and does not save. A returned string is exactly what
-    ``normalize_name`` returns for the same input, so the form does
-    not accept a name the write model would store differently.
-    ``CompanyCreate`` still accepts ``""`` if this helper is skipped.
-    The form does not skip it.
+    Create and edit both call this. ``TextValidationError`` means
+    the form answers 422 and does not save. The caller reads
+    ``code`` and picks a catalog key. A returned string is what
+    ``normalize_name`` stores for the same input, except a name
+    that is only too long: this function raises ``too_long``, and
+    ``normalize_name`` returns the stripped text so the HTTP API
+    can keep Pydantic's ``string_too_long``.
 
-    ``normalize_name`` strips whitespace and rejects an empty name
-    or one made only of format characters (Cf, such as U+200B). It
-    keeps a control character (category Cc). NUL and DEL are Cc,
-    and ``strip`` does not remove them, so a name like
-    ``"\\x00Kept\\x7f"`` would be stored. PostgreSQL then raises a
-    driver error, including when the failed save looks the name up.
-    This helper adds three 422 cases the model would otherwise keep:
+    ``None`` and any other non-string become ``""`` first. The HTML
+    form posts strings. A missing name is blank, not a crash.
+    ``str`` on an unexpected object is the same conversion the form
+    used before this helper called ``clean_text``.
 
-    - a bidi override or isolate anywhere in the original name
-    - any Cc character left after that strip, at either end or in
-      the middle
-    - a name made only of invisible characters or marks
-
-    A format character beside a letter is kept, including ZWNJ
-    (U+200C) in a Persian name and a format character at an edge.
-    A Devanagari or Arabic letter is kept. A mark with no base
-    letter is not.
+    Character rules live in ``clean_text``. A mark with no base
+    letter is blank there, so the form and the API reject it with
+    the same code. A format character beside a letter is kept,
+    including ZWNJ (U+200C) in a Persian name.
     """
     if not isinstance(value, str):
         value = "" if value is None else str(value)
-    if any(char in _BIDI_CONTROLS for char in value):
-        return None
+    return clean_text(
+        value,
+        field="name",
+        max_len=COMPANY_NAME_MAX,
+        allow_newlines=False,
+        allow_blank=False,
+    )
+
+
+def company_name_error_key(value):
+    """Catalog key for one company name, or None when it is acceptable.
+
+    ``None`` means create and edit may store the name. A key means
+    the form shows that sentence and does not save.
+    """
     try:
-        normalized = normalize_name(value)
-    except ValueError:
-        return None
-    if any(unicodedata.category(char) == "Cc" for char in normalized):
-        return None
-    if not _has_visible_character(normalized):
-        return None
-    return normalized
+        normalized_company_name(value)
+    except TextValidationError as exc:
+        return _NAME_ERROR_KEYS.get(exc.code, "error.invalid")
+    return None
 
 
 def instrument_type_for_payload(value):
@@ -267,10 +258,11 @@ def company_payload(values):
 
     The name goes through ``normalized_company_name``, the helper
     create and edit share. When that helper accepts the name, the
-    payload is the same string ``normalize_name`` would store. A
-    rejected name stays a string (the stripped text) so the write
-    model still receives ``str``. The 422 is applied in
-    ``validate_company``. Ticker text is left as typed;
+    payload is the same string ``clean_text`` returns. A rejected
+    name stays a string (the stripped text) so the write model
+    still receives ``str``. The 422 is applied in
+    ``validate_company``, which reads the error code. Ticker text
+    is left as typed;
     ``normalize_ticker`` strips and uppercases that field. A blank
     ISIN is ``None`` (unknown), not the empty string. The instrument
     type goes through ``instrument_type_for_payload``.
@@ -281,8 +273,15 @@ def company_payload(values):
         if not isinstance(raw, str):
             raw = "" if raw is None else str(raw)
         if field == "name":
-            normalized = normalized_company_name(raw)
-            payload[field] = raw.strip() if normalized is None else normalized
+            try:
+                payload[field] = normalized_company_name(raw)
+            except TextValidationError:
+                # raw is already a str. strip() removes whitespace
+                # only. A control in the middle stays in the string
+                # the model receives. validate_company still rejects
+                # the original text, including a newline that
+                # strip() would have hidden.
+                payload[field] = raw.strip()
         elif field == "instrument_type":
             typed = instrument_type_for_payload(raw)
             if typed is not None:
@@ -400,9 +399,10 @@ def validate_company(values, *, update):
 
     ``model`` is None when validation failed. The raw ``values`` stay
     with the caller for the inputs. Create (``update`` false) and
-    edit (``update`` true) both use ``normalized_company_name``. A
-    name with no visible character is ``error.required`` even when
-    the write model would accept it.
+    edit (``update`` true) both use ``normalized_company_name``.
+    The catalog key comes from ``TextValidationError.code``. A name
+    the checker rejects is not saved, including when ``strip`` would
+    have turned the posted text into a name the model accepts.
     """
     model_type = CompanyUpdate if update else CompanyCreate
     try:
@@ -412,9 +412,10 @@ def validate_company(values, *, update):
         model = None
     else:
         errors, form_key = {}, None
-    if normalized_company_name(values.get("name", "")) is None:
+    name_key = company_name_error_key(values.get("name", ""))
+    if name_key is not None:
         rest = {key: value for key, value in errors.items() if key != "name"}
-        errors = {"name": "error.required", **rest}
+        errors = {"name": name_key, **rest}
         model = None
     return model, errors, form_key
 

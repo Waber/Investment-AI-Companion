@@ -16,10 +16,11 @@ reports Pydantic ``string_too_long``. That is the error these
 fields produced before the shared helper. Raising ``too_long``
 here would turn it into ``value_error``. A title or a body
 that is empty after stripping is rejected. So is one made only of
-whitespace and Unicode categories Cf, Co, and Cn (zero-width
-characters, private use, unassigned), including a space that sits
-between those characters. A letter with one of those characters
-beside it is kept, including at an edge. Thesis-breakers may be
+whitespace, combining marks (Mn, Mc, Me), and Unicode categories
+Cf, Co, and Cn (zero-width characters, private use, unassigned),
+including a space that sits between those characters. A letter
+with one of those characters beside it is kept, including at an
+edge. A mark on that letter is kept too. Thesis-breakers may be
 empty: a new thesis does not have to list any yet, and a blank
 breakers value is stored as ``""``. ``clean_text`` returns ``None``
 for that blank. This module turns that ``None`` into ``""`` because
