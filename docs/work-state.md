@@ -32,7 +32,8 @@
   - Item 4. The per-process skip logs are insertion-ordered dicts
     capped at 1024. The oldest id is dropped and may log once
     more. The repository and `app/api/prices.py` share
-    `_remember_skip`.
+    `remember_skip`. The update is under one `threading.Lock`,
+    so a full dict cannot make two threads pop the same oldest id.
   - Item 5. The repository rejects a currency that is not exactly
     three letters before flush, on SQLite and PostgreSQL.
     `ValueError`: `currency must be exactly three letters`. No new

@@ -183,6 +183,12 @@ BAD_CURRENCY_SAMPLES = (
     pytest.param("PL1", id="PL1"),
     pytest.param(None, id="None"),
     pytest.param("usd ", id="usd-space"),
+    # Not ASCII. ``ſ``.upper() is ``S`` and ``Ü``.upper() is ``U``,
+    # so a later case fold could turn these into USD. They are
+    # rejected before that. A newline is not a letter.
+    pytest.param("ſSD", id="long-s"),
+    pytest.param("ÜSD", id="u-umlaut"),
+    pytest.param("USD\n", id="newline"),
 )
 
 

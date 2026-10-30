@@ -190,7 +190,7 @@ def test_logged_skip_cap_is_the_literal_1024(caplog):
     """1024 ids stay. The 1025th drops only the oldest, which logs again.
 
     The cap is not patched. ``_MAX_LOGGED_SKIP_IDS`` must be 1024,
-    and ``_remember_skip`` must read that constant. A cap of 1023
+    and ``remember_skip`` must read that constant. A cap of 1023
     drops id 1 before the 1025th insert. A cap of 1025 still holds
     id 1 after that insert.
     """
@@ -201,7 +201,7 @@ def test_logged_skip_cap_is_the_literal_1024(caplog):
     seen.clear()
     try:
         for bar_id in range(1, 1025):
-            assert bars._remember_skip(seen, bar_id) is True
+            assert bars.remember_skip(seen, bar_id) is True
         assert len(seen) == 1024
         assert list(seen)[0] == 1
         assert 1024 in seen
@@ -216,7 +216,7 @@ def test_logged_skip_cap_is_the_literal_1024(caplog):
             if "not a decimal" in record.getMessage()
         ] == []
         caplog.clear()
-        assert bars._remember_skip(seen, 1025) is True
+        assert bars.remember_skip(seen, 1025) is True
         assert list(seen)[0] == 2
         assert 1 not in seen
         assert 2 in seen
@@ -237,6 +237,54 @@ def test_logged_skip_cap_is_the_literal_1024(caplog):
         ]
     finally:
         seen.clear()
+
+
+def test_remember_skip_survives_many_threads_past_the_cap():
+    """Several threads may fill the dict past 1024 without an error.
+
+    The cap still holds. The switch interval is tiny so threads
+    interleave inside the update. Without the lock that raises
+    ``KeyError`` or ``RuntimeError``.
+    """
+    import sys
+    import threading
+
+    from app.repositories.price_bar_repository import (
+        _MAX_LOGGED_SKIP_IDS,
+        remember_skip,
+    )
+
+    seen = {}
+    errors = []
+    per_thread = 400
+    thread_count = 32
+    previous = sys.getswitchinterval()
+    # A short interval is what makes the race show up. The default
+    # 5ms often hides it. Put the interval back before the asserts
+    # so a failure here does not change later tests.
+    sys.setswitchinterval(1e-9)
+
+    def worker(start):
+        try:
+            for offset in range(per_thread):
+                remember_skip(seen, start + offset)
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+
+    try:
+        threads = [
+            threading.Thread(target=worker, args=(index * per_thread,))
+            for index in range(thread_count)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        sys.setswitchinterval(previous)
+    assert errors == []
+    assert len(seen) <= _MAX_LOGGED_SKIP_IDS
+    assert len(seen) <= 1024
 
 
 def test_api_skip_log_drops_the_oldest_id(caplog, monkeypatch):
