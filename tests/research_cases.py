@@ -441,6 +441,34 @@ class ResearchBehavior:
         assert again.updated_at == _OLD
         assert again.title == "T"
 
+    def test_same_thesis_texts_still_count_as_an_update(self, session):
+        """Sending the stored texts again is an edit, as for a note.
+
+        Only the panel skips an edit that changes nothing. An API
+        ``PUT`` with the same values still moves ``updated_at``.
+        """
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(
+            company.id,
+            ThesisCreate(title="T", body="B", thesis_breakers="X"),
+        )
+        created_at = thesis.created_at
+        _pin_updated_at(session, ThesisDB, thesis.id, _OLD)
+        same = ThesisUpdate(
+            title=thesis.title,
+            body=thesis.body,
+            thesis_breakers=thesis.thesis_breakers,
+        )
+        changed = repo.update(company.id, thesis.id, same)
+        assert (changed.title, changed.body, changed.thesis_breakers) == (
+            "T",
+            "B",
+            "X",
+        )
+        assert changed.created_at == created_at
+        assert changed.updated_at > _OLD
+
     def test_closing_sets_closed_at_and_reopening_clears_it(self, session):
         company = _company(session, "ACME")
         repo = ThesisRepository(session)
