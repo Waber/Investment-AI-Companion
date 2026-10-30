@@ -12,6 +12,7 @@ from alembic.script import ScriptDirectory
 from app.core.database import Base, create_db_engine
 from tests.company_migration import (
     upgrade_head,
+    upgrade_head_over_create_all,
     without_unreflectable_ticker_index,
 )
 from tests.watchlist_migration import (
@@ -162,7 +163,7 @@ def test_autogenerate_against_sqlite_watchlist_is_empty(tmp_path):
         with engine.connect() as connection:
             config = _config(connection)
             command.stamp(config, "0003")
-            upgrade_head(connection)
+            upgrade_head_over_create_all(connection)
             assert_autogenerate_is_empty(connection)
             with without_unreflectable_ticker_index():
                 script = command.revision(

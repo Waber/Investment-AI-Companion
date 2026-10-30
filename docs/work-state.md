@@ -1,54 +1,50 @@
 # Current Work State
 
-## Watchlist `/ui` page (#96): 2026-10-27
+## Watchlist N+1 and ticker-index SAWarning: 2026-10-30
 
-- Branch `feat/watchlist-ui-96`, from `origin/master` `b871326`.
-  Pull request to `master`, Closes #96. Not merged.
-- Design: `docs/superpowers/specs/2026-10-27-watchlist-ui-design.md`.
-  Plan: `docs/superpowers/plans/2026-10-27-watchlist-ui.md`. Raul
-  approved the design and chose the table layout.
-- Completed: `/ui/watchlist` (nav link "Watchlista" / "Watchlist")
-  lists company, ticker and label, latest close with currency, change
-  against the previous bar, a 3-month sparkline (inline SVG, 92 days
-  ending on the latest bar), the latest bar date with its source, a
-  stale badge, and a remove button. The detail page has a heart
-  toggle (♡/♥, `aria-pressed`). Add and remove are POST forms that
-  HTMX enhances (`POST /ui/watchlist/{id}` and `.../remove`, hidden
-  `from` = `detail` or `watchlist`). Prices are formatted from
-  `Decimal` (`format_price`, 2 to 4 decimals; below 0.1 it keeps 4
-  significant digits, up to 8 places).
-  `PriceBarRepository.recent_closes` reads the default series and
-  skips bars without a close.
-- Decisions: "stale" counts from today's UTC date (Raul), so every
-  demo-v2 row with prices is stale (the fixture ends 2026-09-28). The
-  column is "Zmiana" / "Change", not "daily", because demo bars are
-  weekly. The demo starts with an empty watchlist; the demo script
-  adds two instruments. A missing price, change, or trend is an em
-  dash with the "no data" text as its title.
-- Code Reviewer: ready to merge, no Critical or Important. Fixed at
-  Raul's request: HTMX errors fall back to a plain POST
-  (`static/ui.js`, forms marked `data-plain-fallback`), focus stays on
-  the heart or moves to the neighbour row after ✕, and each ✕ names
-  its company. Deferred: trend direction only shown by colour,
-  duplicated `.visually-hidden` CSS.
-- Not in scope: named lists (#99), on-demand AI summary per row
-  (#100), entering or editing the label.
-- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI command
-  on local SQLite 3.54.1: 1871 passed, 2 failed, 221 deselected,
-  coverage 96.39%. The two failures are the known `0006` float
-  boundary tests (below). Demo check: demo-v2 seeded into a
-  throwaway SQLite file; four companies added through the heart
-  POST; the table showed prices, sparklines, stale badges, sources,
-  and no `style=` attribute. No local PostgreSQL; GitHub Actions runs
-  both jobs. No live market-data calls. black, isort, and flake8
+- Branch `cursor/watchlist-nplus1-sawarnings`, from `origin/master`
+  `3c40413`. Pull request to `master`. Refs, no closing keyword
+  (there is no issue). Not merged.
+- Completed: `GET /ui/watchlist` no longer runs one price query and
+  one company query per row. `list_items(with_company=True)` uses
+  `joinedload`. New `PriceBarRepository.recent_closes_for` loads
+  default sources, the two newest closes, and the sparkline window
+  in at most three queries for the whole list. `recent_closes` and
+  `_default_source` are unchanged (PR #107 edits those). Rendered
+  HTML is unchanged. Templates and static files were not edited.
+- Query counts on SQLite, every row with two closes: 1 row was 6
+  statements and 10 rows were 51 (`5N+1`). Both are now 4 statements.
+- SAWarning: CI on `3c40413` printed
+  `Skipped unsupported reflection of expression-based index
+  uq_companies_ticker` from
+  `test_autogenerate_against_sqlite_notes_is_empty` and
+  `test_autogenerate_against_sqlite_watchlist_is_empty`. Cause:
+  those tests `create_all` (the expression index already exists),
+  then revision 0006 batch-alters `price_bars` and reflects
+  `companies` through the foreign key. SQLAlchemy 2.0.23 cannot
+  reflect `upper(ticker)`. Fix is test-helper only:
+  `upgrade_head_over_create_all` ignores that one message and turns
+  any other `SAWarning` into an error. No Alembic revision.
+  `-W error::DeprecationWarning` is unchanged.
+- Decisions: batch method is new, not a rewrite of `recent_closes`.
+  Company eager-load is opt-in so the watchlist API query stays a
+  plain list. Default source is still latest `retrieved_at`, then
+  the source name that sorts last in Python (`fake` beats
+  `[IAC-DEMO-V2]`).
+- Not in scope: PR #104, PR #106 (`form_fields.py`, `text.py`),
+  PR #107's edits to `upsert_many`, `_default_source`, the log-once
+  cap, and the currency check. Templates and static files.
+- Tests: no `.env`, `DATABASE_URL` unset. CI command on local
+  SQLite 3.45.1: 1880 passed, 222 deselected, coverage 96.40%.
+  No warnings summary. No local PostgreSQL; GitHub Actions runs
+  that job. No live market-data calls. black, isort, and flake8
   passed on the changed Python files.
-- Active agents: none. Blockers: none. Account usage was not
+- Active agents: this run. Blockers: none. Account usage was not
   available in this session.
-- After the review fixes: CI command locally 1875 passed, the same 2
-  failed, coverage 96.39%. `ui.js` checked in node only, not in a real
-  browser.
-- Next action: GitHub Actions on the pull request, then QA. Raul
-  merges with "Rebase and merge".
+- Next action: GitHub Actions on this pull request (SQLite and
+  PostgreSQL). Do not merge. Raul merges with "Rebase and merge".
+  A later rebase onto PR #107 should stay small because the new
+  price method does not edit `_default_source` or `upsert_many`.
 
 ## Open work elsewhere
 
@@ -56,7 +52,8 @@
   work-state still lists the `/ui` forms and any HTTP API as
   incomplete. Those belong to the Frontend Developer.
 - #32: the watchlist backend is on master (revision `0004`).
-  The `/ui` page is #96, on `feat/watchlist-ui-96`.
+  The `/ui` page from #96 is on master (`3c40413`). The N+1 follow-up
+  is this branch.
 - #8 and #10: the instrument Alembic baseline is still open,
   and `init_db` still uses `create_all`.
 - #54: the real Yahoo adapter, and the case where a Yahoo HTTP

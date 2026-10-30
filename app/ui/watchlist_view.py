@@ -179,16 +179,19 @@ def list_entries(
 ) -> list[WatchlistEntryView]:
     """Every watchlist row, in the repository order (oldest first).
 
-    One price query per row. The list is short, and the query reads
-    only the last few months of one series.
+    Companies and closes are loaded for the whole list at once.
+    The number of queries does not grow with the number of rows.
+    Each row still shows the same closes ``recent_closes`` would
+    return for that company alone.
     """
     if today is None:
         today = utc_today()
-    prices = PriceBarRepository(db)
+    items = WatchlistRepository(db).list_items(with_company=True)
+    recent = PriceBarRepository(db).recent_closes_for(
+        [item.company_id for item in items]
+    )
     stale_days = settings.WATCHLIST_STALE_PRICE_DAYS
     return [
-        to_entry(
-            item, prices.recent_closes(item.company_id), today, stale_days
-        )
-        for item in WatchlistRepository(db).list_items()
+        to_entry(item, recent.get(item.company_id), today, stale_days)
+        for item in items
     ]

@@ -102,6 +102,28 @@ def without_unreflectable_ticker_index():
         yield
 
 
+def upgrade_head_over_create_all(connection):
+    """Upgrade a database that ``create_all`` already built.
+
+    ``create_all`` creates ``uq_companies_ticker`` on ``upper(ticker)``
+    before these tests stamp an older revision and run 0006. On SQLite,
+    0006 rebuilds ``price_bars`` with Alembic batch mode. Batch mode
+    reflects ``price_bars`` and, because of the foreign key, reflects
+    ``companies`` too. SQLAlchemy 2.0.23 cannot reflect an expression
+    index. It warns ``Skipped unsupported reflection of expression-based
+    index uq_companies_ticker`` and skips that index. The price-bar
+    copy does not read the index. The filter hides that one message.
+    Any other ``SAWarning`` still fails this helper.
+
+    A legacy database does not have the expression index until 0007,
+    which runs after 0006, so ``upgrade_head`` itself stays unfiltered.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", SAWarning)
+        with without_unreflectable_ticker_index():
+            upgrade_head(connection)
+
+
 def metadata_diff(connection):
     """Operations autogenerate would apply to match ``Base.metadata``.
 

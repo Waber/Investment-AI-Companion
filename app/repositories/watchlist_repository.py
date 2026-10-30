@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.database_models import CompanyDB, WatchlistItemDB
 from app.models.watchlist import (
@@ -141,10 +141,23 @@ class WatchlistRepository:
         """True when this company is already on the watchlist."""
         return self.get_by_company_id(company_id) is not None
 
-    def list_items(self) -> list[WatchlistItemDB]:
-        """Every row, oldest ``added_at`` first, then lowest id."""
-        return (
-            self.db.query(WatchlistItemDB)
-            .order_by(WatchlistItemDB.added_at, WatchlistItemDB.id)
-            .all()
-        )
+    def list_items(
+        self, *, with_company: bool = False
+    ) -> list[WatchlistItemDB]:
+        """Every row, oldest ``added_at`` first, then lowest id.
+
+        ``with_company`` loads ``company`` in the same query. The
+        watchlist page reads the company of every row. A lazy load
+        would be one extra SELECT per row (the ORM default, the same
+        idea as a JPA field that is not JOIN FETCH). The company is
+        many-to-one, so the join does not repeat watchlist rows.
+        Callers that only need ``company_id`` leave this off.
+        """
+        query = self.db.query(WatchlistItemDB)
+        if with_company:
+            # joinedload is JOIN FETCH: the company columns arrive
+            # on the watchlist SELECT instead of a follow-up query.
+            query = query.options(joinedload(WatchlistItemDB.company))
+        return query.order_by(
+            WatchlistItemDB.added_at, WatchlistItemDB.id
+        ).all()
