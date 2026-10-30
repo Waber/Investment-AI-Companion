@@ -15,6 +15,14 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_ui_research import (
+    _company,
+    _is_create_post,
+    _note,
+    _panel_actions,
+    _thesis,
+)
+
 UI_JS = Path(__file__).resolve().parents[1] / "static" / "ui.js"
 # The href of the marked link in the harness.
 _LINK = "http://127.0.0.1/ui/companies/7/research"
@@ -227,7 +235,12 @@ def test_ui_js_repeats_marked_requests(tmp_path):
     )
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout) == {
-        "events": ["htmx:afterSettle", "htmx:responseError", "htmx:sendError"],
+        "events": [
+            "htmx:afterSettle",
+            "htmx:beforeSwap",
+            "htmx:responseError",
+            "htmx:sendError",
+        ],
         "submitted": {
             "marked": 2,
             "samePage": 0,
@@ -239,5 +252,142 @@ def test_ui_js_repeats_marked_requests(tmp_path):
             "kept": ["id"],
             "focused": ["id", "tabindex"],
             "plain": ["id"],
+        },
+    }
+
+
+# Fires htmx:beforeSwap. The script may only force a swap for a 500
+# whose target is the research panel. Other targets and other statuses
+# keep the shouldSwap value HTMX already chose.
+_SWAP_HARNESS = r"""
+"use strict";
+const fs = require("fs");
+const vm = require("vm");
+
+const handlers = {};
+vm.runInNewContext(
+  fs.readFileSync(process.argv[2], "utf8"),
+  {
+    document: {
+      addEventListener(name, handler) {
+        (handlers[name] = handlers[name] || []).push(handler);
+      },
+    },
+    window: { location: { href: "http://127.0.0.1/ui", assign() {} } },
+    FormData: class {},
+    URL: URL,
+    URLSearchParams: URLSearchParams,
+  },
+  { filename: process.argv[2] }
+);
+
+function fire(event) {
+  for (const handler of handlers["htmx:beforeSwap"] || []) {
+    handler(event);
+  }
+}
+
+const cases = [
+  { name: "research500", status: 500, id: "research", shouldSwap: false },
+  { name: "other500", status: 500, id: "watchlist-table", shouldSwap: false },
+  { name: "research404", status: 404, id: "research", shouldSwap: false },
+  { name: "research422", status: 422, id: "research", shouldSwap: true },
+  { name: "research200", status: 200, id: "research", shouldSwap: true },
+  { name: "noId", status: 500, id: "", shouldSwap: false },
+];
+const results = {};
+for (const item of cases) {
+  const detail = {
+    xhr: { status: item.status },
+    target: { id: item.id },
+    shouldSwap: item.shouldSwap,
+  };
+  fire({ detail: detail });
+  results[item.name] = detail.shouldSwap;
+}
+fire({});
+console.log(JSON.stringify({
+  listened: Object.prototype.hasOwnProperty.call(handlers, "htmx:beforeSwap"),
+  results: results,
+}));
+"""
+
+
+@pytest.mark.asyncio
+async def test_create_forms_do_not_repeat_and_a_research_500_swaps(
+    client, tmp_path
+):
+    """Create posts are not repeated. A 500 swaps into #research only.
+
+    A 500 after the row is stored used to post the add form again,
+    because it carried ``data-plain-fallback``. That second post
+    stored another note or thesis and threw away the 500 panel.
+    Edit and delete stay marked: repeating them does not insert a
+    row. ``ui.js`` swaps a 500 into ``#research`` and leaves every
+    other 500 unswapped.
+    """
+    company_id = _company(client)
+    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    thesis_id = _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    base = f"/ui/companies/{company_id}"
+    headers = {"hx-request": "true"}
+    pages = (
+        await client.get(f"{base}/research", headers=headers),
+        await client.get(f"{base}/theses/new", headers=headers),
+        await client.get(f"{base}/notes/{note_id}/edit", headers=headers),
+        await client.get(f"{base}/notes/{note_id}/delete", headers=headers),
+        await client.get(f"{base}/theses/{thesis_id}/edit", headers=headers),
+        await client.get(f"{base}/theses/{thesis_id}/delete", headers=headers),
+    )
+    creates, edits, deletes = set(), set(), set()
+    for response in pages:
+        assert response.status_code == 200
+        for tag, attrs in _panel_actions(response.text):
+            action = attrs.get("action", attrs.get("href", ""))
+            if _is_create_post(tag, attrs):
+                assert "data-plain-fallback" not in attrs, action
+                creates.add(action)
+            else:
+                assert "data-plain-fallback" in attrs, action
+                if tag == "form" and action.endswith("/edit"):
+                    edits.add(action)
+                if tag == "form" and action.endswith("/delete"):
+                    deletes.add(action)
+    assert creates == {f"{base}/notes", f"{base}/theses"}
+    assert edits == {
+        f"{base}/notes/{note_id}/edit",
+        f"{base}/theses/{thesis_id}/edit",
+    }
+    assert deletes == {
+        f"{base}/notes/{note_id}/delete",
+        f"{base}/theses/{thesis_id}/delete",
+    }
+
+    script = UI_JS.read_text(encoding="utf-8")
+    assert 'xhr.status === 500 && target.id === "research"' in script
+    assert "detail.shouldSwap = true" in script
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    harness = tmp_path / "swap-harness.cjs"
+    harness.write_text(_SWAP_HARNESS, encoding="utf-8")
+    completed = subprocess.run(
+        [node, str(harness), str(UI_JS)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {
+        "listened": True,
+        "results": {
+            "research500": True,
+            "other500": False,
+            "research404": False,
+            "research422": True,
+            "research200": True,
+            "noId": False,
         },
     }
