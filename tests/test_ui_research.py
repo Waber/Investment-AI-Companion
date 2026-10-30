@@ -1651,14 +1651,72 @@ def test_research_error_key_names_the_limit():
     assert research_error_key(too_long(20)) == "error.too_long"
     blank = TextValidationError("blank", "body")
     assert research_error_key(value_error(blank)) == "error.required"
+    too_long_code = TextValidationError("too_long", "body", 10000)
+    assert research_error_key(value_error(too_long_code)) == "error.too_long"
     control = TextValidationError("control_char", "body")
-    assert research_error_key(value_error(control)) == "error.invalid"
+    assert research_error_key(value_error(control)) == "error.control_char"
+    bidi = TextValidationError("bidi", "title")
+    assert research_error_key(value_error(bidi)) == "error.bidi"
+    surrogate = TextValidationError("surrogate", "body")
+    assert research_error_key(value_error(surrogate)) == "error.surrogate"
+    unknown = TextValidationError("not_a_code", "body")
+    assert research_error_key(value_error(unknown)) == "error.invalid"
     plain = ValueError("body cannot be null")
     assert research_error_key(value_error(plain)) == "error.invalid"
     assert research_error_key({"type": "string_type"}) == "error.invalid"
     for key in ("error.max_200", "error.max_5000", "error.max_10000"):
         assert CATALOGS["pl"][key].startswith("Najwyżej ")
         assert CATALOGS["en"][key].startswith("At most ")
+    for key in ("error.control_char", "error.bidi", "error.surrogate"):
+        assert CATALOGS["pl"][key] != CATALOGS["pl"]["error.invalid"]
+        assert CATALOGS["en"][key] != CATALOGS["en"]["error.invalid"]
+
+
+@pytest.mark.asyncio
+async def test_control_and_bidi_text_names_the_reason(client):
+    """A control or bidi character is 422 with its own sentence.
+
+    ``blank`` and ``too_long`` already have catalog keys. These two
+    used to share ``error.invalid`` ("Ta wartość jest nieprawidłowa.").
+    The note body and the thesis title both go through
+    ``research_error_key``.
+    """
+    company_id = _company(client)
+    base = f"/ui/companies/{company_id}"
+    posts = (
+        (f"{base}/notes", {"body": "\x00"}, "error.control_char"),
+        (
+            f"{base}/theses",
+            {"title": "Teza\u202e", "body": "Powód.", "thesis_breakers": ""},
+            "error.bidi",
+        ),
+    )
+    for path, data, key in posts:
+        for language in ("pl", "en"):
+            client.cookies.set("ui_lang", language)
+            response = await _post(client, path, data, htmx=True)
+            assert response.status_code == 422
+            assert CATALOGS[language][key] in response.text
+            assert CATALOGS[language]["error.invalid"] not in response.text
+    assert _stored_notes(client, company_id) == {}
+    assert _stored_theses(client, company_id) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_lone_surrogate_cannot_be_a_form_post(client):
+    """UTF-8 cannot carry U+D800, so the form never sees a surrogate.
+
+    The catalog key is still ``error.surrogate``. The company-name
+    form hit the same encoding error and locks the sentence without
+    a POST. This test records that the research form cannot do more.
+    """
+    company_id = _company(client)
+    with pytest.raises(UnicodeEncodeError):
+        await _post(
+            client,
+            f"/ui/companies/{company_id}/notes",
+            {"body": "\ud800"},
+        )
 
 
 @pytest.mark.asyncio
@@ -1764,7 +1822,7 @@ async def test_invalid_thesis_is_422(client, htmx):
     valid = {"title": "Teza", "body": "Powód zakupu.", "thesis_breakers": ""}
     for field, value, message in (
         ("title", "   ", "To pole jest wymagane."),
-        ("title", "a\nb", "Ta wartość jest nieprawidłowa."),
+        ("title", "a\nb", "To pole nie może zawierać znaków sterujących."),
         ("title", "a" * 201, "Najwyżej 200 znaków."),
         ("body", "a" * 10001, "Najwyżej 10\u00a0000 znaków."),
         ("thesis_breakers", "a" * 5001, "Najwyżej 5000 znaków."),

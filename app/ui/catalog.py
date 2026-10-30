@@ -202,6 +202,11 @@ _POLISH = {
     "error.number": "Podaj skończoną liczbę albo zostaw pole puste.",
     "error.datetime": ("Podaj datę i czas, na przykład 2024-12-31T00:00:00."),
     "error.invalid": "Ta wartość jest nieprawidłowa.",
+    "error.control_char": "To pole nie może zawierać znaków sterujących.",
+    "error.bidi": (
+        "To pole nie może zawierać ukrytych znaków " "ani znaków kierunkowych."
+    ),
+    "error.surrogate": "To pole nie może zawierać niesparowanych surogatów.",
     "error.instrument_type": "Typ musi być STOCK, ETF albo ETC.",
     "error.duplicate_company": (
         "Istnieje już spółka o tej nazwie lub tym tickerze."
@@ -409,6 +414,9 @@ _ENGLISH = {
     "error.number": "Enter a finite number, or leave the field empty.",
     "error.datetime": ("Enter a date and time, such as 2024-12-31T00:00:00."),
     "error.invalid": "This value is not valid.",
+    "error.control_char": "This field must not contain control characters.",
+    "error.bidi": "This field must not contain hidden or bidi controls.",
+    "error.surrogate": "This field must not contain unpaired surrogates.",
     "error.instrument_type": "Type must be STOCK, ETF, or ETC.",
     "error.duplicate_company": (
         "A company with this name or ticker already exists."
