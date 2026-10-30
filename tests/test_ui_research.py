@@ -1028,8 +1028,12 @@ async def test_crlf_note_at_the_limit_is_saved(client):
         response = await _post(client, path, {"body": over}, htmx=htmx)
         assert response.status_code == 422
         html = response.text
-        assert "Najwyżej 10 000 znaków." in _text(html, "note-new-body-error")
-        assert "Najwyżej 10 000 znaków." in _text(html, "note-new-errors")
+        # U+00A0, a no-break space: the app's Polish thousands
+        # separator, so "10 000" never wraps between its two parts.
+        assert "Najwyżej 10\u00a0000 znaków." in _text(
+            html, "note-new-body-error"
+        )
+        assert "Najwyżej 10\u00a0000 znaków." in _text(html, "note-new-errors")
         assert _text(html, "note-new-body") == over
     assert len(_stored_notes(client, company_id)) == 1
 
@@ -1094,11 +1098,11 @@ async def test_invalid_note_edit_keeps_the_text(client, htmx):
     assert _text(html, field) == typed
     assert _attrs(html, field)["aria-invalid"] == "true"
     assert _attrs(html, field)["aria-describedby"] == f"{field}-error"
-    assert _text(html, f"{field}-error") == "Najwyżej 10 000 znaków."
+    assert _text(html, f"{field}-error") == "Najwyżej 10\u00a0000 znaków."
     assert_labeled(html)
     summary = _between(html, f'id="note-{note_id}-errors"', "</div>")
     assert f'<a href="#{field}">Treść notatki</a>' in summary
-    assert "Najwyżej 10 000 znaków." in summary
+    assert "Najwyżej 10\u00a0000 znaków." in summary
     assert _focus(response) == f"note-{note_id}-errors"
     # The form sits in the note's own item.
     item = _between(html, f'<li id="note-{note_id}"', "</li>")
@@ -1744,7 +1748,7 @@ async def test_invalid_thesis_is_422(client, htmx):
         ("title", "   ", "To pole jest wymagane."),
         ("title", "a\nb", "Ta wartość jest nieprawidłowa."),
         ("title", "a" * 201, "Najwyżej 200 znaków."),
-        ("body", "a" * 10001, "Najwyżej 10 000 znaków."),
+        ("body", "a" * 10001, "Najwyżej 10\u00a0000 znaków."),
         ("thesis_breakers", "a" * 5001, "Najwyżej 5000 znaków."),
     ):
         typed = {**valid, field: value}
