@@ -2,10 +2,11 @@
 
 Company names, watchlist labels, note bodies, and thesis fields all
 call ``clean_text``. The rules stay here so a form and the API cannot
-drift apart. The ``/ui`` forms still have their own copy until the
-Frontend Developer switches them over. They should import this module
-and the length constants (``COMPANY_NAME_MAX``, ``NOTE_BODY_MAX``, and
-the others), not grow a third copy of the checks.
+drift apart. The ``/ui`` company name calls this function. Other
+``/ui`` free-text fields still check characters themselves. They
+should import this module and the length constants
+(``COMPANY_NAME_MAX``, ``NOTE_BODY_MAX``, and the others), not grow
+another copy of the checks.
 
 The checks run in a fixed order. A later check must not hide an
 earlier one:
@@ -27,13 +28,16 @@ earlier one:
    character at the edge is not whitespace, so it stays.
 
 3. Blank check. The value is blank when nothing is left, or when
-   every remaining character is whitespace or category ``Cf``
-   (format), ``Co`` (private use), or ``Cn`` (unassigned). ``Cf``
-   is included because a value made only of invisible characters
-   such as U+200B or U+FEFF is not a name or a note. ``Co`` and
-   ``Cn`` are the same kind of filler. A ``Cf``, ``Co``, or ``Cn``
-   character next to a letter is kept, including at an edge. This
-   step does not strip those characters out of real text.
+   every remaining character is whitespace, a combining mark
+   (``Mn``, ``Mc``, or ``Me``), or category ``Cf`` (format), ``Co``
+   (private use), or ``Cn`` (unassigned). ``Cf`` is included because
+   a value made only of invisible characters such as U+200B or
+   U+FEFF is not a name or a note. ``Co`` and ``Cn`` are the same
+   kind of filler. A mark with no base letter is too: U+0301,
+   U+093E, and U+20DD are not a name by themselves. A ``Cf``,
+   ``Co``, ``Cn``, or mark next to a letter is kept, including at
+   an edge. This step does not strip those characters out of real
+   text.
 
 4. ``max_len`` is the length of the stripped text. Padding spaces
    do not count. A blank value fails step 3, so it is never
@@ -95,7 +99,11 @@ _NEWLINE_CONTROLS = frozenset("\n\r\t")
 # A value made only of these, plus whitespace, is blank. ``Cs`` is
 # not here: a surrogate already failed step 1. Bidi format
 # characters are ``Cf`` too, and they also failed step 1.
-_BLANK_CATEGORIES = frozenset({"Cf", "Co", "Cn"})
+# ``Mn``, ``Mc``, and ``Me`` are combining marks. With no base
+# letter they are not a name. A letter plus a mark is kept, because
+# the letter is not in this set. The check stays in this step so it
+# cannot hide a surrogate, a bidi mark, or a control.
+_BLANK_CATEGORIES = frozenset({"Cf", "Co", "Cn", "Mn", "Mc", "Me"})
 
 
 class TextValidationError(ValueError):
@@ -148,6 +156,8 @@ def _is_blank(value: str) -> bool:
 
     The caller already stripped the ends. A space between two
     zero-width characters is still here, and it is still blank.
+    A combining mark is blank on its own and visible when a letter
+    sits beside it.
     """
     if value == "":
         return True

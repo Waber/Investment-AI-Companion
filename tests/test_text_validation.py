@@ -227,6 +227,14 @@ _BLANK_VALUES = (
     "\ue000 \ue001",
     "\u0378",
     "\u0378 \u0379",
+    # Marks with no base letter. Mn, Mc, and Me are invisible on
+    # their own, the same way a private-use character is.
+    "\u0301",
+    "\u0301\u0308",
+    "\u093e",
+    "\u20dd",
+    "\u093e\u20dd",
+    "\u200b\u0301\u200b",
 )
 
 
@@ -246,6 +254,31 @@ def test_blank_categories_match_the_characters_under_test():
     assert unicodedata.category("\ue000") == "Co"
     assert unicodedata.category("\u0378") == "Cn"
     assert unicodedata.category("\u200b") == "Cf"
+
+
+def test_combining_marks_without_a_base_are_blank():
+    """Mn, Mc, and Me with no letter are blank. A letter keeps its mark.
+
+    This is the blank step: after surrogate, bidi, and control, and
+    before the length check. A long run of marks is blank, not
+    ``too_long``. A control before a mark is still a control.
+    """
+    assert unicodedata.category("\u0301") == "Mn"
+    assert unicodedata.category("\u093e") == "Mc"
+    assert unicodedata.category("\u20dd") == "Me"
+    for value in ("\u0301", "\u093e", "\u20dd", "\u0301" * 50):
+        error = _raise(value, max_len=10)
+        assert error.code == "blank", repr(value)
+        assert error.field == "name"
+    assert clean_text("e\u0301", field="name", max_len=20) == "e\u0301"
+    assert clean_text("A\u093e\u20dd", field="name", max_len=20) == (
+        "A\u093e\u20dd"
+    )
+    assert _raise("\n\u0301").code == "control_char"
+    assert (
+        clean_text("\u0301", field="label", max_len=80, allow_blank=True)
+        is None
+    )
 
 
 def test_co_and_cn_beside_a_letter_are_kept():

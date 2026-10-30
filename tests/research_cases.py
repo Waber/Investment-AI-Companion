@@ -541,6 +541,9 @@ class ResearchBehavior:
             (" \u200b \ufeff ", "blank", "blank"),
             ("\n\u200c\t", "control_char", "blank"),
             ("\u200d", "blank", "blank"),
+            ("\u0301", "blank", "blank"),
+            ("\u093e", "blank", "blank"),
+            ("\u20dd", "blank", "blank"),
         ],
         ids=[
             "U+200B",
@@ -548,12 +551,17 @@ class ResearchBehavior:
             "spaces-and-Cf",
             "LF-U+200C-tab",
             "U+200D",
+            "U+0301",
+            "U+093E",
+            "U+20DD",
         ],
     )
     def test_format_characters_alone_count_as_blank(
         self, value, title_code, body_code
     ):
-        """Cf plus whitespace is blank. A letter beside Cf is kept.
+        """Cf, a combining mark, or whitespace is blank.
+
+        A letter beside Cf is kept.
 
         ``\\n\\u200c\\t`` is blank on a body: newline and tab are
         allowed, then strip leaves U+200C. The same text is

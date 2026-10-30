@@ -250,7 +250,9 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         assert normalized_company_name(accepted) == normalize_name(accepted)
     # A trailing newline is a control on the raw name. The form
     # rejects it. strip() must not turn it into "Kept".
-    assert normalized_company_name("  Kept\n") is None
+    with pytest.raises(TextValidationError) as newline_form:
+        normalized_company_name("  Kept\n")
+    assert newline_form.value.code == "control_char"
     with pytest.raises(TextValidationError) as newline_name:
         normalize_name("  Kept\n")
     assert newline_name.value.code == "control_char"
@@ -265,10 +267,8 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
     assert long_errors["name"] == "error.too_long"
     assert normalized_company_name("\u200bKept\u200b") == "\u200bKept\u200b"
     # LRM, RLM, ALM, the deprecated controls, and a tag character
-    # now fail inside normalize_name. The form catches ValueError
-    # and shows error.required. Mapping exc.code onto a catalog
-    # key is the Frontend Developer's follow-up. This locks the
-    # page the form shows today.
+    # fail in clean_text as bidi. The form maps that code to
+    # error.invalid. A blank name stays error.required.
     for marked in (
         "Kept\u200e",
         "Kept\u200f",
@@ -276,52 +276,74 @@ def test_payload_helpers_blank_optional_fields_and_keep_typed_text():
         "Kept\u206a",
         "Kept\U000e0001",
     ):
+        with pytest.raises(TextValidationError) as marked_error:
+            normalized_company_name(marked)
+        assert marked_error.value.code == "bidi"
         _marked_model, marked_errors, _marked_key = validate_company(
             {"name": marked, "ticker": "MARKED", "currency": "USD"},
             update=False,
         )
-        assert marked_errors["name"] == "error.required"
+        assert _marked_model is None
+        assert marked_errors["name"] == "error.invalid"
     assert unicodedata.category("\u0301") == "Mn"
     assert unicodedata.category("\u093e") == "Mc"
     assert unicodedata.category("\u20dd") == "Me"
     assert unicodedata.category("\u200c") == "Cf"
-    assert normalized_company_name(None) is None
+    with pytest.raises(TextValidationError) as missing_name:
+        normalized_company_name(None)
+    assert missing_name.value.code == "blank"
     with pytest.raises(ValueError, match="control"):
         normalize_name("\x00Kept\x7f")
-    for invisible in (
-        "",
-        "   ",
-        "\n\t",
-        "\u00a0",
-        "\u3000",
-        "\u200b",
-        "\u200b\u00a0",
-        "\u200c\u200d\ufeff",
-        "\u200b \u3000",
-        "\x00",
-        "\x00 \x01",
-        "\u0301",
-        "\u0301\u0308",
-        "\u093e",
-        "\u20dd",
-        "\u093e\u20dd",
-        "\u200b\u0301\u200b",
-        "\u202a",
-        "\u202eKept",
-        "Ke\u202ept",
-        "\u2066A\u2069",
-        "A\u2067B",
-        "Ke\x00pt",
-        "Na\nme",
-        "\x00Kept\x7f",
-    ):
-        assert normalized_company_name(invisible) is None
+    # (raw name, clean_text code, catalog key). Every code in the
+    # shared checker is here. A surrogate cannot be posted as form
+    # bytes; this call is the form's own mapping.
+    name_cases = (
+        ("", "blank", "error.required"),
+        ("   ", "blank", "error.required"),
+        ("\u00a0", "blank", "error.required"),
+        ("\u3000", "blank", "error.required"),
+        ("\u200b", "blank", "error.required"),
+        ("\u200b\u00a0", "blank", "error.required"),
+        ("\u200c\u200d\ufeff", "blank", "error.required"),
+        ("\u200b \u3000", "blank", "error.required"),
+        ("\u0301", "blank", "error.required"),
+        ("\u0301\u0308", "blank", "error.required"),
+        ("\u093e", "blank", "error.required"),
+        ("\u20dd", "blank", "error.required"),
+        ("\u093e\u20dd", "blank", "error.required"),
+        ("\u200b\u0301\u200b", "blank", "error.required"),
+        ("N" * (COMPANY_NAME_MAX + 1), "too_long", "error.too_long"),
+        ("\n\t", "control_char", "error.invalid"),
+        ("\x00", "control_char", "error.invalid"),
+        ("\x00 \x01", "control_char", "error.invalid"),
+        ("Ke\x00pt", "control_char", "error.invalid"),
+        ("Na\nme", "control_char", "error.invalid"),
+        ("\x00Kept\x7f", "control_char", "error.invalid"),
+        ("\u202a", "bidi", "error.invalid"),
+        ("\u202eKept", "bidi", "error.invalid"),
+        ("Ke\u202ept", "bidi", "error.invalid"),
+        ("\u2066A\u2069", "bidi", "error.invalid"),
+        ("A\u2067B", "bidi", "error.invalid"),
+        ("A\ud800B", "surrogate", "error.invalid"),
+    )
+    assert {code for _raw, code, _key in name_cases} == {
+        "blank",
+        "too_long",
+        "control_char",
+        "bidi",
+        "surrogate",
+    }
+    for raw, code, key in name_cases:
+        with pytest.raises(TextValidationError) as caught:
+            normalized_company_name(raw)
+        assert caught.value.code == code, repr(raw)
+        assert caught.value.field == "name"
         for update in (False, True):
             rejected, field_errors, _key = validate_company(
-                {"name": invisible, "ticker": "ABC"}, update=update
+                {"name": raw, "ticker": "ABC"}, update=update
             )
             assert rejected is None
-            assert field_errors["name"] == "error.required"
+            assert field_errors["name"] == key, repr(raw)
     kept = company_payload({"name": " \u200bKept\u200b "})
     assert kept["name"] == normalize_name(" \u200bKept\u200b ")
     assert kept["name"] == "\u200bKept\u200b"
@@ -1064,12 +1086,14 @@ async def test_duplicate_code_attribute_maps_without_the_class(
     [
         "",
         "   ",
-        "\n\t",
         "\u00a0",
         "\u3000",
         "\u200b",
         "\u200c\u200d\ufeff",
         "\u00a0\u200b\u3000",
+        "\u0301",
+        "\u093e",
+        "\u20dd",
     ],
 )
 async def test_blank_company_name_is_422_in_both_languages(client, name):
@@ -1166,26 +1190,30 @@ async def test_names_in_other_scripts_match_normalize_name(
 
 @pytest.mark.asyncio
 async def test_interior_control_or_only_combining_marks_is_422(client):
-    """A control, a bidi mark, or only marks, is 422.
+    """A control, a bidi mark, or only marks, is 422 and stores nothing.
 
-    Create and edit share ``normalized_company_name``. The row is
-    not written. The message is the localized required-field sentence.
-    A bidi override at the end is not stripped down to the letters.
-    Mn, Mc, and Me with no base letter are rejected. A letter with
-    one of those marks is stored.
+    Create and edit share ``normalized_company_name``. Marks with no
+    base letter are blank, so the page says the field is required.
+    A control or a bidi mark is an invalid character. A bidi override
+    at the end is not stripped down to the letters. A letter with a
+    mark is stored.
     """
-    for name in (
-        "Ke\x00pt",
-        "\x00Kept\x7f",
-        "Na\nme",
+    required_names = (
         "\u0301",
         "\u0301\u0308",
         "\u093e",
         "\u20dd",
+    )
+    invalid_names = (
+        "Ke\x00pt",
+        "\x00Kept\x7f",
+        "Na\nme",
+        "\n\t",
         "\u202eKept",
         "Ke\u202ept",
         "\u2066Name",
-    ):
+    )
+    for name in required_names:
         response = await _post(
             client,
             "/ui/companies",
@@ -1193,6 +1221,18 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
         )
         assert response.status_code == 422, repr(name)
         assert "To pole jest wymagane." in response.text
+        assert "Ta wartość jest nieprawidłowa." not in response.text
+        assert _counts(client) == (0, 0)
+    for name in invalid_names:
+        response = await _post(
+            client,
+            "/ui/companies",
+            {"name": name, "ticker": "BADNM", "currency": "USD"},
+        )
+        assert response.status_code == 422, repr(name)
+        assert "Ta wartość jest nieprawidłowa." in response.text
+        assert "To pole jest wymagane." not in response.text
+        assert 'id="field-name-error"' in response.text
         assert _counts(client) == (0, 0)
     company_id, _data = await _create(
         client, name="A\u093e\u20dd", ticker="MARKA"
@@ -1210,7 +1250,8 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
         {"name": "Na\x01me", "ticker": "MARKA"},
     )
     assert edited.status_code == 422
-    assert "This field is required." in edited.text
+    assert "This value is not valid." in edited.text
+    assert "This field is required." not in edited.text
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert "A\u093e\u20dd" in detail.text
 
@@ -1232,10 +1273,65 @@ async def test_edge_controls_are_422_on_edit(client):
         {"name": "\x00Kept\x7f", "ticker": "EDGECC"},
     )
     assert edited.status_code == 422
-    assert "To pole jest wymagane." in edited.text
+    assert "Ta wartość jest nieprawidłowa." in edited.text
+    assert "To pole jest wymagane." not in edited.text
     assert 'id="field-name-error"' in edited.text
     assert _stored_column(client, company_id, "name") == "Kept Name"
     assert _counts(client) == (1, 0)
+
+
+@pytest.mark.asyncio
+async def test_company_name_length_boundary_rerenders_and_stores_nothing(
+    client,
+):
+    """255 characters are stored. 256 rerenders the form and adds no row."""
+    exact = "N" * COMPANY_NAME_MAX
+    company_id, _data = await _create(client, name=exact, ticker="MAXNM")
+    assert _stored_column(client, company_id, "name") == exact
+    over = "N" * (COMPANY_NAME_MAX + 1)
+    rejected = await _post(
+        client,
+        "/ui/companies",
+        {"name": over, "ticker": "TOOLNG", "currency": "USD"},
+    )
+    assert rejected.status_code == 422
+    _assert_field_message(rejected.text, "name", "Za długa wartość.")
+    assert 'value="TOOLNG"' in rejected.text
+    assert over in rejected.text
+    assert _counts(client) == (1, 0)
+    edited = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": over, "ticker": "MAXNM"},
+    )
+    assert edited.status_code == 422
+    assert "Za długa wartość." in edited.text
+    assert _stored_column(client, company_id, "name") == exact
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raw", "ticker", "stored"),
+    [
+        ("Zażółć gęślą jaźń", "PLDIAC", "Zażółć gęślą jaźń"),
+        ("  Spółka 😀  ", "EMOJNM", "Spółka 😀"),
+        ("e\u0301", "EACUTE", "e\u0301"),
+    ],
+)
+async def test_polish_diacritics_emoji_and_based_marks_are_stored(
+    client, raw, ticker, stored
+):
+    """Letters, Polish diacritics, emoji, and a mark on a letter stay.
+
+    ``clean_text`` strips the ends and does not rewrite those
+    characters. The form stores the same string as the API.
+    """
+    assert normalized_company_name(raw) == stored
+    assert normalize_name(raw) == stored
+    company_id, _data = await _create(client, name=raw, ticker=ticker)
+    assert _stored_column(client, company_id, "name") == stored
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert stored in detail.text
 
 
 @pytest.mark.asyncio
