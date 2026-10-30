@@ -2,16 +2,24 @@
 
 Companies are added through ``POST /api/v1/companies/``, the way
 ``tests/test_watchlist.py`` does. No test calls a market-data
-provider. ``tests/research_cases.py`` covers the repositories. These
-tests cover the HTTP contract: status codes, the 404 texts, the id
-bounds, the text rules as a 422, and the fixed 500.
+provider: the refresh test uses the offline ``FakeCollector``.
+``tests/research_cases.py`` covers the repositories. These tests
+cover the HTTP contract: status codes, the 404 texts, the id bounds,
+the text rules as a 422, and the fixed 500. The last two tests pin
+that notes and theses persist across a data refresh, a price
+refresh, and a new engine on the same database file.
 """
 
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
+from app.api.data_collection import get_collector
+from app.core.database import Base, create_db_engine
+from app.data_collectors.fake import FakeCollector
+from app.models.company import CompanyCreate
 from app.models.database_models import CompanyDB, NoteDB, ThesisDB
 from app.models.research import (
     NOTE_BODY_MAX,
@@ -19,8 +27,10 @@ from app.models.research import (
     THESIS_BREAKERS_MAX,
     THESIS_TITLE_MAX,
     NoteCreate,
+    ThesisCreate,
 )
 from app.repositories.company_errors import CompanyNotFoundError
+from app.repositories.company_repository import CompanyRepository
 from app.repositories.note_repository import NoteRepository
 from app.repositories.research_store import ResearchStorageError
 from app.repositories.thesis_repository import ThesisRepository
@@ -593,3 +603,68 @@ async def test_openapi_lists_notes_and_theses(client):
         assert parameters[name]["exclusiveMinimum"] == 0
         assert parameters[name]["maximum"] == _LARGEST_ID
         assert type(parameters[name]["maximum"]) is int
+
+
+@pytest.mark.asyncio
+async def test_notes_survive_data_and_price_refresh(client):
+    """A company data refresh and a price refresh keep the research.
+
+    fetch-company updates the stored company in place, and the price
+    refresh upserts bars. Neither may touch ``notes`` or ``theses``.
+    The fake collector serves ``DEMO_PL_TECH`` offline.
+    """
+    client.app.dependency_overrides[get_collector] = lambda: FakeCollector()
+
+    async def fetch_company():
+        response = await client.post(
+            "/api/v1/data-collection/fetch-company",
+            json={"ticker": "DEMO_PL_TECH"},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["company_id"]
+
+    company_id = await fetch_company()
+    note = await _add(client, company_id, "notes", _NOTE)
+    thesis = await _add(client, company_id, "theses", _THESIS)
+
+    # The second fetch finds the ticker and updates that row.
+    assert await fetch_company() == company_id
+    refreshed = await client.post(f"{API}/{company_id}/prices/refresh")
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["bar_count"] > 0
+
+    # Equal JSON, timestamps included: nothing was rewritten.
+    assert await _listed(client, company_id, "notes") == [note]
+    assert await _listed(client, company_id, "theses") == [thesis]
+
+
+def test_notes_survive_a_new_engine_on_the_same_file(tmp_path):
+    """Notes and theses are on disk, not in one engine's memory.
+
+    A server restart opens a new engine on the same file. Here the
+    first engine writes through the repositories and is disposed,
+    which closes its connections. A second engine reads both rows.
+    """
+    url = f"sqlite:///{tmp_path}/r.db"
+    engine = create_db_engine(url)
+    Base.metadata.create_all(bind=engine)
+    with Session(engine) as session:
+        company = CompanyRepository(session).create(
+            CompanyCreate(name="Restart Co", ticker="RESTART")
+        )
+        company_id = company.id
+        note = NoteRepository(session).create(company_id, NoteCreate(**_NOTE))
+        thesis = ThesisRepository(session).create(
+            company_id, ThesisCreate(**_THESIS)
+        )
+    engine.dispose()
+
+    reopened = create_db_engine(url)
+    try:
+        with Session(reopened) as session:
+            notes = NoteRepository(session).list_for_company(company_id)
+            theses = ThesisRepository(session).list_for_company(company_id)
+    finally:
+        reopened.dispose()
+    assert notes == [note]
+    assert theses == [thesis]

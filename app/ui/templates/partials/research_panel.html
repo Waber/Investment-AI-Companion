@@ -237,10 +237,13 @@
   {# The new-thesis form opens in place of the "+ Nowa teza" link. Its
      "Anuluj" takes the link's id, thesis-new-link. After "Anuluj",
      HTMX puts the focus back on the element with that id: the link
-     again, so that answer needs no autofocus. #}
+     again, so that answer needs no autofocus. Without HTMX, the
+     #research fragment opens the page at the panel, not at its top;
+     the fragment is not sent to the server. With HTMX it is not sent
+     either, but after the swap HTMX scrolls #research into view. #}
   {% set theses_action = '/ui/companies/' ~ panel.company_id ~ '/theses' %}
   {% if panel.form and panel.form.kind == 'thesis_new' %}
-  {{ thesis_form(panel, 'thesis-new', theses_action, '/ui/companies/' ~ panel.company_id ~ '/research', 'thesis-new-link') }}
+  {{ thesis_form(panel, 'thesis-new', theses_action, '/ui/companies/' ~ panel.company_id ~ '/research#research', 'thesis-new-link') }}
   {% else %}
   <p>{{ panel_link(theses_action ~ '/new', t['action.new_thesis'], link_id='thesis-new-link') }}</p>
   {% endif %}

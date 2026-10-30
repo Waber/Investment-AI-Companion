@@ -2115,9 +2115,11 @@ async def test_thesis_focus_rules(client):
     assert _focus(opened) == "thesis-new-title"
     # "Anuluj" carries the id of the "+ Nowa teza" link whose place it
     # takes, so HTMX puts the focus back on that link (Ruling P2).
+    # Without HTMX the link opens the page at the panel, not at the
+    # top: the fragment never reaches the server.
     cancel_new = _attrs(opened.text, "thesis-new-link")
-    assert cancel_new["href"] == f"{base}/research"
-    assert cancel_new["hx-get"] == f"{base}/research"
+    assert cancel_new["href"] == f"{base}/research#research"
+    assert cancel_new["hx-get"] == f"{base}/research#research"
     assert _text(opened.text, "thesis-new-link") == "Anuluj"
     back = await client.get(cancel_new["href"], headers=_HTMX)
     assert "autofocus" not in back.text
@@ -2284,7 +2286,7 @@ async def test_thesis_draft_and_fallback(client):
     }
     assert links == {
         f"{base}/theses/new",
-        f"{base}/research",
+        f"{base}/research#research",
         f"{base}/research?focus=thesis-{active}",
         f"{base}/research?focus=thesis-{closed}",
         f"{first}/edit",
@@ -2324,8 +2326,10 @@ async def test_thesis_draft_and_fallback(client):
     assert _link(english, f"{first}/delete")["aria-label"] == (
         'Delete the thesis "Teza AI"'
     )
+    # The name starts with the visible "Close thesis" (WCAG 2.5.3), as
+    # the Polish "Zamknij tezę „…”" does.
     assert _attrs(english, f"thesis-{active}-status")["aria-label"] == (
-        'Close the thesis "Teza AI"'
+        'Close thesis "Teza AI"'
     )
     assert _text(english, f"thesis-{active}-status") == "Close thesis"
     assert _attrs(english, f"thesis-{closed}-status")["aria-label"] == (
@@ -2593,3 +2597,35 @@ async def test_language_path_follows_the_thesis_state(client, monkeypatch):
     assert _attrs(page.text, "language-next-pl")["value"] == (
         f"{base}/theses/new"
     )
+
+
+@pytest.mark.asyncio
+async def test_company_delete_warns_about_notes_and_theses(client):
+    """The company delete page names the notes and theses it removes.
+
+    The warning is true: ``notes`` and ``theses`` reference
+    ``companies.id`` with ON DELETE CASCADE, so the delete that
+    follows leaves no row of either behind.
+    """
+    company_id = _company(client)
+    _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    path = f"/ui/companies/{company_id}/delete"
+
+    polish = await client.get(path)
+    assert polish.status_code == 200
+    assert (
+        '<p class="warning">Usunięcie tej spółki usuwa także jej '
+        "wskaźniki finansowe, notatki i tezy.</p>"
+    ) in polish.text
+    client.cookies.set("ui_lang", "en")
+    english = await client.get(path)
+    assert (
+        '<p class="warning">Deleting this company also deletes its '
+        "financial metrics, notes, and theses.</p>"
+    ) in english.text
+
+    deleted = await _post(client, path)
+    assert deleted.status_code == 303
+    assert _stored_notes(client, company_id) == {}
+    assert _stored_theses(client, company_id) == {}

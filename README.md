@@ -231,6 +231,8 @@ read-only preview, and explicit, non-overwriting seed command.
 - Company endpoints: `/api/v1/companies`
 - Financial metrics endpoints: `/api/v1/financial-metrics`
 - Data collection endpoints: `/api/v1/data-collection`
+- Note endpoints: `/api/v1/instruments/{instrument_id}/notes`
+- Investment thesis endpoints: `/api/v1/instruments/{instrument_id}/theses`
 
 ## Tests And Quality Checks
 
