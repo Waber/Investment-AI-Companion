@@ -27,6 +27,24 @@
 - Next: GitHub Actions, SQLite and PostgreSQL, on the rebased
   head. Do not merge.
 
+## 2026-10-30 - Lock the batch default source against SQL order
+
+- Scope: QA Low and nit on PR #107 at `0975776`. Tests and one
+  dead branch. No rebase. No Alembic revision. Refs #95.
+- What changed: `recent_closes_for` is given grouped rows whose
+  SQL order would pick `[IAC-DEMO-V2]`. The page path still
+  returns `fake` and that source's close. The `if source is not
+  None` branch in `_default_sources_for` is gone. Each group
+  already has a row, and `_pick_default` returns None only for
+  an empty list.
+- Mutation, reverted: `ORDER BY source DESC` and keep the first
+  row per instrument. The new test failed with
+  `{1: '[IAC-DEMO-V2]'}` instead of `{1: 'fake'}`.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 14:05 to 14:25.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
 ## 2026-10-30 - One default-source helper after rebasing onto #108
 
 - Scope: rebase `cursor/price-bar-followups-95-ce0a` onto
