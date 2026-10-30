@@ -7,6 +7,7 @@ to run twice.
 """
 
 import logging
+import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -38,6 +39,12 @@ _CURRENCY = "currency must be exactly three letters"
 # uses the same helper for its own dict.
 _MAX_LOGGED_SKIP_IDS = 1024
 _logged_skip_ids: dict = {}
+# One lock for every skip-log dict. The check, the insert, and the
+# eviction are one read-modify-write. Two threads that both see a
+# full dict can otherwise pop the same oldest id (KeyError) or
+# walk the dict while it changes (RuntimeError), and a GET would
+# answer 500.
+_skip_log_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -653,7 +660,7 @@ def _bar_for_storage(bar: PriceBarCreate) -> PriceBarCreate:
     return bar.model_copy(update={"currency": code})
 
 
-def _remember_skip(seen: dict, bar_id) -> bool:
+def remember_skip(seen: dict, bar_id) -> bool:
     """True when this skip should be logged.
 
     ``seen`` maps a bar id to ``None`` and remembers insertion
@@ -662,13 +669,17 @@ def _remember_skip(seen: dict, bar_id) -> bool:
     removed and may be logged again later. The cap is a memory
     bound, not a promise that each id logs only once for the life
     of the process.
+
+    The lock covers the whole update. Without it, two threads can
+    both decide to evict the same oldest key.
     """
-    if bar_id in seen:
-        return False
-    seen[bar_id] = None
-    while len(seen) > _MAX_LOGGED_SKIP_IDS:
-        seen.pop(next(iter(seen)))
-    return True
+    with _skip_log_lock:
+        if bar_id in seen:
+            return False
+        seen[bar_id] = None
+        while len(seen) > _MAX_LOGGED_SKIP_IDS:
+            seen.pop(next(iter(seen)))
+        return True
 
 
 def _readable(row: PriceBarDB) -> bool:
@@ -680,7 +691,7 @@ def _readable(row: PriceBarDB) -> bool:
         row.close_price,
     )
     if any(isinstance(price, UnreadablePrice) for price in prices):
-        if _remember_skip(_logged_skip_ids, row.id):
+        if remember_skip(_logged_skip_ids, row.id):
             logger.warning(
                 "Skipping price bar id=%s instrument_id=%s: "
                 "stored price is not a decimal",

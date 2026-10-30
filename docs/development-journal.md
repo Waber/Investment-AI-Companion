@@ -1,5 +1,33 @@
 # Development Journal
 
+## 2026-10-30 - Review lows on the price-bar follow-ups (#95)
+
+- Scope: Code Reviewer lows on PR #107, on top of the rebase
+  onto `origin/master` `da6579d`. No new rebase in this commit.
+  Refs #95.
+- What changed: `remember_skip` (renamed from `_remember_skip`)
+  holds a module-level `threading.Lock` around the check, the
+  insert, and the eviction. The cap stays 1024 and the oldest
+  id is still the one dropped. Sixteen threads inserting 200
+  new ids each finish with no exception and at most 1024 keys.
+  The test sets a 1e-9 thread switch interval. Removing the lock
+  made that same test fail with `RuntimeError` and `KeyError`.
+  The lock was put back. Ten runs at the default interval, also
+  without the lock, stayed green, so the short interval is what
+  makes the race show up. Currency samples now include `ſSD`,
+  `ÜSD`, and `USD\n` on SQLite and PostgreSQL. `normalize_currency`
+  already rejected them (`isascii` and the three-letter pattern),
+  so the rule was not changed. A refresh whose `upsert_many`
+  raises `ValueError` is HTTP 400.
+- For a Java developer: the lock is a private `synchronized`
+  block around the whole update. `dict` is not a concurrent
+  map. Two threads can both read the oldest key and then both
+  call `pop`, and the second `pop` is `KeyError`.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 14:25 to 14:45.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
 ## 2026-10-30 - Rebase #106 and two review lows
 
 - Scope: rebase `cursor/ui-company-name-clean-text-86` onto
