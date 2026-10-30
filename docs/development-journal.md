@@ -174,8 +174,31 @@
   passed on the changed Python files. No live market-data calls.
 - AI model: Grok 4.7. Account usage was not available in this
   session.
-- Time tracking (UTC): 2026-10-30, about 1 hour.
-- Next: GitHub Actions, SQLite and PostgreSQL, on the pull request.
+- Time tracking (UTC): 2026-10-30, about 1 hour, plus the QA fix
+  round below.
+- QA fix round (same day, Grok 4.7, about 40 minutes): the length
+  tests followed `COMPANY_NAME_MAX`, so changing that constant
+  would not fail them. For a Java developer: that is like writing
+  `assertEquals(MAX, input.length())` in a test that also builds
+  the input as `MAX + 1`. Both sides move together. The new tests
+  write `'a' * 255` and `'a' * 256` and assert `255` in
+  `ctx.max_length`. Temporarily setting the constant to 254 failed
+  both new tests (255 was rejected: API 422 instead of 201, form
+  showed "too long" instead of redirecting). Setting it to 256
+  failed both again (256 was stored: API 201 instead of 422, form
+  303 instead of 422). The constant was put back to 255 and that
+  edit was not committed. `ids=` name the unprintable blank cases.
+  The model assertion for marks-only also checks `.field == "name"`.
+  Control and bidi names rerender in Polish and English. A lone
+  surrogate still cannot be a form POST or an HTML body: encoding
+  U+D800 raises `UnicodeEncodeError`, so that case checks
+  `error.invalid` and the catalog sentence. `docs/api-demo.md` now
+  says a marks-only watchlist label is JSON null, and a marks-only
+  note body, thesis title, or thesis body is 422 blank. The same
+  CI command after these fixes: 1914 passed, 224 deselected,
+  coverage 96.42%. black, isort, and flake8 passed on the changed
+  Python files.
+- Next: GitHub Actions, SQLite and PostgreSQL, on the fix commit.
   Do not merge.
 
 ## 2026-10-27 - Watchlist `/ui` page (#96)
