@@ -142,6 +142,20 @@ def focus_after_delete(items, deleted_id: int, prefix: str) -> str:
     return "research-title"
 
 
+def shows_item(panel: ResearchPanel, element_id: str) -> bool:
+    """True when the panel lists the note or thesis with this id.
+
+    ``element_id`` has the form of the template's item ids,
+    ``note-{id}`` or ``thesis-{id}``. A note deleted in another tab,
+    or another company's thesis, is not listed, so no element in the
+    panel has that id and nothing there would take the focus.
+    """
+    listed = [f"note-{note.id}" for note in panel.notes]
+    theses = panel.active_theses + panel.closed_theses
+    listed += [f"thesis-{thesis.id}" for thesis in theses]
+    return element_id in listed
+
+
 def research_count(db: Session, company_id: int) -> int:
     """The button's number when the panel is closed.
 

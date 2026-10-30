@@ -793,11 +793,17 @@ async def test_focus_names_one_item_or_nothing(client):
     """``focus`` puts ``autofocus`` on that note or thesis, and only there.
 
     Only ``note-<digits>`` and ``thesis-<digits>`` are accepted. Any
-    other value is ignored and never written into the page.
+    other value is ignored and never written into the page. A
+    well-formed id that names no item in this panel, such as a note
+    deleted in another tab or another company's thesis, gives the
+    focus to the panel heading, so it never drops to the top of the
+    page.
     """
     company_id = _company(client)
     note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
     thesis_id = _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    other_id = _company(client, name="Microsoft Corp.", ticker="MSFT")
+    other_thesis = _thesis(client, other_id, "Cudza", "2026-10-28T13:05")
     research = f"/ui/companies/{company_id}/research"
     for element_id in (f"note-{note_id}", f"thesis-{thesis_id}"):
         for headers in ({}, _HTMX):
@@ -807,6 +813,14 @@ async def test_focus_names_one_item_or_nothing(client):
             assert response.status_code == 200
             assert response.text.count("autofocus") == 1
             assert "autofocus" in _attrs(response.text, element_id)
+    for missing in (f"note-{note_id + 100}", f"thesis-{other_thesis}"):
+        for headers in ({}, _HTMX):
+            response = await client.get(
+                research, params={"focus": missing}, headers=headers
+            )
+            assert response.status_code == 200, missing
+            assert response.text.count("autofocus") == 1, missing
+            assert "autofocus" in _attrs(response.text, "research-title")
     for ignored in (
         "research-title",
         f"note-{note_id}\n",
@@ -852,8 +866,9 @@ def _render_panel(**fields):
 def test_panel_focus_can_name_the_heading():
     """The panel heading is a focus target too (``tabindex="-1"``).
 
-    The ``focus`` parameter names only notes and theses, so no GET can
-    focus the heading.
+    The ``focus`` parameter itself never names the heading. The
+    heading takes the focus when that parameter names an item the
+    panel does not list, and after a delete that leaves no neighbour.
     """
     html = _render_panel(focus="research-title")
     assert html.count("autofocus") == 1
