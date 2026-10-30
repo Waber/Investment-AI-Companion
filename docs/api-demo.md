@@ -265,9 +265,10 @@ curl -q --noproxy '*' -fsS -i -X DELETE "$THESES_URL/$THESIS_ID"
   when empty), `status` (`active` or `closed`), and `closed_at`
   (`null` while active). Times are UTC with an offset. The `/ui`
   panel shows them in Polish time.
-- A new thesis is `active`. `PUT` with `{"status":"closed"}` closes it
-  and sets `closed_at`; `{"status":"active"}` reopens it and clears
-  `closed_at`.
+- A new thesis is `active`, unless the `POST` sends
+  `"status":"closed"`, which also sets `closed_at`. `PUT` with
+  `{"status":"closed"}` closes it and sets `closed_at`;
+  `{"status":"active"}` reopens it and clears `closed_at`.
 - `PUT` is a partial update: send only the fields to change. `{}`
   returns the stored item unchanged.
 - Lists are newest edit first. `?status=active` or `?status=closed`

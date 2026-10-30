@@ -92,7 +92,10 @@ class ThesisRepository:
 
         Raises:
             CompanyNotFoundError: ``company_id`` is not in ``companies``.
-            ResearchStorageError: the insert failed and was rolled back.
+            ResearchStorageError: the insert failed and was rolled
+                back. One exception: when only the refresh after the
+                commit fails, the commit has already stored the thesis
+                (see ``commit_company_scoped``).
         """
         status = _status_value(thesis.status)
         closed_at = None

@@ -20,6 +20,10 @@ from app.repositories.company_errors import CompanyNotFoundError
 class ResearchStorageError(RuntimeError):
     """A note or thesis write failed and was rolled back.
 
+    There is one exception: when only the refresh after the commit of
+    a ``create`` fails, this is raised although the commit has already
+    stored the row (see ``commit_company_scoped``).
+
     ``create``, ``update``, ``delete``, and ``set_status`` raise it.
     A ``create`` for a company that is not stored raises
     ``CompanyNotFoundError`` instead.
