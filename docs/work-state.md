@@ -1,15 +1,81 @@
 # Current Work State
 
-## Company name on `clean_text` (#86 remainder): 2026-10-30
+## Price-bar repository follow-ups (#95): 2026-10-30
 
-- Branch `cursor/ui-company-name-clean-text-86`, rebased onto
-  `origin/master` `67974c5`. Pull request #106 is in review.
-  Refs #86. Not merged. #86 stays open. See the #86 bullet under
+- Branch `cursor/price-bar-followups-95-ce0a`, rebased onto
+  `origin/master` `da6579d`. Pull request #107 to `master`.
+  **Refs #95**. Item 1 is deferred, so #95 stays open. In review.
+  Not merged. No Alembic revision; head stays `0007`. `app/ui`,
+  `templates/`, and `static/` were not edited. PR #104 was not
+  touched. #106 and #108 are merged.
+- PR #108 is merged on that master. It added
+  `PriceBarRepository.recent_closes_for`,
+  `WatchlistRepository.list_items(with_company=True)`, and a
+  scoped ignore of the `uq_companies_ticker` reflection
+  SAWarning (`upgrade_head_over_create_all`). This branch keeps
+  those and the price-bar follow-ups. Rendered HTML is unchanged.
+- Fixed:
+  - Item 2. `upsert_many` keeps the last bar when one batch
+    repeats `(date, source)`. Equal prices leave one row. Unequal
+    prices leave the last bar. The returned list has one row per
+    key (refresh `bar_count` counts keys). A later failure rolls
+    the whole batch back, so a row that was already stored keeps
+    its previous values.
+  - Item 3. `_default_source` is one `GROUP BY source` plus
+    Python `max` of the names at the newest `retrieved_at`. The
+    second query that read every bar at that instant is gone.
+    `fake` still beats `[IAC-DEMO-V2]`.
+  - Item 4. The per-process skip logs are insertion-ordered dicts
+    capped at 1024. The oldest id is dropped and may log once
+    more. The repository and `app/api/prices.py` share
+    `_remember_skip`.
+  - Item 5. The repository rejects a currency that is not exactly
+    three letters before flush, on SQLite and PostgreSQL.
+    `ValueError`: `currency must be exactly three letters`. No new
+    row. `usd` is stored as `USD`. `GBp` stays `GBp`.
+- Deferred:
+  - Item 1, skipped-bar visibility. GET still returns 200 and the
+    shorter list. No count, no header, no response-shape change.
+    Server phase #93.
+  - #98 review nits, still open. They do not live in
+    `app/validation/text.py`, so they stayed out of this pull
+    request: (a) `app/core/validation.py` `_truncate_error_input`
+    slices dict keys to 100 characters, and two keys that share
+    that prefix collapse to one key in the 422 body; (b)
+    `_limit_error_context` edits the dicts from `exc.errors()`
+    in place instead of copying them; (c) `docs/api-demo.md`
+    does not yet say that surrogate characters in dict keys are
+    escaped, or that `WatchlistRepository.add` rejects a label
+    longer than 80 with `too_long` when the HTTP model is
+    bypassed; (d) no test that a valid body plus an extra
+    surrogate key returns 201.
+- Decisions are in the journal entry for this date. Last-wins is
+  checked only on the winning bar: a discarded earlier copy with
+  a bad currency is not an error when the last copy is valid.
+- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. This
+  machine's SQLite is 3.45.1, not 3.54, so the two known `0006`
+  float-boundary failures did not appear. CI command: 1885
+  passed, 227 deselected, coverage 96.42%. Two pre-existing
+  SAWarnings on the autogenerate tests (expression index
+  `uq_companies_ticker`). Local PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  integration suite: 227 passed, 1885 deselected. No live
+  market-data calls. black, isort, and flake8 passed on the
+  changed Python files.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: both GitHub Actions jobs green on this head, then
+  QA. Raul merges with "Rebase and merge". Do not merge from
+  the agent. #95 stays open until skipped-bar visibility (#93)
+  is done.
+
+## Company name on `clean_text` (#86 remainder, #106 merged)
+
+- Merged in #106 at `da6579d`. Branch was
+  `cursor/ui-company-name-clean-text-86`, rebased onto
+  `67974c5`. Refs #86. #86 stays open for the items under
   Open work elsewhere.
-- #108 merged on `67974c5`: the watchlist page loads companies and
-  prices in a batch, and the ticker-index `SAWarning` is a scoped
-  ignore in the autogenerate tests. Details are in the section
-  below.
 - Completed: `normalized_company_name` in `app/ui/form_fields.py`
   calls `app.validation.text.clean_text` with `COMPANY_NAME_MAX`
   (255). The form maps `exc.code` to catalog keys that already
@@ -24,40 +90,19 @@
   The form and the API both reject it. A letter keeps its mark.
   Watchlist labels and note or thesis text share the checker, so a
   marks-only label is stored as null and a marks-only note is blank.
-- Not in this slice: `instrument_type_for_payload` still rejects
+- Not in that slice: `instrument_type_for_payload` still rejects
   ASCII controls (code points below 32, and DEL) on its own.
   Exchange, country, sector, industry, website, and description are
   not on `clean_text`.
 - QA on `33a70a5`: behaviour items 1-5 passed. One Medium: the
   length tests multiplied `COMPANY_NAME_MAX`, so a wrong constant
-  still passed. Fixed on this branch with literal tests: `'a' * 255`
-  is stored (form 303, API 201) and `'a' * 256` is form
-  `error.too_long` in Polish and English and API 422
-  `string_too_long` with `ctx.max_length == 255`. Mutating the
-  constant to 254 and to 256 made both new tests fail; the
-  mutation was not committed. Readable `ids=` were added. A
-  surrogate still cannot be rendered: the HTML response cannot
-  encode U+D800, so that case locks the catalog sentence for
-  `error.invalid` instead of a form POST.
-- Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
-  command on local SQLite 3.45.1 after the rebase and the review
-  lows: 1921 passed, 225 deselected, coverage 96.47%. The known
-  `0006` float failures show up on SQLite 3.54; this machine is
-  3.45.1, so those two tests passed. No local PostgreSQL.
-  GitHub Actions runs both jobs. No live market-data calls.
-  black, isort, and flake8 passed on the changed Python files.
-- Active agents: none. Blockers: none. Account usage was not
-  available in this session.
-- Review lows, tests only: a stored name with U+200F still
-  renders on the detail page and the edit form, and the edit
-  POST is 422 `error.invalid`. A 422 whose name is
-  `<script>x</script>` plus U+202E escapes the tag. No production
-  behaviour change in that commit. The edit block for an
-  already-stored bidi mark is the behaviour from the `clean_text`
-  move, recorded above.
-- Next action: GitHub Actions on the rebased head, SQLite and
-  PostgreSQL, both green. Raul merges with "Rebase and merge".
-  The agent does not merge. #106 stays in review. #108 is merged.
+  still passed. Fixed with literal tests: `'a' * 255` is stored
+  (form 303, API 201) and `'a' * 256` is form `error.too_long` in
+  Polish and English and API 422 `string_too_long` with
+  `ctx.max_length == 255`. Review lows, tests only: a stored name
+  with U+200F still renders on the detail page and the edit form,
+  and the edit POST is 422 `error.invalid`. A 422 whose name is
+  `<script>x</script>` plus U+202E escapes the tag.
 
 ## Watchlist N+1 and ticker-index SAWarning (#108, merged)
 
@@ -68,9 +113,8 @@
   one company query per row. `list_items(with_company=True)` uses
   `joinedload`. New `PriceBarRepository.recent_closes_for` loads
   default sources, the two newest closes, and the sparkline window
-  in at most three queries for the whole list. `recent_closes` and
-  `_default_source` are unchanged (PR #107 edits those). Rendered
-  HTML is unchanged. Templates and static files were not edited.
+  in at most three queries for the whole list. Rendered HTML is
+  unchanged. Templates and static files were not edited.
 - Query counts on SQLite, every row with two closes: 1 row was 6
   statements and 10 rows were 51 (`5N+1`). Both are now 4 statements.
 - SAWarning: CI on `3c40413` printed
@@ -96,18 +140,30 @@
   statement, a barless row is 2, a priced page is 4 on SQLite and
   5 on PostgreSQL (`SET TIME ZONE`). The warning wording is
   scoped ignore.
-- Tests on that branch: no `.env`, `DATABASE_URL` unset. CI command
-  on local SQLite 3.45.1 before the QA tests: 1880 passed, 222
-  deselected, coverage 96.40%.
 
 ## Open work elsewhere
 
-- #33: notes and theses are on master (revision `0005`). Master's
-  work-state still lists the `/ui` forms and any HTTP API as
-  incomplete. Those belong to the Frontend Developer.
-- #32: the watchlist backend is on master (revision `0004`).
-  The `/ui` page from #96 is on master. The N+1 follow-up merged
-  in #108.
+- #106 is merged. The `/ui` company name uses `clean_text`.
+  #86 stays open: when the ticker and the ISIN are both
+  duplicates, report both; `watchlist_stale_price_days` still
+  has no `ge=1` check. Stripping Cf characters at the edges stays
+  undone on purpose: a format character beside a letter is kept,
+  including at an edge.
+- #108 is merged. `recent_closes_for` and
+  `list_items(with_company=True)` are on master. The
+  `uq_companies_ticker` reflection warning is a scoped ignore,
+  not an open fix.
+- #107 is in review (this branch). Refs #95. Item 1 stays deferred.
+- #33: notes and theses backend is on master (revision `0005`).
+  The `/ui` forms and HTTP API are PR #104 (`feat/notes-theses-33`).
+  This branch did not edit that work.
+- #32: the watchlist backend, the `/ui` page, and the batch read
+  (#108) are on master. #96 merged as PR #101 on 2026-10-28.
+  Named lists are #99. The on-demand summary is #100.
+- #98 review nits still open (see the section above): truncated
+  422 keys in `app/core/validation.py`, copying `exc.errors()`
+  before editing, docs for surrogate keys and the watchlist
+  `too_long` gate, and a 201 test for an extra surrogate key.
 - #8 and #10: the instrument Alembic baseline is still open,
   and `init_db` still uses `create_all`.
 - #54: the real Yahoo adapter, and the case where a Yahoo HTTP
@@ -128,12 +184,6 @@
   (`demo_source_label` in `app/ui/view_models.py`).
 - #99: named watchlists (several lists per company).
 - #100: on-demand AI summary of recent moves in a watchlist row.
-- #86 stays open. The `/ui` company name now uses `clean_text`
-  (branch `cursor/ui-company-name-clean-text-86`). Still open:
-  when the ticker and the ISIN are both duplicates, report both;
-  `watchlist_stale_price_days` still has no `ge=1` check. Stripping
-  Cf characters at the edges stays undone on purpose: a format
-  character beside a letter is kept, including at an edge.
 - #28: ETF/ETC attribute columns, fund attributes, and the
   attribute forms. Yahoo still does not implement
   `FundAttributes`.
@@ -149,11 +199,10 @@
   says Refs #27. Price-bar storage and the demo-v2 fixture
   landed in that pull request. ETF and ETC attribute columns
   stay on #28, which is still open, so #83 did not close #27.
-- #95 is open. It lists follow-ups for #94: skipped bars, a
-  duplicate `(date, source)` inside one batch, a lighter tie
-  query, an optional cap on the log-once sets, and currency
-  length on SQLite. #94 merged on 2026-10-22 (revision
-  `0006`).
+- #95 stays open. Items 2–5 are this branch. Item 1
+  (skipped-bar visibility) waits for the server phase (#93).
+  The GET body stays a list of bars. #94 merged on 2026-10-22
+  (revision `0006`).
 - Tooling: `.github/workflows/tests.yml` runs the two pytest
   jobs only. The workflow says neither job lints, so CI does
   not run black, isort, or flake8. `setup_database.py` fails
