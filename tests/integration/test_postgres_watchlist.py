@@ -377,9 +377,9 @@ async def test_company_deleted_before_insert_is_404_on_postgresql(
 async def test_watchlist_page_query_count_does_not_grow(postgres_client):
     """The watchlist page stays a fixed number of statements on PostgreSQL.
 
-    Same seed as the SQLite test: one priced row, then ten. The Warsaw
-    session timezone can add a statement the SQLite file does not see,
-    so this test checks that the count does not grow and stays small.
+    Same seed as the SQLite test: one priced row, then ten. SQLite
+    uses 4 statements. This engine also runs ``SET TIME ZONE`` at the
+    start of the transaction, so the count is 5.
     """
     count = await assert_watchlist_query_count_is_flat(postgres_client)
-    assert count <= 8, count
+    assert count == 5, count
