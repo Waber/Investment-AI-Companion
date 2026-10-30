@@ -26,7 +26,10 @@ from app.data_collectors.base import PriceBar as CollectedPriceBar
 from app.data_collectors.base import ProviderError
 from app.models.price_bar import PriceBar, PriceBarCreate
 from app.repositories.company_repository import CompanyRepository
-from app.repositories.price_bar_repository import PriceBarRepository
+from app.repositories.price_bar_repository import (
+    PriceBarRepository,
+    _remember_skip,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +39,12 @@ _NO_INSTRUMENT = "Instrument not found"
 _NO_PRICES = "No price data for this instrument"
 _PROVIDER_ERROR = "Data provider error"
 # One warning per bar id for this process. Listing the series again
-# must not repeat it. Showing the skipped bars in the response is a
-# later change.
-_logged_skip_ids = set()
+# must not repeat it. The dict and the cap live with
+# ``_remember_skip``: oldest ids are dropped so the process does
+# not keep every skipped id. Showing the skipped bars in the
+# response waits for the server phase (#93). The response shape
+# stays a list of bars.
+_logged_skip_ids: dict = {}
 
 
 class PriceRefreshResult(BaseModel):
@@ -52,7 +58,11 @@ class PriceRefreshResult(BaseModel):
         ..., description="Retrieval time stored on the bars, UTC"
     )
     bar_count: int = Field(
-        ..., description="Bars inserted or updated by this refresh"
+        ...,
+        description=(
+            "Bars inserted or updated by this refresh. "
+            "A repeated date and source in one refresh counts once."
+        ),
     )
 
 
@@ -266,8 +276,7 @@ def _bars_or_skip(rows, instrument_id: int) -> List[PriceBar]:
             loaded.append(db_to_price(row))
         except (ValidationError, ValueError):
             bar_id = getattr(row, "id", None)
-            if bar_id not in _logged_skip_ids:
-                _logged_skip_ids.add(bar_id)
+            if _remember_skip(_logged_skip_ids, bar_id):
                 logger.warning(
                     "Skipping price bar id=%s instrument_id=%s: "
                     "stored price cannot be returned",

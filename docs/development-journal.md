@@ -235,6 +235,94 @@
 - Next: GitHub Actions, SQLite and PostgreSQL, on the fix commit.
   Do not merge.
 
+## 2026-10-30 - Price-bar repository follow-ups (#95)
+
+- Scope: issue #95 items 2, 3, 4, and 5. Item 1 is deferred.
+  Branch `cursor/price-bar-followups-95-ce0a` from `origin/master`
+  `3c40413`. No Alembic revision (head stays `0007`). `app/ui`,
+  `templates/`, and `static/` were not edited. PR #104 and PR
+  #106 were not touched. The pull request says Refs #95, so the
+  issue stays open.
+- Decisions: a repeated `(date, source)` inside one `upsert_many`
+  is last-wins. The later bar is stored, whether or not the
+  prices match. The list returned has one row per key, in the
+  order the key first appeared, so refresh `bar_count` counts
+  stored keys. The round-trip check compares that winning bar.
+  Before this change the row already held the last price while
+  the check still saw the first bar, so unequal duplicates
+  failed the batch. A later failure still rolls the whole batch
+  back, including the last-wins update. Currency uses
+  `normalize_currency` (three ASCII letters, uppercased, except
+  `GBp` and `ZAc`). The check runs on the winning bars before
+  any row is added. A bad code raises `ValueError` with
+  `currency must be exactly three letters` and leaves the table
+  as it was. The raise sits outside the `except`, so
+  `__context__` does not keep the checker error. A discarded
+  earlier copy with a bad currency is not an error when the
+  last copy is valid. `_default_source` is one `GROUP BY source`
+  with `max(retrieved_at)`. Python then keeps the newest instant
+  and `max` of those source names. That `max` compares code
+  points, so PostgreSQL's collation cannot let `[IAC-DEMO-V2]`
+  beat `fake`. The old second query, which read every bar
+  stamped with the winning timestamp, is gone. Skip warnings
+  use an insertion-ordered dict capped at 1024. The oldest id
+  is dropped and may log once more. The cap bounds memory. It
+  is not a promise that each id logs only once for the life of
+  the process. The repository and the price route share
+  `_remember_skip`.
+- Item 1 stays deferred. An unreadable bar is still skipped, the
+  GET stays 200, and the body stays a list of bars. No count and
+  no header. That visibility belongs to the server phase (#93).
+- #98 review nits (a)–(d) stay open. They are not in
+  `app/validation/text.py`. (a) and (b) are
+  `app/core/validation.py`. (c) is `docs/api-demo.md` plus the
+  watchlist repository gate. (d) is an HTTP test. They are listed
+  in `docs/work-state.md`.
+- For a Java developer: `_last_wins` is a `LinkedHashMap`. The
+  key is the date and the source. Python's `dict` keeps
+  insertion order, so the first time a key appears we remember
+  its slot, and a later copy overwrites that slot. We never
+  insert two rows, so the unique constraint does not see the
+  duplicate. The round-trip check walks the flushed rows and
+  the bars in lockstep (`zip`). Deduping first is what makes
+  those two lists the same length. `_default_source` used to
+  be two queries, like a `MAX` followed by a second `SELECT`
+  of every row at that timestamp. `GROUP BY source` is one
+  query and returns one row per source. The winner is still
+  chosen with Python `max`, which is `String.compareTo` (code
+  points), not SQL `ORDER BY`. The skip log is a
+  `LinkedHashMap` used as a set: the value is always `None`.
+  `pop` of the first key drops the oldest entry once the map
+  passes 1024. A `HashSet` would not know which id is oldest.
+  `model_copy(update=...)` builds a new model with one field
+  changed and does not mutate the caller's object. Assigning
+  `bar.currency` after the model was built does not re-run
+  validators (`validate_assignment` is off). That is why the
+  repository checks again. Raising inside an `except` chains
+  the previous exception onto `__context__`. This repository
+  sets a flag and raises after the `except`, which is how the
+  other price errors avoid carrying the driver exception.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` were
+  unset. No live market-data calls. SQLite here is 3.45.1, so
+  the two `0006` float-boundary failures that show up on SQLite
+  3.54 did not appear. CI command from `docs/HANDOFF.md`:
+  1885 passed, 227 deselected, coverage 96.42%
+  (4620 statements, 136 miss, 1302 branches, 60 partial).
+  Two SAWarnings, both pre-existing, from autogenerate tests
+  reflecting `uq_companies_ticker`. Local PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  integration suite: 227 passed, 1885 deselected. black,
+  isort, and flake8 passed on the changed Python files.
+  `price_bar_repository.py` is covered on every statement
+  and branch in that run.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 09:07 to 09:40.
+- Next: both GitHub Actions jobs on the pull request. The run
+  id is recorded on the pull request, not in a later commit.
+  Agents do not merge. #95 stays open for item 1.
+
 ## 2026-10-27 - Watchlist `/ui` page (#96)
 
 - Scope: the UI part of #32. `/ui/watchlist` table and the heart

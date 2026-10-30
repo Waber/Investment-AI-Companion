@@ -16,6 +16,7 @@ from sqlalchemy import and_, func, or_, tuple_
 from sqlalchemy.exc import DBAPIError, IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
+from app.models.company import normalize_currency
 from app.models.database_models import PriceBarDB
 from app.models.price_amount import UnreadablePrice
 from app.models.price_bar import PriceBarCreate, price_to_json
@@ -28,9 +29,15 @@ _ALREADY_STORED = (
 # A check constraint, a foreign key, or any other failure that is
 # not a duplicate key. The driver text is not included.
 _CONSTRAINT = "Price bar could not be stored"
+_CURRENCY = "currency must be exactly three letters"
 # One skip warning per bar id for this process. Reading the series
-# again must not repeat the same line.
-_logged_skip_ids = set()
+# again must not repeat the same line. The dict is an insertion-
+# ordered set (a Java LinkedHashMap used only for its keys). The
+# cap drops the oldest id so a long-running process cannot keep
+# every skipped id. A dropped id may log once more. The price route
+# uses the same helper for its own dict.
+_MAX_LOGGED_SKIP_IDS = 1024
+_logged_skip_ids: dict = {}
 
 
 @dataclass(frozen=True)
@@ -156,26 +163,38 @@ class PriceBarRepository:
     def _default_source(query) -> Optional[str]:
         """The one source a list uses when the caller did not name one.
 
-        The latest ``retrieved_at`` is one aggregate. The source
-        names at that instant are a second, narrow query. Ordering
-        those names in Python compares code points, which matches
-        SQLite's byte order. PostgreSQL ``en_US.UTF-8`` can ignore
-        ``[``, so ``ORDER BY source`` would let ``[IAC-DEMO-V2]``
-        beat ``fake``. The full bar is not loaded: a tie can be
-        every session of one source.
+        One grouped query returns each source and the latest
+        ``retrieved_at`` of that source. Python keeps the newest
+        instant, then ``max`` of the source names at that instant.
+        ``max`` compares code points, so the winner does not follow
+        the database collation. PostgreSQL ``en_US.UTF-8`` can ignore
+        ``[``, and ``ORDER BY source`` would let ``[IAC-DEMO-V2]``
+        beat ``fake``.
+
+        The older tie query is not used. It loaded every distinct
+        source at the winning instant. A refresh stamps a whole
+        series with one timestamp, so that query read every bar of
+        the series to learn there was one source. Grouping by source
+        returns one row per source (usually one or two) and the
+        full bars stay unloaded.
         """
-        latest_at = query.with_entities(
-            func.max(PriceBarDB.retrieved_at)
-        ).scalar()
-        if latest_at is None:
-            return None
-        sources = (
-            query.filter(PriceBarDB.retrieved_at == latest_at)
-            .with_entities(PriceBarDB.source)
-            .distinct()
+        # ``query`` is not modified. SQLAlchemy Query methods return
+        # a new query, the same way a Java stream does not change
+        # the collection it reads.
+        pairs = (
+            query.with_entities(
+                PriceBarDB.source,
+                func.max(PriceBarDB.retrieved_at),
+            )
+            .group_by(PriceBarDB.source)
             .all()
         )
-        return max(source for (source,) in sources)
+        if not pairs:
+            return None
+        latest_at = max(retrieved for _source, retrieved in pairs)
+        return max(
+            source for source, retrieved in pairs if retrieved == latest_at
+        )
 
     def get_by_key(
         self, instrument_id: int, bar_date: date, source: str
@@ -196,8 +215,10 @@ class PriceBarRepository:
 
         The caller commits one row, matching the financial-metrics
         repository, so a failed seed can resume at the next missing
-        bar.
+        bar. A currency that is not three letters is rejected before
+        that commit. See ``_bar_for_storage``.
         """
+        bar = _bar_for_storage(bar)
         if self.get_by_key(instrument_id, bar.date, bar.source) is not None:
             raise ValueError(_ALREADY_STORED)
         row = self._new_row(instrument_id, bar)
@@ -214,14 +235,32 @@ class PriceBarRepository:
         changes the stored rows in place. The number of rows for
         that key does not grow. Rows for a different source are
         left alone.
+
+        Last-wins inside this batch. Two bars with the same date
+        and source are one key. The later bar in ``bars`` is the
+        one that is written, whether its prices match the earlier
+        bar or not. The returned list has one row per key, in the
+        order the key first appeared, so a refresh count is the
+        number of stored keys and not the number of input lines.
+        The earlier copy is not written.
+
+        Currency is checked on the winning bars before any row is
+        added. A bad code raises ``ValueError`` and leaves the
+        table as it was. A later failure (a price that does not
+        round-trip, a constraint) rolls the whole batch back, so a
+        row that was already stored keeps the values it had before
+        this call. The last-wins update is included in that
+        rollback.
         """
+        bars = [_bar_for_storage(bar) for bar in _last_wins(bars)]
         rows: List[PriceBarDB] = []
         inserted: List[PriceBarCreate] = []
         # One SELECT for the whole batch. Looking up each bar would
         # be one query per row, which is hundreds of round-trips for
-        # a year of daily bars. The map is updated when this batch
-        # inserts a key, so a second bar with that same key updates
-        # the pending row instead of inserting another.
+        # a year of daily bars. ``_last_wins`` already collapsed a
+        # repeated key. The map still records a row this batch
+        # inserts, so a repeated key cannot insert a second object
+        # if that collapse is ever skipped.
         found = self._existing_for_batch(instrument_id, bars)
         for bar in bars:
             key = (bar.date, bar.source)
@@ -548,6 +587,75 @@ def _unique_ids(instrument_ids: List[int]) -> List[int]:
     return unique
 
 
+def _last_wins(bars: List[PriceBarCreate]) -> List[PriceBarCreate]:
+    """One bar per ``(date, source)``. The last copy in ``bars`` wins.
+
+    The result keeps the position of the first copy. A later
+    duplicate replaces that entry and does not move it. This is a
+    ``LinkedHashMap``: the key order is first-seen, the value is
+    overwritten. An empty list stays empty.
+    """
+    position = {}
+    winners: List[PriceBarCreate] = []
+    for bar in bars:
+        key = (bar.date, bar.source)
+        index = position.get(key)
+        if index is None:
+            position[key] = len(winners)
+            winners.append(bar)
+        else:
+            winners[index] = bar
+    return winners
+
+
+def _bar_for_storage(bar: PriceBarCreate) -> PriceBarCreate:
+    """The bar with a currency the ``String(3)`` column can hold.
+
+    ``normalize_currency`` is the write model's rule: exactly three
+    ASCII letters, uppercased, except Yahoo's ``GBp`` and ``ZAc``.
+    The API runs it before the repository. A direct caller can skip
+    that (build the model without validation, then assign
+    ``currency``). SQLite does not enforce ``VARCHAR(3)``, so a
+    longer code would commit and the response model would then fail
+    on read. This raises before flush, on SQLite and on PostgreSQL,
+    and no row is added. The message does not repeat the bad code.
+
+    A code that only needed uppercasing is copied onto a new model.
+    The caller's object is left as it was.
+    """
+    # Raise outside the handler. A ``raise`` inside the ``except``
+    # would keep the checker error on ``__context__``.
+    rejected = False
+    try:
+        code = normalize_currency(bar.currency)
+    except ValueError:
+        rejected = True
+        code = None
+    if rejected or not isinstance(code, str):
+        raise ValueError(_CURRENCY)
+    if code == bar.currency:
+        return bar
+    return bar.model_copy(update={"currency": code})
+
+
+def _remember_skip(seen: dict, bar_id) -> bool:
+    """True when this skip should be logged.
+
+    ``seen`` maps a bar id to ``None`` and remembers insertion
+    order. A second call with the same id returns False. When the
+    dict grows past ``_MAX_LOGGED_SKIP_IDS``, the oldest id is
+    removed and may be logged again later. The cap is a memory
+    bound, not a promise that each id logs only once for the life
+    of the process.
+    """
+    if bar_id in seen:
+        return False
+    seen[bar_id] = None
+    while len(seen) > _MAX_LOGGED_SKIP_IDS:
+        seen.pop(next(iter(seen)))
+    return True
+
+
 def _readable(row: PriceBarDB) -> bool:
     """False when any OHLC cell did not parse as a decimal."""
     prices = (
@@ -557,8 +665,7 @@ def _readable(row: PriceBarDB) -> bool:
         row.close_price,
     )
     if any(isinstance(price, UnreadablePrice) for price in prices):
-        if row.id not in _logged_skip_ids:
-            _logged_skip_ids.add(row.id)
+        if _remember_skip(_logged_skip_ids, row.id):
             logger.warning(
                 "Skipping price bar id=%s instrument_id=%s: "
                 "stored price is not a decimal",
