@@ -1,5 +1,140 @@
 # Development Journal
 
+## 2026-10-29 - Notes and theses on the company page (#33)
+
+- Scope: N1, the HTTP API and the `/ui` part of #33 (the tables and
+  repositories merged in #91). Design
+  `docs/superpowers/specs/2026-10-28-notes-theses-design.md`, decided
+  with Raul on 2026-10-28; plan
+  `docs/superpowers/plans/2026-10-28-notes-theses.md`. Ten tasks, run
+  with subagent-driven development, each reviewed by a fresh reviewer:
+  1. revision `0008` adds `theses.closed_at` (closed rows get their
+     `updated_at`);
+  2. startup refuses a `theses` table without `closed_at` and names
+     the Alembic commands;
+  3. a failed note or thesis insert is `ResearchStorageError`;
+  4. the JSON API under `/api/v1/instruments/{instrument_id}/notes`
+     and `/theses`;
+  5. note and thesis times in Polish time (`Europe/Warsaw`, 24-hour
+     clock) in both languages;
+  6. HTMX swaps a 422, marked links fall back to a plain request, and
+     a stale `autofocus` is cleared;
+  7. the sticky-note button beside the heart and the read-only panel;
+  8. note forms: add, edit, delete, and the "Nowa notatka" draft kept
+     across panel actions;
+  9. thesis forms: add, edit, close, reopen, and delete;
+  10. the company delete warning names notes and theses, persistence
+      tests, docs, and the Chrome check.
+- Decisions with Raul (2026-10-28): a sticky-note icon with a count,
+  as in DEGIRO; a panel under the company name without a reload;
+  plain text with line breaks; theses above notes, closed theses
+  folded; the fields "Tytuł", "Dlaczego kupiłem", and "Kiedy sprzedam
+  / co złamie tezę"; one-click close with a closing date, and reopen;
+  a +20% target is plain text (reminders are #58, trade comments
+  #103).
+- Decisions by Claude (in the spec; Raul can overrule): every panel
+  action re-renders the panel and has a GET URL for the same state; a
+  validation error is a 422 with HTMX and without; every panel form
+  and link repeats a failed request without HTMX; delete asks inline
+  and is a hard delete; notes sort by creation; one focus table; item
+  buttons name their item; a "too long" error names the limit and
+  there is no `maxlength`; an unchanged edit stores nothing.
+- Controller rulings (all of them are in the task ledger). These
+  changed the plan:
+  - P1: an HTMX panel answer carries three out-of-band elements, the
+    button form and both language inputs. The plan named one.
+  - P2: "Anuluj" on the new-thesis form takes the id of "+ Nowa teza",
+    so the focus returns there. Task 10 added `#research` to its href.
+  - P3: every storage failure is a 500 with "Nie udało się zapisać.
+    Spróbuj ponownie." in that form's focused error summary. A failed
+    close or reopen got its own form kind.
+  - P7: `static/ui.js` loads a same-page fallback without its
+    fragment, because a fragment-only navigation sends no request.
+  - Task 2: the plan's date for `alembic stamp 0007` was wrong. The
+    docs map a file to `0005`, `0006`, or `0007` by when each revision
+    reached master. Four old E501 lines in `init_db.py` were fixed.
+  - Task 7: a closed card shows "zamknięta {date}" as its status
+    badge. One builder makes every panel state URL (done in Task 8).
+  - Task 8: `build_panel` lost the plan's `state_path` parameter.
+    `errors_from_validation` gained `key_for` instead of a second
+    copy. The panel error summaries have no `role="alert"`. One helper
+    re-renders every 422 and 500 (done in Task 9).
+  - Task 9: one `static/ui.css` rule spaces the thesis action row like
+    the note row. The EN label became `Close thesis "{title}"` (WCAG
+    2.5.3), applied in Task 10.
+  - Task 10: the final whole-branch review runs after this task, as a
+    multi-reviewer workflow. HANDOFF records 2026-10-29.
+
+  Rulings that kept the plan: P4 (a thesis created closed takes
+  `closed_at` from the Python clock), both API routers in
+  `app/api/research.py`, and the closed list unfolded when the focus
+  names a closed thesis. P5 and P6 set the process: the git-ignored
+  `demo/` directory stays, and the models follow the owner's model
+  rule.
+- Accepted costs:
+  - an unsent "Nowa notatka" draft is lost when any panel action falls
+    back to a full page;
+  - a duplicate note is possible after a lost answer, including when
+    only the refresh after a commit fails;
+  - SQLite reuses a deleted top id, so a stale form can reach a newer
+    note. This is pre-existing and app-wide, and deferred to a
+    follow-up;
+  - without JavaScript, or after a fallback, an action on a closed
+    thesis ends on the spec's fixed 303 target with the closed list
+    folded;
+  - after a mouse close or reopen in Safari or Firefox on macOS, the
+    focus falls to the page: the id restore needs a focused button.
+    Deferred to an app-wide follow-up.
+- Task 10 tests: the warning test and the changed label and href
+  assertions failed first. The two persistence tests
+  (`test_notes_survive_data_and_price_refresh`,
+  `test_notes_survive_a_new_engine_on_the_same_file`) passed at once,
+  because they pin behaviour that already held. Four throwaway mutants
+  (a refresh that deletes or rewrites research, an insert that is
+  never committed) each made them fail.
+- Verification: no `.env`, local SQLite 3.54. CI pytest command: 1983
+  passed, 3 failed (the two `0006` float boundary tests, and
+  `test_run_demo` because a local `demo/` directory exists), 233
+  deselected, the 2 known `SAWarning`s, coverage 96.87%. black,
+  isort, and flake8 passed on the changed Python files. The new
+  `docs/api-demo.md` curl block ran as written against the demo on a
+  scratch file: every request answered as documented. Not run: the
+  PostgreSQL job locally (no server) and GitHub Actions.
+- Chrome check (claude-in-chrome; the real demo on a scratch SQLite
+  file; mouse and keyboard; Polish, then English): open and close the
+  panel; add, edit, and delete notes; add, close, reopen, edit, and
+  delete theses; 422s on the note add, the thesis add, and a thesis
+  edit; a draft and its 422 error kept together while an edit form
+  opened; the stale-tab 404 (a note deleted in a second tab, then
+  "Zapisz"); a network error with the server stopped; the data after
+  a restart with `--keep`; PL/EN with the panel open; the delete
+  warning in both languages. `document.activeElement` matched the
+  focus table after every step. The console showed nothing for the
+  422s, HTMX's one "Response Status Error Code 404" line for the 404,
+  two HTMX lines for the network error, and no CSP violation or
+  uncaught error. Two observations for the final review: opening
+  "+ Nowa teza" puts the focus on "Anuluj" for about 25 ms before the
+  title field takes it; and with HTMX, the `#research` in the
+  new-thesis "Anuluj" href makes HTMX scroll the panel to the top of
+  the window.
+- AI model: Claude Opus 5.5 for the controller and the implementers;
+  the task reviewers ran on Opus at effort xhigh. Account usage was
+  not available in this session.
+- Time tracking (Europe/Warsaw): design and plan on 2026-10-28, 13:16
+  to 14:39. Execution from 2026-10-29 09:02 to the Task 10 commit on
+  2026-10-30 (see `git log`). At about 12:10 the controlling session
+  lost its terminal view in IntelliJ; a new session took over from the
+  ledger at about 12:20, while Task 7 was being implemented. From
+  about 16:05, Task 10's tool calls came back hours apart (19:55,
+  00:12, 05:29), for a cause the session could not see. pytest timed
+  the last CI run at 129 s while it spanned over an hour on the wall
+  clock, which suggests the machine was asleep. The restart, PL/EN,
+  and warning checks, the work-state and journal edits, the last CI
+  run, and the commit came after that. Per-task commit times are in
+  `git log`.
+- Next: the final whole-branch review, its fixes, then the pull
+  request.
+
 ## 2026-10-30 - Rebase #106 and two review lows
 
 - Scope: rebase `cursor/ui-company-name-clean-text-86` onto

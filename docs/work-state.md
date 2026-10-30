@@ -1,6 +1,6 @@
 # Current Work State
 
-## Notes and theses (#33): 2026-10-29, work in progress
+## Notes and theses (#33): 2026-10-29, ten tasks done, final review next
 
 - Branch `feat/notes-theses-33`, from `master` `3c40413`. Not pushed;
   no pull request yet.
@@ -9,7 +9,8 @@
   run with subagent-driven development. The per-task ledger (rulings,
   deferred review findings, status) is the git-ignored
   `.superpowers/sdd/2026-10-28-notes-theses/progress.md`.
-- Completed, each task reviewed (`15b5afb`..`d320dd0`):
+- Completed, Tasks 1 to 9 each reviewed (`15b5afb`..`ce52331`), and
+  Task 10 in the docs commit on top:
   - Task 1: `theses.closed_at` (revision `0008`);
   - Task 2: startup refuses a `theses` table without `closed_at` and
     names the Alembic commands;
@@ -20,23 +21,39 @@
   - Task 6: HTMX swaps a 422, marked links fall back to a plain
     request, and a stale `autofocus` is cleared;
   - Task 7: the sticky-note button and the read-only panel on
-    `/ui/instruments/{id}`.
-- Incomplete: Task 8 (note forms), Task 9 (thesis forms), Task 10
-  (company delete warning, persistence tests, docs, Chrome check),
-  then the final whole-branch review and the pull request.
-- Tests: after Task 7 the CI command gives 1937 passed and the 3 known
-  local failures, coverage 96.53%. The known failures are the two
-  `0006` float boundary tests on local SQLite 3.54, and
+    `/ui/instruments/{id}`;
+  - Task 8: add, edit, and delete notes in the panel;
+  - Task 9: add, edit, close, reopen, and delete theses in the panel;
+  - Task 10: the company delete warning names notes and theses, two
+    persistence tests, the EN "Close thesis" label, the new-thesis
+    "Anuluj" link lands on the panel without JavaScript, the docs, and
+    the Chrome check on the demo.
+- Incomplete: the final whole-branch review (the controller runs it as
+  a multi-reviewer workflow), its fixes, then the pull request.
+- Tests: the CI command gives 1983 passed and the 3 known local
+  failures, coverage 96.87%. The known failures are the two `0006`
+  float boundary tests on local SQLite 3.54, and
   `tests/test_run_demo.py::test_child_process_does_not_inherit_dotenv_database`,
   which fails because a local git-ignored `demo/` directory exists.
   Not run: the PostgreSQL job (no local server) and GitHub Actions.
-- Checkpoint reason: on 2026-10-29 the controlling session lost its
-  terminal view in IntelliJ while its process kept running. A new
-  session took over from the ledger at Task 7. The old process is idle
-  and does no work.
-- Active agents: none at this checkpoint. Blockers: none. Account
-  usage was not available in this session.
-- Next action: Task 8, note forms in the panel.
+- Deferred to follow-ups, no issue filed yet:
+  - SQLite reuses a deleted top id (no table uses `AUTOINCREMENT`), so
+    a stale form can reach a newer note or thesis. This is app-wide.
+  - After a mouse close or reopen in Safari or Firefox on macOS, the
+    focus falls to the page: HTMX's id restore needs a focused button.
+  - `/static` files have no `Cache-Control`, so a browser can keep an
+    old `ui.css` or `ui.js` after an update.
+- Stop reason: Task 10 is done. From about 16:05 on 2026-10-29 its
+  tool calls came back hours apart, for a cause the session could not
+  see, so the browser check finished and Task 10 was committed on
+  2026-10-30. Earlier, at about 12:10 on 2026-10-29, the controlling
+  session lost its terminal view in IntelliJ; a new session took over
+  from the ledger at Task 7.
+- Active agents: the controller only; the implementers and the task
+  reviewers have finished. Blockers: none. Account usage was not
+  available in this session.
+- Next action: the final whole-branch review of
+  `3c40413..feat/notes-theses-33`, then the pull request.
 
 ## Company name on `clean_text` (#86 remainder): 2026-10-30
 
@@ -143,9 +160,12 @@
 - #33: the notes and theses tables and repositories are on master
   (revision `0005`). The API and the `/ui` panel are on
   `feat/notes-theses-33` (above).
-- #32: the watchlist backend is on master (revision `0004`).
-  The `/ui` page from #96 is on master. The N+1 follow-up merged
-  in #108.
+- #32 and #96: the watchlist backend (revision `0004`) and the
+  `/ui/watchlist` page are on master (#96 merged in PR #101 on
+  2026-10-28). The N+1 follow-up merged in #108.
+- #102: the Code Reviewer agent, priority high, is next after #33.
+- #103: comments on buy and sell transactions, deferred until #57
+  brings transactions.
 - #8 and #10: the instrument Alembic baseline is still open,
   and `init_db` still uses `create_all`.
 - #54: the real Yahoo adapter, and the case where a Yahoo HTTP

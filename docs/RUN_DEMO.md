@@ -71,6 +71,30 @@ row shows the latest close, the change against the previous bar, a
 2026-09-28, so every row with prices carries the "nieaktualne" /
 "stale" badge: staleness counts from today.
 
+Notes and theses start empty too: the seed adds none. On a company
+page, the sticky-note button next to the heart ("Notatki i tezy" /
+"Notes and theses") opens a panel under the company name without a
+page reload, and a second click closes it. Once something is stored,
+the button shows how many notes and theses the company has.
+
+- Theses come first. Active ones are on top. Closed ones are folded
+  under "Zamknięte tezy (n)" / "Closed theses (n)" and show their
+  closing date.
+- "+ Nowa teza" / "+ New thesis" asks for "Tytuł", "Dlaczego kupiłem"
+  and "Kiedy sprzedam / co złamie tezę". "Zamknij tezę" / "Close
+  thesis" closes a thesis with one click. "Otwórz ponownie" /
+  "Reopen" brings it back.
+- "Nowa notatka" / "New note" with "Dodaj notatkę" / "Add note" adds a
+  note. Notes are listed newest first, each with its date and time
+  in Polish time, "Edytuj" / "Edit", and "Usuń" / "Delete".
+- Deleting asks first, inside the panel. Text is plain: line breaks
+  show, and HTML shows as text.
+
+Step 6 of the demo (`docs/product-requirements.md` section 9) adds a
+note and an active thesis live. They are stored in the demo file, so
+they survive a server restart. `python -m scripts.run_demo` replaces
+that file unless you pass `--keep`, and the reset below deletes it.
+
 To reset, stop uvicorn, delete the file, and seed again:
 
 ```bash

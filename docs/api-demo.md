@@ -127,7 +127,7 @@ What differs from the previous write rules:
   is not a 422, so it has no `type` or `ctx.error.code`. It used to
   be stored as that text. The same Co/Cn-only value is now blank for
   a note or a thesis (422 on a required field, `""` for
-  thesis-breakers). There is no HTTP route for notes or theses yet.
+  thesis-breakers).
 - The watchlist bidi message is `Value error, label must not contain
   hidden or bidi controls`. It used to say `hidden format controls`.
   A thesis title used to say `bidi controls` and now says
@@ -232,6 +232,62 @@ Omitting `period_end` leaves the stored value unchanged. An explicit
 `null` is rejected with 422. Company `website` is different: the
 example above sends `{"website": null}` and that clears the website.
 
+Notes and investment theses belong to one company. Their routes are
+under `/api/v1/instruments/{instrument_id}`, where the instrument id
+is the company id, and they have no trailing slash. One request per
+route:
+
+```bash
+NOTES_URL="$BASE_URL/api/v1/instruments/$COMPANY_ID/notes"
+THESES_URL="$BASE_URL/api/v1/instruments/$COMPANY_ID/theses"
+NOTE_JSON=$(curl -q --noproxy '*' -fsS -X POST "$NOTES_URL" \
+  -H 'Content-Type: application/json' \
+  -d '{"body":"Bought after an analysis.\nCheck the next report."}')
+NOTE_ID=$(printf '%s' "$NOTE_JSON" | "$PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -q --noproxy '*' -fsS "$NOTES_URL"
+curl -q --noproxy '*' -fsS "$NOTES_URL/$NOTE_ID"
+curl -q --noproxy '*' -fsS -X PUT "$NOTES_URL/$NOTE_ID" \
+  -H 'Content-Type: application/json' -d '{"body":"Report checked."}'
+curl -q --noproxy '*' -fsS -i -X DELETE "$NOTES_URL/$NOTE_ID"
+THESIS_JSON=$(curl -q --noproxy '*' -fsS -X POST "$THESES_URL" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"AI infrastructure","body":"Demand keeps growing.","thesis_breakers":"Sell at +20%, or when demand stalls."}')
+THESIS_ID=$(printf '%s' "$THESIS_JSON" | "$PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -q --noproxy '*' -fsS "$THESES_URL?status=active"
+curl -q --noproxy '*' -fsS "$THESES_URL/$THESIS_ID"
+curl -q --noproxy '*' -fsS -X PUT "$THESES_URL/$THESIS_ID" \
+  -H 'Content-Type: application/json' -d '{"status":"closed"}'
+curl -q --noproxy '*' -fsS -i -X DELETE "$THESES_URL/$THESIS_ID"
+```
+
+- A note is `id`, `company_id`, `body`, `created_at`, and
+  `updated_at`. A thesis also has `title`, `thesis_breakers` (`""`
+  when empty), `status` (`active` or `closed`), and `closed_at`
+  (`null` while active). Times are UTC with an offset. The `/ui`
+  panel shows them in Polish time.
+- A new thesis is `active`. `PUT` with `{"status":"closed"}` closes it
+  and sets `closed_at`; `{"status":"active"}` reopens it and clears
+  `closed_at`.
+- `PUT` is a partial update: send only the fields to change. `{}`
+  returns the stored item unchanged.
+- Lists are newest edit first. `?status=active` or `?status=closed`
+  filters theses; any other value is 422.
+- The text is plain text. A note body and a thesis body hold up to
+  10000 characters, a title up to 200, and thesis-breakers up to
+  5000. Line breaks and tabs are kept, except in the title, which is
+  one line. A blank body or title, an unknown key, any other control
+  character, or a bidi mark is 422.
+- An unknown instrument is 404 `Instrument not found`, checked first,
+  so its list is that 404 and not `[]`. A note or thesis that is not
+  stored, or that belongs to another company, is 404 `Note not found`
+  or `Thesis not found`. Every id is an integer from 1 to
+  9223372036854775807 (2^63 - 1); anything else is 422.
+- A failed write is 500 `Note or thesis could not be stored`, with
+  nothing else from the database error.
+- Deleting the company deletes its notes and theses: the foreign keys
+  are `ON DELETE CASCADE`. There is no origin check, as on the other
+  API routes.
+
 Invalid URL: expected 422, without changing the company. Deliberate error examples
 omit curl's `-f` so the response body and status remain visible.
 
@@ -242,8 +298,8 @@ curl -q --noproxy '*' -sS -i -X PUT "$BASE_URL/api/v1/companies/$COMPANY_ID" \
 
 Clean up only the IDs created above, metrics before company. Do not substitute an
 existing record's ID. Stop and inspect any failed creation before continuing.
-Company deletion also cascades to its metrics. After deletion, PUT to those same
-IDs must return 404:
+Company deletion also cascades to its metrics, notes, and theses. After deletion,
+PUT to those same IDs must return 404:
 
 ```bash
 curl -q --noproxy '*' -fsS -i -X DELETE "$BASE_URL/api/v1/financial-metrics/$METRICS_ID"
