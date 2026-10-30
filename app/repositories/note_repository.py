@@ -7,7 +7,8 @@ A note id that belongs to another company is treated as missing:
 from editing another company's note.
 
 ``create`` raises ``CompanyNotFoundError`` when the company id is
-not stored. It does not raise ``IntegrityError`` for that case.
+not stored, and ``ResearchStorageError`` when the insert fails for
+another reason. It does not raise the driver error.
 """
 
 from datetime import datetime, timezone
@@ -19,7 +20,6 @@ from app.models.research import Note, NoteCreate, NoteUpdate
 from app.repositories.research_store import (
     commit_company_scoped,
     commit_research_change,
-    ensure_company_exists,
 )
 
 
@@ -57,12 +57,13 @@ class NoteRepository:
 
         Raises:
             CompanyNotFoundError: ``company_id`` is not in ``companies``.
+            ResearchStorageError: the insert failed and was rolled
+                back. One exception: when only the refresh after the
+                commit fails, the commit has already stored the note
+                (see ``commit_company_scoped``).
         """
-        ensure_company_exists(self.db, company_id)
         row = NoteDB(company_id=company_id, body=note.body)
-        self.db.add(row)
-        commit_company_scoped(self.db, company_id)
-        self.db.refresh(row)
+        commit_company_scoped(self.db, company_id, row)
         return Note.model_validate(row)
 
     def update(

@@ -123,7 +123,7 @@ def forbidden_page(request: Request, exc: OriginRejected):
     Imported lazily. This module is imported by the page router, and
     the page router owns the shared security headers.
     """
-    from app.ui.router import _with_ui_headers
+    from app.ui.router import with_ui_headers
     from app.ui.templating import render
 
-    return _with_ui_headers(render(request, "forbidden.html", status_code=403))
+    return with_ui_headers(render(request, "forbidden.html", status_code=403))

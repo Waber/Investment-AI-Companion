@@ -2,8 +2,9 @@
 
 HTML forms only send GET and POST, so an edit is a POST and not a PUT.
 The path is still under /ui. HTMX is not required: a 4xx response is
-the whole form again, and HTMX does not swap error pages unless the
-shared htmx-config meta is changed. The list filter keeps using HTMX.
+the whole form again, and these forms post without HTMX. The shared
+htmx-config meta lets HTMX swap a 422, but no other error page. The
+list filter keeps using HTMX.
 
 Successful posts answer 303 and send the browser to a GET page, so a
 refresh does not save a second time. Invalid input is 422. A
@@ -11,9 +12,11 @@ repository ValueError (a duplicate) is 400. Both render the same form
 with the user's text still in the fields. A bad id uses the same guard
 as the detail page and is the HTML 404.
 
-Deleting a company goes through ``CompanyRepository.delete``. The
-company relationship cascades to financial metrics. Prices, a
-watchlist, notes, and analyses are not stored on this model.
+Deleting a company goes through ``CompanyRepository.delete``. Its
+financial metrics are deleted through the ORM relationship. The
+database removes its notes, theses, price bars, and watchlist row
+(``ON DELETE CASCADE`` on their foreign keys). The delete warning
+names the metrics, notes, and theses.
 """
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -49,7 +52,7 @@ from app.ui.form_fields import (
     validate_metrics,
 )
 from app.ui.origin import require_same_origin
-from app.ui.router import _instrument_id, _with_ui_headers, is_htmx
+from app.ui.router import instrument_id, is_htmx, with_ui_headers
 from app.ui.templating import render
 from app.ui.view_models import METRIC_FIELDS
 
@@ -145,37 +148,37 @@ def posted_metrics(
     }
 
 
-def _see_other(url):
+def see_other(url):
     """303 so the next request is a GET. A refresh does not re-post."""
-    return _with_ui_headers(RedirectResponse(url, status_code=303))
+    return with_ui_headers(RedirectResponse(url, status_code=303))
 
 
-def _not_found(request):
-    return _with_ui_headers(render(request, "not_found.html", status_code=404))
+def not_found(request):
+    return with_ui_headers(render(request, "not_found.html", status_code=404))
 
 
-def _load_company(request, db, raw_id):
+def load_company(request, db, raw_id):
     """Return ``(row, response)``. One of the two is None."""
-    parsed = _instrument_id(raw_id)
+    parsed = instrument_id(raw_id)
     if parsed is None:
-        return None, _not_found(request)
+        return None, not_found(request)
     row = CompanyRepository(db).get_by_id(parsed)
     if row is None:
-        return None, _not_found(request)
+        return None, not_found(request)
     return row, None
 
 
 def _load_metrics(request, db, company_raw, metrics_raw):
     """Return ``(company, metrics, response)``."""
-    company, missing = _load_company(request, db, company_raw)
+    company, missing = load_company(request, db, company_raw)
     if missing is not None:
         return None, None, missing
-    parsed = _instrument_id(metrics_raw)
+    parsed = instrument_id(metrics_raw)
     if parsed is None:
-        return None, None, _not_found(request)
+        return None, None, not_found(request)
     row = FinancialMetricsRepository(db).get_by_id(parsed)
     if row is None or row.company_id != company.id:
-        return None, None, _not_found(request)
+        return None, None, not_found(request)
     return company, row, None
 
 
@@ -201,7 +204,7 @@ def _company_page(
 ):
     errors = errors or {}
     invalid = tuple(invalid_fields or ())
-    return _with_ui_headers(
+    return with_ui_headers(
         render(
             request,
             "company_form.html",
@@ -241,7 +244,7 @@ def _metrics_page(
     errors = errors or {}
     invalid = tuple(invalid_fields or ())
     fields = ("period_end", "period_type") + METRIC_FIELDS
-    return _with_ui_headers(
+    return with_ui_headers(
         render(
             request,
             "metrics_form.html",
@@ -276,7 +279,7 @@ def _confirm_page(
     period_end=None,
     period_type=None,
 ):
-    return _with_ui_headers(
+    return with_ui_headers(
         render(
             request,
             "confirm_delete.html",
@@ -479,7 +482,7 @@ def create_company(
         return _company_save_failed(
             request, db, model, values, exclude_id=None, error=error, **page
         )
-    return _see_other(f"/ui/instruments/{row.id}")
+    return see_other(f"/ui/instruments/{row.id}")
 
 
 @router.get("/companies/{company_id}/edit", include_in_schema=False)
@@ -487,7 +490,7 @@ def edit_company_form(
     request: Request, company_id: str, db: Session = Depends(get_db)
 ):
     """Edit form filled from the stored row."""
-    row, missing = _load_company(request, db, company_id)
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     return _company_page(
@@ -508,7 +511,7 @@ def update_company(
     db: Session = Depends(get_db),
 ):
     """Validate with CompanyUpdate. Every field on the form is sent."""
-    row, missing = _load_company(request, db, company_id)
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     model, errors, form_error = validate_company(values, update=True)
@@ -539,8 +542,8 @@ def update_company(
             **page,
         )
     if saved is None:
-        return _not_found(request)
-    return _see_other(f"/ui/instruments/{saved.id}")
+        return not_found(request)
+    return see_other(f"/ui/instruments/{saved.id}")
 
 
 @router.get("/companies/{company_id}/delete", include_in_schema=False)
@@ -548,7 +551,7 @@ def delete_company_form(
     request: Request, company_id: str, db: Session = Depends(get_db)
 ):
     """Confirmation only. The row is still there after this GET."""
-    row, missing = _load_company(request, db, company_id)
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     return _confirm_page(
@@ -566,12 +569,16 @@ def delete_company_form(
 def delete_company(
     request: Request, company_id: str, db: Session = Depends(get_db)
 ):
-    """Delete the company. Related financial metrics go with it."""
-    row, missing = _load_company(request, db, company_id)
+    """Delete the company and everything stored for it.
+
+    Its financial metrics, notes, theses, price bars, and watchlist
+    row go with it (see the module docstring).
+    """
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     CompanyRepository(db).delete(row.id)
-    return _see_other("/ui")
+    return see_other("/ui")
 
 
 @router.get("/companies/{company_id}/metrics/new", include_in_schema=False)
@@ -579,7 +586,7 @@ def new_metrics_form(
     request: Request, company_id: str, db: Session = Depends(get_db)
 ):
     """Empty metrics form for one company."""
-    row, missing = _load_company(request, db, company_id)
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     return _metrics_page(
@@ -664,7 +671,7 @@ def create_metrics(
     db: Session = Depends(get_db),
 ):
     """Validate with FinancialMetricsCreate for this company only."""
-    company, missing = _load_company(request, db, company_id)
+    company, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     model, errors, form_error = validate_metrics(
@@ -702,7 +709,7 @@ def create_metrics(
             update=False,
             metrics_id=None,
         )
-    return _see_other(f"/ui/instruments/{company.id}")
+    return see_other(f"/ui/instruments/{company.id}")
 
 
 @router.get(
@@ -788,8 +795,8 @@ def update_metrics(
             updated_at=row.updated_at,
         )
     if saved is None:
-        return _not_found(request)
-    return _see_other(f"/ui/instruments/{company.id}")
+        return not_found(request)
+    return see_other(f"/ui/instruments/{company.id}")
 
 
 @router.get(
@@ -834,7 +841,7 @@ def delete_metrics(
     if missing is not None:
         return missing
     FinancialMetricsRepository(db).delete(row.id)
-    return _see_other(f"/ui/instruments/{company.id}")
+    return see_other(f"/ui/instruments/{company.id}")
 
 
 def _watchlist_response(request, db, company_id, origin, position=0):
@@ -852,11 +859,11 @@ def _watchlist_response(request, db, company_id, origin, position=0):
     from_watchlist = origin == "watchlist"
     if not is_htmx(request):
         if from_watchlist:
-            return _see_other("/ui/watchlist")
-        return _see_other(f"/ui/instruments/{company_id}")
+            return see_other("/ui/watchlist")
+        return see_other(f"/ui/instruments/{company_id}")
     if from_watchlist:
         entries = watchlist_view.list_entries(db)
-        return _with_ui_headers(
+        return with_ui_headers(
             render(
                 request,
                 "partials/watchlist_table.html",
@@ -865,7 +872,7 @@ def _watchlist_response(request, db, company_id, origin, position=0):
                 focus_index=min(position, len(entries) - 1) if entries else -1,
             )
         )
-    return _with_ui_headers(
+    return with_ui_headers(
         render(
             request,
             "partials/watchlist_heart.html",
@@ -883,7 +890,7 @@ def add_to_watchlist(
     db: Session = Depends(get_db),
 ):
     """Add the company. A second add keeps the stored label."""
-    row, missing = _load_company(request, db, company_id)
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     WatchlistRepository(db).add(row.id)
@@ -898,7 +905,7 @@ def remove_from_watchlist(
     db: Session = Depends(get_db),
 ):
     """Remove the company. One that is not listed is not an error."""
-    row, missing = _load_company(request, db, company_id)
+    row, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     watchlist = WatchlistRepository(db)

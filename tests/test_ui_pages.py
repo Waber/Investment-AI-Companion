@@ -138,6 +138,54 @@ def test_language_next_path_uses_the_get_form_for_a_post():
     )
 
 
+def test_language_next_path_for_research_posts():
+    """A plain 422 or 500 of a panel form returns to a GET of that state.
+
+    Adding a note has no GET form of its own: the "Nowa notatka" field
+    lives in the panel. Edit and delete have a GET at the same path.
+    """
+    from app.ui.templating import language_next_path
+
+    assert (
+        language_next_path(_page_request("POST", "/ui/companies/7/notes"))
+        == "/ui/companies/7/research"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/notes/3/edit")
+        )
+        == "/ui/companies/7/notes/3/edit"
+    )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/notes/3/delete")
+        )
+        == "/ui/companies/7/notes/3/delete"
+    )
+
+
+def test_language_next_path_for_thesis_posts():
+    """A plain 422 or 500 of a thesis form returns to a GET of that state.
+
+    A new thesis has its empty form at ``.../theses/new``. Close and
+    reopen have no form, so they return to the panel. Edit and delete
+    have a GET at the same path.
+    """
+    from app.ui.templating import language_next_path
+
+    for posted, expected in (
+        ("/ui/companies/7/theses", "/ui/companies/7/theses/new"),
+        ("/ui/companies/7/theses/4/close", "/ui/companies/7/research"),
+        ("/ui/companies/7/theses/4/reopen", "/ui/companies/7/research"),
+        ("/ui/companies/7/theses/4/edit", "/ui/companies/7/theses/4/edit"),
+        (
+            "/ui/companies/7/theses/4/delete",
+            "/ui/companies/7/theses/4/delete",
+        ),
+    ):
+        assert language_next_path(_page_request("POST", posted)) == expected
+
+
 def test_safe_next_drops_a_path_that_parses_as_absolute(monkeypatch):
     """The scheme check stays even when the prefix check already passed."""
     from types import SimpleNamespace
@@ -342,6 +390,7 @@ async def test_pages_render_in_polish_by_default(seeded):
     assert "includeIndicatorStyles" in page.text
     assert '"allowEval":false' in page.text
     assert '"allowScriptTags":false' in page.text
+    assert '{"code":"422","swap":true}' in page.text
     assert config_at < script_at
     assert 'href="/static/ui.css"' in page.text
     assert_no_dangerous_href(page.text)
@@ -971,3 +1020,20 @@ async def test_other_period_and_static_assets(client):
     assert script.status_code == 200
     assert "htmx" in script.text
     assert "cdn.jsdelivr.net" not in script.text
+
+
+def test_shared_ui_helpers_are_public():
+    """Research routes call these by a public name.
+
+    A leading underscore said they were private to one module. The
+    research panel imports them, so the names have no underscore.
+    """
+    import app.ui.forms as forms
+    import app.ui.router as router
+
+    for name in ("load_company", "not_found", "see_other"):
+        assert callable(getattr(forms, name))
+        assert not hasattr(forms, "_" + name)
+    for name in ("instrument_id", "with_ui_headers"):
+        assert callable(getattr(router, name))
+        assert not hasattr(router, "_" + name)

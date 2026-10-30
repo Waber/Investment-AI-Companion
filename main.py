@@ -15,6 +15,7 @@ from app.api.companies import router as companies_router
 from app.api.data_collection import router as data_collection_router
 from app.api.financial_metrics import router as financial_metrics_router
 from app.api.prices import router as prices_router
+from app.api.research import notes_router, theses_router
 from app.api.watchlist import router as watchlist_router
 from app.core.config import settings
 from app.core.init_db import init_db
@@ -22,6 +23,7 @@ from app.core.validation import request_validation_exception_handler
 from app.models.price_bar import restore_volume_openapi_maximum
 from app.ui.forms import router as ui_forms_router
 from app.ui.origin import OriginRejected, forbidden_page
+from app.ui.research_forms import router as ui_research_router
 from app.ui.router import router as ui_router
 
 # HTMX and CSS live in the repository. The pages link to this directory
@@ -41,10 +43,10 @@ async def http_exception_page(request, exc):
     if exc.status_code == 405 and under_ui:
         # Imported here. This module loads the UI routers, and those
         # routers load the header helper.
-        from app.ui.router import _with_ui_headers
+        from app.ui.router import with_ui_headers
         from app.ui.templating import render
 
-        response = _with_ui_headers(
+        response = with_ui_headers(
             render(request, "method_not_allowed.html", status_code=405)
         )
         allowed = (exc.headers or {}).get("Allow")
@@ -154,8 +156,11 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     )
     application.include_router(prices_router, prefix=settings.API_V1_STR)
     application.include_router(watchlist_router, prefix=settings.API_V1_STR)
+    application.include_router(notes_router, prefix=settings.API_V1_STR)
+    application.include_router(theses_router, prefix=settings.API_V1_STR)
     application.include_router(ui_router)
     application.include_router(ui_forms_router)
+    application.include_router(ui_research_router)
     application.mount(
         "/static",
         StaticFiles(directory=str(STATIC_DIR)),

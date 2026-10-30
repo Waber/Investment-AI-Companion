@@ -103,6 +103,48 @@ def test_one_missing_company_column_is_named(memory_engine, present):
     assert present not in message.split(". An Alembic-managed", 1)[0]
 
 
+def test_missing_theses_table_is_left_for_create_all(memory_engine):
+    database_initializer.require_thesis_closed_at_column(memory_engine)
+
+
+def test_current_theses_table_passes(memory_engine):
+    Base.metadata.create_all(bind=memory_engine)
+    # Without the table the check would pass on the early return.
+    assert "theses" in inspect(memory_engine).get_table_names()
+
+    database_initializer.require_thesis_closed_at_column(memory_engine)
+
+
+def test_init_db_rejects_theses_without_closed_at(monkeypatch, memory_engine):
+    """A create_all database from before revision 0008.
+
+    create_all leaves the old theses table as it is, so startup must
+    stop before it serves. ``alembic stamp head`` would record 0008
+    without adding the column, so the message names an older stamp.
+    """
+    with memory_engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE theses ("
+                "id INTEGER PRIMARY KEY, "
+                "company_id INTEGER NOT NULL, "
+                "title VARCHAR(200) NOT NULL, "
+                "status VARCHAR(6) NOT NULL)"
+            )
+        )
+    monkeypatch.setattr(database_initializer, "engine", memory_engine)
+
+    with pytest.raises(database_initializer.ThesisSchemaError) as error:
+        database_initializer.init_db()
+
+    message = str(error.value)
+    assert "theses is missing closed_at" in message
+    assert "alembic upgrade head" in message
+    assert "alembic stamp 0007" in message
+    assert "2026-10-24" in message
+    assert "alembic stamp head" not in message
+
+
 def test_init_db_is_safe_to_repeat(monkeypatch, memory_engine):
     monkeypatch.setattr(database_initializer, "engine", memory_engine)
 

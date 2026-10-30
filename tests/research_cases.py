@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.models.database_models import (
@@ -79,6 +79,20 @@ def _pin_updated_at(session, model, row_id, moment):
     return stored.updated_at
 
 
+def _pin_closed_at(session, thesis_id, moment):
+    """Write ``closed_at`` with an SQL UPDATE, past the repository.
+
+    The repository sets ``closed_at`` from its own clock. A fixed old
+    value shows whether a later call moved it.
+    """
+    session.execute(
+        update(ThesisDB)
+        .where(ThesisDB.id == thesis_id)
+        .values(closed_at=moment)
+    )
+    session.commit()
+
+
 class ResearchBehavior:
     """CRUD, scoping, validation, and cascade for notes and theses."""
 
@@ -116,6 +130,10 @@ class ResearchBehavior:
         sql = str(checks[0].sqltext)
         assert "active" in sql
         assert "closed" in sql
+        assert ThesisDB.__table__.c.closed_at.nullable is True
+        # Revision 0008 appends closed_at with ADD COLUMN. create_all
+        # must build the same column order as the upgrade.
+        assert list(ThesisDB.__table__.c.keys())[-1] == "closed_at"
 
     def test_note_crud_orders_by_edit_then_id(self, session):
         company = _company(session, "ACME")
@@ -229,22 +247,109 @@ class ResearchBehavior:
         assert caught.value.__cause__ is None
         assert caught.value.__context__ is None
 
-    def test_unexpected_integrity_error_is_reraised_and_session_recovers(
+    def test_unexpected_integrity_error_on_create_is_a_storage_error_and_session_recovers(  # noqa: E501
         self, session, monkeypatch
     ):
+        """A constraint failure while the company exists is a storage error.
+
+        The failed insert is rolled back, so the next ``create``
+        stores only its own row.
+        """
         company = _company(session, "ACME")
 
         def fail_commit():
             raise IntegrityError("INSERT", {}, Exception("check"))
 
         monkeypatch.setattr(session, "commit", fail_commit)
-        with pytest.raises(IntegrityError):
+        with pytest.raises(ResearchStorageError) as caught:
             NoteRepository(session).create(company.id, NoteCreate(body="x"))
         monkeypatch.undo()
-        created = NoteRepository(session).create(
-            company.id, NoteCreate(body="after")
+        assert str(caught.value) == "Note or thesis could not be stored"
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert NoteRepository(session).create(
+            company.id, NoteCreate(body="ok")
         )
-        assert created.body == "after"
+        assert session.query(NoteDB).count() == 1
+
+    @pytest.mark.parametrize("step", ["query", "commit", "refresh"])
+    @pytest.mark.parametrize(
+        ("repository", "item"),
+        [
+            (NoteRepository, NoteCreate(body="x")),
+            (ThesisRepository, ThesisCreate(title="T", body="B")),
+        ],
+        ids=["note", "thesis"],
+    )
+    def test_operational_error_on_create_is_a_storage_error_and_session_recovers(  # noqa: E501
+        self, session, monkeypatch, repository, item, step
+    ):
+        """A locked database at any step of ``create`` is a storage error.
+
+        ``query`` is the company check, ``commit`` writes the row, and
+        ``refresh`` reads back its id and timestamps. The patched step
+        fails on its first call only.
+        """
+        company = _company(session, "ACME")
+        real_step = getattr(session, step)
+        calls = {"n": 0}
+
+        def fail_once(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError(
+                    "stmt", {}, Exception("database is locked")
+                )
+            return real_step(*args, **kwargs)
+
+        monkeypatch.setattr(session, step, fail_once)
+        with pytest.raises(ResearchStorageError) as caught:
+            repository(session).create(company.id, item)
+        monkeypatch.undo()
+        assert str(caught.value) == "Note or thesis could not be stored"
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert NoteRepository(session).create(
+            company.id, NoteCreate(body="ok")
+        )
+
+    def test_failed_lookup_after_a_failed_insert_is_a_storage_error(
+        self, session, monkeypatch
+    ):
+        """The lookup that tells a deleted company apart can fail too.
+
+        With no answer, the error stays ``ResearchStorageError``. The
+        second lookup runs a real statement that fails. PostgreSQL
+        then refuses every statement until a rollback, so there the
+        last ``create`` shows that the session was rolled back again.
+        """
+        company = _company(session, "ACME")
+        calls = {"n": 0}
+
+        def lookup(db, _company_id):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return False
+            # No such column on either database, so this raises.
+            db.execute(text("SELECT no_such_column FROM companies"))
+
+        def fail_commit():
+            raise IntegrityError("INSERT", {}, Exception("fk"))
+
+        monkeypatch.setattr(
+            "app.repositories.research_store.missing_company",
+            lookup,
+        )
+        monkeypatch.setattr(session, "commit", fail_commit)
+        with pytest.raises(ResearchStorageError) as caught:
+            NoteRepository(session).create(company.id, NoteCreate(body="x"))
+        monkeypatch.undo()
+        assert calls["n"] == 2
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert NoteRepository(session).create(
+            company.id, NoteCreate(body="ok")
+        )
         assert session.query(NoteDB).count() == 1
 
     def test_thesis_status_filter_and_set_status(self, session):
@@ -335,6 +440,112 @@ class ResearchBehavior:
         again = repo.update(company.id, thesis.id, ThesisUpdate())
         assert again.updated_at == _OLD
         assert again.title == "T"
+
+    def test_same_thesis_texts_still_count_as_an_update(self, session):
+        """Sending the stored texts again is an edit, as for a note.
+
+        Only the panel skips an edit that changes nothing. An API
+        ``PUT`` with the same values still moves ``updated_at``.
+        """
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(
+            company.id,
+            ThesisCreate(title="T", body="B", thesis_breakers="X"),
+        )
+        created_at = thesis.created_at
+        _pin_updated_at(session, ThesisDB, thesis.id, _OLD)
+        same = ThesisUpdate(
+            title=thesis.title,
+            body=thesis.body,
+            thesis_breakers=thesis.thesis_breakers,
+        )
+        changed = repo.update(company.id, thesis.id, same)
+        assert (changed.title, changed.body, changed.thesis_breakers) == (
+            "T",
+            "B",
+            "X",
+        )
+        assert changed.created_at == created_at
+        assert changed.updated_at > _OLD
+
+    def test_closing_sets_closed_at_and_reopening_clears_it(self, session):
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(company.id, ThesisCreate(title="T", body="B"))
+        assert thesis.closed_at is None
+
+        closed = repo.set_status(company.id, thesis.id, ThesisStatus.CLOSED)
+        assert closed.closed_at.utcoffset() == timedelta(0)
+        # One clock: the close is the edit that moved updated_at.
+        assert closed.closed_at == closed.updated_at
+
+        reopened = repo.set_status(company.id, thesis.id, ThesisStatus.ACTIVE)
+        assert reopened.closed_at is None
+        assert repo.get(company.id, thesis.id).closed_at is None
+
+    def test_update_that_changes_status_sets_closed_at(self, session):
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(company.id, ThesisCreate(title="T", body="B"))
+        assert thesis.closed_at is None
+
+        closed = repo.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(status=ThesisStatus.CLOSED),
+        )
+        assert closed.closed_at.utcoffset() == timedelta(0)
+        assert closed.closed_at == closed.updated_at
+
+        reopened = repo.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(status=ThesisStatus.ACTIVE),
+        )
+        assert reopened.closed_at is None
+        assert repo.get(company.id, thesis.id).closed_at is None
+
+    def test_same_status_keeps_closed_at(self, session):
+        """Only a change of status moves ``closed_at``.
+
+        ``updated_at`` is pinned too, so the edit below can show that
+        it moved one clock and left the other.
+        """
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        thesis = repo.create(company.id, ThesisCreate(title="T", body="B"))
+        repo.set_status(company.id, thesis.id, ThesisStatus.CLOSED)
+        _pin_closed_at(session, thesis.id, _OLD)
+        _pin_updated_at(session, ThesisDB, thesis.id, _OLD)
+
+        again = repo.set_status(company.id, thesis.id, ThesisStatus.CLOSED)
+        assert again.closed_at == _OLD
+
+        edited = repo.update(
+            company.id,
+            thesis.id,
+            ThesisUpdate(status=ThesisStatus.CLOSED, title="x"),
+        )
+        assert edited.title == "x"
+        assert edited.updated_at > _OLD
+        assert edited.closed_at == _OLD
+
+        # An edit that does not send a status keeps it, and the date.
+        text_only = repo.update(company.id, thesis.id, ThesisUpdate(body="y"))
+        assert text_only.status is ThesisStatus.CLOSED
+        assert text_only.closed_at == _OLD
+
+    def test_create_closed_sets_closed_at(self, session):
+        company = _company(session, "ACME")
+        repo = ThesisRepository(session)
+        closed = repo.create(
+            company.id,
+            ThesisCreate(title="Old", body="done", status=ThesisStatus.CLOSED),
+        )
+        assert closed.closed_at.utcoffset() == timedelta(0)
+        active = repo.create(company.id, ThesisCreate(title="New", body="go"))
+        assert active.closed_at is None
 
     def test_deleting_the_company_removes_notes_and_theses(self, session):
         company = _company(session, "ACME")
@@ -729,9 +940,8 @@ class ResearchBehavior:
     def test_write_models_reject_surrogates_without_echoing_them(self):
         """A lone surrogate is rejected on every write field.
 
-        There is no HTTP route for notes or theses. These models are
-        the boundary that route will use. The message does not
-        repeat the character.
+        These models are the boundary of the notes and theses API.
+        The message does not repeat the character.
         """
         raw = "A\ud800B"
         cases = (

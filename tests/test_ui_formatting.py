@@ -7,6 +7,8 @@ from app.ui.formatting import (
     format_change,
     format_date,
     format_day,
+    format_local_date,
+    format_local_datetime,
     format_number,
     format_price,
 )
@@ -95,3 +97,29 @@ def test_small_prices_keep_four_significant_digits():
     assert format_price(Decimal("0.00123456"), "en") == "0.001235"
     assert format_price(Decimal("0.01234500"), "pl") == "0,01234"
     assert format_price(Decimal("0.12345678"), "en") == "0.1235"
+
+
+def test_local_datetime_uses_warsaw_time():
+    winter = datetime(2026, 10, 28, 13, 5, tzinfo=timezone.utc)
+    summer = datetime(2026, 7, 1, 12, 5, tzinfo=timezone.utc)
+    assert format_local_datetime(winter, "pl") == "28.10.2026, 14:05"
+    assert format_local_datetime(winter, "en") == "Oct 28, 2026, 14:05"
+    assert format_local_datetime(summer, "pl") == "01.07.2026, 14:05"
+    assert format_local_datetime(winter.replace(tzinfo=None), "pl") == (
+        "28.10.2026, 14:05"
+    )
+    assert format_local_datetime(None, "pl") is None
+
+
+def test_local_date_crosses_midnight_in_warsaw():
+    late = datetime(2026, 10, 28, 23, 30, tzinfo=timezone.utc)
+    assert format_local_date(late, "pl") == "29.10.2026"
+    assert format_local_date(late, "en") == "Oct 29, 2026"
+
+
+def test_local_formatters_return_none_without_a_datetime():
+    """A plain date has no time of day to move into Polish time."""
+    assert format_local_date(None, "pl") is None
+    assert format_local_date(date(2026, 10, 28), "en") is None
+    assert format_local_datetime(date(2026, 10, 28), "pl") is None
+    assert format_local_datetime("2026-10-28T13:05:00Z", "en") is None

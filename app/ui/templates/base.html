@@ -5,7 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t['app_name'] }}</title>
   <link rel="stylesheet" href="/static/ui.css">
-  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'>
+  {# responseHandling replaces HTMX's list. 422 is inserted before
+     [45].., so a validation error is swapped in and the form shows
+     the error and the typed text. The first code that matches wins.
+     The list ends with the catch-all {"code":"...", "swap":false},
+     so a status that matched nothing earlier is not swapped. Any
+     other 4xx or 5xx is not swapped and fires htmx:responseError
+     (see static/ui.js). A 500 whose target is #research is the one
+     exception, and only there. #}
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":false}]}'>
   <script src="/static/vendor/htmx-2.0.10.min.js"></script>
   <script src="/static/ui.js" defer></script>
 </head>

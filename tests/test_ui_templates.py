@@ -33,12 +33,25 @@ def test_htmx_config_disables_the_indicator_style():
 
     Without this, htmx injects an inline style. That style is not
     allowed by the page CSP.
+
+    ``responseHandling`` is HTMX's list with ``422`` inserted before
+    ``[45]..``, and the catch-all ``{"code":"...", "swap":false}``
+    kept last. HTMX 2.0.10 copies the meta's keys over its defaults
+    one by one, so this list replaces the default list, and the
+    first code that matches wins. A 422 is then swapped into the
+    page; every other 4xx and 5xx is still an error. A status that
+    matches nothing earlier is not swapped.
     """
     text = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
     marker = (
         '<meta name="htmx-config" content='
         '\'{"includeIndicatorStyles":false,'
-        '"allowEval":false,"allowScriptTags":false}\'>'
+        '"allowEval":false,"allowScriptTags":false,'
+        '"responseHandling":[{"code":"204","swap":false},'
+        '{"code":"[23]..","swap":true},'
+        '{"code":"422","swap":true},'
+        '{"code":"[45]..","swap":false,"error":true},'
+        '{"code":"...","swap":false}]}\'>'
     )
     script = '<script src="/static/vendor/htmx-2.0.10.min.js">'
     assert marker in text

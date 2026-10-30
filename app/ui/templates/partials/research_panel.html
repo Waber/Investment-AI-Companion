@@ -1,0 +1,315 @@
+{# The research panel, right under the company name: theses first,
+   then notes. The full page and every HTMX answer render this file.
+   ``research_panel`` None is the closed panel: an empty element that
+   keeps the id, so the sticky note's hx-target and hx-sync always
+   find it.
+
+   User text sits flush against its tags. ui.css gives .research-text
+   ``white-space: pre-wrap``, so a space or newline between the tag
+   and the value would show on the page. A textarea shows its value
+   the same way. Autoescape shows HTML as text.
+
+   ``panel.focus`` names the one element that gets ``autofocus``.
+   The heading, every note and thesis, each error summary, and the
+   delete question have ``tabindex="-1"``, so they can take the focus
+   without joining the Tab order.
+
+   Every form and HTMX link in the panel replaces the whole panel
+   (hx-target, hx-swap). Links, edits, deletes, and close or reopen
+   carry data-plain-fallback: when the HTMX request fails, ui.js
+   repeats it without HTMX, so a form posts to its own action and a
+   link opens its own href. The note add and the new-thesis post do
+   not. Repeating those would store a second row, including when the
+   500 is only the refresh after a commit that already worked. ui.js
+   swaps that 500 into #research instead.
+
+   Only HTMX answers set ``research_oob``. They also bring the
+   sticky-note form and the language switch's return path out of
+   band, as the instrument list does for its filters.
+
+   A macro is defined before the macros that call it. #}
+{% macro form_errors(panel, prefix, form, labels) %}
+{# The error summary of one panel form. ``form`` is panel.new_note or
+   panel.form. Each invalid field links to its control, and ``labels``
+   maps a field to the catalog key of its label. A failed save has
+   no field to correct, only its message.
+
+   Unlike partials/error_summary.html it has no role="alert". The
+   summary takes the focus when it appears, and in this slice focus
+   replaces status messages; an alert on top would be read twice. #}
+{% if form.errors or form.form_error %}
+<div id="{{ prefix }}-errors" class="error-summary" tabindex="-1"{% if panel.focus == prefix ~ '-errors' %} autofocus{% endif %}>
+  {% if form.errors %}
+  <p>{{ t['form.error_summary'] }}</p>
+  {% endif %}
+  {% if form.form_error %}
+  <p>{{ t[form.form_error] }}</p>
+  {% endif %}
+  {% if form.errors %}
+  <ul>
+    {% for field, key in form.errors.items() %}
+    <li><a href="#{{ prefix }}-{{ field }}">{{ t[labels[field]] }}</a> {{ t[key] }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+{% macro textarea_field(panel, prefix, field, value, errors) %}
+{# A textarea and its field error, with the ids {prefix}-{field} and
+   {prefix}-{field}-error. #}
+{% set field_id = prefix ~ '-' ~ field %}
+<textarea id="{{ field_id }}" name="{{ field }}" rows="4"{% if field in errors %} aria-invalid="true" aria-describedby="{{ field_id }}-error"{% endif %}{% if panel.focus == field_id %} autofocus{% endif %}>{{ value }}</textarea>
+{% if field in errors %}
+<p id="{{ field_id }}-error" class="field-error">{{ t[errors[field]] }}</p>
+{% endif %}
+{% endmacro %}
+{% macro input_field(panel, prefix, field, value, errors) %}
+{# A one-line input and its field error, with the same ids as
+   textarea_field. Autoescape escapes the value, quotes included, so
+   typed text cannot end the attribute. #}
+{% set field_id = prefix ~ '-' ~ field %}
+<input id="{{ field_id }}" name="{{ field }}" type="text" value="{{ value }}"{% if field in errors %} aria-invalid="true" aria-describedby="{{ field_id }}-error"{% endif %}{% if panel.focus == field_id %} autofocus{% endif %}>
+{% if field in errors %}
+<p id="{{ field_id }}-error" class="field-error">{{ t[errors[field]] }}</p>
+{% endif %}
+{% endmacro %}
+{% macro panel_link(href, text, label=none, link_id=none) %}
+{# A link that opens another panel state. ``label`` names the item for
+   a screen reader, for example "Usuń notatkę z 28.10.2026, 14:05".
+   ``link_id`` gives the link an id (see "+ Nowa teza"). hx-get is the
+   href without its #fragment. It is the same request, because a
+   browser never sends the fragment, but HTMX would keep a fragment as
+   the request's anchor and scroll to it after the swap. #}
+<a{% if link_id %} id="{{ link_id }}"{% endif %} href="{{ href }}" hx-get="{{ href.partition('#')[0] }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback{% if label %} aria-label="{{ label }}"{% endif %}>{{ text }}</a>
+{% endmacro %}
+{% macro thesis_form(panel, prefix, action, cancel, cancel_id=none, repeatable=true) %}
+{# The new-thesis form and a thesis's inline edit form: the three
+   fields, "Zapisz", and "Anuluj". There is no status field. A new
+   thesis starts active, and only "Zamknij tezę" and "Otwórz
+   ponownie" change the status. ``cancel_id`` is the id "Anuluj"
+   takes; see "+ Nowa teza". ``repeatable`` is false for a new
+   thesis: posting it twice would store two theses. An edit is safe
+   to repeat, so it keeps data-plain-fallback. #}
+{% set form = panel.form %}
+<form method="post" class="stacked-form" action="{{ action }}" hx-post="{{ action }}" hx-target="#research" hx-swap="outerHTML"{% if repeatable %} data-plain-fallback{% endif %}>
+  {{ form_errors(panel, prefix, form, {'title': 'field.thesis_title', 'body': 'field.thesis_body', 'thesis_breakers': 'field.thesis_breakers'}) }}
+  <div class="form-field">
+    <label for="{{ prefix }}-title">{{ t['field.thesis_title'] }}</label>
+    {{ input_field(panel, prefix, 'title', form.values['title'], form.errors) }}
+  </div>
+  <div class="form-field">
+    <label for="{{ prefix }}-body">{{ t['field.thesis_body'] }}</label>
+    {{ textarea_field(panel, prefix, 'body', form.values['body'], form.errors) }}
+  </div>
+  <div class="form-field">
+    <label for="{{ prefix }}-thesis_breakers">{{ t['field.thesis_breakers'] }}</label>
+    {{ textarea_field(panel, prefix, 'thesis_breakers', form.values['thesis_breakers'], form.errors) }}
+  </div>
+  <div class="form-actions">
+    <button type="submit">{{ t['action.save'] }}</button>
+    {{ panel_link(cancel, t['action.cancel'], link_id=cancel_id) }}
+  </div>
+</form>
+{% endmacro %}
+{% macro thesis_card(thesis, panel, closed=false) %}
+{# One thesis. ``closed`` is true in the closed list; the loop that
+   renders each list passes it. An active card shows the "aktywna"
+   badge. A closed one shows "zamknięta {date}" in its place, or only
+   "zamknięta" for a row written past the repository without a
+   closing date.
+
+   An open edit form takes the place of the title, the text, and the
+   actions; a delete question takes the place of the actions. Their
+   "Anuluj" puts the focus back on the card. The close and reopen
+   buttons share the id {prefix}-status. After either one, HTMX puts
+   the focus back on the element with that id: the button, now with
+   the other word. So that answer needs no autofocus. #}
+{% set prefix = 'thesis-' ~ thesis.id %}
+{% set action = '/ui/companies/' ~ panel.company_id ~ '/theses/' ~ thesis.id %}
+{% set cancel = '/ui/companies/' ~ panel.company_id ~ '/research?focus=' ~ prefix %}
+{% set delete_label = t['research.delete_thesis_named'].replace('{title}', thesis.title) %}
+{% set editing = panel.form and panel.form.kind == 'thesis_edit' and panel.form.item_id == thesis.id %}
+{% set asking = panel.form and panel.form.kind == 'thesis_delete' and panel.form.item_id == thesis.id %}
+{% set status_failed = panel.form and panel.form.kind == 'thesis_status' and panel.form.item_id == thesis.id %}
+<li id="{{ prefix }}" class="research-item" tabindex="-1"{% if panel.focus == prefix %} autofocus{% endif %}>
+  {% if not editing %}
+  <h4 class="thesis-title" dir="auto">{{ thesis.title }}</h4>
+  {% endif %}
+  <p class="research-meta">
+    {% if not closed %}
+    <span class="badge badge-active">{{ t['research.status_active'] }}</span>
+    {% elif thesis.closed_at %}
+    <span class="badge badge-closed">{{ t['research.closed_on'].replace('{date}', format_local_date(thesis.closed_at, language)) }}</span>
+    {% else %}
+    <span class="badge badge-closed">{{ t['research.status_closed'] }}</span>
+    {% endif %}
+    <span>{{ t['research.since'].replace('{date}', format_local_date(thesis.created_at, language)) }}</span>
+  </p>
+  {% if editing %}
+  {{ thesis_form(panel, prefix, action ~ '/edit', cancel) }}
+  {% else %}
+  <dl class="research-fields">
+    <dt>{{ t['field.thesis_body'] }}</dt>
+    <dd><p class="research-text" dir="auto">{{ thesis.body }}</p></dd>
+    <dt>{{ t['field.thesis_breakers'] }}</dt>
+    {% if thesis.thesis_breakers|trim %}
+    <dd><p class="research-text" dir="auto">{{ thesis.thesis_breakers }}</p></dd>
+    {% else %}
+    <dd><span class="missing">{{ t['missing'] }}</span></dd>
+    {% endif %}
+  </dl>
+  {% if asking %}
+  <form method="post" class="stacked-form" action="{{ action }}/delete" hx-post="{{ action }}/delete" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ form_errors(panel, prefix, panel.form, {}) }}
+    {# The question takes the focus, never the "Usuń" button. #}
+    <p id="{{ prefix }}-delete-question" tabindex="-1"{% if panel.focus == prefix ~ '-delete-question' %} autofocus{% endif %}>{{ t['delete.thesis_question'] }}</p>
+    <div class="form-actions">
+      <button type="submit" aria-label="{{ delete_label }}">{{ t['action.confirm_delete'] }}</button>
+      {{ panel_link(cancel, t['action.cancel']) }}
+    </div>
+  </form>
+  {% else %}
+  {% if status_failed %}
+  {{ form_errors(panel, prefix, panel.form, {}) }}
+  {% endif %}
+  {# One form holds the whole row: its button closes or reopens the
+     thesis, and the links beside it open the edit form and the delete
+     question. It is not a <p>: a form inside a <p> makes the browser
+     close the <p> early. #}
+  {% set status_action = action ~ ('/reopen' if closed else '/close') %}
+  <form method="post" class="form-actions" action="{{ status_action }}" hx-post="{{ status_action }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ panel_link(action ~ '/edit', t['action.edit'], t['research.edit_thesis_named'].replace('{title}', thesis.title)) }}
+    <button type="submit" id="{{ prefix }}-status" aria-label="{{ t['research.reopen_thesis_named' if closed else 'research.close_thesis_named'].replace('{title}', thesis.title) }}">{{ t['action.reopen_thesis' if closed else 'action.close_thesis'] }}</button>
+    {{ panel_link(action ~ '/delete', t['action.delete'], delete_label) }}
+  </form>
+  {% endif %}
+  {% endif %}
+</li>
+{% endmacro %}
+{% macro note_item(note, panel) %}
+{# One note. Its inline edit form or delete question, when open,
+   takes the place of its "Edytuj" and "Usuń" links. "Anuluj" puts
+   the focus back on the note. #}
+{% set prefix = 'note-' ~ note.id %}
+{% set created = format_local_datetime(note.created_at, language) %}
+{% set action = '/ui/companies/' ~ panel.company_id ~ '/notes/' ~ note.id %}
+{% set cancel = '/ui/companies/' ~ panel.company_id ~ '/research?focus=' ~ prefix %}
+{% set editing = panel.form and panel.form.kind == 'note_edit' and panel.form.item_id == note.id %}
+{% set asking = panel.form and panel.form.kind == 'note_delete' and panel.form.item_id == note.id %}
+<li id="{{ prefix }}" class="research-item" tabindex="-1"{% if panel.focus == prefix %} autofocus{% endif %}>
+  <p class="research-meta">
+    <span>{{ created }}</span>
+    {# Saving an edit moves only updated_at. #}
+    {% if note.updated_at > note.created_at %}
+    <span>{{ t['research.edited'].replace('{datetime}', format_local_datetime(note.updated_at, language)) }}</span>
+    {% endif %}
+  </p>
+  {% if editing %}
+  <form method="post" class="stacked-form" action="{{ action }}/edit" hx-post="{{ action }}/edit" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ form_errors(panel, prefix, panel.form, {'body': 'field.note_body'}) }}
+    <div class="form-field">
+      <label for="{{ prefix }}-body">{{ t['field.note_body'] }}</label>
+      {{ textarea_field(panel, prefix, 'body', panel.form.values['body'], panel.form.errors) }}
+    </div>
+    <div class="form-actions">
+      <button type="submit">{{ t['action.save'] }}</button>
+      {{ panel_link(cancel, t['action.cancel']) }}
+    </div>
+  </form>
+  {% else %}
+  <p class="research-text" dir="auto">{{ note.body }}</p>
+  {% if asking %}
+  <form method="post" class="stacked-form" action="{{ action }}/delete" hx-post="{{ action }}/delete" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+    {{ form_errors(panel, prefix, panel.form, {}) }}
+    {# The question takes the focus, never the "Usuń" button. #}
+    <p id="{{ prefix }}-delete-question" tabindex="-1"{% if panel.focus == prefix ~ '-delete-question' %} autofocus{% endif %}>{{ t['delete.note_question'] }}</p>
+    <div class="form-actions">
+      <button type="submit" aria-label="{{ t['research.delete_note_named'].replace('{datetime}', created) }}">{{ t['action.confirm_delete'] }}</button>
+      {{ panel_link(cancel, t['action.cancel']) }}
+    </div>
+  </form>
+  {% else %}
+  <p class="form-actions">
+    {{ panel_link(action ~ '/edit', t['action.edit'], t['research.edit_note_named'].replace('{datetime}', created)) }}
+    {{ panel_link(action ~ '/delete', t['action.delete'], t['research.delete_note_named'].replace('{datetime}', created)) }}
+  </p>
+  {% endif %}
+  {% endif %}
+</li>
+{% endmacro %}
+{% set panel = research_panel %}
+{% if panel %}
+<section id="research" class="research-panel" hx-sync="this:drop" aria-labelledby="research-title">
+  <h2 id="research-title" tabindex="-1"{% if panel.focus == 'research-title' %} autofocus{% endif %}>{{ t['research.toggle'] }}</h2>
+  <h3>{{ t['research.theses'] }}</h3>
+  {# The new-thesis form opens in place of the "+ Nowa teza" link. Its
+     "Anuluj" takes the link's id, thesis-new-link. After "Anuluj",
+     HTMX puts the focus back on the element with that id: the link
+     again, so that answer needs no autofocus. Its href ends in
+     #research, so without HTMX, or after a fallback, the page opens
+     at the panel and not at its top. panel_link leaves the fragment
+     out of hx-get, so HTMX keeps the scroll position. #}
+  {% set theses_action = '/ui/companies/' ~ panel.company_id ~ '/theses' %}
+  {% if panel.form and panel.form.kind == 'thesis_new' %}
+  {{ thesis_form(panel, 'thesis-new', theses_action, '/ui/companies/' ~ panel.company_id ~ '/research#research', 'thesis-new-link', repeatable=false) }}
+  {% else %}
+  <p>{{ panel_link(theses_action ~ '/new', t['action.new_thesis'], link_id='thesis-new-link') }}</p>
+  {% endif %}
+  {% if panel.active_theses %}
+  <ul class="research-list">
+    {% for thesis in panel.active_theses %}
+    {{ thesis_card(thesis, panel) }}
+    {% endfor %}
+  </ul>
+  {% elif panel.closed_theses %}
+  <p class="muted">{{ t['research.no_active_theses'] }}</p>
+  {% else %}
+  <p class="muted">{{ t['research.no_theses'] }}</p>
+  {% endif %}
+  {% if panel.closed_theses %}
+  <details class="research-closed"{% if panel.show_closed %} open{% endif %}>
+    <summary>{{ t['research.closed_theses'].replace('{count}', panel.closed_theses|length|string) }}</summary>
+    <ul class="research-list">
+      {% for thesis in panel.closed_theses %}
+      {{ thesis_card(thesis, panel, closed=true) }}
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  <h3>{{ t['research.notes'] }}</h3>
+  {% set notes_action = '/ui/companies/' ~ panel.company_id ~ '/notes' %}
+  <form method="post" class="stacked-form" action="{{ notes_action }}" hx-post="{{ notes_action }}" hx-target="#research" hx-swap="outerHTML">
+    {{ form_errors(panel, 'note-new', panel.new_note, {'body': 'research.new_note'}) }}
+    <div class="form-field">
+      <label for="note-new-body">{{ t['research.new_note'] }}</label>
+      {# The draft wrapper. While the answer's copy has hx-preserve,
+         HTMX keeps the browser's copy instead: the text typed so far
+         and its own error. Only the answers to its own add leave the
+         attribute out. #}
+      <div id="note-new-field"{% if panel.new_note.preserve %} hx-preserve="true"{% endif %}>
+        {{ textarea_field(panel, 'note-new', 'body', panel.new_note.body, panel.new_note.errors) }}
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit">{{ t['action.add_note'] }}</button>
+    </div>
+  </form>
+  {% if panel.notes %}
+  <ul class="research-list">
+    {% for note in panel.notes %}
+    {{ note_item(note, panel) }}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">{{ t['research.no_notes'] }}</p>
+  {% endif %}
+</section>
+{% else %}
+<div id="research"></div>
+{% endif %}
+{% if research_oob %}
+{% include "partials/research_toggle.html" %}
+<input type="hidden" name="next" value="{{ research_state_path }}" id="language-next-pl" hx-swap-oob="outerHTML">
+<input type="hidden" name="next" value="{{ research_state_path }}" id="language-next-en" hx-swap-oob="outerHTML">
+{% endif %}
