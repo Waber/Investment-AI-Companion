@@ -44,7 +44,9 @@
   - P1: an HTMX panel answer carries three out-of-band elements, the
     button form and both language inputs. The plan named one.
   - P2: "Anuluj" on the new-thesis form takes the id of "+ Nowa teza",
-    so the focus returns there. Task 10 added `#research` to its href.
+    so the focus returns there. Task 10 added `#research` to its href
+    only. Every panel link's `hx-get` is its href without the
+    fragment, because HTMX scrolls to a fragment in `hx-get`.
   - P3: every storage failure is a 500 with "Nie udało się zapisać.
     Spróbuj ponownie." in that form's focused error summary. A failed
     close or reopen got its own form kind.
@@ -112,11 +114,13 @@
   focus table after every step. The console showed nothing for the
   422s, HTMX's one "Response Status Error Code 404" line for the 404,
   two HTMX lines for the network error, and no CSP violation or
-  uncaught error. Two observations for the final review: opening
+  uncaught error. One observation for the final review: opening
   "+ Nowa teza" puts the focus on "Anuluj" for about 25 ms before the
-  title field takes it; and with HTMX, the `#research` in the
-  new-thesis "Anuluj" href makes HTMX scroll the panel to the top of
-  the window.
+  title field takes it. The check also found that a `#research` in
+  the new-thesis "Anuluj" `hx-get` made HTMX scroll the panel to the
+  top of the window. After the fix, which keeps the fragment out of
+  `hx-get`, Chrome showed the scroll position kept and the focus back
+  on "+ Nowa teza".
 - AI model: Claude Opus 5.5 for the controller and the implementers;
   the task reviewers ran on Opus at effort xhigh. Account usage was
   not available in this session.

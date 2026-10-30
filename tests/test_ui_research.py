@@ -356,6 +356,16 @@ def _panel_actions(html):
     ]
 
 
+def _without_fragment(href):
+    """``href`` up to its ``#``: the request a panel link sends.
+
+    A browser never sends the fragment, so a link's ``hx-get`` is its
+    ``href`` without it. HTMX would keep a fragment in ``hx-get`` and
+    scroll to it after the swap.
+    """
+    return href.partition("#")[0]
+
+
 def _link(html, href):
     """The attributes of the one link to ``href`` inside the panel."""
     found = [
@@ -1333,7 +1343,7 @@ async def test_note_actions_fall_back_and_are_named(client):
                 assert attrs["hx-post"] == attrs["action"]
                 actions.add(attrs["action"])
             else:
-                assert attrs["hx-get"] == attrs["href"]
+                assert attrs["hx-get"] == _without_fragment(attrs["href"])
                 links.add(attrs["href"])
     assert actions == {f"{base}/notes", f"{note}/edit", f"{note}/delete"}
     # "+ Nowa teza" is in every open panel.
@@ -2116,10 +2126,11 @@ async def test_thesis_focus_rules(client):
     # "Anuluj" carries the id of the "+ Nowa teza" link whose place it
     # takes, so HTMX puts the focus back on that link (Ruling P2).
     # Without HTMX the link opens the page at the panel, not at the
-    # top: the fragment never reaches the server.
+    # top: the fragment never reaches the server. hx-get has no
+    # fragment, because HTMX would scroll to it after the swap.
     cancel_new = _attrs(opened.text, "thesis-new-link")
     assert cancel_new["href"] == f"{base}/research#research"
-    assert cancel_new["hx-get"] == f"{base}/research#research"
+    assert cancel_new["hx-get"] == f"{base}/research"
     assert _text(opened.text, "thesis-new-link") == "Anuluj"
     back = await client.get(cancel_new["href"], headers=_HTMX)
     assert "autofocus" not in back.text
@@ -2272,7 +2283,7 @@ async def test_thesis_draft_and_fallback(client):
                 assert attrs["hx-post"] == attrs["action"]
                 actions.add(attrs["action"])
             else:
-                assert attrs["hx-get"] == attrs["href"]
+                assert attrs["hx-get"] == _without_fragment(attrs["href"])
                 links.add(attrs["href"])
     assert actions == {
         f"{base}/notes",

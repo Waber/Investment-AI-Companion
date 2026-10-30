@@ -73,8 +73,11 @@
 {% macro panel_link(href, text, label=none, link_id=none) %}
 {# A link that opens another panel state. ``label`` names the item for
    a screen reader, for example "Usuń notatkę z 28.10.2026, 14:05".
-   ``link_id`` gives the link an id (see "+ Nowa teza"). #}
-<a{% if link_id %} id="{{ link_id }}"{% endif %} href="{{ href }}" hx-get="{{ href }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback{% if label %} aria-label="{{ label }}"{% endif %}>{{ text }}</a>
+   ``link_id`` gives the link an id (see "+ Nowa teza"). hx-get is the
+   href without its #fragment. It is the same request, because a
+   browser never sends the fragment, but HTMX would keep a fragment as
+   the request's anchor and scroll to it after the swap. #}
+<a{% if link_id %} id="{{ link_id }}"{% endif %} href="{{ href }}" hx-get="{{ href.partition('#')[0] }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback{% if label %} aria-label="{{ label }}"{% endif %}>{{ text }}</a>
 {% endmacro %}
 {% macro thesis_form(panel, prefix, action, cancel, cancel_id=none) %}
 {# The new-thesis form and a thesis's inline edit form: the three
@@ -237,10 +240,10 @@
   {# The new-thesis form opens in place of the "+ Nowa teza" link. Its
      "Anuluj" takes the link's id, thesis-new-link. After "Anuluj",
      HTMX puts the focus back on the element with that id: the link
-     again, so that answer needs no autofocus. Without HTMX, the
-     #research fragment opens the page at the panel, not at its top;
-     the fragment is not sent to the server. With HTMX it is not sent
-     either, but after the swap HTMX scrolls #research into view. #}
+     again, so that answer needs no autofocus. Its href ends in
+     #research, so without HTMX, or after a fallback, the page opens
+     at the panel and not at its top. panel_link leaves the fragment
+     out of hx-get, so HTMX keeps the scroll position. #}
   {% set theses_action = '/ui/companies/' ~ panel.company_id ~ '/theses' %}
   {% if panel.form and panel.form.kind == 'thesis_new' %}
   {{ thesis_form(panel, 'thesis-new', theses_action, '/ui/companies/' ~ panel.company_id ~ '/research#research', 'thesis-new-link') }}
