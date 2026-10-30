@@ -43,10 +43,10 @@ async def http_exception_page(request, exc):
     if exc.status_code == 405 and under_ui:
         # Imported here. This module loads the UI routers, and those
         # routers load the header helper.
-        from app.ui.router import _with_ui_headers
+        from app.ui.router import with_ui_headers
         from app.ui.templating import render
 
-        response = _with_ui_headers(
+        response = with_ui_headers(
             render(request, "method_not_allowed.html", status_code=405)
         )
         allowed = (exc.headers or {}).get("Allow")
