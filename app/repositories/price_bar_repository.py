@@ -189,12 +189,7 @@ class PriceBarRepository:
             .group_by(PriceBarDB.source)
             .all()
         )
-        if not pairs:
-            return None
-        latest_at = max(retrieved for _source, retrieved in pairs)
-        return max(
-            source for source, retrieved in pairs if retrieved == latest_at
-        )
+        return _pick_default(pairs)
 
     def get_by_key(
         self, instrument_id: int, bar_date: date, source: str
@@ -464,10 +459,10 @@ class PriceBarRepository:
         """Default source per instrument. See ``_default_source``.
 
         One grouped query returns ``max(retrieved_at)`` for every
-        ``(instrument, source)``. Python then keeps, per instrument,
-        the source whose maximum is latest. A tie uses the source
-        name that sorts last in code-point order, not the database
-        collation. ``[IAC-DEMO-V2]`` therefore loses to ``fake``.
+        ``(instrument, source)``. ``_pick_default`` then keeps, per
+        instrument, the source whose maximum is latest. A tie uses
+        Python ``max`` of the names, not the database collation.
+        ``[IAC-DEMO-V2]`` therefore loses to ``fake``.
         """
         rows = (
             self.db.query(
@@ -479,16 +474,17 @@ class PriceBarRepository:
             .group_by(PriceBarDB.instrument_id, PriceBarDB.source)
             .all()
         )
-        best: Dict[int, Tuple] = {}
+        grouped: Dict[int, List] = {}
         for instrument_id, source, retrieved_at in rows:
-            candidate = (retrieved_at, source)
-            current = best.get(instrument_id)
-            if current is None or candidate > current:
-                best[instrument_id] = candidate
-        return {
-            instrument_id: source
-            for instrument_id, (_retrieved_at, source) in best.items()
-        }
+            grouped.setdefault(instrument_id, []).append(
+                (source, retrieved_at)
+            )
+        chosen: Dict[int, str] = {}
+        for instrument_id, pairs in grouped.items():
+            source = _pick_default(pairs)
+            if source is not None:
+                chosen[instrument_id] = source
+        return chosen
 
     def _newest_readable_closes(
         self, sources: Dict[int, str], limit: int
@@ -585,6 +581,24 @@ def _unique_ids(instrument_ids: List[int]) -> List[int]:
         seen.add(instrument_id)
         unique.append(instrument_id)
     return unique
+
+
+def _pick_default(pairs) -> Optional[str]:
+    """The default source for one instrument.
+
+    ``pairs`` is ``(source, retrieved_at)``, one row per source, and
+    ``retrieved_at`` is that source's latest. The newest instant
+    wins. When two sources share it, Python ``max`` keeps the name
+    that sorts last by code point, so ``fake`` beats
+    ``[IAC-DEMO-V2]``. An empty sequence is ``None``. The database
+    collation is not consulted. ``_default_source`` and
+    ``_default_sources_for`` both call this so the rule stays one
+    place.
+    """
+    if not pairs:
+        return None
+    latest_at = max(retrieved for _source, retrieved in pairs)
+    return max(source for source, retrieved in pairs if retrieved == latest_at)
 
 
 def _last_wins(bars: List[PriceBarCreate]) -> List[PriceBarCreate]:

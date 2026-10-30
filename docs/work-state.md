@@ -13,7 +13,9 @@
   `WatchlistRepository.list_items(with_company=True)`, and a
   scoped ignore of the `uq_companies_ticker` reflection
   SAWarning (`upgrade_head_over_create_all`). This branch keeps
-  those and the price-bar follow-ups. Rendered HTML is unchanged.
+  those and the price-bar follow-ups. `_pick_default` is the one
+  tie rule for `_default_source` and `_default_sources_for`.
+  Rendered HTML is unchanged.
 - Fixed:
   - Item 2. `upsert_many` keeps the last bar when one batch
     repeats `(date, source)`. Equal prices leave one row. Unequal
@@ -65,7 +67,9 @@
   index `uq_companies_ticker`). Local PostgreSQL 16.15,
   `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
-  integration suite: 232 passed, 1893 deselected. No live
+  integration suite after the rebase and `_pick_default`:
+  233 passed, 1899 deselected. SQLite CI command on this head:
+  1899 passed, 233 deselected, coverage 96.46%. No live
   market-data calls. black, isort, and flake8 passed on
   the changed Python files. Mutation checks, each reverted:
   cap 1025 fails `assert 1025 == 1024`; cap 1023 fails

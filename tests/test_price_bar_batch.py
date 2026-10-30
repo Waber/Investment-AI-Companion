@@ -13,7 +13,10 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, create_db_engine
 from app.models.price_amount import UnreadablePrice
-from app.repositories.price_bar_repository import PriceBarRepository
+from app.repositories.price_bar_repository import (
+    PriceBarRepository,
+    _pick_default,
+)
 from tests.price_bar_batch import (
     BAD_CURRENCY_SAMPLES,
     add_company,
@@ -338,6 +341,30 @@ class _TieQuery:
     def first(self):
         rows = self._materialize()
         return rows[0] if rows else None
+
+
+def test_pick_default_tie_is_fake_and_empty_is_none():
+    """The shared rule: latest instant, then Python ``max`` on the name.
+
+    An empty list is None. ``fake`` beats ``[IAC-DEMO-V2]`` when
+    the instants match. A later ``aaa`` beats an earlier ``zzz``.
+    """
+    assert _pick_default(()) is None
+    assert _pick_default([]) is None
+    when = datetime(2026, 10, 2, 18, tzinfo=timezone.utc)
+    earlier = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    assert _pick_default([("[IAC-DEMO-V2]", when), ("fake", when)]) == "fake"
+    assert (
+        _pick_default(
+            [
+                ("zzz", earlier),
+                ("[IAC-DEMO-V2]", when),
+                ("fake", when),
+            ]
+        )
+        == "fake"
+    )
+    assert _pick_default([("zzz", earlier), ("aaa", when)]) == "aaa"
 
 
 def test_default_source_tie_break_is_python_max_not_sql_order():

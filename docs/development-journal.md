@@ -27,6 +27,39 @@
 - Next: GitHub Actions, SQLite and PostgreSQL, on the rebased
   head. Do not merge.
 
+## 2026-10-30 - One default-source helper after rebasing onto #108
+
+- Scope: rebase `cursor/price-bar-followups-95-ce0a` onto
+  `origin/master` `67974c5` (PR #108). No merge commit. Then one
+  helper, `_pick_default`, so the default-source rule is not
+  written twice. No Alembic revision. `app/ui` was not edited.
+  Refs #95. The issue stays open.
+- Conflicts: `price_bar_repository.py` auto-merged, keeping
+  `recent_closes_for` / `_default_sources_for` and the #95
+  write path. `docs/work-state.md` now says #108 is merged and
+  #107 is in review. The journal keeps the #108 entries and the
+  #95 entries, newest first.
+- Decisions: `_pick_default(pairs)` takes `(source, retrieved_at)`.
+  Empty is `None`. The newest instant wins. A tie is Python
+  `max`, so `fake` beats `[IAC-DEMO-V2]`. `_default_source` and
+  `_default_sources_for` both call it. The queries stay as they
+  were.
+- For a Java developer: this is one package-private method
+  instead of two copies of the same `if`. A later time wins
+  before the name is compared, the same as sorting a
+  `Comparator` on time and then using `String.compareTo` only
+  for the rows that share that time.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market-data calls. SQLite 3.45.1 CI command: 1899
+  passed, 233 deselected, coverage 96.46%. Local PostgreSQL
+  16.15 integration suite: 233 passed, 1899 deselected.
+  `test_pick_default_tie_is_fake_and_empty_is_none` passed,
+  and the existing tie and `recent_closes_for` tests passed.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 10:20 to 10:40.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
 ## 2026-10-30 - Test locks for the price-bar follow-ups (#95)
 
 - Scope: QA on PR #107 at `f4bf55b` did not approve. The behaviour
