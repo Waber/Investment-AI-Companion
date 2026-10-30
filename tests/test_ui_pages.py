@@ -1020,3 +1020,20 @@ async def test_other_period_and_static_assets(client):
     assert script.status_code == 200
     assert "htmx" in script.text
     assert "cdn.jsdelivr.net" not in script.text
+
+
+def test_shared_ui_helpers_are_public():
+    """Research routes call these by a public name.
+
+    A leading underscore said they were private to one module. The
+    research panel imports them, so the names have no underscore.
+    """
+    import app.ui.forms as forms
+    import app.ui.router as router
+
+    for name in ("load_company", "not_found", "see_other"):
+        assert callable(getattr(forms, name))
+        assert not hasattr(forms, "_" + name)
+    for name in ("instrument_id", "with_ui_headers"):
+        assert callable(getattr(router, name))
+        assert not hasattr(router, "_" + name)
