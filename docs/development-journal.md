@@ -1,5 +1,33 @@
 # Development Journal
 
+## 2026-10-30 - Review lows on the price-bar follow-ups (#95)
+
+- Scope: Code Reviewer lows on PR #107, on top of the rebase
+  onto `origin/master` `da6579d`. No new rebase in this commit.
+  Refs #95.
+- What changed: `remember_skip` (renamed from `_remember_skip`)
+  holds a module-level `threading.Lock` around the check, the
+  insert, and the eviction. The cap stays 1024 and the oldest
+  id is still the one dropped. Sixteen threads inserting 200
+  new ids each finish with no exception and at most 1024 keys.
+  The test sets a 1e-9 thread switch interval. Removing the lock
+  made that same test fail with `RuntimeError` and `KeyError`.
+  The lock was put back. Ten runs at the default interval, also
+  without the lock, stayed green, so the short interval is what
+  makes the race show up. Currency samples now include `ſSD`,
+  `ÜSD`, and `USD\n` on SQLite and PostgreSQL. `normalize_currency`
+  already rejected them (`isascii` and the three-letter pattern),
+  so the rule was not changed. A refresh whose `upsert_many`
+  raises `ValueError` is HTTP 400.
+- For a Java developer: the lock is a private `synchronized`
+  block around the whole update. `dict` is not a concurrent
+  map. Two threads can both read the oldest key and then both
+  call `pop`, and the second `pop` is `KeyError`.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 14:25 to 14:45.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
 ## 2026-10-30 - Rebase #106 and two review lows
 
 - Scope: rebase `cursor/ui-company-name-clean-text-86` onto
@@ -26,6 +54,101 @@
 - Time tracking (UTC): 2026-10-30, about 30 minutes, from 14:05.
 - Next: GitHub Actions, SQLite and PostgreSQL, on the rebased
   head. Do not merge.
+
+## 2026-10-30 - Lock the batch default source against SQL order
+
+- Scope: QA Low and nit on PR #107 at `0975776`. Tests and one
+  dead branch. No rebase. No Alembic revision. Refs #95.
+- What changed: `recent_closes_for` is given grouped rows whose
+  SQL order would pick `[IAC-DEMO-V2]`. The page path still
+  returns `fake` and that source's close. The `if source is not
+  None` branch in `_default_sources_for` is gone. Each group
+  already has a row, and `_pick_default` returns None only for
+  an empty list.
+- Mutation, reverted: `ORDER BY source DESC` and keep the first
+  row per instrument. The new test failed with
+  `{1: '[IAC-DEMO-V2]'}` instead of `{1: 'fake'}`.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 14:05 to 14:25.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
+## 2026-10-30 - One default-source helper after rebasing onto #108
+
+- Scope: rebase `cursor/price-bar-followups-95-ce0a` onto
+  `origin/master` `67974c5` (PR #108). No merge commit. Then one
+  helper, `_pick_default`, so the default-source rule is not
+  written twice. No Alembic revision. `app/ui` was not edited.
+  Refs #95. The issue stays open.
+- Conflicts: `price_bar_repository.py` auto-merged, keeping
+  `recent_closes_for` / `_default_sources_for` and the #95
+  write path. `docs/work-state.md` now says #108 is merged and
+  #107 is in review. The journal keeps the #108 entries and the
+  #95 entries, newest first.
+- Decisions: `_pick_default(pairs)` takes `(source, retrieved_at)`.
+  Empty is `None`. The newest instant wins. A tie is Python
+  `max`, so `fake` beats `[IAC-DEMO-V2]`. `_default_source` and
+  `_default_sources_for` both call it. The queries stay as they
+  were.
+- For a Java developer: this is one package-private method
+  instead of two copies of the same `if`. A later time wins
+  before the name is compared, the same as sorting a
+  `Comparator` on time and then using `String.compareTo` only
+  for the rows that share that time.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market-data calls. SQLite 3.45.1 CI command: 1899
+  passed, 233 deselected, coverage 96.46%. Local PostgreSQL
+  16.15 integration suite: 233 passed, 1899 deselected.
+  `test_pick_default_tie_is_fake_and_empty_is_none` passed,
+  and the existing tie and `recent_closes_for` tests passed.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 10:20 to 10:40.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
+## 2026-10-30 - Test locks for the price-bar follow-ups (#95)
+
+- Scope: QA on PR #107 at `f4bf55b` did not approve. The behaviour
+  stays. This commit only locks it. Same branch
+  `cursor/price-bar-followups-95-ce0a`. No Alembic revision.
+  `app/ui`, `templates/`, and `static/` were not edited. The pull
+  request still says Refs #95.
+- Decisions: the skip-log cap test no longer patches the limit.
+  It asserts `_MAX_LOGGED_SKIP_IDS == 1024`, fills 1024 ids, and
+  checks that the 1025th drops only id 1, which then logs again.
+  Refresh `bar_count` is locked with an HTTP test: a stub
+  collector returns the same day twice, the response is 200,
+  `bar_count` is 1, and GET has that many rows with the later
+  price. The tie test feeds `_default_source` pairs whose SQL
+  order (brackets ignored, case folded) picks `[IAC-DEMO-V2]`.
+  Python `max` still returns `fake`. C.UTF-8 cannot show that
+  split, so the test does not use a database collation. A bad
+  currency on a discarded earlier duplicate stays accepted when
+  the last copy is valid. That sentence is in `docs/demo-data.md`
+  and `docs/api-demo.md`, with the `bar_count` rule. `ZAc` is
+  stored unchanged, next to `GBp`. Each bad currency is its own
+  pytest case (`ids=`).
+- For a Java developer: `@pytest.mark.parametrize` is JUnit's
+  `@ParameterizedTest`. `ids=` is the name in the report, so
+  `None` and `usd ` are not one loop failure. The tie stand-in
+  is a fake query object. Production code calls `.all()` and
+  then `max`. A version that `ORDER BY`s and takes the first row
+  hits the fake's other order and gets the demo marker.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market data. SQLite 3.45.1. CI command: 1893 passed,
+  232 deselected, coverage 96.42%. Local PostgreSQL 16.15
+  integration suite: 232 passed, 1893 deselected. Mutations,
+  then reverted:
+  cap 1025 failed (`1025 == 1024`); cap 1023 failed
+  (`1023 == 1024`); `bar_count=len(payload)` failed (`2 == 1`);
+  `_default_source` without Python `max` returned
+  `[IAC-DEMO-V2]` instead of `fake`. black, isort, and flake8
+  passed on the changed Python files.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 10:03 to 10:20.
+- Next: both GitHub Actions jobs on the new head. Agents do not
+  merge. #95 stays open.
 
 ## 2026-10-30 - QA Lows on the watchlist batch read
 
@@ -234,6 +357,94 @@
   Python files.
 - Next: GitHub Actions, SQLite and PostgreSQL, on the fix commit.
   Do not merge.
+
+## 2026-10-30 - Price-bar repository follow-ups (#95)
+
+- Scope: issue #95 items 2, 3, 4, and 5. Item 1 is deferred.
+  Branch `cursor/price-bar-followups-95-ce0a` from `origin/master`
+  `3c40413`. No Alembic revision (head stays `0007`). `app/ui`,
+  `templates/`, and `static/` were not edited. PR #104 and PR
+  #106 were not touched. The pull request says Refs #95, so the
+  issue stays open.
+- Decisions: a repeated `(date, source)` inside one `upsert_many`
+  is last-wins. The later bar is stored, whether or not the
+  prices match. The list returned has one row per key, in the
+  order the key first appeared, so refresh `bar_count` counts
+  stored keys. The round-trip check compares that winning bar.
+  Before this change the row already held the last price while
+  the check still saw the first bar, so unequal duplicates
+  failed the batch. A later failure still rolls the whole batch
+  back, including the last-wins update. Currency uses
+  `normalize_currency` (three ASCII letters, uppercased, except
+  `GBp` and `ZAc`). The check runs on the winning bars before
+  any row is added. A bad code raises `ValueError` with
+  `currency must be exactly three letters` and leaves the table
+  as it was. The raise sits outside the `except`, so
+  `__context__` does not keep the checker error. A discarded
+  earlier copy with a bad currency is not an error when the
+  last copy is valid. `_default_source` is one `GROUP BY source`
+  with `max(retrieved_at)`. Python then keeps the newest instant
+  and `max` of those source names. That `max` compares code
+  points, so PostgreSQL's collation cannot let `[IAC-DEMO-V2]`
+  beat `fake`. The old second query, which read every bar
+  stamped with the winning timestamp, is gone. Skip warnings
+  use an insertion-ordered dict capped at 1024. The oldest id
+  is dropped and may log once more. The cap bounds memory. It
+  is not a promise that each id logs only once for the life of
+  the process. The repository and the price route share
+  `_remember_skip`.
+- Item 1 stays deferred. An unreadable bar is still skipped, the
+  GET stays 200, and the body stays a list of bars. No count and
+  no header. That visibility belongs to the server phase (#93).
+- #98 review nits (a)–(d) stay open. They are not in
+  `app/validation/text.py`. (a) and (b) are
+  `app/core/validation.py`. (c) is `docs/api-demo.md` plus the
+  watchlist repository gate. (d) is an HTTP test. They are listed
+  in `docs/work-state.md`.
+- For a Java developer: `_last_wins` is a `LinkedHashMap`. The
+  key is the date and the source. Python's `dict` keeps
+  insertion order, so the first time a key appears we remember
+  its slot, and a later copy overwrites that slot. We never
+  insert two rows, so the unique constraint does not see the
+  duplicate. The round-trip check walks the flushed rows and
+  the bars in lockstep (`zip`). Deduping first is what makes
+  those two lists the same length. `_default_source` used to
+  be two queries, like a `MAX` followed by a second `SELECT`
+  of every row at that timestamp. `GROUP BY source` is one
+  query and returns one row per source. The winner is still
+  chosen with Python `max`, which is `String.compareTo` (code
+  points), not SQL `ORDER BY`. The skip log is a
+  `LinkedHashMap` used as a set: the value is always `None`.
+  `pop` of the first key drops the oldest entry once the map
+  passes 1024. A `HashSet` would not know which id is oldest.
+  `model_copy(update=...)` builds a new model with one field
+  changed and does not mutate the caller's object. Assigning
+  `bar.currency` after the model was built does not re-run
+  validators (`validate_assignment` is off). That is why the
+  repository checks again. Raising inside an `except` chains
+  the previous exception onto `__context__`. This repository
+  sets a flag and raises after the `except`, which is how the
+  other price errors avoid carrying the driver exception.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` were
+  unset. No live market-data calls. SQLite here is 3.45.1, so
+  the two `0006` float-boundary failures that show up on SQLite
+  3.54 did not appear. CI command from `docs/HANDOFF.md`:
+  1885 passed, 227 deselected, coverage 96.42%
+  (4620 statements, 136 miss, 1302 branches, 60 partial).
+  Two SAWarnings, both pre-existing, from autogenerate tests
+  reflecting `uq_companies_ticker`. Local PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  integration suite: 227 passed, 1885 deselected. black,
+  isort, and flake8 passed on the changed Python files.
+  `price_bar_repository.py` is covered on every statement
+  and branch in that run.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 09:07 to 09:40.
+- Next: both GitHub Actions jobs on the pull request. The run
+  id is recorded on the pull request, not in a later commit.
+  Agents do not merge. #95 stays open for item 1.
 
 ## 2026-10-27 - Watchlist `/ui` page (#96)
 

@@ -160,6 +160,25 @@ The currency on a refreshed bar is the currency stored on the
 instrument, because a collector bar has no currency of its own. The
 source and the retrieval time come from the collector's provenance.
 
+One refresh is one batch. Two bars in that batch with the same
+session date and source are one key. The later bar is stored, and
+the earlier bar is not written, whether or not the prices match.
+`bar_count` counts stored keys, so the repeated key counts once.
+A discarded earlier copy is not validated: a bad currency on that
+copy does not reject the batch when the last copy is valid.
+If the batch then fails for another reason, the whole batch is
+rolled back, including that last bar. A row that was already stored
+keeps the values it had before the refresh.
+
+The repository rejects a currency that is not exactly three letters
+before it commits. That includes a write that bypasses the API
+model. SQLite does not enforce `VARCHAR(3)`, so without this check
+a longer code would be stored and the response model would fail on
+read. Both engines raise `ValueError` (`currency must be exactly
+three letters`) and leave no new row. A lowercase code such as
+`usd` is stored as `USD`. `GBp` and `ZAc` stay as sent. The API
+already rejected a bad currency; this is the direct repository path.
+
 The `/ui` synthetic badge matches a description that starts with
 `[IAC-DEMO-`, so a demo-v2 row shows it. `[IAC-DEMO-V1]` is not a
 separate check. The token rule is in the section above.

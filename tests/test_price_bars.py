@@ -812,6 +812,70 @@ async def test_refresh_twice_from_the_fake_collector_does_not_duplicate(
 
 
 @pytest.mark.asyncio
+async def test_refresh_value_error_is_http_400(client, monkeypatch):
+    """A repository ``ValueError`` on refresh is 400, not 500.
+
+    ``ValidationError`` is caught first and becomes 502. A plain
+    ``ValueError`` from ``upsert_many`` is the 400 branch.
+    """
+    from app.repositories.price_bar_repository import PriceBarRepository
+
+    instrument_id = await _company(client, ticker="DEMO_REFRESH_400")
+    _use(
+        client,
+        _StubCollector(
+            [CollectedPriceBar(date(2026, 4, 6), 4.0, 4.0, 4.0, 4.0, 4)]
+        ),
+    )
+
+    def reject(self, instrument_id, bars):
+        raise ValueError("Price bar could not be stored")
+
+    monkeypatch.setattr(PriceBarRepository, "upsert_many", reject)
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    refreshed = await client.post(path + "/refresh")
+    assert refreshed.status_code == 400, refreshed.text
+    assert refreshed.json()["detail"] == "Price bar could not be stored"
+    listed = await client.get(path)
+    assert listed.status_code == 200
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_refresh_counts_stored_keys_when_a_day_is_repeated(client):
+    """One date twice in one refresh: 200, last price, bar_count 1.
+
+    ``bar_count`` is the number of stored keys, and GET returns
+    that many rows. The prices differ, so this used to fail the
+    batch. The collector source is the same on both bars.
+    """
+    instrument_id = await _company(client, ticker="DEMO_DUP_DAY")
+    day = date(2026, 4, 6)
+    _use(
+        client,
+        _StubCollector(
+            [
+                CollectedPriceBar(day, 4.0, 4.0, 4.0, 4.0, 4),
+                CollectedPriceBar(day, 9.0, 9.0, 9.0, 9.0, 9),
+            ]
+        ),
+    )
+    path = f"/api/v1/instruments/{instrument_id}/prices"
+    refreshed = await client.post(path + "/refresh")
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["bar_count"] == 1
+    assert refreshed.json()["source"] == "stub"
+    listed = await client.get(path)
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()
+    assert len(rows) == refreshed.json()["bar_count"]
+    assert rows[0]["date"] == "2026-04-06"
+    assert rows[0]["close"] == "9.00000000"
+    assert rows[0]["volume"] == 9
+    assert rows[0]["source"] == "stub"
+
+
+@pytest.mark.asyncio
 async def test_refresh_keeps_null_prices_and_a_different_source(client):
     instrument_id = await _company(client, ticker="DEMO_PL_TECH")
     seeded = await client.post(
