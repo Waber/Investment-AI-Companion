@@ -1,5 +1,75 @@
 # Development Journal
 
+## 2026-10-30 - Watchlist query batch and ticker-index warning
+
+- Scope: two follow-ups from the watchlist page review, on
+  `origin/master` `3c40413`. No issue, so the pull request says
+  Refs and does not close anything. (1) `GET /ui/watchlist` loaded
+  each company and each price series on its own. (2) CI printed an
+  `SAWarning` from the SQLite notes and watchlist autogenerate
+  tests. Templates, static files, and Alembic revisions were not
+  changed. PR #104, PR #106, and the functions PR #107 edits
+  (`upsert_many`, `_default_source`) were left alone.
+- What changed: `WatchlistRepository.list_items(with_company=True)`
+  and new `PriceBarRepository.recent_closes_for`. The page calls
+  those. `upgrade_head_over_create_all` in `tests/company_migration.py`
+  wraps the two autogenerate upgrades.
+- Decisions: the batch method is additive. It repeats the default
+  source rule (latest `retrieved_at`, then the source name that
+  sorts last in Python) instead of calling `_default_source`, so a
+  rebase onto PR #107 does not have to merge that function. The
+  API list does not pass `with_company`, so its SELECT stays a
+  single table. The warning is silenced in the test helper, not by
+  a new migration and not by weakening `-W error::DeprecationWarning`.
+  Any other `SAWarning` during that upgrade is an error.
+- For a Java developer: a lazy `item.company` is the ORM default,
+  the same idea as a JPA association that is not `JOIN FETCH`.
+  Touching it in a loop is the N+1. `joinedload` is that JOIN
+  FETCH. The company is many-to-one, so the join does not duplicate
+  watchlist rows. `recent_closes_for` replaces the per-row queries
+  with three statements. The second uses `row_number() OVER
+  (PARTITION BY instrument_id, source ORDER BY bar_date DESC)`, a
+  window function: the database numbers rows inside each group and
+  we keep numbers 1 and 2. That is one round-trip for every
+  instrument, not a loop of `LIMIT 2` queries. The sparkline dates
+  are computed in Python (`latest - 92 days`) so SQLite and
+  PostgreSQL do not need different date SQL. `warnings.catch_warnings`
+  is a try-with-resources for the warning filter list: the ignore
+  rule exists only inside the `with` block. `filterwarnings` matches
+  the start of the message as a regular expression.
+- The warning, exact text: `SAWarning: Skipped unsupported reflection
+  of expression-based index uq_companies_ticker`. CI on `3c40413`
+  (run 40675846004) grouped it under
+  `test_autogenerate_against_sqlite_notes_is_empty` and
+  `test_autogenerate_against_sqlite_watchlist_is_empty`, and the
+  stack line was `contextlib.py:144` `next(self.gen)`.
+  Those tests build the schema with `create_all`, which already
+  created `uq_companies_ticker` on `upper(ticker)`, then stamp an
+  older revision and upgrade through 0006. 0006's
+  `op.batch_alter_table("price_bars")` is a context manager. On the
+  way out it reflects `price_bars` and, through the foreign key,
+  `companies`. SQLAlchemy 2.0.23 cannot reflect an expression index,
+  warns, and skips it. A legacy upgrade does not warn: 0007 creates
+  that index after 0006. The price-bar copy does not need the
+  index. The filter hides that message only.
+- Query counts, SQLite, each row two closes, listener
+  `before_cursor_execute` around `GET /ui/watchlist`. Before: 6
+  statements for 1 row, 51 for 10 (`5N+1`: the list, then per row
+  `max(retrieved_at)`, distinct source, two newest closes, the
+  window, and the company). After: 4 statements for both (list
+  joined to companies, one grouped source query, one window query
+  for the two newest closes, one query for the sparkline window).
+- Verification: no `.env`, `DATABASE_URL` unset. CI pytest command
+  on local SQLite 3.45.1: 1880 passed, 222 deselected, coverage
+  96.40%. The two autogenerate tests also passed with
+  `-W error::sqlalchemy.exc.SAWarning`. No local PostgreSQL.
+  black, isort, and flake8 passed on the changed Python files.
+  No live market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 25 minutes, from 09:28.
+- Next: GitHub Actions, both jobs, on the head commit. Do not merge.
+
 ## 2026-10-27 - Watchlist `/ui` page (#96)
 
 - Scope: the UI part of #32. `/ui/watchlist` table and the heart

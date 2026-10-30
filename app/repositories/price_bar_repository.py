@@ -7,11 +7,12 @@ to run twice.
 """
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import func, tuple_
+from sqlalchemy import and_, func, or_, tuple_
 from sqlalchemy.exc import DBAPIError, IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
@@ -372,6 +373,179 @@ class PriceBarRepository:
         row.volume = bar.volume
         row.currency = bar.currency
         row.retrieved_at = bar.retrieved_at
+
+    def recent_closes_for(
+        self, instrument_ids: List[int], window_days: int = 92
+    ) -> Dict[int, RecentCloses]:
+        """``recent_closes`` for many instruments, in a few queries.
+
+        The values match calling ``recent_closes`` once per id.
+        An instrument with no close is left out of the dict.
+        An empty ``instrument_ids`` does not query the database.
+
+        At most three queries, however many ids are passed. No query
+        runs when ``instrument_ids`` is empty, and a list with no
+        bars stops after the source query.
+
+        1. One ``GROUP BY`` picks each instrument's default source
+           (latest ``retrieved_at``, then the source name that sorts
+           last). That is the same rule as ``_default_source``.
+        2. One window query loads the two newest closes of that
+           source. The older of the two may sit outside the sparkline
+           window, and it is still ``previous``.
+        3. One query loads every close from ``window_days`` before
+           the newest readable close through that close.
+
+        ``recent_closes`` stays as it is. This method is the batch
+        read the watchlist page uses.
+        """
+        ids = _unique_ids(instrument_ids)
+        if not ids:
+            return {}
+        sources = self._default_sources_for(ids)
+        if not sources:
+            return {}
+        newest = self._newest_readable_closes(sources, limit=2)
+        if not newest:
+            return {}
+        windows = self._close_windows(newest, window_days)
+        found: Dict[int, RecentCloses] = {}
+        for instrument_id, (source, rows) in newest.items():
+            found[instrument_id] = RecentCloses(
+                source=source,
+                latest=rows[0],
+                previous=rows[1] if len(rows) > 1 else None,
+                window=windows.get(instrument_id, []),
+            )
+        return found
+
+    def _default_sources_for(
+        self, instrument_ids: List[int]
+    ) -> Dict[int, str]:
+        """Default source per instrument. See ``_default_source``.
+
+        One grouped query returns ``max(retrieved_at)`` for every
+        ``(instrument, source)``. Python then keeps, per instrument,
+        the source whose maximum is latest. A tie uses the source
+        name that sorts last in code-point order, not the database
+        collation. ``[IAC-DEMO-V2]`` therefore loses to ``fake``.
+        """
+        rows = (
+            self.db.query(
+                PriceBarDB.instrument_id,
+                PriceBarDB.source,
+                func.max(PriceBarDB.retrieved_at),
+            )
+            .filter(PriceBarDB.instrument_id.in_(instrument_ids))
+            .group_by(PriceBarDB.instrument_id, PriceBarDB.source)
+            .all()
+        )
+        best: Dict[int, Tuple] = {}
+        for instrument_id, source, retrieved_at in rows:
+            candidate = (retrieved_at, source)
+            current = best.get(instrument_id)
+            if current is None or candidate > current:
+                best[instrument_id] = candidate
+        return {
+            instrument_id: source
+            for instrument_id, (_retrieved_at, source) in best.items()
+        }
+
+    def _newest_readable_closes(
+        self, sources: Dict[int, str], limit: int
+    ) -> Dict[int, Tuple]:
+        """Up to ``limit`` newest readable closes per chosen series.
+
+        ``row_number()`` counts bars inside each ``(instrument,
+        source)`` group, newest date first. It is one SELECT for
+        the whole list. Filtering ``rn <= limit`` in SQL matches
+        ``recent_closes``, which asks the database for two rows and
+        only then drops a bar whose price did not parse. A readable
+        bar older than those two is not promoted.
+        """
+        pairs = list(sources.items())
+        rank = (
+            func.row_number()
+            .over(
+                partition_by=(
+                    PriceBarDB.instrument_id,
+                    PriceBarDB.source,
+                ),
+                order_by=PriceBarDB.bar_date.desc(),
+            )
+            .label("rn")
+        )
+        ranked = (
+            self.db.query(PriceBarDB.id.label("bar_id"), rank)
+            .filter(
+                PriceBarDB.close_price.isnot(None),
+                tuple_(PriceBarDB.instrument_id, PriceBarDB.source).in_(pairs),
+            )
+            .subquery()
+        )
+        loaded = (
+            self.db.query(PriceBarDB)
+            .join(ranked, PriceBarDB.id == ranked.c.bar_id)
+            .filter(ranked.c.rn <= limit)
+            .all()
+        )
+        grouped: Dict[int, List[PriceBarDB]] = defaultdict(list)
+        for row in loaded:
+            if _readable(row):
+                grouped[row.instrument_id].append(row)
+        chosen: Dict[int, Tuple] = {}
+        for instrument_id, rows in grouped.items():
+            rows.sort(key=lambda row: row.bar_date, reverse=True)
+            chosen[instrument_id] = (sources[instrument_id], rows)
+        return chosen
+
+    def _close_windows(
+        self, newest: Dict[int, Tuple], window_days: int
+    ) -> Dict[int, List[PriceBarDB]]:
+        """Sparkline closes for each series, oldest first.
+
+        The window ends on that series' newest readable close, not
+        on today. The start date is computed in Python so SQLite
+        and PostgreSQL do not need different date arithmetic.
+        One ``OR`` of per-instrument predicates is still one query.
+        """
+        predicates = []
+        for instrument_id, (source, rows) in newest.items():
+            start = rows[0].bar_date - timedelta(days=window_days)
+            predicates.append(
+                and_(
+                    PriceBarDB.instrument_id == instrument_id,
+                    PriceBarDB.source == source,
+                    PriceBarDB.bar_date >= start,
+                    PriceBarDB.close_price.isnot(None),
+                )
+            )
+        loaded = (
+            self.db.query(PriceBarDB)
+            .filter(or_(*predicates))
+            .order_by(
+                PriceBarDB.bar_date.asc(),
+                PriceBarDB.id.asc(),
+            )
+            .all()
+        )
+        grouped: Dict[int, List[PriceBarDB]] = defaultdict(list)
+        for row in loaded:
+            if _readable(row):
+                grouped[row.instrument_id].append(row)
+        return grouped
+
+
+def _unique_ids(instrument_ids: List[int]) -> List[int]:
+    """Ids in first-seen order, without duplicates."""
+    seen = set()
+    unique = []
+    for instrument_id in instrument_ids:
+        if instrument_id in seen:
+            continue
+        seen.add(instrument_id)
+        unique.append(instrument_id)
+    return unique
 
 
 def _readable(row: PriceBarDB) -> bool:

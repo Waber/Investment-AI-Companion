@@ -10,8 +10,10 @@ from decimal import Decimal
 from html.parser import HTMLParser
 
 import pytest
+from sqlalchemy import event
 
 from app.models.database_models import CompanyDB, PriceBarDB
+from app.repositories.price_bar_repository import PriceBarRepository
 from app.repositories.watchlist_repository import WatchlistRepository
 from app.ui import watchlist_view
 
@@ -463,3 +465,306 @@ async def test_remove_buttons_name_their_company(client):
     client.cookies.set("ui_lang", "en")
     row = _row((await client.get("/ui/watchlist")).text, company_id)
     assert 'aria-label="Remove Apple &#34;Inc.&#34; from watchlist"' in row
+
+
+def _engine(client):
+    """The test engine. Seeding and the page share it."""
+    return client.app.state.testing_session_local.kw["bind"]
+
+
+def _record_statements(engine):
+    """Append SQL text until the caller stops the listener.
+
+    The returned list and the stop function. The watchlist route is
+    synchronous, and the test client runs it on a worker thread, so
+    the listener has to stay installed across the ``await``.
+    """
+    statements = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record)
+
+    def stop():
+        event.remove(engine, "before_cursor_execute", record)
+
+    return statements, stop
+
+
+def _statements(engine, call):
+    """SQL text executed while the synchronous ``call`` runs."""
+    statements, stop = _record_statements(engine)
+    try:
+        call()
+    finally:
+        stop()
+    return statements
+
+
+def _seed_priced_watch_rows(client, count, start=0):
+    """``count`` watchlist rows that each have two closes.
+
+    Every row has the same shape, so a per-row query would add the
+    same number of statements for each extra company. The latest
+    close is ``110 + index`` and shows up in the Polish price cell.
+    """
+    seeded = []
+    for index in range(start, start + count):
+        ticker = f"W{index:02d}"
+        company_id = _company(client, ticker=ticker, name=f"Name {index}")
+        _watch(client, company_id)
+        _bars(
+            client,
+            company_id,
+            [
+                (date(2026, 10, 19), str(100 + index)),
+                (date(2026, 10, 26), str(110 + index)),
+            ],
+        )
+        seeded.append((ticker, f"{110 + index},00"))
+    return seeded
+
+
+async def _watchlist_page(client):
+    """HTML and the SQL statements of one GET /ui/watchlist."""
+    engine = _engine(client)
+    statements, stop = _record_statements(engine)
+    try:
+        response = await client.get("/ui/watchlist")
+    finally:
+        stop()
+    assert response.status_code == 200
+    return response.text, statements
+
+
+def _assert_rendered(html, seeded):
+    for ticker, price in seeded:
+        assert ticker in html
+        assert price in html
+
+
+async def assert_watchlist_query_count_is_flat(client):
+    """GET /ui/watchlist uses the same number of statements for 1 and 10 rows.
+
+    Returns that number. Every seeded ticker and its latest close
+    must still be on the page. One row and ten rows have the same
+    price shape, so a per-row query would make the second count
+    larger.
+    """
+    first = _seed_priced_watch_rows(client, 1)
+    one_html, one_statements = await _watchlist_page(client)
+    _assert_rendered(one_html, first)
+
+    rest = _seed_priced_watch_rows(client, 9, start=1)
+    ten_html, ten_statements = await _watchlist_page(client)
+    _assert_rendered(ten_html, first + rest)
+
+    assert len(one_statements) == len(ten_statements), (
+        f"1 row ran {len(one_statements)} statements, "
+        f"10 rows ran {len(ten_statements)}:\n"
+        + "\n".join(statement[:120] for statement in ten_statements)
+    )
+    return len(one_statements)
+
+
+@pytest.mark.asyncio
+async def test_watchlist_query_count_does_not_grow_with_rows(client):
+    """One row and ten rows hit the database the same number of times.
+
+    Before the batch read, one row was 6 statements and ten rows were
+    51 (one list, then five queries per row). The page now loads the
+    companies with the list and the closes in a fixed handful of
+    queries. SQLite is the database this test opens.
+    """
+    count = await assert_watchlist_query_count_is_flat(client)
+    assert count == 4, count
+
+
+def _add_bar(
+    client,
+    company_id,
+    day,
+    close,
+    source="fake",
+    retrieved_at=RETRIEVED,
+):
+    session = _session(client)
+    try:
+        session.add(
+            PriceBarDB(
+                instrument_id=company_id,
+                bar_date=day,
+                close_price=None if close is None else Decimal(close),
+                currency="USD",
+                source=source,
+                retrieved_at=retrieved_at,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
+def _recent_signature(recent):
+    """The fields the watchlist page reads, for one series or None."""
+    if recent is None:
+        return None
+    previous = recent.previous
+    return (
+        recent.source,
+        recent.latest.bar_date,
+        recent.latest.close_price,
+        (
+            None
+            if previous is None
+            else (previous.bar_date, previous.close_price)
+        ),
+        [(bar.bar_date, bar.close_price) for bar in recent.window],
+    )
+
+
+@pytest.mark.asyncio
+async def test_recent_closes_for_matches_one_query_per_company(client):
+    """The batch read returns the same closes as ``recent_closes``.
+
+    The cases are the ones the page can show: no bars, a bar with no
+    close, one close, a previous close inside the window, a previous
+    close older than 92 days, a null close between two real ones, and
+    two sources (a later retrieval wins, and a tie uses code-point
+    order). An empty id list does not query.
+    """
+    empty = _company(client, ticker="NONE", name="No Prices")
+    null_only = _company(client, ticker="NULL", name="Null Close")
+    _add_bar(client, null_only, date(2026, 9, 28), None)
+    single = _company(client, ticker="ONE", name="One Close")
+    _add_bar(client, single, date(2026, 10, 26), "5")
+    inside = _company(client, ticker="IN", name="Inside Window")
+    _add_bar(client, inside, date(2026, 10, 19), "10")
+    _add_bar(client, inside, date(2026, 10, 26), "12")
+    older = _company(client, ticker="OLD", name="Old Previous")
+    _add_bar(client, older, date(2026, 1, 1), "1")
+    _add_bar(client, older, date(2026, 10, 26), "2")
+    skipped = _company(client, ticker="SKIP", name="Skipped Null")
+    _add_bar(client, skipped, date(2026, 9, 21), "10")
+    _add_bar(client, skipped, date(2026, 9, 28), None)
+    _add_bar(client, skipped, date(2026, 10, 5), "11")
+    later = _company(client, ticker="LATER", name="Later Source")
+    _add_bar(
+        client,
+        later,
+        date(2026, 9, 28),
+        "10",
+        source="[IAC-DEMO-V2]",
+        retrieved_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+    )
+    _add_bar(
+        client,
+        later,
+        date(2026, 9, 21),
+        "21",
+        source="fake",
+        retrieved_at=datetime(2026, 10, 2, tzinfo=timezone.utc),
+    )
+    tied = _company(client, ticker="TIE", name="Tied Retrieval")
+    same_time = datetime(2026, 10, 3, tzinfo=timezone.utc)
+    _add_bar(
+        client,
+        tied,
+        date(2026, 10, 26),
+        "30",
+        source="[IAC-DEMO-V2]",
+        retrieved_at=same_time,
+    )
+    _add_bar(
+        client,
+        tied,
+        date(2026, 10, 26),
+        "31",
+        source="fake",
+        retrieved_at=same_time,
+    )
+
+    ids = [empty, null_only, single, inside, older, skipped, later, tied]
+    session = _session(client)
+    try:
+        repo = PriceBarRepository(session)
+        engine = _engine(client)
+        quiet = _statements(engine, lambda: repo.recent_closes_for([]))
+        assert quiet == []
+        # No bars, and bars whose close is null, stop before the
+        # window query. Both are absent from a mixed batch too.
+        assert repo.recent_closes_for([empty]) == {}
+        assert repo.recent_closes_for([null_only]) == {}
+        batched = repo.recent_closes_for(ids + [inside])
+        for instrument_id in ids:
+            single_recent = repo.recent_closes(instrument_id)
+            if single_recent is None:
+                assert instrument_id not in batched
+            else:
+                assert _recent_signature(batched[instrument_id]) == (
+                    _recent_signature(single_recent)
+                )
+        assert set(batched) == {
+            instrument_id
+            for instrument_id in ids
+            if instrument_id not in (empty, null_only)
+        }
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_batched_watchlist_still_shows_mixed_rows(client):
+    """A row with no prices and a row on the later source both render.
+
+    The batch path has to keep the em dash and the winning source.
+    ``fake`` wins the tie because its name sorts after
+    ``[IAC-DEMO-V2]``.
+    """
+    bare = _company(client, ticker="BARE", name="Bare Co")
+    _watch(client, bare)
+    priced = _company(client, ticker="PRICED", name="Priced Co")
+    _watch(client, priced, label="core")
+    same_time = datetime(2026, 10, 3, tzinfo=timezone.utc)
+    _add_bar(
+        client,
+        priced,
+        date(2026, 10, 19),
+        "10",
+        source="[IAC-DEMO-V2]",
+        retrieved_at=same_time,
+    )
+    _add_bar(
+        client,
+        priced,
+        date(2026, 10, 26),
+        "11",
+        source="[IAC-DEMO-V2]",
+        retrieved_at=same_time,
+    )
+    _add_bar(
+        client,
+        priced,
+        date(2026, 10, 19),
+        "40",
+        source="fake",
+        retrieved_at=same_time,
+    )
+    _add_bar(
+        client,
+        priced,
+        date(2026, 10, 26),
+        "42",
+        source="fake",
+        retrieved_at=same_time,
+    )
+    html = (await client.get("/ui/watchlist")).text
+    assert "brak notowań" in html
+    assert "BARE" in html
+    assert "42,00" in html
+    assert "PRICED" in html
+    assert "źródło: fake" in html
+    assert "core" in html
+    # 40 -> 42 is +5%. The other source must not leak into the row.
+    assert "11,00" not in html

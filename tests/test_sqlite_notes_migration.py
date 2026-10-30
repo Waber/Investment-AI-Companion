@@ -13,6 +13,7 @@ from tests.company_migration import (
     LEGACY_METRICS,
     _config,
     upgrade_head,
+    upgrade_head_over_create_all,
 )
 from tests.research_migration import (
     assert_compare_metadata_is_empty,
@@ -80,6 +81,6 @@ def test_autogenerate_against_sqlite_notes_is_empty(tmp_path):
     with engine.connect() as connection:
         config = _config(connection)
         command.stamp(config, "0004")
-        upgrade_head(connection)
+        upgrade_head_over_create_all(connection)
         assert_compare_metadata_is_empty(connection)
     engine.dispose()

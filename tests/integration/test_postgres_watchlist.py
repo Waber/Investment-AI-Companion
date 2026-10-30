@@ -16,6 +16,7 @@ from tests.company_migration import (
     upgrade_head,
     without_unreflectable_ticker_index,
 )
+from tests.test_ui_watchlist import assert_watchlist_query_count_is_flat
 from tests.watchlist_checks import (
     assert_add_is_idempotent_and_keeps_the_first_label,
     assert_company_update_leaves_the_watchlist_row,
@@ -370,3 +371,15 @@ async def test_company_deleted_before_insert_is_404_on_postgresql(
     assert "FOREIGN" not in response.text
     listed = await postgres_client.get("/api/v1/watchlist/")
     assert listed.json() == []
+
+
+@pytest.mark.asyncio
+async def test_watchlist_page_query_count_does_not_grow(postgres_client):
+    """The watchlist page stays a fixed number of statements on PostgreSQL.
+
+    Same seed as the SQLite test: one priced row, then ten. The Warsaw
+    session timezone can add a statement the SQLite file does not see,
+    so this test checks that the count does not grow and stays small.
+    """
+    count = await assert_watchlist_query_count_is_flat(postgres_client)
+    assert count <= 8, count
