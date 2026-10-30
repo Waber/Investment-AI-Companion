@@ -68,7 +68,8 @@
 - AI model: Grok 4.7. Account usage was not available in this
   session.
 - Time tracking (UTC): 2026-10-30, about 25 minutes, from 09:28.
-- Next: GitHub Actions, both jobs, on the head commit. Do not merge.
+- Next: GitHub Actions on pull request #108, both jobs, on the
+  head commit. Do not merge.
 
 ## 2026-10-27 - Watchlist `/ui` page (#96)
 
