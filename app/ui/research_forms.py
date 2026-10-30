@@ -41,7 +41,7 @@ from app.repositories.note_repository import NoteRepository
 from app.repositories.research_store import ResearchStorageError
 from app.repositories.thesis_repository import ThesisRepository
 from app.ui.form_fields import errors_from_validation
-from app.ui.forms import _load_company, _not_found, _see_other
+from app.ui.forms import load_company, not_found, see_other
 from app.ui.origin import require_same_origin
 from app.ui.research_view import (
     NewNote,
@@ -52,12 +52,7 @@ from app.ui.research_view import (
     research_count,
     shows_item,
 )
-from app.ui.router import (
-    _instrument_id,
-    _with_ui_headers,
-    detail_page,
-    is_htmx,
-)
+from app.ui.router import detail_page, instrument_id, is_htmx, with_ui_headers
 from app.ui.templating import render
 from app.ui.view_models import to_instrument
 from app.validation.text import TextValidationError
@@ -199,7 +194,7 @@ def _panel_response(request, db, company, panel, *, status_code=200):
     else:
         count = panel.count
         state_path = panel.state_path
-    return _with_ui_headers(
+    return with_ui_headers(
         render(
             request,
             "partials/research_panel.html",
@@ -256,7 +251,7 @@ def _changed(request, db, company, panel):
     """
     if is_htmx(request):
         return _panel_response(request, db, company, panel)
-    return _see_other(panel_state_path(company.id) + "#research")
+    return see_other(panel_state_path(company.id) + "#research")
 
 
 def _research_not_found(request, company):
@@ -267,7 +262,7 @@ def _research_not_found(request, company):
     404, so ``ui.js`` repeats the request without HTMX, and the
     browser shows this page.
     """
-    return _with_ui_headers(
+    return with_ui_headers(
         render(
             request,
             "research_not_found.html",
@@ -286,10 +281,10 @@ def _load_item(request, db, company_raw, item_raw, repository_type):
     research 404. The repository only looks inside this company, so
     another company's note or thesis looks missing.
     """
-    company, missing = _load_company(request, db, company_raw)
+    company, missing = load_company(request, db, company_raw)
     if missing is not None:
         return None, None, missing
-    item_id = _instrument_id(item_raw)
+    item_id = instrument_id(item_raw)
     item = None
     if item_id is not None:
         item = repository_type(db).get(company.id, item_id)
@@ -324,12 +319,12 @@ def _names_closed_thesis(db, company_id, focus):
     "Anuluj" on a closed thesis comes back with that focus. The
     closed list must then be unfolded, or the card that takes the
     focus would stay hidden. ``focus`` already matched ``_FOCUS``, or
-    is None. Its id still goes through ``_instrument_id``, which
+    is None. Its id still goes through ``instrument_id``, which
     refuses an id too long for the database.
     """
     if focus is None or not focus.startswith("thesis-"):
         return False
-    thesis_id = _instrument_id(focus.removeprefix("thesis-"))
+    thesis_id = instrument_id(focus.removeprefix("thesis-"))
     if thesis_id is None:
         return False
     thesis = ThesisRepository(db).get(company_id, thesis_id)
@@ -358,7 +353,7 @@ def show_research_panel(
     panel does not list that item, for example a note deleted in
     another tab, the panel heading takes the focus.
     """
-    company, missing = _load_company(request, db, company_id)
+    company, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     if research == "closed":
@@ -391,7 +386,7 @@ def add_note(
     After a success the field is empty and has the focus, ready for
     the next note. A 422 or a failed save keeps the typed text.
     """
-    company, missing = _load_company(request, db, company_id)
+    company, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     note, errors, form_error = validate_note({"body": body}, update=False)
@@ -406,7 +401,7 @@ def add_note(
         NoteRepository(db).create(company.id, note)
     except CompanyNotFoundError:
         # The company was deleted after the check above.
-        return _not_found(request)
+        return not_found(request)
     except ResearchStorageError:
         draft = NewNote(body=body, form_error="error.storage", preserve=False)
         return _panel_with_errors(
@@ -560,7 +555,7 @@ def new_thesis_form(
     db: Session = Depends(get_db),
 ):
     """The empty thesis form, in place of the "+ Nowa teza" link."""
-    company, missing = _load_company(request, db, company_id)
+    company, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     form = PanelForm(
@@ -585,7 +580,7 @@ def add_thesis(
     card. A 422 or a failed save keeps the form open with the typed
     text.
     """
-    company, missing = _load_company(request, db, company_id)
+    company, missing = load_company(request, db, company_id)
     if missing is not None:
         return missing
     values = {"title": title, "body": body, "thesis_breakers": thesis_breakers}
@@ -604,7 +599,7 @@ def add_thesis(
         created = ThesisRepository(db).create(company.id, thesis)
     except CompanyNotFoundError:
         # The company was deleted after the check above.
-        return _not_found(request)
+        return not_found(request)
     except ResearchStorageError:
         form = PanelForm(
             kind="thesis_new", values=values, form_error="error.storage"

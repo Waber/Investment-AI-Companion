@@ -690,8 +690,10 @@ async def test_script_payload_is_escaped_in_the_panel(client):
     )
     for html in (page.text, fragment.text):
         assert "<script>alert" not in html
-        assert f'class="thesis-title">{_ESCAPED}</h4>' in html
-        assert html.count(f'class="research-text">{_ESCAPED}</p>') == 3
+        assert f'class="thesis-title" dir="auto">{_ESCAPED}</h4>' in html
+        assert (
+            html.count(f'class="research-text" dir="auto">{_ESCAPED}</p>') == 3
+        )
 
 
 @pytest.mark.asyncio
@@ -716,8 +718,8 @@ async def test_research_text_keeps_breaks_and_wraps(client):
     html = (
         await client.get(f"/ui/instruments/{company_id}?research=open")
     ).text
-    assert html.count('class="research-text">line1\nline2</p>') == 3
-    assert f'class="thesis-title">{title}</h4>' in html
+    assert html.count('class="research-text" dir="auto">line1\nline2</p>') == 3
+    assert f'class="thesis-title" dir="auto">{title}</h4>' in html
     text_rules = _css_declarations(".research-text")
     assert ("white-space", "pre-wrap") in text_rules
     assert ("overflow-wrap", "anywhere") in text_rules
@@ -1673,6 +1675,40 @@ def test_research_error_key_names_the_limit():
 
 
 @pytest.mark.asyncio
+async def test_user_text_sets_dir_auto(client):
+    """A stored title or body takes its own direction.
+
+    ``dir="auto"`` on the element that shows the text keeps a
+    right-to-left title from reordering the Polish labels beside it.
+    The same idea as isolating a user-provided watchlist name.
+    """
+    company_id = _company(client)
+    _note(client, company_id, "Notatka", "2026-10-28T13:05")
+    _thesis(
+        client,
+        company_id,
+        "Teza",
+        "2026-10-28T13:05",
+        body="Powód.",
+        breakers="Próg.",
+    )
+    html = (
+        await client.get(f"/ui/companies/{company_id}/research", headers=_HTMX)
+    ).text
+    tagged = _tags(_panel(html))
+    titles = [attrs for tag, attrs in tagged if tag == "h4"]
+    texts = [
+        attrs
+        for tag, attrs in tagged
+        if tag == "p" and "research-text" in attrs.get("class", "")
+    ]
+    assert len(titles) == 1
+    assert len(texts) == 3
+    for attrs in titles + texts:
+        assert attrs.get("dir") == "auto", attrs
+
+
+@pytest.mark.asyncio
 async def test_control_and_bidi_text_names_the_reason(client):
     """A control or bidi character is 422 with its own sentence.
 
@@ -1779,7 +1815,7 @@ async def test_add_thesis_plain_and_htmx(client):
     assert "<html" not in html
     assert _focus(added) == f"thesis-{thesis.id}"
     card = _between(html, f'<li id="thesis-{thesis.id}"', "</li>")
-    assert '<h4 class="thesis-title">Teza AI</h4>' in card
+    assert '<h4 class="thesis-title" dir="auto">Teza AI</h4>' in card
     assert '<span class="badge badge-active">aktywna</span>' in card
     # The form is closed, and the link is back with its id.
     assert 'id="thesis-new-title"' not in html
@@ -2073,7 +2109,10 @@ async def test_edit_thesis_keeps_status(client):
     assert _focus(saved) == f"thesis-{thesis_id}"
     assert '<details class="research-closed" open>' in html
     assert f'id="thesis-{thesis_id}-title"' not in html
-    assert '<h4 class="thesis-title">Nowa teza</h4>' in _closed_list(html)
+    assert (
+        '<h4 class="thesis-title" dir="auto">Nowa teza</h4>'
+        in _closed_list(html)
+    )
 
     # The same values, padded, store nothing: updated_at stays.
     unchanged = await _post(

@@ -134,7 +134,7 @@
 {% set status_failed = panel.form and panel.form.kind == 'thesis_status' and panel.form.item_id == thesis.id %}
 <li id="{{ prefix }}" class="research-item" tabindex="-1"{% if panel.focus == prefix %} autofocus{% endif %}>
   {% if not editing %}
-  <h4 class="thesis-title">{{ thesis.title }}</h4>
+  <h4 class="thesis-title" dir="auto">{{ thesis.title }}</h4>
   {% endif %}
   <p class="research-meta">
     {% if not closed %}
@@ -151,10 +151,10 @@
   {% else %}
   <dl class="research-fields">
     <dt>{{ t['field.thesis_body'] }}</dt>
-    <dd><p class="research-text">{{ thesis.body }}</p></dd>
+    <dd><p class="research-text" dir="auto">{{ thesis.body }}</p></dd>
     <dt>{{ t['field.thesis_breakers'] }}</dt>
     {% if thesis.thesis_breakers|trim %}
-    <dd><p class="research-text">{{ thesis.thesis_breakers }}</p></dd>
+    <dd><p class="research-text" dir="auto">{{ thesis.thesis_breakers }}</p></dd>
     {% else %}
     <dd><span class="missing">{{ t['missing'] }}</span></dd>
     {% endif %}
@@ -218,7 +218,7 @@
     </div>
   </form>
   {% else %}
-  <p class="research-text">{{ note.body }}</p>
+  <p class="research-text" dir="auto">{{ note.body }}</p>
   {% if asking %}
   <form method="post" class="stacked-form" action="{{ action }}/delete" hx-post="{{ action }}/delete" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
     {{ form_errors(panel, prefix, panel.form, {}) }}
