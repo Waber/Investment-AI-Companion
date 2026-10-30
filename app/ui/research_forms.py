@@ -86,14 +86,31 @@ _TOO_LONG_KEYS = {
 # summary lists them in the same order.
 _THESIS_FIELDS = ("title", "body", "thesis_breakers")
 
+# One sentence per ``TextValidationError.code``. ``blank`` reuses the
+# required-field sentence. ``too_long`` reuses the generic length
+# sentence; a Pydantic ``string_too_long`` still names the limit via
+# ``_TOO_LONG_KEYS``. The company name form keeps ``control_char``,
+# ``bidi``, and ``surrogate`` on ``error.invalid``. Notes and theses
+# say which check failed. A code that is not in this map stays
+# ``error.invalid``, so a new code cannot turn the page into a 500.
+_TEXT_ERROR_KEYS = {
+    "blank": "error.required",
+    "too_long": "error.too_long",
+    "control_char": "error.control_char",
+    "bidi": "error.bidi",
+    "surrogate": "error.surrogate",
+}
+
 
 def research_error_key(error: dict) -> str:
     """The catalog key for one Pydantic error on a note or thesis field.
 
     ``error`` is one item of ``ValidationError.errors()``. Blank text
-    fails in the write model's validator, which raises
-    ``TextValidationError`` with the code ``blank``. Pydantic reports
-    that as ``value_error`` and keeps the exception in ``ctx``.
+    and the character checks fail in the write model's validator,
+    which raises ``TextValidationError``. Pydantic reports that as
+    ``value_error`` and keeps the exception in ``ctx``. ``blank`` is
+    ``error.required``. ``too_long``, ``control_char``, ``bidi``, and
+    ``surrogate`` each have their own catalog key.
     """
     kind = error.get("type")
     context = error.get("ctx") or {}
@@ -102,12 +119,8 @@ def research_error_key(error: dict) -> str:
     if kind == "string_too_long":
         return _TOO_LONG_KEYS.get(context.get("max_length"), "error.too_long")
     cause = context.get("error")
-    if (
-        kind == "value_error"
-        and isinstance(cause, TextValidationError)
-        and cause.code == "blank"
-    ):
-        return "error.required"
+    if kind == "value_error" and isinstance(cause, TextValidationError):
+        return _TEXT_ERROR_KEYS.get(cause.code, "error.invalid")
     return "error.invalid"
 
 
