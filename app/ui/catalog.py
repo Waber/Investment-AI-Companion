@@ -187,7 +187,9 @@ _POLISH = {
     "error.too_long": "Za długa wartość.",
     "error.max_200": "Najwyżej 200 znaków.",
     "error.max_5000": "Najwyżej 5000 znaków.",
-    "error.max_10000": "Najwyżej 10 000 znaków.",
+    # A no-break space (U+00A0) between 10 and 000: the thousands
+    # separator of Polish numbers in this app, so it never wraps.
+    "error.max_10000": "Najwyżej 10\u00a0000 znaków.",
     "error.too_short": "Za krótka wartość.",
     "error.ticker": (
         "Ticker musi mieć od 1 do 20 znaków ASCII: "
