@@ -1,17 +1,19 @@
 # Current Work State
 
-## Notes and theses (#33): 2026-10-30, reviewed and fixed, pull request next
+## Notes and theses (#33): 2026-10-30, PR #104 in review
 
-- Branch `feat/notes-theses-33`, from `master` `3c40413`. Not pushed;
-  no pull request yet.
+- Branch `feat/notes-theses-33`, rebased onto `origin/master`
+  `da6579d`. Pull request #104 is open and in review. Not merged.
+  The head before the review fixes below was `43fb9c8`; both
+  GitHub Actions jobs (SQLite and PostgreSQL) succeeded on it.
 - Design: `docs/superpowers/specs/2026-10-28-notes-theses-design.md`.
   Plan: `docs/superpowers/plans/2026-10-28-notes-theses.md`, 10 tasks,
   run with subagent-driven development. The per-task ledger (rulings,
   deferred review findings, status) is the git-ignored
   `.superpowers/sdd/2026-10-28-notes-theses/progress.md`.
-- Completed, each task reviewed: Tasks 1 to 9 in
-  `15b5afb`..`ce52331`, and Task 10 in two commits, `3217d9b` and
-  `4fa7959`:
+- Completed, each task reviewed: Tasks 1 to 9, and Task 10 in
+  `d74ba7f` and `7c5f99b` (the rebase onto `da6579d` rewrote the
+  earlier SHAs; `git log` has the current ones):
   - Task 1: `theses.closed_at` (revision `0008`);
   - Task 2: startup refuses a `theses` table without `closed_at` and
     names the Alembic commands;
@@ -31,25 +33,35 @@
     the Chrome check on the demo.
 - The final whole-branch review (four lenses, 2026-10-30) said "With
   fixes": no Critical or Important finding, and five Minor fixes
-  before the pull request. The fix wave made them in five commits:
-  - F1 `b290b99`: "Anuluj" for a note or thesis deleted in another
+  before the pull request. The fix wave made them in five commits
+  (SHAs after the rebase onto `da6579d`):
+  - F1 `0f332fc`: "Anuluj" for a note or thesis deleted in another
     tab now puts the focus on the panel heading, not on the page;
-  - F5 `d77ecb5`: "Najwyżej 10 000 znaków." keeps a no-break space
+  - F5 `fb14390`: "Najwyżej 10 000 znaków." keeps a no-break space
     between 10 and 000;
-  - F2 `faa4816`: a test pins that a thesis update with the stored
+  - F2 `ea850a8`: a test pins that a thesis update with the stored
     texts still moves `updated_at`;
-  - F3 `4a01368`: docstrings and `docs/api-demo.md` that contradicted
+  - F3 `7cf0f4e`: docstrings and `docs/api-demo.md` that contradicted
     the code;
-  - F4: this file and the journal, in the docs commit after
-    `4a01368`.
-- Incomplete: the pull request and its GitHub Actions run, and the
-  follow-up issues below.
-- Tests: the CI command at the final head gives 1984 passed and the 3
-  known local failures, coverage 96.88%. The known failures are the
-  two `0006` float boundary tests on local SQLite 3.54, and
-  `tests/test_run_demo.py::test_child_process_does_not_inherit_dotenv_database`,
-  which fails because a local git-ignored `demo/` directory exists.
-  Not run: the PostgreSQL job (no local server) and GitHub Actions.
+  - F4 `f17bb4b`: this file and the journal.
+- Code review on #104, fixed on this branch (frontend only):
+  - M1 `0dc4bff`: the note add and the new-thesis post are not
+    repeated after a failed HTMX request. A 500 swaps into
+    `#research` only;
+  - L4 `94e6c33`: each text-validation code has its own panel
+    message;
+  - nits `3e1976a`: `dir="auto"` on user text, the shared UI
+    helpers are public, and the HTMX list keeps its catch-all.
+- Incomplete: filing FU1 to FU7 (FU5 is done for the panel; the
+  company name still uses `error.invalid`). GitHub Actions on
+  this review-fix head follows the push.
+- Tests: CI command on local SQLite 3.45.1 after the review fixes:
+  2036 passed, 238 deselected, coverage 96.95%. This SQLite is
+  3.45.1, so the two `0006` float boundary tests passed (they fail
+  on SQLite 3.54). No local `demo/` directory, so the `run_demo`
+  dotenv test passed. No local PostgreSQL. No live market-data
+  calls. black, isort, and flake8 passed on the changed Python
+  files.
 - Proposed follow-up issues, not filed yet. Filing publishes outside
   this repository, so it waits for the owner's approval:
   - FU1, required by the Task 8 ruling: stop SQLite from reusing
@@ -68,27 +80,24 @@
     databases: the `0002` and `0004` docstrings, the "before
     2026-10-21 19:35" sentence, and a database stamped `0008` without
     `closed_at`.
-  - FU5: say why a pasted control or bidi character is rejected,
-    instead of "Ta wartość jest nieprawidłowa.".
+  - FU5: done for notes and theses (L4 above). The company name
+    form still says "Ta wartość jest nieprawidłowa." for a control
+    character, a bidi character, or a surrogate.
   - FU6: let Cmd, Ctrl or Shift-click on panel links open a new tab
     instead of swapping in place.
   - FU7: fail the SQLite CI job when node is missing
     (`REQUIRE_NODE=1`), instead of skipping `tests/test_ui_js.py`, and
     say so in the README.
-- Stop reason: the final-review fixes are done. The pull request and
-  the follow-up issues wait for the controller and the owner.
-- Active agents: the controller only; the implementers, the task
-  reviewers, the final-review lenses, and the fix-wave implementer
-  have finished. Blockers: none. Account usage was not available in
-  this session.
-- Next action: the controller checks the fix wave. Then, with the
-  owner's approval, file FU1 to FU7 and open the pull request. Its
-  body references #33 and the follow-up issues with "Refs" only,
-  never a closing keyword. Its GitHub Actions run must be green: the
-  PostgreSQL job runs the `0008` and `ResearchBehavior` tests for the
-  first time, and in the SQLite job `tests/test_ui_js.py` must pass,
-  not skip. HANDOFF section 2 and this file are refreshed with the
-  pull request.
+- Stop reason: the #104 review fixes are on this branch. Filing
+  the follow-ups still waits for the owner. The agent does not
+  merge.
+- Active agents: none. The Developer who was going to update the
+  stale docs is paused; those doc fixes are in this section.
+  Blockers: none. Account usage was not available in this session.
+- Next action: GitHub Actions on this head, SQLite and PostgreSQL,
+  both green. #104 stays in review. Do not merge. Do not file
+  FU1 to FU7 until the owner asks. The pull request body is the
+  owner's to update.
 
 ## Company name on `clean_text` (#86 remainder): 2026-10-30
 

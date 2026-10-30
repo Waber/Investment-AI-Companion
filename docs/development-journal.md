@@ -1,5 +1,44 @@
 # Development Journal
 
+## 2026-10-30 - Review fixes on notes and theses (#104)
+
+- Scope: the Code Reviewer's findings on pull request #104, fixed
+  on `feat/notes-theses-33` (rebased onto `origin/master`
+  `da6579d`). No new pull request. Frontend only: templates,
+  `static/ui.js`, the panel's form helpers, and the catalog.
+  Models, schema, migrations, collectors, scoring, and AI adapters
+  were not touched. Thesis labels "Dlaczego kupiłem" and "Kiedy
+  sprzedam / co złamie tezę" were not changed.
+- M1: the note add and the new-thesis post no longer carry
+  `data-plain-fallback`. A 500 after the row was stored used to
+  post the form again, store a second row, and discard the
+  server-rendered 500 panel. Edit and delete stay marked, because
+  repeating them does not insert a row. `ui.js` swaps a 500 into
+  `#research` only. Other 500s stay unswapped.
+- L4: `research_error_key` maps `blank` to `error.required`,
+  `too_long` to `error.too_long`, and `control_char`, `bidi`, and
+  `surrogate` to their own Polish and English catalog keys. The
+  company name still uses `error.invalid` for those three. A form
+  POST cannot carry a lone surrogate: UTF-8 refuses U+D800 before
+  the request is sent.
+- Nits: `dir="auto"` on a thesis title and on note and thesis
+  bodies. `load_company`, `not_found`, `see_other`,
+  `instrument_id`, and `with_ui_headers` are public. The
+  `responseHandling` list in `base.html` ends with the catch-all
+  `{"code":"...", "swap":false}`. A 422 from any `/ui` form is
+  swapped in by that same list (the `422` rule sits before
+  `[45]..`).
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI pytest command on local SQLite 3.45.1: 2036 passed, 238
+  deselected, coverage 96.95%. black, isort, and flake8 passed on
+  the changed Python files. No live market-data calls. No local
+  PostgreSQL. GitHub Actions on this head follows the push.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, one session.
+- Next: both GitHub Actions jobs on this head. #104 stays in
+  review. Do not merge.
+
 ## 2026-10-29 - Notes and theses on the company page (#33)
 
 - Scope: N1, the HTTP API and the `/ui` part of #33 (the tables and
@@ -134,8 +173,9 @@
   local `PATH`). black, isort, and flake8 passed on the changed Python
   files. The new `docs/api-demo.md` curl block ran as written against
   the demo on a scratch file in Task 10: every request answered as
-  documented. Not run: the PostgreSQL job locally (no server) and
-  GitHub Actions.
+  documented. Not run locally: the PostgreSQL job (no server).
+  GitHub Actions on pull request #104 later succeeded for SQLite
+  and PostgreSQL, on the head before the review fixes.
 - Chrome check (claude-in-chrome; the real demo on a scratch SQLite
   file; mouse and keyboard; Polish, then English): open and close the
   panel; add, edit, and delete notes; add, close, reopen, edit, and
@@ -181,9 +221,8 @@
   `git log`. On 2026-10-30 the final review ran after the Task 10 fix
   (07:43), and its synthesis was written at 08:21. The fix wave ran
   from about 08:23 to its last commit (see `git log`).
-- Next: the controller checks the fix wave. Then, with the owner's
-  approval, the follow-up issues and the pull request (see
-  `docs/work-state.md`).
+- Next: pull request #104 is open and in review. The review fixes
+  are the entry above. Follow-up issues are still not filed.
 
 ## 2026-10-30 - Rebase #106 and two review lows
 
