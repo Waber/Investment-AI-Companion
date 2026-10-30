@@ -3,7 +3,7 @@
 ## Watchlist N+1 and ticker-index SAWarning: 2026-10-30
 
 - Branch `cursor/watchlist-nplus1-sawarnings`, from `origin/master`
-  `3c40413`. Pull request to `master`. Refs, no closing keyword
+  `3c40413`. Pull request #108 to `master`. Refs, no closing keyword
   (there is no issue). Not merged.
 - Completed: `GET /ui/watchlist` no longer runs one price query and
   one company query per row. `list_items(with_company=True)` uses
