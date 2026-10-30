@@ -22,6 +22,7 @@ is the research 404, which links back to the panel.
 """
 
 import re
+from dataclasses import replace
 
 from fastapi import APIRouter, Depends, Form, Request
 from pydantic import ValidationError
@@ -49,6 +50,7 @@ from app.ui.research_view import (
     focus_after_delete,
     panel_state_path,
     research_count,
+    shows_item,
 )
 from app.ui.router import (
     _instrument_id,
@@ -339,7 +341,9 @@ def show_research_panel(
     The sticky note sends ``research``, the state it asks for.
     ``closed`` closes the panel. Any other value, or none, opens it.
     ``focus`` is ignored unless it names a note or thesis. When it
-    names a closed thesis, the closed list is unfolded.
+    names a closed thesis, the closed list is unfolded. When the
+    panel does not list that item, for example a note deleted in
+    another tab, the panel heading takes the focus.
     """
     company, missing = _load_company(request, db, company_id)
     if missing is not None:
@@ -353,6 +357,12 @@ def show_research_panel(
         show_closed=_names_closed_thesis(db, company.id, kept),
         focus=kept,
     )
+    if kept is not None and not shows_item(panel, kept):
+        # No element has that id, so the focus would drop to the top
+        # of the page. The heading takes it instead, as after a delete
+        # that leaves no neighbour to focus. ``ResearchPanel`` is
+        # frozen: ``replace`` returns a copy with one field changed.
+        panel = replace(panel, focus="research-title")
     return _panel_response(request, db, company, panel)
 
 
