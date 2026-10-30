@@ -46,7 +46,9 @@ def test_name_is_stripped_and_a_blank_name_is_rejected():
     for marks_only in ("\u0301", "\u093e", "\u20dd"):
         with pytest.raises(ValidationError) as marks:
             CompanyCreate(name=marks_only, ticker="AAA")
-        assert marks.value.errors()[0]["ctx"]["error"].code == "blank"
+        cause = marks.value.errors()[0]["ctx"]["error"]
+        assert cause.code == "blank"
+        assert cause.field == "name"
     based = CompanyCreate(name="A\u093e\u20dd", ticker="AAA")
     assert based.name == "A\u093e\u20dd"
     kept = CompanyCreate(name="Acme\u200b", ticker="AAA")
@@ -227,6 +229,42 @@ def test_company_name_length_stays_a_max_length_error():
         name=" " + ("N" * COMPANY_NAME_MAX) + " ", ticker="AAA"
     )
     assert padded.name == "N" * COMPANY_NAME_MAX
+
+
+@pytest.mark.asyncio
+async def test_api_stores_255_code_points_and_rejects_256(client):
+    """The column width is the number 255, not the constant's name.
+
+    ``'a' * 255`` is stored. ``'a' * 256`` is Pydantic
+    ``string_too_long`` and ``ctx.max_length`` is 255. A test that
+    multiplies ``COMPANY_NAME_MAX`` would still pass if that constant
+    were edited.
+    """
+    exact = "a" * 255
+    assert len(exact) == 255
+    created = await client.post(
+        "/api/v1/companies/",
+        json={"name": exact, "ticker": "FIT255"},
+    )
+    assert created.status_code == 201
+    assert created.json()["name"] == exact
+    assert len(created.json()["name"]) == 255
+    over = "a" * 256
+    assert len(over) == 256
+    rejected = await client.post(
+        "/api/v1/companies/",
+        json={"name": over, "ticker": "FIT256"},
+    )
+    assert rejected.status_code == 422
+    error = _field_error(rejected, "name")
+    assert error["type"] == "string_too_long"
+    assert error["msg"] == "String should have at most 255 characters"
+    assert error["ctx"] == {"max_length": 255}
+    fetched = await client.get("/api/v1/companies/")
+    assert fetched.status_code == 200
+    stored = [row["name"] for row in fetched.json()]
+    assert exact in stored
+    assert over not in stored
 
 
 @pytest.mark.asyncio

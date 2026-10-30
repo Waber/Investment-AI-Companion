@@ -28,18 +28,28 @@
   ASCII controls (code points below 32, and DEL) on its own.
   Exchange, country, sector, industry, website, and description are
   not on `clean_text`.
+- QA on `33a70a5`: behaviour items 1-5 passed. One Medium: the
+  length tests multiplied `COMPANY_NAME_MAX`, so a wrong constant
+  still passed. Fixed on this branch with literal tests: `'a' * 255`
+  is stored (form 303, API 201) and `'a' * 256` is form
+  `error.too_long` in Polish and English and API 422
+  `string_too_long` with `ctx.max_length == 255`. Mutating the
+  constant to 254 and to 256 made both new tests fail; the
+  mutation was not committed. Readable `ids=` were added. A
+  surrogate still cannot be rendered: the HTML response cannot
+  encode U+D800, so that case locks the catalog sentence for
+  `error.invalid` instead of a form POST.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
-  command on local SQLite 3.45.1: 1896 passed, 224 deselected,
-  coverage 96.42%. Two SQLAlchemy reflection warnings, unchanged.
-  The known `0006` float failures show up on SQLite 3.54; this
-  machine has 3.45.1, so those two tests passed. No local
-  PostgreSQL. GitHub Actions runs both jobs. No live market-data
-  calls. black, isort, and flake8 passed on the changed Python
-  files.
+  command on local SQLite 3.45.1 after the QA fixes: 1914 passed,
+  224 deselected, coverage 96.42%. The known `0006` float
+  failures show up on SQLite 3.54; this machine is 3.45.1, so
+  those two tests passed. No local PostgreSQL. GitHub Actions
+  runs both jobs. No live market-data calls. black, isort, and
+  flake8 passed on the changed Python files.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: GitHub Actions on the pull request, SQLite and
-  PostgreSQL, both green on the head commit. Raul merges with
+- Next action: GitHub Actions on the QA-fix commit, SQLite and
+  PostgreSQL, both green on the new head. Raul merges with
   "Rebase and merge". The agent does not merge.
 
 ## Watchlist N+1 and ticker-index SAWarning (#108, merged)

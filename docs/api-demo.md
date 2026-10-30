@@ -95,8 +95,13 @@ sentence. The other text failures are `value_error`. `ctx.error` is
 `surrogate`). It used to be `{}`. `type` and `msg` are unchanged in
 shape. A blank company name still says `Value error, name must
 contain a visible character`. A value made only of combining marks
-(`Mn`, `Mc`, `Me`, for example U+0301) is blank too, on a company
-name, a watchlist label, and a note. A letter keeps its mark.
+(`Mn`, `Mc`, `Me`, for example U+0301) is blank. A company name
+made only of those marks is 422 with the blank message above. A
+marks-only watchlist label becomes JSON `null`, the same as a
+blank label. A marks-only note body, thesis title, or thesis body
+is now 422 `blank`; those fields used to store the marks.
+Thesis-breakers allow a blank, so marks-only breakers become `""`.
+A letter keeps its mark.
 
 What differs from the previous write rules:
 

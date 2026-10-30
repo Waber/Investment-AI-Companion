@@ -1095,6 +1095,18 @@ async def test_duplicate_code_attribute_maps_without_the_class(
         "\u093e",
         "\u20dd",
     ],
+    ids=(
+        "empty",
+        "spaces",
+        "nbsp",
+        "ideographic-space",
+        "zwsp",
+        "zwnj-zwj-bom",
+        "nbsp-zwsp-ideographic-space",
+        "combining-acute",
+        "devanagari-aa",
+        "enclosing-circle",
+    ),
 )
 async def test_blank_company_name_is_422_in_both_languages(client, name):
     polish = await _post(
@@ -1170,6 +1182,7 @@ async def test_stored_name_matches_normalize_name(client):
         ("مصرف الراجحي", "ARABIC"),
         ("  همراه\u200cاول  ", "PERSIAN"),
     ],
+    ids=("hindi", "arabic", "persian-zwnj"),
 )
 async def test_names_in_other_scripts_match_normalize_name(
     client, raw, ticker
@@ -1190,28 +1203,17 @@ async def test_names_in_other_scripts_match_normalize_name(
 
 @pytest.mark.asyncio
 async def test_interior_control_or_only_combining_marks_is_422(client):
-    """A control, a bidi mark, or only marks, is 422 and stores nothing.
+    """Marks with no base letter are 422 and store nothing.
 
-    Create and edit share ``normalized_company_name``. Marks with no
-    base letter are blank, so the page says the field is required.
-    A control or a bidi mark is an invalid character. A bidi override
-    at the end is not stripped down to the letters. A letter with a
-    mark is stored.
+    The page says the field is required. A letter with a mark is
+    stored. Controls, bidi marks, and a surrogate are covered in
+    both languages by the test below.
     """
     required_names = (
         "\u0301",
         "\u0301\u0308",
         "\u093e",
         "\u20dd",
-    )
-    invalid_names = (
-        "Ke\x00pt",
-        "\x00Kept\x7f",
-        "Na\nme",
-        "\n\t",
-        "\u202eKept",
-        "Ke\u202ept",
-        "\u2066Name",
     )
     for name in required_names:
         response = await _post(
@@ -1222,17 +1224,6 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
         assert response.status_code == 422, repr(name)
         assert "To pole jest wymagane." in response.text
         assert "Ta wartość jest nieprawidłowa." not in response.text
-        assert _counts(client) == (0, 0)
-    for name in invalid_names:
-        response = await _post(
-            client,
-            "/ui/companies",
-            {"name": name, "ticker": "BADNM", "currency": "USD"},
-        )
-        assert response.status_code == 422, repr(name)
-        assert "Ta wartość jest nieprawidłowa." in response.text
-        assert "To pole jest wymagane." not in response.text
-        assert 'id="field-name-error"' in response.text
         assert _counts(client) == (0, 0)
     company_id, _data = await _create(
         client, name="A\u093e\u20dd", ticker="MARKA"
@@ -1306,6 +1297,124 @@ async def test_company_name_length_boundary_rerenders_and_stores_nothing(
     )
     assert edited.status_code == 422
     assert "Za długa wartość." in edited.text
+    client.cookies.set("ui_lang", "en")
+    english = await _post(
+        client,
+        "/ui/companies",
+        {"name": over, "ticker": "TOOLNG", "currency": "USD"},
+    )
+    assert english.status_code == 422
+    assert "This value is too long." in english.text
+    client.cookies.clear()
+    assert _stored_column(client, company_id, "name") == exact
+
+
+_INVALID_NAME_SENTENCE = {
+    "pl": "Ta wartość jest nieprawidłowa.",
+    "en": "This value is not valid.",
+}
+_REQUIRED_NAME_SENTENCE = {
+    "pl": "To pole jest wymagane.",
+    "en": "This field is required.",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", ("pl", "en"))
+@pytest.mark.parametrize(
+    "name",
+    (
+        "Ke\x00pt",
+        "\x00Kept\x7f",
+        "Na\nme",
+        "\n\t",
+        "\u202eKept",
+        "Ke\u202ept",
+        "\u2066Name",
+    ),
+    ids=(
+        "nul-inside",
+        "nul-and-del",
+        "newline-inside",
+        "newline-and-tab",
+        "rlo-before",
+        "rlo-inside",
+        "isolate",
+    ),
+)
+async def test_control_and_bidi_names_are_invalid_in_both_languages(
+    client, name, language
+):
+    """Each control or bidi name rerenders in Polish and in English.
+
+    The sentence is ``error.invalid``, not the required-field
+    sentence. Nothing is stored.
+    """
+    if language == "en":
+        client.cookies.set("ui_lang", "en")
+    response = await _post(
+        client,
+        "/ui/companies",
+        {"name": name, "ticker": "BADNM", "currency": "USD"},
+    )
+    assert response.status_code == 422, repr(name)
+    assert _INVALID_NAME_SENTENCE[language] in response.text
+    assert _REQUIRED_NAME_SENTENCE[language] not in response.text
+    assert 'id="field-name-error"' in response.text
+    assert _counts(client) == (0, 0)
+
+
+@pytest.mark.parametrize("language", ("pl", "en"))
+def test_surrogate_name_uses_the_invalid_sentence(language):
+    """A surrogate maps to ``error.invalid`` in both catalogs.
+
+    The form body is UTF-8, so a browser cannot post a lone
+    surrogate. Putting one into the re-rendered input makes the
+    HTML response raise ``UnicodeEncodeError``. The catalog
+    sentence is what that key shows when the page can be encoded.
+    """
+    rejected, errors, _form_key = validate_company(
+        {"name": "A\ud800B", "ticker": "BADNM", "currency": "USD"},
+        update=False,
+    )
+    assert rejected is None
+    assert errors["name"] == "error.invalid"
+    assert CATALOGS[language][errors["name"]] == (
+        _INVALID_NAME_SENTENCE[language]
+    )
+
+
+@pytest.mark.asyncio
+async def test_form_stores_255_code_points_and_rejects_256(client):
+    """255 code points redirect. 256 rerenders too-long in both languages.
+
+    The lengths are the literals 255 and 256. They do not read
+    ``COMPANY_NAME_MAX``, so editing that constant fails this test.
+    """
+    exact = "a" * 255
+    assert len(exact) == 255
+    company_id, _data = await _create(client, name=exact, ticker="FIT255")
+    assert _stored_column(client, company_id, "name") == exact
+    assert len(_stored_column(client, company_id, "name")) == 255
+    over = "a" * 256
+    assert len(over) == 256
+    polish = await _post(
+        client,
+        "/ui/companies",
+        {"name": over, "ticker": "FIT256", "currency": "USD"},
+    )
+    assert polish.status_code == 422
+    _assert_field_message(polish.text, "name", "Za długa wartość.")
+    client.cookies.set("ui_lang", "en")
+    english = await _post(
+        client,
+        "/ui/companies",
+        {"name": over, "ticker": "FIT256", "currency": "USD"},
+    )
+    assert english.status_code == 422
+    _assert_field_message(english.text, "name", "This value is too long.")
+    client.cookies.clear()
+    assert _counts(client) == (1, 0)
     assert _stored_column(client, company_id, "name") == exact
 
 
@@ -1317,6 +1426,7 @@ async def test_company_name_length_boundary_rerenders_and_stores_nothing(
         ("  Spółka 😀  ", "EMOJNM", "Spółka 😀"),
         ("e\u0301", "EACUTE", "e\u0301"),
     ],
+    ids=("polish-diacritics", "emoji", "letter-plus-acute"),
 )
 async def test_polish_diacritics_emoji_and_based_marks_are_stored(
     client, raw, ticker, stored
