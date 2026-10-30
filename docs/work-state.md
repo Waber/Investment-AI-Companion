@@ -52,17 +52,26 @@
 - Decisions are in the journal entry for this date. Last-wins is
   checked only on the winning bar: a discarded earlier copy with
   a bad currency is not an error when the last copy is valid.
+  QA on `f4bf55b` did not approve the test locks. The behaviour
+  stayed. The follow-up commit pins the literal cap 1024, refresh
+  `bar_count` against a collector that repeats a day, and a
+  Python-max tie that SQL would order the other way. `ZAc` is
+  kept next to `GBp`. Currency samples are one pytest case each.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. This
   machine's SQLite is 3.45.1, not 3.54, so the two known `0006`
-  float-boundary failures did not appear. CI command: 1885
-  passed, 227 deselected, coverage 96.42%. Two pre-existing
-  SAWarnings on the autogenerate tests (expression index
-  `uq_companies_ticker`). Local PostgreSQL 16.15,
+  float-boundary failures did not appear. CI command after the
+  QA fixes: 1893 passed, 232 deselected, coverage 96.42%. Two
+  pre-existing SAWarnings on the autogenerate tests (expression
+  index `uq_companies_ticker`). Local PostgreSQL 16.15,
   `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
-  integration suite: 227 passed, 1885 deselected. No live
-  market-data calls. black, isort, and flake8 passed on the
-  changed Python files.
+  integration suite: 232 passed, 1893 deselected. No live
+  market-data calls. black, isort, and flake8 passed on
+  the changed Python files. Mutation checks, each reverted:
+  cap 1025 fails `assert 1025 == 1024`; cap 1023 fails
+  `assert 1023 == 1024`; `bar_count=len(payload)` fails
+  `assert 2 == 1`; `_default_source` without Python `max`
+  returns `[IAC-DEMO-V2]` instead of `fake`.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
 - Next action: both GitHub Actions jobs green on this head, then

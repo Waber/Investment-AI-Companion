@@ -10,6 +10,7 @@ itself.
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import event
 
 from app.models.database_models import CompanyDB, PriceBarDB
@@ -174,7 +175,18 @@ def assert_failed_batch_keeps_the_stored_row(repo, session, instrument_id):
     assert list(session.new) == []
 
 
-def assert_bad_currency_leaves_no_row(repo, session, instrument_id):
+# One case per test. ``ids`` are the node names pytest prints.
+# ``usd `` has a trailing space, which is not three letters.
+BAD_CURRENCY_SAMPLES = (
+    pytest.param("PLNX", id="PLNX"),
+    pytest.param("US", id="US"),
+    pytest.param("PL1", id="PL1"),
+    pytest.param(None, id="None"),
+    pytest.param("usd ", id="usd-space"),
+)
+
+
+def assert_bad_currency_leaves_no_row(repo, session, instrument_id, bad):
     """A code that is not three letters never reaches the database.
 
     The batch also carries a valid new bar. That bar is not stored
@@ -182,29 +194,27 @@ def assert_bad_currency_leaves_no_row(repo, session, instrument_id):
     was already stored keeps PLN and its price.
     """
     repo.create(instrument_id, flat_bar("2026-03-01", 10))
-    samples = ("PLNX", "US", "PL1", None, "usd ")
-    for bad in samples:
-        created = flat_bar("2026-03-02", 11)
-        created.currency = bad
-        try:
-            repo.create(instrument_id, created)
-        except ValueError as caught:
-            assert str(caught) == "currency must be exactly three letters"
-            assert caught.__cause__ is None
-            assert caught.__context__ is None
-        else:
-            raise AssertionError("create should reject " + repr(bad))
-        updated = flat_bar("2026-03-01", 12, volume=12)
-        updated.currency = bad
-        fresh = flat_bar("2026-03-03", 13)
-        try:
-            repo.upsert_many(instrument_id, [fresh, updated])
-        except ValueError as caught:
-            assert str(caught) == "currency must be exactly three letters"
-        else:
-            raise AssertionError("upsert should reject " + repr(bad))
-        assert list(session.new) == []
-        assert list(session.dirty) == []
+    created = flat_bar("2026-03-02", 11)
+    created.currency = bad
+    try:
+        repo.create(instrument_id, created)
+    except ValueError as caught:
+        assert str(caught) == "currency must be exactly three letters"
+        assert caught.__cause__ is None
+        assert caught.__context__ is None
+    else:
+        raise AssertionError("create should reject " + repr(bad))
+    updated = flat_bar("2026-03-01", 12, volume=12)
+    updated.currency = bad
+    fresh = flat_bar("2026-03-03", 13)
+    try:
+        repo.upsert_many(instrument_id, [fresh, updated])
+    except ValueError as caught:
+        assert str(caught) == "currency must be exactly three letters"
+    else:
+        raise AssertionError("upsert should reject " + repr(bad))
+    assert list(session.new) == []
+    assert list(session.dirty) == []
     rows = stored_rows(session)
     assert [row.bar_date for row in rows] == [date(2026, 3, 1)]
     assert rows[0].currency == "PLN"
@@ -215,10 +225,11 @@ def assert_bad_currency_leaves_no_row(repo, session, instrument_id):
 def assert_repository_normalizes_a_lowercase_currency(
     repo, session, instrument_id
 ):
-    """``usd`` is stored as ``USD``. ``GBp`` keeps its case.
+    """``usd`` is stored as ``USD``. ``GBp`` and ``ZAc`` keep their case.
 
     The same rule as the API model. A direct caller does not get
-    a second spelling of one currency.
+    a second spelling of one currency. ``ZAc`` is South African
+    cents, the same kind of exception as London pence.
     """
     lower = flat_bar("2026-03-04", 6)
     lower.currency = "usd"
@@ -228,9 +239,38 @@ def assert_repository_normalizes_a_lowercase_currency(
     pence.currency = "GBp"
     stored = repo.create(instrument_id, pence)
     assert stored.currency == "GBp"
+    cents = flat_bar("2026-03-06", 6, source="cents")
+    cents.currency = "ZAc"
+    stored = repo.create(instrument_id, cents)
+    assert stored.currency == "ZAc"
     rows = {row.bar_date: row for row in stored_rows(session)}
     assert rows[date(2026, 3, 4)].currency == "USD"
     assert rows[date(2026, 3, 5)].currency == "GBp"
+    assert rows[date(2026, 3, 6)].currency == "ZAc"
+
+
+def assert_discarded_bad_currency_keeps_the_last_bar(
+    repo, session, instrument_id
+):
+    """Last-wins does not validate a copy that is not written.
+
+    The first bar's currency is not three letters. The later bar
+    for the same date and source is valid, so that bar is stored
+    and the batch does not raise.
+    """
+    discarded = flat_bar("2026-04-01", 3, volume=3)
+    discarded.currency = "NOPE"
+    winner = flat_bar("2026-04-01", 8, volume=8)
+    stored = repo.upsert_many(instrument_id, [discarded, winner])
+    assert len(stored) == 1
+    assert stored[0].currency == "PLN"
+    assert stored[0].close_price == Decimal("8.00000000")
+    assert stored[0].volume == 8
+    rows = stored_rows(session)
+    assert len(rows) == 1
+    assert rows[0].currency == "PLN"
+    assert rows[0].close_price == Decimal("8.00000000")
+    assert rows[0].volume == 8
 
 
 def assert_default_source_tie_is_one_grouped_query(
@@ -269,9 +309,9 @@ def assert_default_source_tie_is_one_grouped_query(
         chosen["source"] = PriceBarRepository._default_source(query)
 
     tied = select_statements(engine, read)
+    # One SELECT, not the old max-then-distinct pair. The winner
+    # itself is locked by the Python-max test, not by SQL text.
     assert len(tied) == 1
-    assert "group by" in tied[0].lower()
-    assert "distinct" not in tied[0].lower()
     assert chosen["source"] == "fake"
     # The window has the demo bar only. The source was already
     # chosen, so this is empty rather than the demo series.
@@ -298,7 +338,6 @@ def assert_default_source_tie_is_one_grouped_query(
     )
     later = select_statements(engine, read)
     assert len(later) == 1
-    assert "group by" in later[0].lower()
     assert chosen["source"] == "zzz"
 
     empty = session.query(PriceBarDB).filter(PriceBarDB.instrument_id == -1)

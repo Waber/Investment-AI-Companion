@@ -27,6 +27,50 @@
 - Next: GitHub Actions, SQLite and PostgreSQL, on the rebased
   head. Do not merge.
 
+## 2026-10-30 - Test locks for the price-bar follow-ups (#95)
+
+- Scope: QA on PR #107 at `f4bf55b` did not approve. The behaviour
+  stays. This commit only locks it. Same branch
+  `cursor/price-bar-followups-95-ce0a`. No Alembic revision.
+  `app/ui`, `templates/`, and `static/` were not edited. The pull
+  request still says Refs #95.
+- Decisions: the skip-log cap test no longer patches the limit.
+  It asserts `_MAX_LOGGED_SKIP_IDS == 1024`, fills 1024 ids, and
+  checks that the 1025th drops only id 1, which then logs again.
+  Refresh `bar_count` is locked with an HTTP test: a stub
+  collector returns the same day twice, the response is 200,
+  `bar_count` is 1, and GET has that many rows with the later
+  price. The tie test feeds `_default_source` pairs whose SQL
+  order (brackets ignored, case folded) picks `[IAC-DEMO-V2]`.
+  Python `max` still returns `fake`. C.UTF-8 cannot show that
+  split, so the test does not use a database collation. A bad
+  currency on a discarded earlier duplicate stays accepted when
+  the last copy is valid. That sentence is in `docs/demo-data.md`
+  and `docs/api-demo.md`, with the `bar_count` rule. `ZAc` is
+  stored unchanged, next to `GBp`. Each bad currency is its own
+  pytest case (`ids=`).
+- For a Java developer: `@pytest.mark.parametrize` is JUnit's
+  `@ParameterizedTest`. `ids=` is the name in the report, so
+  `None` and `usd ` are not one loop failure. The tie stand-in
+  is a fake query object. Production code calls `.all()` and
+  then `max`. A version that `ORDER BY`s and takes the first row
+  hits the fake's other order and gets the demo marker.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  No live market data. SQLite 3.45.1. CI command: 1893 passed,
+  232 deselected, coverage 96.42%. Local PostgreSQL 16.15
+  integration suite: 232 passed, 1893 deselected. Mutations,
+  then reverted:
+  cap 1025 failed (`1025 == 1024`); cap 1023 failed
+  (`1023 == 1024`); `bar_count=len(payload)` failed (`2 == 1`);
+  `_default_source` without Python `max` returned
+  `[IAC-DEMO-V2]` instead of `fake`. black, isort, and flake8
+  passed on the changed Python files.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 10:03 to 10:20.
+- Next: both GitHub Actions jobs on the new head. Agents do not
+  merge. #95 stays open.
+
 ## 2026-10-30 - QA Lows on the watchlist batch read
 
 - Scope: QA approved pull request #108 at `35847c5` with Lows.

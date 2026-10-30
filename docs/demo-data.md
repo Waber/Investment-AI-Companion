@@ -164,6 +164,8 @@ One refresh is one batch. Two bars in that batch with the same
 session date and source are one key. The later bar is stored, and
 the earlier bar is not written, whether or not the prices match.
 `bar_count` counts stored keys, so the repeated key counts once.
+A discarded earlier copy is not validated: a bad currency on that
+copy does not reject the batch when the last copy is valid.
 If the batch then fails for another reason, the whole batch is
 rolled back, including that last bar. A row that was already stored
 keeps the values it had before the refresh.

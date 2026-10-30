@@ -77,6 +77,15 @@ strings such as `10.50000000`, not JSON numbers. Parse them with
 `Decimal` or another decimal library. Never use float math: a binary
 float cannot hold every 8-place price.
 
+`POST /api/v1/instruments/{id}/prices/refresh` upserts the collector's
+bars. `bar_count` is the number of stored keys (the session date and
+the source), not the number of bars the collector returned. Two bars
+in one refresh with the same date and source count once: the later
+bar is stored and the response is 200. Prices that differ do not turn
+that refresh into 400. A discarded earlier copy is not validated, so
+a bad currency on that copy does not reject the batch when the last
+copy is valid.
+
 `instrument_type` is `STOCK`, `ETF`, or `ETC`. Omitting it on create
 stores `STOCK`. On update, omit it to keep the stored type. JSON
 `null` is 422. A value already stored outside those three is returned
