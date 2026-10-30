@@ -85,8 +85,18 @@
     thesis ends on the spec's fixed 303 target with the closed list
     folded;
   - after a mouse close or reopen in Safari or Firefox on macOS, the
-    focus falls to the page: the id restore needs a focused button.
-    Deferred to an app-wide follow-up.
+    focus is expected to fall to the page, because the id restore
+    needs a focused button (expected from those browsers' click-focus
+    behaviour; not driven, only Chrome was). Deferred to an app-wide
+    follow-up (FU2 in `docs/work-state.md`);
+  - after a language switch, or a link that fell back to a plain
+    request, the address bar keeps the inline form's URL, and later
+    HTMX panel actions do not change it. A reload can then open the
+    edit form again, or show the research 404 when that item has been
+    deleted since. Its back link returns to the panel in one click.
+    `HX-Replace-Url` would fix the address bar, but it would also need
+    HTMX's history cache turned off, so that note text is not
+    snapshotted into `localStorage`.
 - Task 10 tests: the warning test and the changed label and href
   assertions failed first. The two persistence tests
   (`test_notes_survive_data_and_price_refresh`,
@@ -94,14 +104,38 @@
   because they pin behaviour that already held. Four throwaway mutants
   (a refresh that deletes or rewrites research, an insert that is
   never committed) each made them fail.
-- Verification: no `.env`, local SQLite 3.54. CI pytest command: 1983
-  passed, 3 failed (the two `0006` float boundary tests, and
-  `test_run_demo` because a local `demo/` directory exists), 233
-  deselected, the 2 known `SAWarning`s, coverage 96.87%. black,
-  isort, and flake8 passed on the changed Python files. The new
-  `docs/api-demo.md` curl block ran as written against the demo on a
-  scratch file: every request answered as documented. Not run: the
-  PostgreSQL job locally (no server) and GitHub Actions.
+- Final whole-branch review (2026-10-30, a workflow of four lenses:
+  spec and rulings; data, migration and API; UI, HTMX, accessibility
+  and security; tests and docs): "With fixes", no Critical or
+  Important finding. Five Minor fixes came before the pull request:
+  - F1: "Anuluj" on an edit form or a delete question whose item
+    another tab had deleted left no `autofocus`, so the focus fell to
+    `<body>`. The panel heading now takes it. The new test cases
+    failed first (no `autofocus` in the answer). Three throwaway
+    mutants (closed theses left out, the guard for a missing `focus`
+    dropped, the old behaviour) each made the UI suite fail;
+  - F2: a thesis update with the stored texts still moves
+    `updated_at`, pinned like its note twin. The test passed at once,
+    and a throwaway mutant that skips unchanged texts in
+    `ThesisRepository.update` made it fail, and only it;
+  - F3: docstrings and `docs/api-demo.md` that contradicted the code:
+    a thesis the API creates closed, the company delete cascade, and
+    the one `ResearchStorageError` case that is not rolled back;
+  - F4: the follow-up issues FU1 to FU7, listed in
+    `docs/work-state.md` but not filed (filing waits for the owner's
+    approval), and corrections to work-state and this entry;
+  - F5: a no-break space in "Najwyżej 10 000 znaków.", as the app
+    writes Polish thousands. The five assertions failed first.
+- Verification: no `.env`, local SQLite 3.54. CI pytest command at the
+  final head: 1984 passed, 3 failed (the two `0006` float boundary
+  tests, and `test_run_demo` because a local `demo/` directory
+  exists), 234 deselected, the 2 known `SAWarning`s, coverage 96.88%.
+  Nothing was skipped, so `tests/test_ui_js.py` ran (node 22 on the
+  local `PATH`). black, isort, and flake8 passed on the changed Python
+  files. The new `docs/api-demo.md` curl block ran as written against
+  the demo on a scratch file in Task 10: every request answered as
+  documented. Not run: the PostgreSQL job locally (no server) and
+  GitHub Actions.
 - Chrome check (claude-in-chrome; the real demo on a scratch SQLite
   file; mouse and keyboard; Polish, then English): open and close the
   panel; add, edit, and delete notes; add, close, reopen, edit, and
@@ -121,9 +155,18 @@
   top of the window. After the fix, which keeps the fragment out of
   `hx-get`, Chrome showed the scroll position kept and the focus back
   on "+ Nowa teza".
-- AI model: Claude Opus 5.5 for the controller and the implementers;
-  the task reviewers ran on Opus at effort xhigh. Account usage was
-  not available in this session.
+- Chrome check of F1 (the demo on a scratch SQLite file, two tabs): in
+  tab A, note 2's edit form was open; tab B deleted note 2 through the
+  panel; in tab A, "Anuluj" by keyboard left `document.activeElement`
+  on the panel heading (`h2#research-title`), without a page load.
+  The same held for a thesis delete question, with a mouse click on
+  "Anuluj" after tab B deleted that thesis, and for a plain load of
+  `/ui/companies/1/research?focus=note-2`. No CSP violation, uncaught
+  error, or console message.
+- AI model: Claude Opus 5.5 for the controller, the implementers, and
+  the fix wave; the task reviewers ran on Opus at effort xhigh, and
+  the final whole-branch review ran on Claude Opus 5.5 (Ruling P6).
+  Account usage was not available in this session.
 - Time tracking (Europe/Warsaw): design and plan on 2026-10-28, 13:16
   to 14:39. Execution from 2026-10-29 09:02 to the Task 10 commit on
   2026-10-30 (see `git log`). At about 12:10 the controlling session
@@ -135,9 +178,12 @@
   clock, which suggests the machine was asleep. The restart, PL/EN,
   and warning checks, the work-state and journal edits, the last CI
   run, and the commit came after that. Per-task commit times are in
-  `git log`.
-- Next: the final whole-branch review, its fixes, then the pull
-  request.
+  `git log`. On 2026-10-30 the final review ran after the Task 10 fix
+  (07:43), and its synthesis was written at 08:21. The fix wave ran
+  from about 08:23 to its last commit (see `git log`).
+- Next: the controller checks the fix wave. Then, with the owner's
+  approval, the follow-up issues and the pull request (see
+  `docs/work-state.md`).
 
 ## 2026-10-30 - Rebase #106 and two review lows
 

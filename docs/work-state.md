@@ -1,6 +1,6 @@
 # Current Work State
 
-## Notes and theses (#33): 2026-10-29, ten tasks done, final review next
+## Notes and theses (#33): 2026-10-30, reviewed and fixed, pull request next
 
 - Branch `feat/notes-theses-33`, from `master` `3c40413`. Not pushed;
   no pull request yet.
@@ -9,8 +9,9 @@
   run with subagent-driven development. The per-task ledger (rulings,
   deferred review findings, status) is the git-ignored
   `.superpowers/sdd/2026-10-28-notes-theses/progress.md`.
-- Completed, Tasks 1 to 9 each reviewed (`15b5afb`..`ce52331`), and
-  Task 10 in the docs commit on top:
+- Completed, each task reviewed: Tasks 1 to 9 in
+  `15b5afb`..`ce52331`, and Task 10 in two commits, `3217d9b` and
+  `4fa7959`:
   - Task 1: `theses.closed_at` (revision `0008`);
   - Task 2: startup refuses a `theses` table without `closed_at` and
     names the Alembic commands;
@@ -28,32 +29,66 @@
     persistence tests, the EN "Close thesis" label, the new-thesis
     "Anuluj" link lands on the panel without JavaScript, the docs, and
     the Chrome check on the demo.
-- Incomplete: the final whole-branch review (the controller runs it as
-  a multi-reviewer workflow), its fixes, then the pull request.
-- Tests: the CI command gives 1983 passed and the 3 known local
-  failures, coverage 96.87%. The known failures are the two `0006`
-  float boundary tests on local SQLite 3.54, and
+- The final whole-branch review (four lenses, 2026-10-30) said "With
+  fixes": no Critical or Important finding, and five Minor fixes
+  before the pull request. The fix wave made them in five commits:
+  - F1 `b290b99`: "Anuluj" for a note or thesis deleted in another
+    tab now puts the focus on the panel heading, not on the page;
+  - F5 `d77ecb5`: "Najwyżej 10 000 znaków." keeps a no-break space
+    between 10 and 000;
+  - F2 `faa4816`: a test pins that a thesis update with the stored
+    texts still moves `updated_at`;
+  - F3 `4a01368`: docstrings and `docs/api-demo.md` that contradicted
+    the code;
+  - F4: this file and the journal, in the docs commit after
+    `4a01368`.
+- Incomplete: the pull request and its GitHub Actions run, and the
+  follow-up issues below.
+- Tests: the CI command at the final head gives 1984 passed and the 3
+  known local failures, coverage 96.88%. The known failures are the
+  two `0006` float boundary tests on local SQLite 3.54, and
   `tests/test_run_demo.py::test_child_process_does_not_inherit_dotenv_database`,
   which fails because a local git-ignored `demo/` directory exists.
   Not run: the PostgreSQL job (no local server) and GitHub Actions.
-- Deferred to follow-ups, no issue filed yet:
-  - SQLite reuses a deleted top id (no table uses `AUTOINCREMENT`), so
-    a stale form can reach a newer note or thesis. This is app-wide.
-  - After a mouse close or reopen in Safari or Firefox on macOS, the
-    focus falls to the page: HTMX's id restore needs a focused button.
-  - `/static` files have no `Cache-Control`, so a browser can keep an
-    old `ui.css` or `ui.js` after an update.
-- Stop reason: Task 10 is done. From about 16:05 on 2026-10-29 its
-  tool calls came back hours apart, for a cause the session could not
-  see, so the browser check finished and Task 10 was committed on
-  2026-10-30. Earlier, at about 12:10 on 2026-10-29, the controlling
-  session lost its terminal view in IntelliJ; a new session took over
-  from the ledger at Task 7.
-- Active agents: the controller only; the implementers and the task
-  reviewers have finished. Blockers: none. Account usage was not
-  available in this session.
-- Next action: the final whole-branch review of
-  `3c40413..feat/notes-theses-33`, then the pull request.
+- Proposed follow-up issues, not filed yet. Filing publishes outside
+  this repository, so it waits for the owner's approval:
+  - FU1, required by the Task 8 ruling: stop SQLite from reusing
+    deleted row ids, so a stale form cannot edit or delete a newer
+    note, thesis or company (`AUTOINCREMENT` plus one migration, or a
+    row token on forms that can go stale).
+  - FU2, required by the Task 9 ruling: in `ui.js`, focus the clicked
+    control before an HTMX request, so the id restore works after a
+    mouse click in Safari and Firefox. Until then, after a mouse close
+    or reopen in those browsers on macOS, the focus is expected to
+    fall to the page (expected from those browsers' click-focus
+    behaviour; not driven, only Chrome was).
+  - FU3: serve `ui.css` and `ui.js` with `Cache-Control` or versioned
+    file names, so a cached copy does not hide an update.
+  - FU4: tighten the `alembic stamp` advice for old `create_all`
+    databases: the `0002` and `0004` docstrings, the "before
+    2026-10-21 19:35" sentence, and a database stamped `0008` without
+    `closed_at`.
+  - FU5: say why a pasted control or bidi character is rejected,
+    instead of "Ta wartość jest nieprawidłowa.".
+  - FU6: let Cmd, Ctrl or Shift-click on panel links open a new tab
+    instead of swapping in place.
+  - FU7: fail the SQLite CI job when node is missing
+    (`REQUIRE_NODE=1`), instead of skipping `tests/test_ui_js.py`, and
+    say so in the README.
+- Stop reason: the final-review fixes are done. The pull request and
+  the follow-up issues wait for the controller and the owner.
+- Active agents: the controller only; the implementers, the task
+  reviewers, the final-review lenses, and the fix-wave implementer
+  have finished. Blockers: none. Account usage was not available in
+  this session.
+- Next action: the controller checks the fix wave. Then, with the
+  owner's approval, file FU1 to FU7 and open the pull request. Its
+  body references #33 and the follow-up issues with "Refs" only,
+  never a closing keyword. Its GitHub Actions run must be green: the
+  PostgreSQL job runs the `0008` and `ResearchBehavior` tests for the
+  first time, and in the SQLite job `tests/test_ui_js.py` must pass,
+  not skip. HANDOFF section 2 and this file are refreshed with the
+  pull request.
 
 ## Company name on `clean_text` (#86 remainder): 2026-10-30
 
