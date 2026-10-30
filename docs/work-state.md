@@ -40,17 +40,24 @@
   encode U+D800, so that case locks the catalog sentence for
   `error.invalid` instead of a form POST.
 - Tests: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset. CI
-  command on local SQLite 3.45.1 after the QA fixes: 1914 passed,
-  224 deselected, coverage 96.42%. The known `0006` float
-  failures show up on SQLite 3.54; this machine is 3.45.1, so
-  those two tests passed. No local PostgreSQL. GitHub Actions
-  runs both jobs. No live market-data calls. black, isort, and
-  flake8 passed on the changed Python files.
+  command on local SQLite 3.45.1 after the rebase and the review
+  lows: 1921 passed, 225 deselected, coverage 96.47%. The known
+  `0006` float failures show up on SQLite 3.54; this machine is
+  3.45.1, so those two tests passed. No local PostgreSQL.
+  GitHub Actions runs both jobs. No live market-data calls.
+  black, isort, and flake8 passed on the changed Python files.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: GitHub Actions on the QA-fix commit, SQLite and
-  PostgreSQL, both green on the new head. Raul merges with
-  "Rebase and merge". The agent does not merge.
+- Review lows, tests only: a stored name with U+200F still
+  renders on the detail page and the edit form, and the edit
+  POST is 422 `error.invalid`. A 422 whose name is
+  `<script>x</script>` plus U+202E escapes the tag. No production
+  behaviour change in that commit. The edit block for an
+  already-stored bidi mark is the behaviour from the `clean_text`
+  move, recorded above.
+- Next action: GitHub Actions on the rebased head, SQLite and
+  PostgreSQL, both green. Raul merges with "Rebase and merge".
+  The agent does not merge. #106 stays in review. #108 is merged.
 
 ## Watchlist N+1 and ticker-index SAWarning (#108, merged)
 
