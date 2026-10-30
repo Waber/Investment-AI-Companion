@@ -15,9 +15,13 @@
    without joining the Tab order.
 
    Every form and HTMX link in the panel replaces the whole panel
-   (hx-target, hx-swap) and carries data-plain-fallback: when the
-   HTMX request fails, ui.js repeats it without HTMX, so a form posts
-   to its own action and a link opens its own href.
+   (hx-target, hx-swap). Links, edits, deletes, and close or reopen
+   carry data-plain-fallback: when the HTMX request fails, ui.js
+   repeats it without HTMX, so a form posts to its own action and a
+   link opens its own href. The note add and the new-thesis post do
+   not. Repeating those would store a second row, including when the
+   500 is only the refresh after a commit that already worked. ui.js
+   swaps that 500 into #research instead.
 
    Only HTMX answers set ``research_oob``. They also bring the
    sticky-note form and the language switch's return path out of
@@ -79,14 +83,16 @@
    the request's anchor and scroll to it after the swap. #}
 <a{% if link_id %} id="{{ link_id }}"{% endif %} href="{{ href }}" hx-get="{{ href.partition('#')[0] }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback{% if label %} aria-label="{{ label }}"{% endif %}>{{ text }}</a>
 {% endmacro %}
-{% macro thesis_form(panel, prefix, action, cancel, cancel_id=none) %}
+{% macro thesis_form(panel, prefix, action, cancel, cancel_id=none, repeatable=true) %}
 {# The new-thesis form and a thesis's inline edit form: the three
    fields, "Zapisz", and "Anuluj". There is no status field. A new
    thesis starts active, and only "Zamknij tezę" and "Otwórz
    ponownie" change the status. ``cancel_id`` is the id "Anuluj"
-   takes; see "+ Nowa teza". #}
+   takes; see "+ Nowa teza". ``repeatable`` is false for a new
+   thesis: posting it twice would store two theses. An edit is safe
+   to repeat, so it keeps data-plain-fallback. #}
 {% set form = panel.form %}
-<form method="post" class="stacked-form" action="{{ action }}" hx-post="{{ action }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+<form method="post" class="stacked-form" action="{{ action }}" hx-post="{{ action }}" hx-target="#research" hx-swap="outerHTML"{% if repeatable %} data-plain-fallback{% endif %}>
   {{ form_errors(panel, prefix, form, {'title': 'field.thesis_title', 'body': 'field.thesis_body', 'thesis_breakers': 'field.thesis_breakers'}) }}
   <div class="form-field">
     <label for="{{ prefix }}-title">{{ t['field.thesis_title'] }}</label>
@@ -246,7 +252,7 @@
      out of hx-get, so HTMX keeps the scroll position. #}
   {% set theses_action = '/ui/companies/' ~ panel.company_id ~ '/theses' %}
   {% if panel.form and panel.form.kind == 'thesis_new' %}
-  {{ thesis_form(panel, 'thesis-new', theses_action, '/ui/companies/' ~ panel.company_id ~ '/research#research', 'thesis-new-link') }}
+  {{ thesis_form(panel, 'thesis-new', theses_action, '/ui/companies/' ~ panel.company_id ~ '/research#research', 'thesis-new-link', repeatable=false) }}
   {% else %}
   <p>{{ panel_link(theses_action ~ '/new', t['action.new_thesis'], link_id='thesis-new-link') }}</p>
   {% endif %}
@@ -273,7 +279,7 @@
   {% endif %}
   <h3>{{ t['research.notes'] }}</h3>
   {% set notes_action = '/ui/companies/' ~ panel.company_id ~ '/notes' %}
-  <form method="post" class="stacked-form" action="{{ notes_action }}" hx-post="{{ notes_action }}" hx-target="#research" hx-swap="outerHTML" data-plain-fallback>
+  <form method="post" class="stacked-form" action="{{ notes_action }}" hx-post="{{ notes_action }}" hx-target="#research" hx-swap="outerHTML">
     {{ form_errors(panel, 'note-new', panel.new_note, {'body': 'research.new_note'}) }}
     <div class="form-field">
       <label for="note-new-body">{{ t['research.new_note'] }}</label>

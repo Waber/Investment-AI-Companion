@@ -356,6 +356,19 @@ def _panel_actions(html):
     ]
 
 
+def _is_create_post(tag, attrs):
+    """The note add or the new-thesis post. Repeating either inserts.
+
+    An edit, a delete, a close, and a reopen are other actions on
+    the same path prefix, so the check is the action with nothing
+    after ``/notes`` or ``/theses``.
+    """
+    if tag != "form":
+        return False
+    action = attrs.get("action", "")
+    return action.endswith("/notes") or action.endswith("/theses")
+
+
 def _without_fragment(href):
     """``href`` up to its ``#``: the request a panel link sends.
 
@@ -1336,10 +1349,12 @@ async def test_note_focus_rules(client):
 
 @pytest.mark.asyncio
 async def test_note_actions_fall_back_and_are_named(client):
-    """Every panel action works without HTMX and names its note.
+    """Panel actions work without HTMX and name the note.
 
-    A failed HTMX request is repeated without HTMX (``ui.js``), so a
-    form posts to its own ``action`` and a link opens its own ``href``.
+    A failed HTMX request is repeated without HTMX (``ui.js``) when
+    the control is marked, so a form posts to its own ``action`` and
+    a link opens its own ``href``. The note add is not marked:
+    repeating it would store a second note.
     """
     company_id = _company(client)
     note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
@@ -1354,7 +1369,10 @@ async def test_note_actions_fall_back_and_are_named(client):
     actions, links = set(), set()
     for response in states:
         for tag, attrs in _panel_actions(response.text):
-            assert "data-plain-fallback" in attrs, attrs
+            if _is_create_post(tag, attrs):
+                assert "data-plain-fallback" not in attrs, attrs
+            else:
+                assert "data-plain-fallback" in attrs, attrs
             assert attrs["hx-target"] == "#research"
             assert attrs["hx-swap"] == "outerHTML"
             if tag == "form":
@@ -2252,8 +2270,9 @@ async def test_thesis_draft_and_fallback(client):
 
     The "Nowa notatka" wrapper keeps ``hx-preserve`` in every thesis
     answer. A failed HTMX request is repeated without HTMX
-    (``ui.js``), so a form posts to its own ``action`` and a link
-    opens its own ``href``.
+    (``ui.js``) when the control is marked, so a form posts to its
+    own ``action`` and a link opens its own ``href``. The note add
+    and the new-thesis post are not marked.
     """
     company_id = _company(client)
     active = _thesis(client, company_id, "Teza AI", "2026-10-28T13:05")
@@ -2294,7 +2313,10 @@ async def test_thesis_draft_and_fallback(client):
         assert 'id="note-new-body"' in wrapper
         assert "autofocus" not in wrapper
         for tag, attrs in _panel_actions(html):
-            assert "data-plain-fallback" in attrs, attrs
+            if _is_create_post(tag, attrs):
+                assert "data-plain-fallback" not in attrs, attrs
+            else:
+                assert "data-plain-fallback" in attrs, attrs
             assert attrs["hx-target"] == "#research"
             assert attrs["hx-swap"] == "outerHTML"
             if tag == "form":

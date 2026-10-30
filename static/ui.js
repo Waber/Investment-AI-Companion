@@ -10,7 +10,13 @@
 // browser shows what the server answered: a form is submitted again,
 // a link is followed. form.submit() skips the submit event, so HTMX
 // does not catch this second request. Only mark forms whose action
-// is safe to repeat.
+// is safe to repeat. The note add and the new-thesis post are not
+// marked: a second post would store another row.
+//
+// A 500 aimed at #research is the panel's own error (for example the
+// refresh failed after the row was stored). Swap that answer in.
+// Any other 500 stays unswapped, so a watchlist or company form is
+// not replaced by an error page.
 //
 // A GET of the page's own URL plus a #fragment sends no request: the
 // browser only scrolls to the fragment. The sticky note's form does
@@ -73,6 +79,18 @@
     }
   }
 
+  // HTMX has already chosen shouldSwap from responseHandling. A 500
+  // for the research panel is the one extra case that must swap.
+  function swapResearchServerError(event) {
+    var detail = event.detail;
+    var xhr = detail && detail.xhr;
+    var target = detail && detail.target;
+    if (xhr && target && xhr.status === 500 && target.id === "research") {
+      detail.shouldSwap = true;
+    }
+  }
+
+  document.addEventListener("htmx:beforeSwap", swapResearchServerError);
   document.addEventListener("htmx:responseError", repeatWithoutHtmx);
   document.addEventListener("htmx:sendError", repeatWithoutHtmx);
   document.addEventListener("htmx:afterSettle", clearAutofocus);
