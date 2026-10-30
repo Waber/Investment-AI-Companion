@@ -593,6 +593,29 @@ async def test_script_payload_is_escaped_in_values_and_errors(client):
 
 
 @pytest.mark.asyncio
+async def test_script_beside_a_bidi_mark_is_escaped_on_422(client):
+    """A bidi mark rejects the name. The script tag is still escaped.
+
+    The 422 page prints the text the browser posted. ``<script>x``
+    must not appear as a raw tag.
+    """
+    response = await _post(
+        client,
+        "/ui/companies",
+        {
+            "name": "<script>x</script>\u202e",
+            "ticker": "XSSBID",
+            "currency": "USD",
+        },
+    )
+    assert response.status_code == 422
+    assert "&lt;script&gt;" in response.text
+    assert "<script>x" not in response.text
+    assert CATALOGS["pl"]["error.invalid"] in response.text
+    assert _counts(client) == (0, 0)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "field,value",
     [
@@ -1245,6 +1268,48 @@ async def test_interior_control_or_only_combining_marks_is_422(client):
     assert "This field is required." not in edited.text
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert "A\u093e\u20dd" in detail.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.asyncio
+async def test_stored_rlm_name_renders_and_cannot_be_saved_again(client):
+    """A name saved before the bidi ban still shows, and an edit is 422.
+
+    LRM, RLM, ALM, U+206A–U+206F, and tag characters are ``bidi``.
+    The edit form posts the stored name back, so ``error.invalid``
+    blocks the save. The detail page and the edit form still show
+    the character. The row is inserted past the form, the way an
+    older database would already hold it.
+    """
+    stored_name = "Saved\u200fName"
+    session = client.app.state.testing_session_local()
+    try:
+        row = CompanyDB(
+            name=stored_name,
+            ticker="OLDRLM",
+            currency="USD",
+            instrument_type="STOCK",
+        )
+        session.add(row)
+        session.commit()
+        company_id = row.id
+    finally:
+        session.close()
+    detail = await client.get(f"/ui/instruments/{company_id}")
+    assert detail.status_code == 200
+    assert stored_name in detail.text
+    edit = await client.get(f"/ui/companies/{company_id}/edit")
+    assert edit.status_code == 200
+    assert stored_name in edit.text
+    rejected = await _post(
+        client,
+        f"/ui/companies/{company_id}/edit",
+        {"name": stored_name, "ticker": "OLDRLM", "currency": "USD"},
+    )
+    assert rejected.status_code == 422
+    assert CATALOGS["pl"]["error.invalid"] in rejected.text
+    assert 'id="field-name-error"' in rejected.text
+    assert _stored_column(client, company_id, "name") == stored_name
 
 
 @pytest.mark.asyncio

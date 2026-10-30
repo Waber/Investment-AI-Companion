@@ -1,5 +1,32 @@
 # Development Journal
 
+## 2026-10-30 - Rebase #106 and two review lows
+
+- Scope: rebase `cursor/ui-company-name-clean-text-86` onto
+  `origin/master` `67974c5` (PR #108 merged). Conflicts were only
+  in `docs/work-state.md` and `docs/development-journal.md`. Both
+  sides stay. The journal is newest first: the #108 entries, then
+  this feature's entry, then 2026-10-27. Work-state says #108
+  merged and #106 is in review. No production code changed in
+  this round. Refs #86.
+- Review lows, tests only. A company stored earlier with RLM
+  (U+200F) still renders on the detail page and the edit form.
+  Posting that name back is 422 `error.invalid`, because LRM,
+  RLM, ALM, U+206A–U+206F, and tag characters are `bidi` and the
+  edit form re-sends the name. A 422 for
+  `<script>x</script>` plus U+202E contains `&lt;script&gt;` and
+  does not contain `<script>x`.
+- Verification: no `.env`, `DATABASE_URL` and `SECRET_KEY` unset.
+  CI pytest command on local SQLite 3.45.1: 1921 passed, 225
+  deselected, coverage 96.47%. The two new tests passed. black,
+  isort, and flake8 passed on `tests/test_ui_forms.py`. No live
+  market-data calls. No local PostgreSQL.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-10-30, about 30 minutes, from 14:05.
+- Next: GitHub Actions, SQLite and PostgreSQL, on the rebased
+  head. Do not merge.
+
 ## 2026-10-30 - QA Lows on the watchlist batch read
 
 - Scope: QA approved pull request #108 at `35847c5` with Lows.
@@ -144,6 +171,13 @@
   required. 256 characters still shows too long. `"\n\t"` is a
   control (checked before strip), so the form shows invalid, not
   required.
+- Behaviour change for a name already stored: LRM, RLM, ALM,
+  U+206A–U+206F, and tag characters are `bidi`. The edit form
+  sends the stored name back, so saving that company is now
+  422 `error.invalid`. The detail page and the edit form still
+  show the name. The API rejects a new name with those characters
+  the same way. A test inserts `Saved` plus U+200F past the form,
+  checks both pages, and checks the edit POST.
 - Left alone: `instrument_type_for_payload` still rejects ASCII
   controls itself (code points under 32, and DEL) so `strip` cannot
   hide a trailing newline and store ETF. Exchange, country, sector,
