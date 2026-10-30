@@ -15,7 +15,9 @@
   SAWarning (`upgrade_head_over_create_all`). This branch keeps
   those and the price-bar follow-ups. `_pick_default` is the one
   tie rule for `_default_source` and `_default_sources_for`.
-  Rendered HTML is unchanged.
+  The batch path is locked with a stand-in whose SQL order
+  would pick `[IAC-DEMO-V2]`; `recent_closes_for` still
+  returns `fake`. Rendered HTML is unchanged.
 - Fixed:
   - Item 2. `upsert_many` keeps the last bar when one batch
     repeats `(date, source)`. Equal prices leave one row. Unequal

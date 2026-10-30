@@ -479,12 +479,13 @@ class PriceBarRepository:
             grouped.setdefault(instrument_id, []).append(
                 (source, retrieved_at)
             )
-        chosen: Dict[int, str] = {}
-        for instrument_id, pairs in grouped.items():
-            source = _pick_default(pairs)
-            if source is not None:
-                chosen[instrument_id] = source
-        return chosen
+        # Each group was built from at least one row, so
+        # ``_pick_default`` returns a source. It returns None only
+        # for an empty list, which this loop does not pass.
+        return {
+            instrument_id: _pick_default(pairs)
+            for instrument_id, pairs in grouped.items()
+        }
 
     def _newest_readable_closes(
         self, sources: Dict[int, str], limit: int

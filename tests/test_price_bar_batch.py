@@ -5,6 +5,7 @@ calls a market-data provider.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +28,7 @@ from tests.price_bar_batch import (
     assert_failed_batch_keeps_the_stored_row,
     assert_repository_normalizes_a_lowercase_currency,
     assert_unequal_duplicate_prices_keep_the_last,
+    flat_bar,
 )
 
 
@@ -389,3 +391,110 @@ def test_default_source_tie_break_is_python_max_not_sql_order():
     assert _TieQuery(query._rows, order_sql=True).first()[0] == (
         "[IAC-DEMO-V2]"
     )
+
+
+def _folded_source_key(row):
+    """Punctuation-ignoring order for one grouped batch row.
+
+    The row is ``(instrument_id, source, retrieved_at)``. ``[`` and
+    ``]`` drop out and the rest is case-folded, which is the order
+    where ``[IAC-DEMO-V2]`` sorts after ``fake``.
+    """
+    _instrument_id, source, retrieved = row
+    folded = "".join(char for char in source.casefold() if char not in "[]")
+    return (retrieved, folded)
+
+
+class _BatchSourceQuery:
+    """The grouped rows ``_default_sources_for`` reads.
+
+    ``all()`` without ``order_by`` keeps the given order, and the
+    Python winner is not at either end. ``order_by`` then returns
+    the punctuation-ignoring order, demo marker first.
+    """
+
+    def __init__(self, rows, order_sql=False):
+        self._rows = rows
+        self._order_sql = order_sql
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def group_by(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return _BatchSourceQuery(self._rows, order_sql=True)
+
+    def all(self):
+        if not self._order_sql:
+            return list(self._rows)
+        return sorted(self._rows, key=_folded_source_key, reverse=True)
+
+
+class _RoutingSession:
+    """Real session, except the three-column source query.
+
+    ``_default_sources_for`` asks for instrument, source, and
+    ``max(retrieved_at)``. That call gets the stand-in. The close
+    queries that follow still hit the database.
+    """
+
+    def __init__(self, real, source_rows):
+        self._real = real
+        self._source_rows = source_rows
+
+    def query(self, *entities, **kwargs):
+        if len(entities) == 3:
+            return _BatchSourceQuery(self._source_rows)
+        return self._real.query(*entities, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def test_recent_closes_for_ignores_sql_source_order():
+    """The watchlist batch path still picks ``fake`` when SQL would not.
+
+    ``list_entries`` calls ``recent_closes_for``. The stand-in
+    returns ``aaa`` first and ``[IAC-DEMO-V2]`` last, and its
+    ``ORDER BY`` puts the demo marker first. The stored close for
+    ``fake`` is the one the page would show.
+    """
+    engine, session, repo, instrument_id = _sqlite_repo()
+    try:
+        when = datetime(2026, 10, 2, 18, tzinfo=timezone.utc)
+        for source, close in (
+            ("aaa", 2),
+            ("fake", 9),
+            ("[IAC-DEMO-V2]", 1),
+        ):
+            repo.create(
+                instrument_id,
+                flat_bar(
+                    "2026-04-06",
+                    close,
+                    volume=close,
+                    source=source,
+                    retrieved_at=when,
+                ),
+            )
+        rows = [
+            (instrument_id, "aaa", when),
+            (instrument_id, "fake", when),
+            (instrument_id, "[IAC-DEMO-V2]", when),
+        ]
+        assert _BatchSourceQuery(rows).all()[0][1] == "aaa"
+        assert _BatchSourceQuery(rows, order_sql=True).all()[0][1] == (
+            "[IAC-DEMO-V2]"
+        )
+        repo.db = _RoutingSession(session, rows)
+        assert repo._default_sources_for([instrument_id]) == {
+            instrument_id: "fake"
+        }
+        found = repo.recent_closes_for([instrument_id])
+        assert found[instrument_id].source == "fake"
+        assert found[instrument_id].latest.close_price == Decimal("9.00000000")
+    finally:
+        session.close()
+        engine.dispose()
