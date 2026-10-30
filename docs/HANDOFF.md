@@ -2,8 +2,9 @@
 
 This guide lets a coding agent outside Grok Bot (Claude Code, Codex,
 Cursor IDE) pull `master` and continue the work. State is as of
-2026-10-23, after #88, #97, and #98 merged. If `master` has moved,
-trust `docs/work-state.md` and GitHub over this file.
+2026-10-29: #96 merged, and #33 is on `feat/notes-theses-33`. If
+`master` has moved, trust `docs/work-state.md` and GitHub over this
+file.
 
 ## 1. Start here
 
@@ -59,7 +60,7 @@ PostgreSQL; it does not run the style checks.
   data providers; use deterministic fakes.
 - Never commit secrets, `.env`, or local configuration.
 
-## 2. Current state (2026-10-23)
+## 2. Current state (2026-10-29)
 
 Merged since the first version of this guide (`a21d912`): #83 (price
 bars, demo-v2 fixture), #87 (unique ticker index, shared company names,
@@ -67,26 +68,38 @@ bars, demo-v2 fixture), #87 (unique ticker index, shared company names,
 company forms), #90 (watchlist backend, #32), #91 (notes and theses
 backend, #33), #94 (price-bar follow-ups, Decimal OHLC, #85), #97
 (case-insensitive ticker index on `upper(ticker)`, #92), #98 (shared
-free-text validator `app.validation.text.clean_text`, Refs #86).
+free-text validator `app.validation.text.clean_text`, Refs #86), #101
+(the `/ui/watchlist` page and the heart toggle, closes #96, merged
+2026-10-28).
 `alembic/versions` on master runs `0001` to `0007` in one chain
 (`0007_companies_ticker_upper.py` is the head). Run `alembic heads` to
 check; a new revision revises the current head.
 
-No pull requests were open after #98 merged.
+#33 (notes and theses) is on `feat/notes-theses-33`, not merged and
+without a pull request yet. It adds the JSON API under
+`/api/v1/instruments/{instrument_id}/notes` and `/theses`, the
+sticky-note panel on `/ui/instruments/{id}`, and revision `0008`
+(`theses.closed_at`), which becomes the head when it merges. The
+branch's state and its next step are in `docs/work-state.md`.
 
-Known local issue: with SQLite 3.54 two `0006` float boundary tests in
+No pull request was open on 2026-10-29.
+
+Known local issues: with SQLite 3.54 two `0006` float boundary tests in
 `tests/test_price_bar_migration.py` fail locally on `master`. That
 SQLite casts a float to text with more digits than the SQLite in CI.
-CI is green.
+A git-ignored `demo/` directory left by a local demo run makes
+`tests/test_run_demo.py::test_child_process_does_not_inherit_dotenv_database`
+fail; a clean checkout does not have it. CI is green.
 
 ## 3. Prioritized queue
 
 Each item: own branch, PR, tests, work-state + journal updated.
 
-a. **#96 watchlist `/ui` page**: pull request from
-   `feat/watchlist-ui-96`. Follow-ups: #99 (named lists), #100
-   (on-demand AI summary per row).
-b. **#33 notes and theses UI and HTTP API**. The backend is merged.
+a. **#33 notes and theses UI and HTTP API**: on
+   `feat/notes-theses-33`. The final whole-branch review, its fixes,
+   and the pull request are next.
+b. **#102 Code Reviewer agent** (priority high): a reusable review
+   agent for every pull request.
 c. **#86 remainder**: move the `/ui` helper
    (`normalized_company_name` in `app/ui/form_fields.py`) onto the
    shared validator, agreed with the Frontend Developer.
@@ -98,8 +111,13 @@ f. Then, in order: #28, #30 and #31 (need #28), #35, #36, #37 (needs
    #36; ignore the disclaimer wording in the issue, see below), #8
    remaining baseline, #38, #39, #40.
 
+Watchlist follow-ups: #99 (named lists), #100 (on-demand AI summary
+per row).
+
 Post-demo: #54, #55, #56, #57, #58, #48, #62, #73, #52, #53, #10, #12,
-#20, #65, #76, #93.
+#20, #65, #76, #93. #103 (comments on buy and sell transactions,
+shown in the transaction history) is deferred until #57 brings
+transactions.
 
 ## 4. Constraints
 

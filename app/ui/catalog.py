@@ -160,7 +160,8 @@ _POLISH = {
     "field.period_type": "Typ okresu",
     "field.updated_at": "Ostatnia zmiana",
     "delete.company_warning": (
-        "Usunięcie tej spółki usuwa także jej wskaźniki finansowe."
+        "Usunięcie tej spółki usuwa także jej wskaźniki finansowe, "
+        "notatki i tezy."
     ),
     "delete.company_question": "Usunąć tę spółkę?",
     "delete.metrics_warning": ("Usunięcie tych wskaźników nie usuwa spółki."),
@@ -268,7 +269,7 @@ _ENGLISH = {
     "research.delete_note_named": "Delete the note from {datetime}",
     "research.edit_thesis_named": 'Edit the thesis "{title}"',
     "research.delete_thesis_named": 'Delete the thesis "{title}"',
-    "research.close_thesis_named": 'Close the thesis "{title}"',
+    "research.close_thesis_named": 'Close thesis "{title}"',
     "research.reopen_thesis_named": 'Reopen the thesis "{title}"',
     "field.thesis_title": "Title",
     "field.thesis_body": "Why I bought",
@@ -364,7 +365,8 @@ _ENGLISH = {
     "field.period_type": "Period type",
     "field.updated_at": "Last edit",
     "delete.company_warning": (
-        "Deleting this company also deletes its financial metrics."
+        "Deleting this company also deletes its financial metrics, "
+        "notes, and theses."
     ),
     "delete.company_question": "Delete this company?",
     "delete.metrics_warning": (
