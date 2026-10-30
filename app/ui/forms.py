@@ -12,9 +12,11 @@ repository ValueError (a duplicate) is 400. Both render the same form
 with the user's text still in the fields. A bad id uses the same guard
 as the detail page and is the HTML 404.
 
-Deleting a company goes through ``CompanyRepository.delete``. The
-company relationship cascades to financial metrics. Prices, a
-watchlist, notes, and analyses are not stored on this model.
+Deleting a company goes through ``CompanyRepository.delete``. Its
+financial metrics are deleted through the ORM relationship. The
+database removes its notes, theses, price bars, and watchlist row
+(``ON DELETE CASCADE`` on their foreign keys). The delete warning
+names the metrics, notes, and theses.
 """
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -567,7 +569,11 @@ def delete_company_form(
 def delete_company(
     request: Request, company_id: str, db: Session = Depends(get_db)
 ):
-    """Delete the company. Related financial metrics go with it."""
+    """Delete the company and everything stored for it.
+
+    Its financial metrics, notes, theses, price bars, and watchlist
+    row go with it (see the module docstring).
+    """
     row, missing = _load_company(request, db, company_id)
     if missing is not None:
         return missing

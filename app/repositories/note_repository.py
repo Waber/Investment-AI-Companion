@@ -57,7 +57,10 @@ class NoteRepository:
 
         Raises:
             CompanyNotFoundError: ``company_id`` is not in ``companies``.
-            ResearchStorageError: the insert failed and was rolled back.
+            ResearchStorageError: the insert failed and was rolled
+                back. One exception: when only the refresh after the
+                commit fails, the commit has already stored the note
+                (see ``commit_company_scoped``).
         """
         row = NoteDB(company_id=company_id, body=note.body)
         commit_company_scoped(self.db, company_id, row)
