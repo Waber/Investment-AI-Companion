@@ -50,8 +50,9 @@ are green.
 - **Important**: one of the failures above, or a bug a user or the
   stored data would hit. It blocks the merge until it is fixed or
   answered.
-- **Nit**: naming, wording, or a small simplification. Report at most
-  three per review and drop the rest. A nit never blocks.
+- **Nit**: naming, wording, or a small simplification. A nit never
+  blocks, however many there are. Report the three most useful and
+  drop the rest.
 - **Pre-existing**: a bug in code this PR did not change. Tag it, so it
   does not look like the author's fault, and suggest a follow-up issue
   instead of a fix in this PR.
