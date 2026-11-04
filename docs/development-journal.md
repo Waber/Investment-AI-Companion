@@ -18,8 +18,9 @@
     this repo (seven cases from AGENTS.md, issue #102, and earlier
     reviews), severity, evidence, paths, rounds, and the summary
     format.
-  - The severity labels are the article's: Important, Nit (at most
-    three per review), and Pre-existing. #102 proposes Critical,
+  - The severity labels are the article's: Important, Nit, and
+    Pre-existing. A nit never blocks, however many there are; the
+    reviewer reports the three most useful and drops the rest. #102 proposes Critical,
     Important, and Minor. #102 should pick one set.
   - From the article: every finding is answered, re-review covers
     only the new diff, and after three rounds the reviewer asks the
