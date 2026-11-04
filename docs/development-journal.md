@@ -1,5 +1,45 @@
 # Development Journal
 
+## 2026-11-04 - REVIEW.md for pull request reviews
+
+- Scope: a new `REVIEW.md` at the repository root, on branch
+  `docs/review-md` from `origin/master` `da6579d`. Docs only. Refs
+  #102: the Code Reviewer agent planned there can point at this file
+  instead of repeating the rules.
+- Source: "How the Claude Code team does code review" (Anthropic,
+  2026-10-15,
+  https://claude.dev/blog/solving-code-review-at-anthropic/). Raul
+  asked for a REVIEW.md based on it.
+- Decisions:
+  - Kept short, as the article advises: what failure looks like in
+    this repo (seven cases from AGENTS.md, issue #102, and earlier
+    reviews), severity, evidence, paths, rounds, and the summary
+    format.
+  - The severity labels are the article's: Important, Nit (at most
+    three per review), and Pre-existing. #102 proposes Critical,
+    Important, and Minor. #102 should pick one set.
+  - From the article: every finding is answered, re-review covers
+    only the new diff, and after three rounds the reviewer asks the
+    author to rethink the approach. The summary starts with a count
+    and says "Nothing to fix." plainly.
+  - Paths that always need Raul: migrations, CI workflows, the
+    origin check and security headers, config and lock files, the
+    collector guard and call budget, and code that sends data to an
+    AI model.
+  - Also corrected the PR #107 body. It said "does not close #95",
+    which GitHub reads as a closing keyword, so merging would have
+    closed #95. GitHub's `closingIssuesReferences` for #107 is now
+    empty.
+- Verification: no Python changed, so pytest was not run. A script
+  checked that all 19 paths named in `REVIEW.md` exist and that
+  `app/ui/router.py` sets the CSP.
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-11-04, branch created at 08:06, committed
+  at about 08:10. Reading the article and the #107 fix just before
+  were not timed.
+- Next: Raul reviews the branch. A pull request is not open yet.
+
 ## 2026-11-07 - Rebase #125 onto master c051ced
 
 - Scope: rebase `chore/security-audit-skill` onto `origin/master`
