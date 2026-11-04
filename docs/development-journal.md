@@ -5,7 +5,10 @@
 - Scope: a new `REVIEW.md` at the repository root, on branch
   `docs/review-md` from `origin/master` `da6579d`. Docs only. Refs
   #102: the Code Reviewer agent planned there can point at this file
-  instead of repeating the rules.
+  instead of repeating the rules. `AGENTS.md` Quality Gates now has
+  a line that tells agents to read `REVIEW.md` before they review a
+  pull request or ask for a review. Cursor, Codex, and Grok read
+  `AGENTS.md`, so the line is how they find the file.
 - Source: "How the Claude Code team does code review" (Anthropic,
   2026-10-15,
   https://claude.dev/blog/solving-code-review-at-anthropic/). Raul
