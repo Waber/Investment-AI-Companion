@@ -76,3 +76,4 @@ The Cloudflare `security-audit` skill in this repository is guidance unless the 
 - Do not call live market-data providers in automated tests.
 - Use deterministic fakes for external providers.
 - Run the relevant pytest suite before claiming completion.
+- Read `REVIEW.md` before you review a pull request or ask for a review. It says what failure looks like in this repository, which severity labels to use, and how to write the summary.
