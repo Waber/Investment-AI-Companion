@@ -1,5 +1,40 @@
 # Development Journal
 
+## 2026-11-05 - REVIEW.md review fixes on pull request #124
+
+- Scope: docs only, on branch `docs/review-md` from `origin/master`
+  `da6579d`. The open review on pull request #124 asked for these
+  doc fixes. Refs #102. #102 stays open. No new pull request.
+- What changed:
+  - `REVIEW.md` no longer calls a missing plain-form fallback a
+    failure. An action needs a path that works without JavaScript.
+    A create POST must not repeat itself. `data-plain-fallback`
+    posts the form again after an HTMX error, so a create must not
+    carry it. That matches the #104 M1 fix: note and thesis creates
+    dropped the attribute so a 500 after the commit cannot store
+    the row twice.
+  - Severity is Critical, Important, and Minor, the labels in #102.
+    Critical is the failure list and blocks. Important is another
+    bug a user or the stored data would hit, or a behaviour change
+    with no test, and it blocks. A minor never blocks, however many
+    there are; the reviewer reports the three most useful. The
+    article's Nit is Minor. Pre-existing stays a mark on a finding
+    this pull request did not cause. It is not a fourth severity,
+    and it does not block this pull request.
+  - The 2026-11-04 entry below no longer says a pull request is not
+    open. Pull request #124 is open.
+  - `docs/work-state.md` now describes this pull request. The #106
+    section records that #106 merged at `da6579d`.
+- Verification: no Python changed, so pytest was not run. A script
+  checked that every concrete path named in `REVIEW.md` exists.
+  `app/ui/router.py` still sets the CSP. No live market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-11-05, from 20:02.
+- Next: GitHub Actions on this head, SQLite and PostgreSQL. Do not
+  merge. When Raul merges, the order is #107, then #104, then #125,
+  then #124.
+
 ## 2026-11-04 - REVIEW.md for pull request reviews
 
 - Scope: a new `REVIEW.md` at the repository root, on branch
@@ -42,7 +77,8 @@
 - Time tracking (UTC): 2026-11-04, branch created at 08:06, committed
   at about 08:10. Reading the article and the #107 fix just before
   were not timed.
-- Next: Raul reviews the branch. A pull request is not open yet.
+- Pull request #124 is open on `docs/review-md`. Refs #102. #102
+  stays open.
 
 ## 2026-10-30 - Rebase #106 and two review lows
 
