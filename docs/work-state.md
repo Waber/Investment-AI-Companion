@@ -1,5 +1,33 @@
 # Current Work State
 
+## REVIEW.md for pull request reviews (#124): 2026-11-05
+
+- Branch `docs/review-md`, from `origin/master` `da6579d`. Not
+  behind `master`. Pull request #124 is open. Refs #102. Not
+  merged. #102 stays open. No new pull request. The agent does
+  not merge.
+- Completed: `REVIEW.md` at the repository root, and one line in
+  `AGENTS.md` Quality Gates that points a reviewer at that file.
+- Review fixes, docs only. An action needs a path that works
+  without JavaScript. A create POST must not repeat itself.
+  `data-plain-fallback` posts the form again after an HTMX error,
+  so a create must not carry it, and a missing one is not this
+  failure. That matches the #104 M1 fix. Severity labels are
+  Critical, Important, and Minor, as #102 asks. Critical and
+  Important block. A minor never blocks, however many there are.
+  Pre-existing is a mark, not a fourth label, and it does not
+  block this pull request.
+- Not in this pull request: the Code Reviewer agent file that
+  #102 asks for (`.claude/agents/code-reviewer.md`), and the
+  HANDOFF note for when to run it. #102 stays open.
+- Tests: docs only. Pytest was not run. No live market-data
+  calls. GitHub Actions runs both jobs on this head.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: GitHub Actions, SQLite and PostgreSQL, both green
+  on this head. Raul reviews. The agent does not merge. When Raul
+  merges, the order is #107, then #104, then #125, then #124.
+
 ## Security-audit skill (#125): 2026-11-07, rebased
 
 - Branch `chore/security-audit-skill`, rebased onto
