@@ -1,5 +1,54 @@
 # Development Journal
 
+## 2026-11-05 - Cloudflare security-audit skill
+
+- Scope: the `security-audit` agent skill from
+  https://github.com/cloudflare/security-audit-skill, on branch
+  `chore/security-audit-skill` from `origin/master` `da6579d`. No
+  application code changed. Raul ran
+  `npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit`
+  and chose to commit it so every agent and checkout gets it.
+- What is in the repository:
+  - `.agents/skills/security-audit/`: the 20 upstream files,
+    unchanged (upstream commit `c1c8a8c14710`, MIT). Codex, Cursor,
+    GitHub Copilot, and the other agents that read `.agents/skills`
+    find it there.
+  - `.claude/skills/security-audit`: a relative symlink to that
+    directory, for Claude Code.
+  - `skills-lock.json`: source and hash, so
+    `npx skills experimental_install` can restore the skill and
+    `npx skills update security-audit` can update it.
+  - `.agents/THIRD_PARTY_NOTICES.md`: the MIT notice the license
+    asks for. It sits outside the skill directory so the recorded
+    hash still matches.
+- Decisions:
+  - Project scope, not global, as in the command Raul ran.
+  - Reviewed before install: `SKILL.md` is a defensive audit
+    workflow, and loading it gives guidance only. A full audit and
+    report files need an explicit request. The two validators
+    (`validate-findings.cjs`, `validate-coverage-ledger.cjs`) only
+    require `fs`, `path`, and `util`. They make no network calls,
+    start no processes, and write nothing. The installed copies are
+    byte-identical to the reviewed ones.
+  - The installer's risk table said Gen "Safe", Socket "0 alerts",
+    and Snyk "Med Risk". The Snyk reason was not looked up
+    (details: https://skills.sh/cloudflare/security-audit-skill).
+- Verification: the skill files contain no personal paths, so the
+  repository-wide `git grep` test in `tests/test_secure_config.py`
+  still holds. No `.env`, `DATABASE_URL` and `SECRET_KEY` unset:
+  `tests/test_secure_config.py` 52 passed; `pytest --collect-only`
+  1921 of 2146 collected, 225 deselected, the same count as on
+  2026-10-30. Git stores `.claude/skills/security-audit` as a
+  symlink (mode `120000`). No Python changed, so the full suite was
+  not run locally.
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-11-05, install at 08:44, branch and
+  pull request after it, about 15 minutes in all.
+- Next: Raul reviews the pull request. The REVIEW.md pull request
+  (#124) also adds a journal entry at the top. Whichever merges
+  second needs a rebase that keeps both entries.
+
 ## 2026-10-30 - Review fixes on notes and theses (#104)
 
 - Scope: the Code Reviewer's findings on pull request #104, fixed
