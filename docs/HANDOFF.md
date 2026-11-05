@@ -2,7 +2,7 @@
 
 This guide lets a coding agent outside Grok Bot (Claude Code, Codex,
 Cursor IDE) pull `master` and continue the work. State is as of
-2026-10-30: #108 is merged, #106 is in review, and #33 is pull
+2026-10-30: #108 is merged, #106 is merged, and #33 is pull
 request #104 on `feat/notes-theses-33`. If `master` has moved,
 trust `docs/work-state.md` and GitHub over this file.
 
@@ -71,7 +71,7 @@ backend, #33), #94 (price-bar follow-ups, Decimal OHLC, #85), #97
 free-text validator `app.validation.text.clean_text`, Refs #86), #101
 (the `/ui/watchlist` page and the heart toggle, closes #96, merged
 2026-10-28), #108 (watchlist batch reads, merged). #106 (the `/ui`
-company name on `clean_text`, Refs #86) is in review, not merged.
+company name on `clean_text`, Refs #86) is merged.
 `alembic/versions` on master runs `0001` to `0007` in one chain
 (`0007_companies_ticker_upper.py` is the head). Run `alembic heads` to
 check; a new revision revises the current head.
@@ -99,8 +99,7 @@ a. **#33 notes and theses UI and HTTP API**: pull request #104,
 b. **#102 Code Reviewer agent** (priority high): a reusable review
    agent for every pull request.
 c. **#86 remainder**: pull request #106 moves
-   `normalized_company_name` onto `clean_text`. In review, not
-   merged.
+   `normalized_company_name` onto `clean_text`. Merged.
 d. **#95** price-bar repository follow-ups (skipped bars, batch
    duplicates, currency length).
 e. **#34 remainder**: `source=manual` column and a synthetic marker
