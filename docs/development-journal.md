@@ -38,6 +38,13 @@
 - Time tracking (UTC): 2026-10-30, one session.
 - Next: both GitHub Actions jobs on this head. #104 stays in
   review. Do not merge.
+- Delta, 2026-11-05: a 500 swaps into `#research` only when the
+  answer carries `HX-Research-Panel: 1`, set on the
+  `ResearchStorageError` panel. An unmarked 500 is not swapped.
+  `repeatWithoutHtmx` returns when the element is detached, so a
+  swapped edit or link is not repeated. The shared panel helpers
+  live in `tests/ui_html.py`. CI command on local SQLite 3.45.1:
+  2037 passed, 238 deselected, coverage 96.95%.
 
 ## 2026-10-29 - Notes and theses on the company page (#33)
 
