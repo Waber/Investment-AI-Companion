@@ -81,6 +81,11 @@ _TOO_LONG_KEYS = {
 # summary lists them in the same order.
 _THESIS_FIELDS = ("title", "body", "thesis_breakers")
 
+# ui.js swaps a 500 into #research only when this header is "1".
+# Starlette's plain "Internal Server Error" does not send it, so
+# that text is not written over the panel.
+_RESEARCH_PANEL_HEADER = "HX-Research-Panel"
+
 # One sentence per ``TextValidationError.code``. ``blank`` reuses the
 # required-field sentence. ``too_long`` reuses the generic length
 # sentence; a Pydantic ``string_too_long`` still names the limit via
@@ -229,6 +234,10 @@ def _panel_with_errors(
     summary, ``{prefix}-errors``, takes the focus: this is the only
     place the summary gets ``autofocus``. ``show_closed`` unfolds the
     closed list for a form inside a closed thesis.
+
+    A 500 is the ``ResearchStorageError`` path. It sets
+    ``HX-Research-Panel: 1`` so ``ui.js`` may swap that panel in.
+    A 422 does not, and neither does an unhandled exception.
     """
     panel = build_panel(
         db,
@@ -238,9 +247,12 @@ def _panel_with_errors(
         show_closed=show_closed,
         focus=f"{prefix}-errors",
     )
-    return _panel_response(
+    response = _panel_response(
         request, db, company, panel, status_code=status_code
     )
+    if status_code == 500:
+        response.headers[_RESEARCH_PANEL_HEADER] = "1"
+    return response
 
 
 def _changed(request, db, company, panel):

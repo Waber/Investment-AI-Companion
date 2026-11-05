@@ -46,8 +46,8 @@
   - F4 `f17bb4b`: this file and the journal.
 - Code review on #104, fixed on this branch (frontend only):
   - M1 `0dc4bff`: the note add and the new-thesis post are not
-    repeated after a failed HTMX request. A 500 swaps into
-    `#research` only;
+    repeated after a failed HTMX request. A storage 500 swaps into
+    `#research` only when it carries `HX-Research-Panel: 1`;
   - L4 `94e6c33`: each text-validation code has its own panel
     message;
   - nits `3e1976a`: `dir="auto"` on user text, the shared UI
@@ -55,13 +55,13 @@
 - Incomplete: filing FU1 to FU7 (FU5 is done for the panel; the
   company name still uses `error.invalid`). GitHub Actions on
   this review-fix head follows the push.
-- Tests: CI command on local SQLite 3.45.1 after the review fixes:
-  2036 passed, 238 deselected, coverage 96.95%. This SQLite is
-  3.45.1, so the two `0006` float boundary tests passed (they fail
-  on SQLite 3.54). No local `demo/` directory, so the `run_demo`
-  dotenv test passed. No local PostgreSQL. No live market-data
-  calls. black, isort, and flake8 passed on the changed Python
-  files.
+- Tests: CI command on local SQLite 3.45.1 after the 2026-11-05
+  delta: 2037 passed, 238 deselected, coverage 96.95%. This SQLite
+  is 3.45.1, so the two `0006` float boundary tests passed (they
+  fail on SQLite 3.54). No local `demo/` directory, so the
+  `run_demo` dotenv test passed. No local PostgreSQL. No live
+  market-data calls. black, isort, and flake8 passed on the changed
+  Python files.
 - Proposed follow-up issues, not filed yet. Filing publishes outside
   this repository, so it waits for the owner's approval:
   - FU1, required by the Task 8 ruling: stop SQLite from reusing
@@ -94,10 +94,10 @@
 - Active agents: none. The Developer who was going to update the
   stale docs is paused; those doc fixes are in this section.
   Blockers: none. Account usage was not available in this session.
-- Next action: GitHub Actions on this head, SQLite and PostgreSQL,
-  both green. #104 stays in review. Do not merge. Do not file
-  FU1 to FU7 until the owner asks. The pull request body is the
-  owner's to update.
+- Next action: GitHub Actions on the 2026-11-05 delta head,
+  SQLite and PostgreSQL, both green. #104 stays in review. Do not
+  merge. Do not file FU1 to FU7 until the owner asks. The pull
+  request body is the owner's to update.
 
 ## Price-bar repository follow-ups (#95): 2026-10-30
 

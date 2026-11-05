@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_ui_research import (
+from tests.ui_html import (
     _company,
     _is_create_post,
     _note,
@@ -52,6 +52,7 @@ function fakeElement(tagName, attributes, extra) {
   return Object.assign(
     {
       tagName: tagName,
+      isConnected: true,
       hasAttribute: (name) => names.has(name),
       removeAttribute: (name) => names.delete(name),
       getAttributeNames: () => [...names].sort(),
@@ -122,6 +123,19 @@ const unmarkedLink = fakeElement("A", ["href"], {
 });
 // Neither a form nor a link, so the marker alone does nothing.
 const markedButton = fakeElement("BUTTON", ["data-plain-fallback"]);
+// HTMX swaps first, then fires responseError. The form and the link
+// are no longer in the document, so neither is repeated.
+const detachedForm = fakeForm(
+  ["data-plain-fallback"],
+  "post",
+  "http://127.0.0.1/ui/companies/7/notes/3/edit",
+  [["body", "Zmieniona"]]
+);
+detachedForm.isConnected = false;
+const detachedLink = fakeElement("A", ["data-plain-fallback", "href"], {
+  href: "http://127.0.0.1/ui/companies/7/notes/3/edit",
+  isConnected: false,
+});
 
 // What one swap left inside its target. "kept" stands for an element
 // that hx-preserve carried over from the previous answer.
@@ -172,6 +186,8 @@ const elements = [
   unmarkedForm,
   unmarkedLink,
   markedButton,
+  detachedForm,
+  detachedLink,
 ];
 for (const name of ["htmx:responseError", "htmx:sendError"]) {
   for (const element of elements) {
@@ -192,6 +208,7 @@ console.log(JSON.stringify({
     samePage: samePageForm.submitted,
     otherPage: otherPageForm.submitted,
     unmarked: unmarkedForm.submitted,
+    detached: detachedForm.submitted,
   },
   assigned: assigned,
   attributes: Object.fromEntries(
@@ -216,6 +233,8 @@ def test_ui_js_repeats_marked_requests(tmp_path):
       ``#fragment`` load this page without the fragment, because the
       browser would only scroll to it and send no request. The
       page's own fragment does not change that;
+    - a detached marked form is not posted, and a detached marked
+      link is not followed. HTMX has already swapped them out;
     - nothing else happens.
 
     ``htmx:afterSettle`` then removes ``autofocus`` from every element
@@ -246,6 +265,7 @@ def test_ui_js_repeats_marked_requests(tmp_path):
             "samePage": 0,
             "otherPage": 2,
             "unmarked": 0,
+            "detached": 0,
         },
         "assigned": [_PAGE, _LINK, _PAGE, _PAGE, _LINK, _PAGE, _PAGE],
         "attributes": {
@@ -287,18 +307,73 @@ function fire(event) {
   }
 }
 
+function makeXhr(status, panel) {
+  return {
+    status: status,
+    getResponseHeader(name) {
+      if (panel && name.toLowerCase() === "hx-research-panel") {
+        return "1";
+      }
+      return null;
+    },
+  };
+}
+
 const cases = [
-  { name: "research500", status: 500, id: "research", shouldSwap: false },
-  { name: "other500", status: 500, id: "watchlist-table", shouldSwap: false },
-  { name: "research404", status: 404, id: "research", shouldSwap: false },
-  { name: "research422", status: 422, id: "research", shouldSwap: true },
-  { name: "research200", status: 200, id: "research", shouldSwap: true },
-  { name: "noId", status: 500, id: "", shouldSwap: false },
+  {
+    name: "research500",
+    status: 500,
+    id: "research",
+    panel: false,
+    shouldSwap: false,
+  },
+  {
+    name: "research500Marked",
+    status: 500,
+    id: "research",
+    panel: true,
+    shouldSwap: false,
+  },
+  {
+    name: "other500",
+    status: 500,
+    id: "watchlist-table",
+    panel: true,
+    shouldSwap: false,
+  },
+  {
+    name: "research404",
+    status: 404,
+    id: "research",
+    panel: true,
+    shouldSwap: false,
+  },
+  {
+    name: "research422",
+    status: 422,
+    id: "research",
+    panel: false,
+    shouldSwap: true,
+  },
+  {
+    name: "research200",
+    status: 200,
+    id: "research",
+    panel: false,
+    shouldSwap: true,
+  },
+  {
+    name: "noId",
+    status: 500,
+    id: "",
+    panel: true,
+    shouldSwap: false,
+  },
 ];
 const results = {};
 for (const item of cases) {
   const detail = {
-    xhr: { status: item.status },
+    xhr: makeXhr(item.status, item.panel),
     target: { id: item.id },
     shouldSwap: item.shouldSwap,
   };
@@ -323,8 +398,9 @@ async def test_create_forms_do_not_repeat_and_a_research_500_swaps(
     because it carried ``data-plain-fallback``. That second post
     stored another note or thesis and threw away the 500 panel.
     Edit and delete stay marked: repeating them does not insert a
-    row. ``ui.js`` swaps a 500 into ``#research`` and leaves every
-    other 500 unswapped.
+    row. ``ui.js`` swaps a 500 into ``#research`` only when the
+    response carries ``HX-Research-Panel: 1``. A 500 without that
+    header is left unswapped.
     """
     company_id = _company(client)
     note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
@@ -365,7 +441,9 @@ async def test_create_forms_do_not_repeat_and_a_research_500_swaps(
 
     script = UI_JS.read_text(encoding="utf-8")
     assert 'xhr.status === 500 && target.id === "research"' in script
+    assert 'getResponseHeader("HX-Research-Panel") === "1"' in script
     assert "detail.shouldSwap = true" in script
+    assert "!element.isConnected" in script
 
     node = shutil.which("node")
     if node is None:
@@ -383,7 +461,8 @@ async def test_create_forms_do_not_repeat_and_a_research_500_swaps(
     assert json.loads(completed.stdout) == {
         "listened": True,
         "results": {
-            "research500": True,
+            "research500": False,
+            "research500Marked": True,
             "other500": False,
             "research404": False,
             "research422": True,

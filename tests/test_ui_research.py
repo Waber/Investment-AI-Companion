@@ -13,21 +13,13 @@ UTC+1: 13:05Z is 14:05, and 23:30Z is already the next day.
 """
 
 import re
-from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 
-from app.models.database_models import CompanyDB, NoteDB, ThesisDB
-from app.models.research import (
-    Note,
-    NoteCreate,
-    NoteUpdate,
-    Thesis,
-    ThesisCreate,
-    ThesisStatus,
-)
+from app.models.database_models import NoteDB, ThesisDB
+from app.models.research import Note, Thesis, ThesisStatus
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.note_repository import NoteRepository
 from app.repositories.research_store import ResearchStorageError
@@ -36,7 +28,20 @@ from app.ui.catalog import CATALOGS
 from app.ui.formatting import format_local_date, format_local_datetime
 from app.ui.research_view import NewNote, PanelForm, ResearchPanel
 from app.ui.templating import MessageCatalog, templates
-from tests.ui_html import FormInParagraph, assert_labeled
+from tests.ui_html import (
+    FormInParagraph,
+    _between,
+    _company,
+    _is_create_post,
+    _note,
+    _panel,
+    _panel_actions,
+    _session,
+    _tags,
+    _thesis,
+    _utc,
+    assert_labeled,
+)
 
 UI_CSS = Path(__file__).resolve().parents[1] / "static" / "ui.css"
 _SCRIPT = "<script>alert(1)</script>"
@@ -71,92 +76,6 @@ _VOID = frozenset(
 )
 
 
-def _utc(text):
-    """``"2026-10-28T13:05"`` as an aware UTC datetime."""
-    return datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
-
-
-def _session(client):
-    return client.app.state.testing_session_local()
-
-
-def _company(client, name="Apple Inc.", ticker="AAPL"):
-    session = _session(client)
-    try:
-        row = CompanyDB(name=name, ticker=ticker, currency="USD")
-        session.add(row)
-        session.commit()
-        return row.id
-    finally:
-        session.close()
-
-
-def _note(client, company_id, body, created, edited=None):
-    """Store a note, edit it when ``edited`` is set, then pin the times.
-
-    A note that was not edited keeps ``updated_at == created_at``, as
-    the insert leaves it.
-    """
-    session = _session(client)
-    try:
-        notes = NoteRepository(session)
-        note_id = notes.create(company_id, NoteCreate(body=body)).id
-        if edited is not None:
-            notes.update(company_id, note_id, NoteUpdate(body=body))
-        row = session.get(NoteDB, note_id)
-        row.created_at = _utc(created)
-        row.updated_at = _utc(edited or created)
-        session.commit()
-        return note_id
-    finally:
-        session.close()
-
-
-def _thesis(
-    client,
-    company_id,
-    title,
-    created,
-    *,
-    body="Powód zakupu.",
-    breakers="",
-    closed=None,
-    updated=None,
-):
-    """Store a thesis, close it at ``closed`` if set, then pin the times.
-
-    ``updated`` defaults to the last change: the closing, else the
-    creation.
-    """
-    session = _session(client)
-    try:
-        theses = ThesisRepository(session)
-        thesis = ThesisCreate(title=title, body=body, thesis_breakers=breakers)
-        thesis_id = theses.create(company_id, thesis).id
-        if closed is not None:
-            theses.set_status(company_id, thesis_id, ThesisStatus.CLOSED)
-        row = session.get(ThesisDB, thesis_id)
-        row.created_at = _utc(created)
-        row.updated_at = _utc(updated or closed or created)
-        if closed is not None:
-            row.closed_at = _utc(closed)
-        session.commit()
-        return thesis_id
-    finally:
-        session.close()
-
-
-class _Tags(HTMLParser):
-    """Every start tag in document order, with its attributes."""
-
-    def __init__(self):
-        super().__init__()
-        self.tags = []
-
-    def handle_starttag(self, tag, attrs):
-        self.tags.append((tag, dict(attrs)))
-
-
 class _Texts(HTMLParser):
     """The text inside each element that has an id, children included."""
 
@@ -183,12 +102,6 @@ class _Texts(HTMLParser):
         for _, element_id in self.open:
             if element_id is not None:
                 self.texts[element_id] += data
-
-
-def _tags(html):
-    parser = _Tags()
-    parser.feed(html)
-    return parser.tags
 
 
 def _attrs(html, element_id):
@@ -222,18 +135,6 @@ def _oob_ids(html):
     return {
         attrs.get("id") for _, attrs in _tags(html) if "hx-swap-oob" in attrs
     }
-
-
-def _between(html, start_marker, end_marker):
-    """From ``start_marker`` up to the next ``end_marker``."""
-    start = html.index(start_marker)
-    end = html.index(end_marker, start)
-    return html[start:end]
-
-
-def _panel(html):
-    """The open panel, from its start tag to its end tag."""
-    return _between(html, '<section id="research"', "</section>")
 
 
 def _closed_list(html):
@@ -345,28 +246,6 @@ def _focus(response):
     assert response.text.count("autofocus") == 1, focused
     [element_id] = focused
     return element_id
-
-
-def _panel_actions(html):
-    """Every form and every HTMX link inside the open panel."""
-    return [
-        (tag, attrs)
-        for tag, attrs in _tags(_panel(html))
-        if tag == "form" or (tag == "a" and "hx-get" in attrs)
-    ]
-
-
-def _is_create_post(tag, attrs):
-    """The note add or the new-thesis post. Repeating either inserts.
-
-    An edit, a delete, a close, and a reopen are other actions on
-    the same path prefix, so the check is the action with nothing
-    after ``/notes`` or ``/theses``.
-    """
-    if tag != "form":
-        return False
-    action = attrs.get("action", "")
-    return action.endswith("/notes") or action.endswith("/theses")
 
 
 def _without_fragment(href):
@@ -1567,6 +1446,28 @@ async def test_storage_failure_keeps_the_text(client, monkeypatch):
         assert _text(response.text, f"note-{note_id}-body") == "Zmieniona"
         assert _focus(response) == errors
     assert _stored_notes(client, company_id) == {note_id: "Stara treść"}
+
+
+@pytest.mark.asyncio
+async def test_storage_error_marks_the_research_panel(client, monkeypatch):
+    """A storage 500 carries HX-Research-Panel so ui.js may swap it.
+
+    An unhandled exception is Starlette's plain 500 and has no
+    marker. ui.js must not swap that text into #research. A 422 is
+    the validation panel and is not marked either.
+    """
+    company_id = _company(client)
+    path = f"/ui/companies/{company_id}/notes"
+    invalid = await _post(client, path, {"body": "  "}, htmx=True)
+    assert invalid.status_code == 422
+    assert "hx-research-panel" not in invalid.headers
+
+    monkeypatch.setattr(NoteRepository, "create", _fail_storage)
+    for htmx in (False, True):
+        failed = await _post(client, path, {"body": "Nowa treść"}, htmx=htmx)
+        assert failed.status_code == 500
+        assert failed.headers["hx-research-panel"] == "1"
+        assert _NOT_STORED in failed.text
 
 
 @pytest.mark.asyncio

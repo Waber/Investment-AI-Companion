@@ -13,10 +13,19 @@
 // is safe to repeat. The note add and the new-thesis post are not
 // marked: a second post would store another row.
 //
-// A 500 aimed at #research is the panel's own error (for example the
-// refresh failed after the row was stored). Swap that answer in.
-// Any other 500 stays unswapped, so a watchlist or company form is
-// not replaced by an error page.
+// HTMX swaps first and fires htmx:responseError afterwards. A form
+// or link that the swap removed is detached. submit() on a detached
+// form is dropped by the browser, and following a detached link
+// would leave the error panel. repeatWithoutHtmx returns when the
+// element is not connected. A marked edit is repeated only while it
+// is still in the page, such as a 404 or a lost network.
+//
+// A 500 is swapped into #research only when the answer carries
+// HX-Research-Panel: 1. That header is set by the storage-error
+// handler, which renders the panel. Any other 500, including
+// Starlette's plain "Internal Server Error", is not swapped.
+// Swapping that text over #research would remove the panel, and
+// later requests aimed at #research would fail until a reload.
 //
 // A GET of the page's own URL plus a #fragment sends no request: the
 // browser only scrolls to the fragment. The sticky note's form does
@@ -59,6 +68,10 @@
   function repeatWithoutHtmx(event) {
     var element = event.detail && event.detail.elt;
     var url;
+    // See the note above: a swap already removed this element.
+    if (!element || !element.isConnected) {
+      return;
+    }
     if (isMarked(element, "FORM")) {
       url = element.method === "get" ? getFormUrl(element) : null;
       if (url !== null && onlyScrolls(url)) {
@@ -79,13 +92,21 @@
     }
   }
 
-  // HTMX has already chosen shouldSwap from responseHandling. A 500
-  // for the research panel is the one extra case that must swap.
+  // HTMX has already chosen shouldSwap from responseHandling. The
+  // storage-error panel is the one extra 500 that must swap, and
+  // only into #research. The header is how we tell it apart from
+  // an unhandled exception.
   function swapResearchServerError(event) {
     var detail = event.detail;
     var xhr = detail && detail.xhr;
     var target = detail && detail.target;
-    if (xhr && target && xhr.status === 500 && target.id === "research") {
+    var marked = xhr && xhr.getResponseHeader &&
+      xhr.getResponseHeader("HX-Research-Panel") === "1";
+    if (
+      marked &&
+      target &&
+      xhr.status === 500 && target.id === "research"
+    ) {
       detail.shouldSwap = true;
     }
   }

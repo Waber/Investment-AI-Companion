@@ -16,12 +16,13 @@
 
    Every form and HTMX link in the panel replaces the whole panel
    (hx-target, hx-swap). Links, edits, deletes, and close or reopen
-   carry data-plain-fallback: when the HTMX request fails, ui.js
-   repeats it without HTMX, so a form posts to its own action and a
-   link opens its own href. The note add and the new-thesis post do
-   not. Repeating those would store a second row, including when the
-   500 is only the refresh after a commit that already worked. ui.js
-   swaps that 500 into #research instead.
+   carry data-plain-fallback. ui.js repeats that request without
+   HTMX only while the element is still in the document: a 404 or a
+   lost network, where HTMX does not swap. A storage 500 carries
+   HX-Research-Panel, so HTMX swaps the panel first and the form or
+   link is then detached. ui.js does not repeat a detached element.
+   The note add and the new-thesis post are not marked. Repeating
+   those would store a second row.
 
    Only HTMX answers set ``research_oob``. They also bring the
    sticky-note form and the language switch's return path out of
