@@ -1,5 +1,85 @@
 # Development Journal
 
+## 2026-11-05 - REVIEW.md review fixes on pull request #124
+
+- Scope: docs only, on branch `docs/review-md` from `origin/master`
+  `da6579d`. The open review on pull request #124 asked for these
+  doc fixes. Refs #102. #102 stays open. No new pull request.
+- What changed:
+  - `REVIEW.md` no longer calls a missing plain-form fallback a
+    failure. An action needs a path that works without JavaScript.
+    A create POST must not repeat itself. `data-plain-fallback`
+    posts the form again after an HTMX error, so a create must not
+    carry it. That matches the #104 M1 fix: note and thesis creates
+    dropped the attribute so a 500 after the commit cannot store
+    the row twice.
+  - Severity is Critical, Important, and Minor, the labels in #102.
+    Critical is the failure list and blocks. Important is another
+    bug a user or the stored data would hit, or a behaviour change
+    with no test, and it blocks. A minor never blocks, however many
+    there are; the reviewer reports the three most useful. The
+    article's Nit is Minor. Pre-existing stays a mark on a finding
+    this pull request did not cause. It is not a fourth severity,
+    and it does not block this pull request.
+  - The 2026-11-04 entry below no longer says a pull request is not
+    open. Pull request #124 is open.
+  - `docs/work-state.md` now describes this pull request. The #106
+    section records that #106 merged at `da6579d`.
+- Verification: no Python changed, so pytest was not run. A script
+  checked that every concrete path named in `REVIEW.md` exists.
+  `app/ui/router.py` still sets the CSP. No live market-data calls.
+- AI model: Grok 4.7. Account usage was not available in this
+  session.
+- Time tracking (UTC): 2026-11-05, from 20:02.
+- Next: GitHub Actions on this head, SQLite and PostgreSQL. Do not
+  merge. When Raul merges, the order is #107, then #104, then #125,
+  then #124.
+
+## 2026-11-04 - REVIEW.md for pull request reviews
+
+- Scope: a new `REVIEW.md` at the repository root, on branch
+  `docs/review-md` from `origin/master` `da6579d`. Docs only. Refs
+  #102: the Code Reviewer agent planned there can point at this file
+  instead of repeating the rules. `AGENTS.md` Quality Gates now has
+  a line that tells agents to read `REVIEW.md` before they review a
+  pull request or ask for a review. Cursor, Codex, and Grok read
+  `AGENTS.md`, so the line is how they find the file.
+- Source: "How the Claude Code team does code review" (Anthropic,
+  2026-10-15,
+  https://claude.dev/blog/solving-code-review-at-anthropic/). Raul
+  asked for a REVIEW.md based on it.
+- Decisions:
+  - Kept short, as the article advises: what failure looks like in
+    this repo (seven cases from AGENTS.md, issue #102, and earlier
+    reviews), severity, evidence, paths, rounds, and the summary
+    format.
+  - The severity labels are the article's: Important, Nit, and
+    Pre-existing. A nit never blocks, however many there are; the
+    reviewer reports the three most useful and drops the rest. #102 proposes Critical,
+    Important, and Minor. #102 should pick one set.
+  - From the article: every finding is answered, re-review covers
+    only the new diff, and after three rounds the reviewer asks the
+    author to rethink the approach. The summary starts with a count
+    and says "Nothing to fix." plainly.
+  - Paths that always need Raul: migrations, CI workflows, the
+    origin check and security headers, config and lock files, the
+    collector guard and call budget, and code that sends data to an
+    AI model.
+  - Also corrected the PR #107 body. It said "does not close #95",
+    which GitHub reads as a closing keyword, so merging would have
+    closed #95. GitHub's `closingIssuesReferences` for #107 is now
+    empty.
+- Verification: no Python changed, so pytest was not run. A script
+  checked that all 19 paths named in `REVIEW.md` exist and that
+  `app/ui/router.py` sets the CSP.
+- AI model: Claude Opus 5.5. Account usage was not available in
+  this session.
+- Time tracking (UTC): 2026-11-04, branch created at 08:06, committed
+  at about 08:10. Reading the article and the #107 fix just before
+  were not timed.
+- Pull request #124 is open on `docs/review-md`. Refs #102. #102
+  stays open.
+
 ## 2026-10-30 - Rebase #106 and two review lows
 
 - Scope: rebase `cursor/ui-company-name-clean-text-86` onto

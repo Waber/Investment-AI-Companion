@@ -1,11 +1,39 @@
 # Current Work State
 
+## REVIEW.md for pull request reviews (#124): 2026-11-05
+
+- Branch `docs/review-md`, from `origin/master` `da6579d`. Not
+  behind `master`. Pull request #124 is open. Refs #102. Not
+  merged. #102 stays open. No new pull request. The agent does
+  not merge.
+- Completed: `REVIEW.md` at the repository root, and one line in
+  `AGENTS.md` Quality Gates that points a reviewer at that file.
+- Review fixes, docs only. An action needs a path that works
+  without JavaScript. A create POST must not repeat itself.
+  `data-plain-fallback` posts the form again after an HTMX error,
+  so a create must not carry it, and a missing one is not this
+  failure. That matches the #104 M1 fix. Severity labels are
+  Critical, Important, and Minor, as #102 asks. Critical and
+  Important block. A minor never blocks, however many there are.
+  Pre-existing is a mark, not a fourth label, and it does not
+  block this pull request.
+- Not in this pull request: the Code Reviewer agent file that
+  #102 asks for (`.claude/agents/code-reviewer.md`), and the
+  HANDOFF note for when to run it. #102 stays open.
+- Tests: docs only. Pytest was not run. No live market-data
+  calls. GitHub Actions runs both jobs on this head.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: GitHub Actions, SQLite and PostgreSQL, both green
+  on this head. Raul reviews. The agent does not merge. When Raul
+  merges, the order is #107, then #104, then #125, then #124.
+
 ## Company name on `clean_text` (#86 remainder): 2026-10-30
 
-- Branch `cursor/ui-company-name-clean-text-86`, rebased onto
-  `origin/master` `67974c5`. Pull request #106 is in review.
-  Refs #86. Not merged. #86 stays open. See the #86 bullet under
-  Open work elsewhere.
+- Branch was `cursor/ui-company-name-clean-text-86`. Pull request
+  #106 merged on 2026-10-30 at `da6579d`. Refs #86. #86 stays open.
+  See the #86 bullet under Open work elsewhere. This section is
+  the record of that work, not the current task.
 - #108 merged on `67974c5`: the watchlist page loads companies and
   prices in a batch, and the ticker-index `SAWarning` is a scoped
   ignore in the autogenerate tests. Details are in the section
@@ -55,9 +83,8 @@
   behaviour change in that commit. The edit block for an
   already-stored bidi mark is the behaviour from the `clean_text`
   move, recorded above.
-- Next action: GitHub Actions on the rebased head, SQLite and
-  PostgreSQL, both green. Raul merges with "Rebase and merge".
-  The agent does not merge. #106 stays in review. #108 is merged.
+- Done: #106 merged at `da6579d`. #108 merged at `67974c5`.
+  #86 stays open for the remainder under Open work elsewhere.
 
 ## Watchlist N+1 and ticker-index SAWarning (#108, merged)
 
