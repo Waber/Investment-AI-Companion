@@ -7,12 +7,12 @@ is and how we work. This file says what matters in a review.
 It follows the lessons in
 [How the Claude Code team does code review](https://claude.dev/blog/solving-code-review-at-anthropic/)
 (Anthropic, 2026-10-15): keep the file short, say what failure looks
-like here, cap the nits, list the paths to skip, ask for evidence, and
+like here, cap the minors, list the paths to skip, ask for evidence, and
 start the summary with a count.
 
 ## What failure looks like here
 
-Report these as **Important**. Each one is a bug, even when the tests
+Report these as **Critical**. Each one is a bug, even when the tests
 are green.
 
 1. **A number lies.** A price, money amount, or score is shown without
@@ -21,8 +21,9 @@ are green.
    instead of `Decimal`. A timestamp is naive instead of aware UTC
    (`app/core/utc_datetime.py`).
 2. **A save goes wrong.** A write is stored twice, half done, or lost.
-   For example, an HTMX retry or a plain-form fallback re-sends a
-   create POST. A batch behaves differently on SQLite and PostgreSQL.
+   A create POST must not repeat itself. An HTMX retry, or
+   `data-plain-fallback` on a create, sends the POST again after the
+   first write. A batch behaves differently on SQLite and PostgreSQL.
    Alembic has more than one head, or a migration cannot run on an
    existing database.
 3. **A page becomes unsafe.** User text reaches HTML through `|safe`
@@ -35,8 +36,11 @@ are green.
    without him adding them to that request. A secret, `.env`, or local
    configuration is committed. A test calls a live market-data provider
    instead of a deterministic fake.
-5. **The UI breaks for someone.** An HTMX action has no plain-form
-   fallback. A key is missing from the PL or EN catalog
+5. **The UI breaks for someone.** An action has no path that works
+   without JavaScript. A create POST must not repeat itself.
+   `data-plain-fallback` posts the form again after an HTMX error, so
+   a create must not carry it, and a missing one is not this failure.
+   A key is missing from the PL or EN catalog
    (`app/ui/catalog.py`). A control has no label, or focus is lost
    after an action.
 6. **Docs lie.** A docstring, the API guide, `README.md`, or
@@ -47,15 +51,24 @@ are green.
 
 ## Severity
 
-- **Important**: one of the failures above, or a bug a user or the
-  stored data would hit. It blocks the merge until it is fixed or
-  answered.
-- **Nit**: naming, wording, or a small simplification. A nit never
-  blocks, however many there are. Report the three most useful and
-  drop the rest.
-- **Pre-existing**: a bug in code this PR did not change. Tag it, so it
-  does not look like the author's fault, and suggest a follow-up issue
-  instead of a fix in this PR.
+The labels are the ones in issue #102: Critical, Important, and
+Minor. The article this file follows uses Important, Nit, and
+Pre-existing. Nit here is Minor. Pre-existing is a mark on a
+finding, not a fourth label.
+
+- **Critical**: one of the failures above. It blocks the merge until
+  it is fixed or answered.
+- **Important**: a bug a user or the stored data would hit that is
+  not in that list, or a behaviour change with no test. It blocks
+  the merge until it is fixed or answered.
+- **Minor**: naming, wording, or a small simplification. A minor
+  never blocks, however many there are. Report the three most
+  useful and drop the rest.
+
+A bug in code this PR did not change keeps its real severity. Mark
+it pre-existing, so it does not look like the author's fault, and
+suggest a follow-up issue instead of a fix in this PR. It does not
+block this PR.
 
 Do not report what black, isort, flake8, or CI already enforce.
 
@@ -104,15 +117,15 @@ merge.
   issue #N.
 - After the first round, review only the diff since the last review.
   Do not repeat a finding that was already posted or answered.
-- After three rounds that still have Important findings open, stop. Ask
-  the author to step back and reconsider the approach instead of
-  starting a fourth fix round.
+- After three rounds that still have Critical or Important findings
+  open, stop. Ask the author to step back and reconsider the
+  approach instead of starting a fourth fix round.
 - Raise a question about direction or scope early, in the issue or the
   spec, not as a blocking comment on a finished PR.
 
 ## Summary
 
-Start with the count, for example "2 Important, 1 Nit, 0 Pre-existing".
+Start with the count, for example "1 Critical, 0 Important, 1 Minor".
 When there is nothing to fix, say "Nothing to fix." plainly, without
 filler. Then list the findings, most severe first. End with what the
 review did not check, such as "the UI was not driven in a browser" or
