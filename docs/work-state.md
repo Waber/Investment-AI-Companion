@@ -28,9 +28,8 @@
   the Windows `core.symlinks=false` checkout of
   `.claude/skills/security-audit`. Skill files and the lock hash
   were not changed.
-- Not done: no pull-request comment was posted. The draft for
-  owner approval is outside the repository, at
-  `/opt/cursor/artifacts/pr-125-snyk-w011-draft-comment.md`.
+- Not done: no pull-request comment was posted. The draft is
+  held outside the repository, pending the owner's decision.
   The skills CLI hash was not recomputed. `npx skills` was not
   re-run. The full pytest suite was not run. No Windows checkout
   was executed; the symlink note follows Git's `core.symlinks`
@@ -39,10 +38,10 @@
   content the skill reads. That includes this repository's own
   files, not only a different tree. It is not a malware or CVE
   finding by itself. No code change was made to clear the label.
-- Tests and unrun checks: validator self-tests above. Personal-path
-  git grep test result is recorded in the 2026-11-07 journal
-  entry after it is run. No live market-data calls. No secrets
-  read.
+- Tests and unrun checks: validator self-tests above. The
+  personal-path `git grep` exited 1 with no matches. That result
+  is in the 2026-11-07 journal entry. No live market-data calls.
+  No secrets read. The full pytest suite was not run.
 - Active agents: none on this pull request. The security
   investigation supplied with the task was checked against the
   sources above and was not treated as proof. #124 was not
@@ -53,13 +52,14 @@
   figure is under the gate. No percentage was invented.
 - Blocker: the branch still conflicts with `origin/master`
   `c051ced`. Cleaning that up needs a rebase, which rewrites
-  published history. Waiting for the owner. Do not describe #125
-  as approved or ready to merge.
-- Next action: owner reviews the draft comment and decides
-  whether a rebase onto `c051ced` is approved. After that rebase,
-  keep master's journal and work-state entries and keep the
-  2026-11-07 #125 notes. Then #124. The agent does not merge and
-  does not post the comment.
+  published history. Waiting for the owner. Code review approved
+  the docs delta at `42d8dd7` only. Integration and merge are
+  not approved.
+- Next action: owner decides on the draft comment and on a
+  rebase onto `c051ced`. After that rebase, keep master's
+  journal and work-state entries and keep the 2026-11-07 #125
+  notes. Then #124. The agent does not merge and does not post
+  the comment.
 
 ## Notes and theses (#33): 2026-10-30, PR #104 in review
 
