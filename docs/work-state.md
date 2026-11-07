@@ -1,71 +1,41 @@
 # Current Work State
 
-## Security-audit skill (#125): 2026-11-07
+## Security-audit skill (#125): 2026-11-07, rebased
 
-- Branch `chore/security-audit-skill`. Published head at the start
-  of this session was `ee12345af9f59f183570f6dbf5ad81d934319246`.
-  This session adds documentation on top of that commit. It does
-  not rebase, amend, merge master, or force-push. Owner approval
-  to rewrite published history was not given.
-- Live `origin/master`, fetched 2026-11-07, is
-  `c051ced1d909278cb2c0aee897e9c72e1e909ef1`. GitHub shows #107
-  merged (`25af8c20786724caf2dc86503496b15e792584ce`, 2026-11-07)
-  and #104 merged (`c051ced`, 2026-11-07). #125 is open. At
-  `ee12345` GitHub reported `mergeable: CONFLICTING`. A local
-  `git merge-tree` against that master conflicted in
-  `docs/development-journal.md`. After this documentation update,
-  `docs/work-state.md` conflicts as well, because master has its
-  own copy of this file. `AGENTS.md` does not.
-- Completed: confirmed the skills.sh Snyk page label (Warn,
-  MEDIUM, one issue, W011, third-party content exposure /
-  indirect prompt injection, evidence score text 0.30). Confirmed
-  the 20 installed skill files match upstream
-  `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8` byte for byte.
-  Production validator self-tests: 34 pass and 31 pass on Node
-  v22.23.4. `AGENTS.md` now keeps this skill in guidance mode
-  unless the owner explicitly requests a full audit or pen-test,
-  requires a real usage reading before that audit, and explains
-  the Windows `core.symlinks=false` checkout of
-  `.claude/skills/security-audit`. Skill files and the lock hash
-  were not changed.
-- Not done: no pull-request comment was posted. The revised
-  draft is held outside the repository, pending the owner's
-  decision. It is not a review approval and not a merge
-  approval.
-  The skills CLI hash was not recomputed. `npx skills` was not
-  re-run. The full pytest suite was not run. No Windows checkout
-  was executed; the symlink note follows Git's `core.symlinks`
-  documentation and https://gitforwindows.org/symbolic-links.
-- Residual risk, left as documentation: W011 names exposure to
-  untrusted public or user-generated content. Repository files,
-  tool results, and text derived from the model remain data.
-  An owner-controlled checkout does not make that data a trust
-  boundary. The label is not, by itself, a malware or CVE
-  finding in the vendored files. No code change was made to
-  clear the label. The skill's guidance text is an instruction,
-  not an enforced sandbox.
-- Tests and unrun checks: validator self-tests above. The
-  personal-path `git grep` exited 1 with no matches. That result
-  is in the 2026-11-07 journal entry. No live market-data calls.
-  No secrets read. The full pytest suite was not run.
-- Active agents: none on this pull request. The security
-  investigation supplied with the task was checked against the
-  sources above and was not treated as proof. #124 was not
-  edited.
-- Account usage meter: not available in this session. The owner
-  reported 36.3% at the start, gate 80%. That figure was not
-  re-read from a meter. Work continued because the reported
-  figure is under the gate. No percentage was invented.
-- Blocker: the branch still conflicts with `origin/master`
-  `c051ced`. Cleaning that up needs a rebase, which rewrites
-  published history. Waiting for the owner. Code review approved
-  the docs delta at `42d8dd7` only. Integration and merge are
-  not approved.
-- Next action: owner decides on the draft comment and on a
-  rebase onto `c051ced`. After that rebase, keep master's
-  journal and work-state entries and keep the 2026-11-07 #125
-  notes. Then #124. The agent does not merge and does not post
-  the comment.
+- Branch `chore/security-audit-skill`, rebased onto
+  `origin/master` `c051ced1d909278cb2c0aee897e9c72e1e909ef1`.
+  The owner approved this history rewrite on 2026-11-07 at
+  21:40 Europe/Warsaw, including `git push --force-with-lease`.
+  No merge. The published tip before the rebase was
+  `46ca45e5e62fbe0027ea12082b42804bbc27a8c8`.
+- Conflicts were the journal on the skill commit and the
+  work-state on the Snyk-note commit. Both sides stayed. This
+  section is the #125 note. The sections below are master's
+  work-state from `c051ced`, unchanged. The branch's older
+  `da6579d` snapshot was not copied over them. Skill files,
+  `skills-lock.json`, and the symlink were not changed.
+  `computedHash` was not recomputed and is not claimed to match
+  the tree.
+- Code review of `46ca45e` approved that docs delta only. That
+  is not integration approval and not merge approval. The Snyk
+  draft stays outside the repository, pending the owner's
+  decision. It was not posted. #124 was not edited.
+- Tests: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset. CI
+  pytest command on local SQLite 3.45.1: 2060 passed, 252
+  deselected, coverage 97.00%. Personal-path `git grep` exited
+  1 with no matches. Validator self-tests: 65 pass, 0 fail.
+  No local PostgreSQL, so integration tests were not run here.
+  No live market-data calls. Fresh GitHub Actions on the pushed
+  head are still the SQLite and PostgreSQL CI record.
+- Account usage: the owner reported 45.5% at the start of this
+  rebase, gate 80%. This session did not read the meter.
+- Active agents: none on #124 in this session. Blocker for the
+  rebase: none. Merge is not approved.
+- Next action: read the GitHub Actions runs for this head. Do
+  not merge. Do not post the Snyk draft. #124 waits for its own
+  run. The sections below still include "#104 in review" and
+  "#107 not merged" because that is the text on `c051ced`.
+  GitHub shows both merged. They are not the next action here.
 
 ## Notes and theses (#33): 2026-10-30, PR #104 in review
 
