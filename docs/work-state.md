@@ -1,5 +1,72 @@
 # Current Work State
 
+## Security-audit skill (#125): 2026-11-07
+
+- Branch `chore/security-audit-skill`. Published head at the start
+  of this session was `ee12345af9f59f183570f6dbf5ad81d934319246`.
+  This session adds documentation on top of that commit. It does
+  not rebase, amend, merge master, or force-push. Owner approval
+  to rewrite published history was not given.
+- Live `origin/master`, fetched 2026-11-07, is
+  `c051ced1d909278cb2c0aee897e9c72e1e909ef1`. GitHub shows #107
+  merged (`25af8c20786724caf2dc86503496b15e792584ce`, 2026-11-07)
+  and #104 merged (`c051ced`, 2026-11-07). #125 is open. At
+  `ee12345` GitHub reported `mergeable: CONFLICTING`. A local
+  `git merge-tree` against that master conflicted in
+  `docs/development-journal.md`. After this documentation update,
+  `docs/work-state.md` conflicts as well, because master has its
+  own copy of this file. `AGENTS.md` does not.
+- Completed: confirmed the skills.sh Snyk page label (Warn,
+  MEDIUM, one issue, W011, third-party content exposure /
+  indirect prompt injection, evidence score text 0.30). Confirmed
+  the 20 installed skill files match upstream
+  `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8` byte for byte.
+  Production validator self-tests: 34 pass and 31 pass on Node
+  v22.23.4. `AGENTS.md` now keeps this skill in guidance mode
+  unless the owner explicitly requests a full audit or pen-test,
+  requires a real usage reading before that audit, and explains
+  the Windows `core.symlinks=false` checkout of
+  `.claude/skills/security-audit`. Skill files and the lock hash
+  were not changed.
+- Not done: no pull-request comment was posted. The draft for
+  owner approval is outside the repository, at
+  `/opt/cursor/artifacts/pr-125-snyk-w011-draft-comment.md`.
+  The skills CLI hash was not recomputed. `npx skills` was not
+  re-run. The full pytest suite was not run. No Windows checkout
+  was executed; the symlink note follows Git's `core.symlinks`
+  documentation and https://gitforwindows.org/symbolic-links.
+- Residual risk, left as documentation: W011 names exposure to
+  content the skill reads. That includes this repository's own
+  files, not only a different tree. It is not a malware or CVE
+  finding by itself. No code change was made to clear the label.
+- Tests and unrun checks: validator self-tests above. Personal-path
+  git grep test result is recorded in the 2026-11-07 journal
+  entry after it is run. No live market-data calls. No secrets
+  read.
+- Active agents: none on this pull request. The security
+  investigation supplied with the task was checked against the
+  sources above and was not treated as proof. #124 was not
+  edited.
+- Account usage meter: not available in this session. The owner
+  reported 36.3% at the start, gate 80%. That figure was not
+  re-read from a meter. Work continued because the reported
+  figure is under the gate. No percentage was invented.
+- Blocker: the branch still conflicts with `origin/master`
+  `c051ced`. Cleaning that up needs a rebase, which rewrites
+  published history. Waiting for the owner. Do not describe #125
+  as approved or ready to merge.
+- Next action: owner reviews the draft comment and decides
+  whether a rebase onto `c051ced` is approved. After that rebase,
+  keep master's journal and work-state entries and keep the
+  2026-11-07 #125 notes. Then #124. The agent does not merge and
+  does not post the comment.
+
+## Historical snapshot on this branch (not the next action)
+
+The sections below are the work-state from this branch's base,
+`da6579d` (2026-10-30). They still talk about #106 as in review.
+Live master has moved. Do not use them as the current next action.
+
 ## Company name on `clean_text` (#86 remainder): 2026-10-30
 
 - Branch `cursor/ui-company-name-clean-text-86`, rebased onto

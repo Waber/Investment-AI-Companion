@@ -1,5 +1,98 @@
 # Development Journal
 
+## 2026-11-07 - Snyk W011 check for the security-audit skill
+
+- Scope: pull request #125 only, on `chore/security-audit-skill`.
+  Started from the published head `ee12345`. No application code.
+  The twenty upstream skill files and `skills-lock.json` were not
+  edited. The owner has not approved a rewrite of published
+  history, so this branch was not rebased onto `origin/master`,
+  not merged with master, and not force-pushed. No pull-request
+  comment, review, or body edit was posted. Pull request #124
+  was not touched.
+- Live master, read from GitHub on 2026-11-07: `origin/master`
+  is `c051ced1d909278cb2c0aee897e9c72e1e909ef1`. #107 is merged
+  (merge commit `25af8c20786724caf2dc86503496b15e792584ce`).
+  #104 is merged (merge commit `c051ced`). Before this entry,
+  `git merge-tree` of this branch with that master conflicted
+  only in `docs/development-journal.md`. Master has also
+  rewritten `docs/work-state.md` since `da6579d`, and this
+  commit edits that file, so a later rebase has to resolve both
+  documents. `AGENTS.md` was not changed on master.
+- Snyk label, fetched from the skills.sh detail page
+  (https://www.skills.sh/cloudflare/security-audit-skill/security-audit/security/snyk):
+  UI label Warn, risk level MEDIUM, one issue, code W011, title
+  "Third-party content exposure detected (indirect prompt
+  injection risk)." Evidence text: "Third-party content exposure
+  detected (medium risk: 0.30). The security audit skill monitors
+  and ingests external codebases, issue bodies, tool responses,
+  and retrieved documents via AI/LLM hunting agents and RAG
+  pipelines." The page says audited Sep 15, 2026, 07:23 AM.
+- What W011 is: Snyk Agent Scan v0.5.x `docs/issue-codes.md`
+  lists W011 under Vulnerable Skills, not under Compromised
+  Skills. The heading is "Exposure to untrusted third-party
+  content", severity medium, and the text is indirect prompt
+  injection from public or user-generated content. The v0.6
+  name for that class is `third_party_content_exposure`. The
+  v0.6 risk doc uses scores 0–1000 and shows Medium as 300.
+  That band is not the `0.30` figure in the skills.sh evidence
+  sentence. This entry does not treat them as one measurement.
+  W011 is not, by itself, a malware or CVE label. The same-day
+  catalog page showed Gen (Agent Trust Hub) Pass, Socket Pass,
+  and Snyk Warn. The Socket detail page says Pass and does not
+  show an alert count. `.../security/gen` returned HTTP 404.
+  The 2026-11-05 installer words "Safe", "0 alerts", and
+  "Med Risk" were not reproduced; `npx skills` was not re-run.
+- Installed tree: all 20 files under
+  `.agents/skills/security-audit/` are byte-identical to
+  `cloudflare/security-audit-skill` commit
+  `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8` ("Clarify guidance
+  and full audit modes"), path `skills/security-audit/`.
+  `skills-lock.json` still records `computedHash`
+  `98b97aad2873b3b9a8e064007c25e7827b493ba27fda8bfbdb41dab586767973`.
+  That hash was not recomputed with the skills CLI.
+- Validators: `validate-findings.cjs` requires `fs`, `path`, and
+  `util`. `validate-coverage-ledger.cjs` requires `node:fs`,
+  `node:path`, and `node:util`. Each opens its input with
+  `O_RDONLY | O_NOFOLLOW | O_NONBLOCK` and uses `process.exit`
+  for the CLI status. A static scan of those two files found no
+  `child_process`, no network client, and no file-write call.
+  The `*.test.cjs` files do spawn Node and write temporary
+  fixtures. Self-tests on Node v22.23.4: `validate-findings.test.cjs`
+  34 pass, 0 fail; `validate-coverage-ledger.test.cjs` 31 pass,
+  0 fail. No live market-data call and no secret was read.
+- Decision: document W011 and the residual exposure. Do not patch
+  the skill to "clear" the label. Content this skill reads —
+  files in this repository, issue text, tool output, retrieved
+  documents, or another tree — can still carry an indirect
+  prompt injection. An owner-controlled tree does not remove
+  that. Guidance mode and the skill's execution limits narrow
+  what such an instruction can do through the skill. They do
+  not bound every other tool the agent already has. `AGENTS.md`
+  now says the six-phase audit and its artifacts wait for an
+  explicit owner request, that usage is checked first, and that
+  an unavailable meter is not a made-up number. It also records
+  the Windows plain-file checkout of the Claude Code symlink.
+- The draft pull-request comment was written for the owner and
+  was not posted. It is not part of this commit.
+- Verification: `python3 -m pytest` could not collect
+  `tests/test_secure_config.py` because this environment has no
+  pytest module, and that test imports the application. The check
+  inside `test_tracked_files_have_no_personal_machine_paths` was
+  run directly: `git grep -n -E` for the same personal-path
+  pattern, exit 1, no matching lines. No `.env`. `DATABASE_URL`
+  and `SECRET_KEY` were unset. The full pytest suite was not run.
+  No Python behaviour changed. No live market-data call.
+- AI model: Grok 4.7. The account usage meter was not readable
+  in this session. The owner reported 36.3% at the start, with
+  a stop gate of 80%. No later meter reading was taken, so no
+  second percentage is recorded.
+- Time tracking (UTC): 2026-11-07, one session, started 08:35.
+- Next: the owner approves or rejects a rebase onto `c051ced`
+  before this branch can merge cleanly. The owner also approves
+  the draft comment before anyone posts it. Do not merge. This
+  note is not a code-review approval.
+
 ## 2026-11-05 - Cloudflare security-audit skill
 
 - Scope: the `security-audit` agent skill from
