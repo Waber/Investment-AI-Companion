@@ -1,5 +1,46 @@
 # Development Journal
 
+## 2026-11-07 - Correct the W011 boundary wording
+
+- Scope: code review of the unpublished W011 draft, not a new
+  audit. The review's five notes are applied to that draft,
+  which stays outside the repository and is not posted. The
+  same inaccurate claims were in tracked docs, so this commit
+  corrects those sentences. No application code. Skill
+  files and `skills-lock.json` were not edited. `computedHash`
+  was not recomputed, and this entry does not claim that the
+  hash matches the tree. No rebase, amend, force-push, or merge.
+  The commits `42d8dd7` and `8127763` stay as pushed.
+- What was wrong. The draft called the boundary "content the
+  model did not write" and listed repository files and tool
+  results as that boundary. W011 is exposure to untrusted
+  public or user-generated content. Repository files, tool
+  results, and text derived from the model remain data, including
+  on an owner-controlled checkout. The draft also treated the
+  skill's prohibitions as something that narrows an injected
+  action. Those lines are behavioral instructions, not an
+  enforced sandbox, and they do not constrain the agent's other
+  tools. `AGENTS.md` said a file edit would differ from the
+  recorded hash. The hash was not recomputed, so the docs now
+  say the files and the lock were left unchanged and make no
+  match claim. The Windows note now states the three facts
+  separately: `core.symlinks=false` writes a text file, Git
+  probes symlink support, and Windows needs that support enabled
+  plus Developer Mode or `SeCreateSymbolicLinkPrivilege`.
+- The byte comparison, static scan, validator self-tests, and
+  the "no secret was read" line in the earlier entry are the
+  implementation session's checks. Code review of the public
+  Snyk page is a separate check. This commit does not call the
+  draft a review approval or a merge approval.
+- Verification: personal-path `git grep` on this tree exited 1
+  with no matches. pytest is still not installed. The full suite
+  was not run. No live market-data call.
+- AI model: Grok 4.7. The usage meter is still not readable
+  here. No new percentage is recorded.
+- Time tracking (UTC): 2026-11-07, follow-up from 08:44.
+- Next: the owner decides whether to post the revised draft
+  and whether to approve a rebase onto `c051ced`. Do not merge.
+
 ## 2026-11-07 - Wording on the #125 work-state
 
 - Scope: code review of the docs delta at `42d8dd7` on pull
@@ -88,18 +129,22 @@
   fixtures. Self-tests on Node v22.23.4: `validate-findings.test.cjs`
   34 pass, 0 fail; `validate-coverage-ledger.test.cjs` 31 pass,
   0 fail. No live market-data call and no secret was read.
-- Decision: document W011 and the residual exposure. Do not patch
-  the skill to "clear" the label. Content this skill reads —
-  files in this repository, issue text, tool output, retrieved
-  documents, or another tree — can still carry an indirect
-  prompt injection. An owner-controlled tree does not remove
-  that. Guidance mode and the skill's execution limits narrow
-  what such an instruction can do through the skill. They do
-  not bound every other tool the agent already has. `AGENTS.md`
+- Decision: document W011. Do not patch the skill to clear the
+  label. W011 names exposure to untrusted public or
+  user-generated content. Repository files, tool results, and
+  text derived from the model remain data. An owner-controlled
+  checkout does not make that data a trust boundary. Guidance
+  mode and the skill's execution wording are instructions to
+  the agent. They are not an enforced sandbox. They do not
+  prevent an injected action, and they do not constrain the
+  agent's other tools. `AGENTS.md`
   now says the six-phase audit and its artifacts wait for an
   explicit owner request, that usage is checked first, and that
   an unavailable meter is not a made-up number. It also records
-  the Windows plain-file checkout of the Claude Code symlink.
+  that `core.symlinks=false` checks the Claude Code path out as
+  a text file, that Git probes symlink support, and that Windows
+  needs that support enabled plus Developer Mode or
+  `SeCreateSymbolicLinkPrivilege`.
 - The draft pull-request comment was written for the owner and
   was not posted. It is not part of this commit.
 - Verification: `python3 -m pytest` could not collect
