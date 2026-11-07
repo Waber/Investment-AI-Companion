@@ -1,5 +1,47 @@
 # Development Journal
 
+## 2026-11-07 - Rebase #125 onto master c051ced
+
+- Scope: rebase `chore/security-audit-skill` onto `origin/master`
+  `c051ced1d909278cb2c0aee897e9c72e1e909ef1`. The owner approved
+  this rewrite on 2026-11-07 at 21:40 Europe/Warsaw, and approved
+  `git push --force-with-lease`. No merge. The Snyk draft was not
+  posted. The pull-request body was not edited. #124 was not
+  touched. The published tip before the rebase was
+  `46ca45e5e62fbe0027ea12082b42804bbc27a8c8`. Code review of that
+  commit approved the docs delta only. That is not integration
+  approval.
+- Conflicts: the skill commit conflicted in
+  `docs/development-journal.md`. The Snyk-note commit conflicted
+  in `docs/work-state.md`. The two later docs commits replayed
+  cleanly. Both sides stayed. The journal is newest first: this
+  entry, then the #125 entries from 2026-11-07 and 2026-11-05,
+  then master's #104 entry, the #33 entry, the price-bar
+  entries, and the older #106 entry. Master's work-state
+  sections stay under the #125 section. The branch's old
+  `da6579d` work-state snapshot was not laid over those
+  sections, because it still said #106 was in review and master
+  already records #106 as merged. Skill files,
+  `skills-lock.json`, and the `.claude` symlink are the same
+  blobs as before the rebase. `computedHash` was not recomputed
+  and is not claimed to match the tree.
+- Verification: no `.env`. `DATABASE_URL` and `SECRET_KEY` unset.
+  Dependencies installed from `requirements-dev.lock` with
+  `pip --require-hashes` into a local `.venv`. CI pytest command
+  on local SQLite 3.45.1: 2060 passed, 252 deselected, coverage
+  97.00%. Personal-path `git grep` exited 1 with no matches.
+  Validator self-tests, both files in one Node run: 65 pass, 0
+  fail. No local PostgreSQL, so the integration tests were not
+  run on this machine. No live market-data calls. No Python
+  files changed, so black, isort, and flake8 were not run.
+- AI model: Grok 4.7. The owner reported usage at 45.5%, under
+  the 80% gate. This session did not read the usage meter, so
+  no second percentage is recorded.
+- Time tracking (UTC): 2026-11-07, after 20:40.
+- Next: GitHub Actions on this rebased head, SQLite and
+  PostgreSQL. Do not merge. Do not post the Snyk draft. #124
+  is a later rebase, not this one.
+
 ## 2026-11-07 - Correct the W011 boundary wording
 
 - Scope: code review of the unpublished W011 draft, not a new
