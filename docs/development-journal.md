@@ -45,6 +45,13 @@
   swapped edit or link is not repeated. The shared panel helpers
   live in `tests/ui_html.py`. CI command on local SQLite 3.45.1:
   2037 passed, 238 deselected, coverage 96.95%.
+- Rebase, 2026-11-07: onto `origin/master` `25af8c2` (#107).
+  Conflicts were only in `docs/work-state.md` and
+  `docs/development-journal.md`. Both sides stayed. No code
+  conflict. Thesis labels and the N1/N2 fixes stayed. CI command
+  on local SQLite 3.45.1: 2060 passed, 252 deselected, coverage
+  97.00%. black, isort, and flake8 passed on this branch's Python
+  files. No live market-data calls. Do not merge.
 
 ## 2026-10-29 - Notes and theses on the company page (#33)
 
