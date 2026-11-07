@@ -3,7 +3,10 @@
 ## Notes and theses (#33): 2026-10-30, PR #104 in review
 
 - Branch `feat/notes-theses-33`, rebased onto `origin/master`
-  `da6579d`. Pull request #104 is open and in review. Not merged.
+  `25af8c2` (#107 is on master). Pull request #104 is open and
+  in review. Not merged. The rebase conflicts were only in
+  `docs/work-state.md` and `docs/development-journal.md`. Both
+  sides stayed. Thesis labels and the N1/N2 panel fixes stayed.
   The head before the review fixes below was `43fb9c8`; both
   GitHub Actions jobs (SQLite and PostgreSQL) succeeded on it.
 - Design: `docs/superpowers/specs/2026-10-28-notes-theses-design.md`.
@@ -55,13 +58,14 @@
 - Incomplete: filing FU1 to FU7 (FU5 is done for the panel; the
   company name still uses `error.invalid`). GitHub Actions on
   this review-fix head follows the push.
-- Tests: CI command on local SQLite 3.45.1 after the 2026-11-05
-  delta: 2037 passed, 238 deselected, coverage 96.95%. This SQLite
-  is 3.45.1, so the two `0006` float boundary tests passed (they
-  fail on SQLite 3.54). No local `demo/` directory, so the
+- Tests: CI command on local SQLite 3.45.1 after the rebase onto
+  `25af8c2`: 2060 passed, 252 deselected, coverage 97.00%. This
+  SQLite is 3.45.1, so the two `0006` float boundary tests passed
+  (they fail on SQLite 3.54). No local `demo/` directory, so the
   `run_demo` dotenv test passed. No local PostgreSQL. No live
-  market-data calls. black, isort, and flake8 passed on the changed
-  Python files.
+  market-data calls. black, isort, and flake8 passed on the Python
+  files this branch changes. Master's older API files still fail
+  isort and flake8; they were not edited.
 - Proposed follow-up issues, not filed yet. Filing publishes outside
   this repository, so it waits for the owner's approval:
   - FU1, required by the Task 8 ruling: stop SQLite from reusing
@@ -94,10 +98,10 @@
 - Active agents: none. The Developer who was going to update the
   stale docs is paused; those doc fixes are in this section.
   Blockers: none. Account usage was not available in this session.
-- Next action: GitHub Actions on the 2026-11-05 delta head,
-  SQLite and PostgreSQL, both green. #104 stays in review. Do not
-  merge. Do not file FU1 to FU7 until the owner asks. The pull
-  request body is the owner's to update.
+- Next action: GitHub Actions on the rebase onto `25af8c2`,
+  SQLite and PostgreSQL. #104 stays in review. Do not merge.
+  Do not file FU1 to FU7 until the owner asks. The pull request
+  body is the owner's to update.
 
 ## Price-bar repository follow-ups (#95): 2026-10-30
 
