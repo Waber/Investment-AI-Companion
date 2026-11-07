@@ -28,16 +28,22 @@
   the Windows `core.symlinks=false` checkout of
   `.claude/skills/security-audit`. Skill files and the lock hash
   were not changed.
-- Not done: no pull-request comment was posted. The draft is
-  held outside the repository, pending the owner's decision.
+- Not done: no pull-request comment was posted. The revised
+  draft is held outside the repository, pending the owner's
+  decision. It is not a review approval and not a merge
+  approval.
   The skills CLI hash was not recomputed. `npx skills` was not
   re-run. The full pytest suite was not run. No Windows checkout
   was executed; the symlink note follows Git's `core.symlinks`
   documentation and https://gitforwindows.org/symbolic-links.
 - Residual risk, left as documentation: W011 names exposure to
-  content the skill reads. That includes this repository's own
-  files, not only a different tree. It is not a malware or CVE
-  finding by itself. No code change was made to clear the label.
+  untrusted public or user-generated content. Repository files,
+  tool results, and text derived from the model remain data.
+  An owner-controlled checkout does not make that data a trust
+  boundary. The label is not, by itself, a malware or CVE
+  finding in the vendored files. No code change was made to
+  clear the label. The skill's guidance text is an instruction,
+  not an enforced sandbox.
 - Tests and unrun checks: validator self-tests above. The
   personal-path `git grep` exited 1 with no matches. That result
   is in the 2026-11-07 journal entry. No live market-data calls.
