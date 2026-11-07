@@ -1,5 +1,36 @@
 # Development Journal
 
+## 2026-11-07 - Rebase REVIEW.md onto master c051ced (#124)
+
+- Scope: rebase `docs/review-md` onto `origin/master` `c051ced`.
+  The owner approved this rewrite in Developer chat on 2026-11-07
+  at 21:40 Europe/Warsaw. No merge. No new pull request. Refs
+  #102. #102 stays open. Pull request #125 was not merged in and
+  is not the base.
+- Before: remote tip `0995fe2`. `origin/master` was `c051ced`
+  (#104 merged there). #107 is already `25af8c2` on that master.
+- Conflicts: `docs/development-journal.md` on the first commit,
+  and `docs/work-state.md` on the review-fix commit. Both sides
+  stayed. The 2026-11-05 and 2026-11-04 entries stay above
+  master's #104 and #107 entries. Work-state keeps master's
+  notes, price-bar, and company-name record. The older
+  company-name snapshot from this branch was not restored over
+  that record.
+- `REVIEW.md` is unchanged by the rebase. A path without
+  JavaScript is required. A create POST must not repeat itself.
+  A missing `data-plain-fallback` is not that failure. Severity
+  stays Critical, Important, and Minor. Pre-existing stays a
+  mark, not a fourth label.
+- Verification: the diff against `c051ced` is docs only, so
+  pytest was not run locally. A script checked that every
+  concrete path named in `REVIEW.md` exists and that
+  `app/ui/router.py` sets the CSP. No live market-data calls.
+  GitHub Actions on this head follows the push.
+- AI model: Grok 4.7. The owner reported account usage at 45.5%
+  before this rebase. Stop threshold for this session is 80%.
+- Time tracking (UTC): 2026-11-07, from 20:51.
+- Next: both GitHub Actions jobs on this head. Do not merge.
+
 ## 2026-11-05 - REVIEW.md review fixes on pull request #124
 
 - Scope: docs only, on branch `docs/review-md` from `origin/master`

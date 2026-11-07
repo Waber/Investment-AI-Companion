@@ -1,32 +1,38 @@
 # Current Work State
 
-## REVIEW.md for pull request reviews (#124): 2026-11-05
+## REVIEW.md for pull request reviews (#124): 2026-11-07
 
-- Branch `docs/review-md`, from `origin/master` `da6579d`. Not
-  behind `master`. Pull request #124 is open. Refs #102. Not
-  merged. #102 stays open. No new pull request. The agent does
-  not merge.
+- Branch `docs/review-md`, rebased onto `origin/master`
+  `c051ced`. The tip before this rebase was `0995fe2`. Pull
+  request #124 is open. Refs #102. Not merged. #102 stays open.
+  No new pull request. The agent does not merge. Pull request
+  #125 is a separate open branch and is not the base of this one.
 - Completed: `REVIEW.md` at the repository root, and one line in
   `AGENTS.md` Quality Gates that points a reviewer at that file.
-- Review fixes, docs only. An action needs a path that works
+  The review fixes stayed. An action needs a path that works
   without JavaScript. A create POST must not repeat itself.
   `data-plain-fallback` posts the form again after an HTMX error,
   so a create must not carry it, and a missing one is not this
-  failure. That matches the #104 M1 fix. Severity labels are
-  Critical, Important, and Minor, as #102 asks. Critical and
-  Important block. A minor never blocks, however many there are.
-  Pre-existing is a mark, not a fourth label, and it does not
-  block this pull request.
+  failure. Severity labels are Critical, Important, and Minor,
+  as #102 asks. Critical and Important block. A minor never
+  blocks, however many there are. Pre-existing is a mark, not a
+  fourth label, and it does not block this pull request.
+- Rebase conflicts were only in `docs/development-journal.md` and
+  `docs/work-state.md`. Both sides stayed. The journal keeps the
+  2026-11-05 and 2026-11-04 entries above master's #104 and #107
+  entries. This file keeps master's notes, price-bar, and
+  company-name record. The older company-name snapshot from this
+  branch was not put back over that record.
 - Not in this pull request: the Code Reviewer agent file that
   #102 asks for (`.claude/agents/code-reviewer.md`), and the
   HANDOFF note for when to run it. #102 stays open.
-- Tests: docs only. Pytest was not run. No live market-data
-  calls. GitHub Actions runs both jobs on this head.
-- Active agents: none. Blockers: none. Account usage was not
-  available in this session.
+- Tests: docs only against `c051ced`. Pytest was not run locally.
+  No live market-data calls. GitHub Actions runs both jobs on
+  this head.
+- Active agents: none. Blockers: none. The owner reported
+  account usage at 45.5% before this rebase. Stop threshold 80%.
 - Next action: GitHub Actions, SQLite and PostgreSQL, both green
-  on this head. Raul reviews. The agent does not merge. When Raul
-  merges, the order is #107, then #104, then #125, then #124.
+  on this head. Raul reviews. The agent does not merge.
 
 ## Security-audit skill (#125): 2026-11-07, rebased
 
@@ -65,11 +71,11 @@
   "#107 not merged" because that is the text on `c051ced`.
   GitHub shows both merged. They are not the next action here.
 
-## Notes and theses (#33): 2026-10-30, PR #104 in review
+## Notes and theses (#33): 2026-10-30, PR #104 merged
 
-- Branch `feat/notes-theses-33`, rebased onto `origin/master`
-  `25af8c2` (#107 is on master). Pull request #104 is open and
-  in review. Not merged. The rebase conflicts were only in
+- Branch was `feat/notes-theses-33`, rebased onto `origin/master`
+  `25af8c2` (#107 is on master). Pull request #104 merged on
+  2026-11-07 at `c051ced`. The rebase conflicts were only in
   `docs/work-state.md` and `docs/development-journal.md`. Both
   sides stayed. Thesis labels and the N1/N2 panel fixes stayed.
   The head before the review fixes below was `43fb9c8`; both
@@ -157,23 +163,21 @@
   - FU7: fail the SQLite CI job when node is missing
     (`REQUIRE_NODE=1`), instead of skipping `tests/test_ui_js.py`, and
     say so in the README.
-- Stop reason: the #104 review fixes are on this branch. Filing
-  the follow-ups still waits for the owner. The agent does not
-  merge.
+- Stop reason at merge: the #104 review fixes landed with that
+  pull request. Filing the follow-ups still waits for the owner.
 - Active agents: none. The Developer who was going to update the
   stale docs is paused; those doc fixes are in this section.
   Blockers: none. Account usage was not available in this session.
-- Next action: GitHub Actions on the rebase onto `25af8c2`,
-  SQLite and PostgreSQL. #104 stays in review. Do not merge.
-  Do not file FU1 to FU7 until the owner asks. The pull request
-  body is the owner's to update.
+- Done on master at `c051ced`. This section is the record of that
+  work, not the current task. Do not file FU1 to FU7 until the
+  owner asks.
 
 ## Price-bar repository follow-ups (#95): 2026-10-30
 
-- Branch `cursor/price-bar-followups-95-ce0a`, rebased onto
-  `origin/master` `da6579d`. Pull request #107 to `master`.
-  **Refs #95**. Item 1 is deferred, so #95 stays open. In review.
-  Not merged. No Alembic revision; head stays `0007`. `app/ui`,
+- Branch was `cursor/price-bar-followups-95-ce0a`. Pull request
+  #107 merged on 2026-11-07 at `25af8c2`. **Refs #95**. Item 1
+  is deferred, so #95 stays open. No Alembic revision; head stays
+  `0007`. `app/ui`,
   `templates/`, and `static/` were not edited. PR #104 was not
   touched. #106 and #108 are merged.
 - PR #108 is merged on that master. It added
@@ -249,10 +253,9 @@
   returns `[IAC-DEMO-V2]` instead of `fake`.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: both GitHub Actions jobs green on this head, then
-  QA. Raul merges with "Rebase and merge". Do not merge from
-  the agent. #95 stays open until skipped-bar visibility (#93)
-  is done.
+- Done on master at `25af8c2`. #95 stays open until skipped-bar
+  visibility (#93) is done. This section is the record, not the
+  current task.
 
 ## Company name on `clean_text` (#86 remainder, #106 merged)
 
@@ -337,10 +340,9 @@
   `list_items(with_company=True)` are on master. The
   `uq_companies_ticker` reflection warning is a scoped ignore,
   not an open fix.
-- #107 is in review (this branch). Refs #95. Item 1 stays deferred.
-- #33: the notes and theses tables and repositories are on master
-  (revision `0005`). The API and the `/ui` panel are on
-  `feat/notes-theses-33` (above). Pull request #104.
+- #107 merged at `25af8c2`. Refs #95. Item 1 stays deferred.
+- #33: the notes and theses tables, repositories, API, and `/ui`
+  panel are on master. Pull request #104 merged at `c051ced`.
 - #32: the watchlist backend, the `/ui` page, and the batch read
   (#108) are on master. #96 merged as PR #101 on 2026-10-28.
   Named lists are #99. The on-demand summary is #100.
@@ -348,7 +350,8 @@
   422 keys in `app/core/validation.py`, copying `exc.errors()`
   before editing, docs for surrogate keys and the watchlist
   `too_long` gate, and a 201 test for an extra surrogate key.
-- #102: the Code Reviewer agent, priority high, is next after #33.
+- #102 stays open. `REVIEW.md` is on this branch (pull request
+  #124). The Code Reviewer agent file is still not committed.
 - #103: comments on buy and sell transactions, deferred until #57
   brings transactions.
 - #8 and #10: the instrument Alembic baseline is still open,
@@ -386,7 +389,7 @@
   says Refs #27. Price-bar storage and the demo-v2 fixture
   landed in that pull request. ETF and ETC attribute columns
   stay on #28, which is still open, so #83 did not close #27.
-- #95 stays open. Items 2–5 are this branch. Item 1
+- #95 stays open. Items 2–5 are on master with #107. Item 1
   (skipped-bar visibility) waits for the server phase (#93).
   The GET body stays a list of bars. #94 merged on 2026-10-22
   (revision `0006`).
