@@ -50,6 +50,16 @@ Use rebase so history stays a straight line. Linear history is easier to read, b
 - Context compaction alone does not cancel the task. Resume from the checkpoint and continue authorized work when capacity is available; do not ask for approval again solely because context was compacted.
 - When a session is interrupted too abruptly to commit, the next session must inspect the working tree and preserve unfinished changes before resuming.
 
+## Security-audit skill
+
+The Cloudflare `security-audit` skill in this repository is guidance unless the owner asks for a full audit. The files under `.agents/skills/security-audit/` are the upstream copy named in `skills-lock.json`. Do not edit those files, and do not replace the Claude Code link with a second copy of the tree. Either change would make the installed tree differ from the hash recorded in that lock file.
+
+- A security question, a focused review, or a check of one finding stays in guidance mode. Do not start the multi-agent six-phase audit, create an audit output directory, or write audit report artifacts unless the owner explicitly asks for a full security audit or a pen-test of this repository or of a named path.
+- Before that full audit, check account usage in every window this session can actually read. If usage is at or above 80%, or at or above a lower threshold the owner set for the session, do not start. Checkpoint and wait. If the usage meter is not available, say so. Do not invent a percentage, a balance, or a reset time, and do not start the full audit on a guessed figure.
+- `.claude/skills/security-audit` is a Git symlink (index mode `120000`). The stored link text is `../../.agents/skills/security-audit` (35 bytes, no trailing newline). When the checkout can create symlinks, that path is a directory link, and Claude Code can read `SKILL.md` through it.
+- Git checks a symlink out as a small plain file containing the link text when `core.symlinks` is false (`git help config`). `git clone` and `git init` set that value to false when their probe finds that this process cannot create a symlink. Git for Windows leaves symlink support off unless it detects that the user can create one (Developer Mode on a recent Windows 10, or `SeCreateSymbolicLinkPrivilege`). See https://gitforwindows.org/symbolic-links. `core.symlinks=true` does not create the link if that privilege is missing.
+- On a checkout where `.claude/skills/security-audit` is a plain file, there is no `SKILL.md` inside a directory at that path, so Claude Code does not discover the skill there. Agents that read `.agents/skills/security-audit/` still do. Keep the symlink. A copied tree can drift from the lock hash.
+
 ## Investment Domain Rules
 
 - Show source, data freshness, assumptions, risks, and uncertainty for market data, scores, AI analysis, and signals.
