@@ -1,5 +1,32 @@
 # Development Journal
 
+## 2026-11-07 - Wording on the #125 work-state
+
+- Scope: code review of the docs delta at `42d8dd7` on pull
+  request #125. That review approved the delta only, not
+  integration and not merge. The work-state personal-path
+  note and the draft-location note are corrected, and the
+  blocker line records that delta-only approval. No application
+  code. The skill
+  files and `skills-lock.json` were not edited. No rebase,
+  amend, force-push, or merge. The Snyk draft was not posted
+  and the pull-request body was not edited. #124 was not touched.
+- The personal-path sentence still said the `git grep` result
+  would be recorded after the command was run. The Snyk journal
+  entry below already records that command: exit 1, no matches.
+  The work-state now uses that past result.
+- The work-state named a machine-local draft path. That path is
+  removed. The draft stays outside the repository until the
+  owner decides whether to post it.
+- Verification: the same personal-path `git grep` exited 1
+  with no matches. `python3 -m pytest` is still unavailable, so
+  the full suite was not run. No live market-data call.
+- AI model: Grok 4.7. The usage meter is still not readable
+  here. No new percentage is recorded.
+- Time tracking (UTC): 2026-11-07, follow-up from 08:43 to 08:44.
+- Next: the owner decides on the draft comment and on a rebase
+  onto `c051ced`. Do not merge.
+
 ## 2026-11-07 - Snyk W011 check for the security-audit skill
 
 - Scope: pull request #125 only, on `chore/security-audit-skill`.
