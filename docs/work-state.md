@@ -3,7 +3,7 @@
 ## Provenance slice A (#105): 2026-11-08
 
 - Branch `cursor/provenance-slice-a-105-e700`, from `origin/master`
-  `e71c098`. New pull request. Refs #105. Does not close #105
+  `e71c098`. Pull request #127. Refs #105. Does not close #105
   until Przemek says the slice is accepted, and does not close #34.
   #28 and revision `0010` are not in this branch. Price bars were
   not edited. Pull request #126 is merged on master at `ce77aa2`.
