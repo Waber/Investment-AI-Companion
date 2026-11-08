@@ -1,36 +1,32 @@
 # Current Work State
 
-## REVIEW.md for pull request reviews (#124): 2026-11-07
+## REVIEW.md for pull request reviews (#124): 2026-11-08
 
 - Branch `docs/review-md`, rebased onto `origin/master`
-  `c051ced`. The tip before this rebase was `0995fe2`. Pull
+  `0ce9703`. The tip before this rebase was `f010cfb`. Pull
   request #124 is open. Refs #102. Not merged. #102 stays open.
   No new pull request. The agent does not merge. Pull request
-  #125 is a separate open branch and is not the base of this one.
+  #125 is merged at that same master SHA.
 - Completed: `REVIEW.md` at the repository root, and one line in
-  `AGENTS.md` Quality Gates that points a reviewer at that file.
-  The review fixes stayed. An action needs a path that works
-  without JavaScript. A create POST must not repeat itself.
-  `data-plain-fallback` posts the form again after an HTMX error,
-  so a create must not carry it, and a missing one is not this
-  failure. Severity labels are Critical, Important, and Minor,
-  as #102 asks. Critical and Important block. A minor never
-  blocks, however many there are. Pre-existing is a mark, not a
-  fourth label, and it does not block this pull request.
-- Rebase conflicts were only in `docs/development-journal.md` and
-  `docs/work-state.md`. Both sides stayed. The journal keeps the
-  2026-11-05 and 2026-11-04 entries above master's #104 and #107
-  entries. This file keeps master's notes, price-bar, and
-  company-name record. The older company-name snapshot from this
-  branch was not put back over that record.
+  `AGENTS.md` Quality Gates. The security-audit section from
+  #125 stays in `AGENTS.md`. The review fixes stayed. An action
+  needs a path that works without JavaScript. A create POST must
+  not repeat itself. `data-plain-fallback` posts the form again
+  after an HTMX error, so a create must not carry it, and a
+  missing one is not this failure. Severity is Critical,
+  Important, and Minor. A minor never blocks. Pre-existing is a
+  mark, not a fourth label.
+- Rebase conflicts were the journal and work-state. Both sides
+  stayed. Skill files, `skills-lock.json`, and the symlink were
+  not changed. `computedHash` was not recomputed.
 - Not in this pull request: the Code Reviewer agent file that
   #102 asks for (`.claude/agents/code-reviewer.md`), and the
   HANDOFF note for when to run it. #102 stays open.
-- Tests: docs only against `c051ced`. Pytest was not run locally.
-  No live market-data calls. GitHub Actions runs both jobs on
-  this head.
+- Tests: docs only against `0ce9703`. Pytest was not run
+  locally. No live market-data calls. GitHub Actions runs both
+  jobs on this head.
 - Active agents: none. Blockers: none. The owner reported
-  account usage at 45.5% before this rebase. Stop threshold 80%.
+  account usage at 55.1% before this rebase. Stop threshold 80%.
 - Next action: GitHub Actions, SQLite and PostgreSQL, both green
   on this head. Raul reviews. The agent does not merge.
 
@@ -44,8 +40,9 @@
   `46ca45e5e62fbe0027ea12082b42804bbc27a8c8`.
 - Conflicts were the journal on the skill commit and the
   work-state on the Snyk-note commit. Both sides stayed. This
-  section is the #125 note. The sections below are master's
-  work-state from `c051ced`, unchanged. The branch's older
+  section is the #125 note. The sections below started as the
+  `c051ced` text. This branch already recorded #104 and #107 as
+  merged, and that record stayed. The branch's older
   `da6579d` snapshot was not copied over them. Skill files,
   `skills-lock.json`, and the symlink were not changed.
   `computedHash` was not recomputed and is not claimed to match
@@ -65,11 +62,9 @@
   rebase, gate 80%. This session did not read the meter.
 - Active agents: none on #124 in this session. Blocker for the
   rebase: none. Merge is not approved.
-- Next action: read the GitHub Actions runs for this head. Do
-  not merge. Do not post the Snyk draft. #124 waits for its own
-  run. The sections below still include "#104 in review" and
-  "#107 not merged" because that is the text on `c051ced`.
-  GitHub shows both merged. They are not the next action here.
+- #125 is merged at `0ce9703`. Do not post the Snyk draft.
+  #104 and #107 are merged. They are not the next action.
+  The current task is the #124 section above.
 
 ## Notes and theses (#33): 2026-10-30, PR #104 merged
 
@@ -261,8 +256,10 @@
 
 - Merged in #106 at `da6579d`. Branch was
   `cursor/ui-company-name-clean-text-86`, rebased onto
-  `67974c5`. Refs #86. #86 stays open for the items under
-  Open work elsewhere.
+  `67974c5`. Refs #86. #86 is closed (completed) since
+  2026-10-30. GitHub records #106 as the closing reference.
+  The remainder under Open work elsewhere was written while
+  the issue was still treated as open.
 - Completed: `normalized_company_name` in `app/ui/form_fields.py`
   calls `app.validation.text.clean_text` with `COMPANY_NAME_MAX`
   (255). The form maps `exc.code` to catalog keys that already
@@ -331,11 +328,14 @@
 ## Open work elsewhere
 
 - #106 is merged. The `/ui` company name uses `clean_text`.
-  #86 stays open: when the ticker and the ISIN are both
-  duplicates, report both; `watchlist_stale_price_days` still
-  has no `ge=1` check. Stripping Cf characters at the edges stays
-  undone on purpose: a format character beside a letter is kept,
-  including at an edge.
+  #86 is closed (completed) since 2026-10-30T14:17:23Z.
+  GitHub's closing reference for #86 is pull request #106.
+  The remainder written while the issue was treated as open:
+  when the ticker and the ISIN are both duplicates, report both;
+  `watchlist_stale_price_days` still has no `ge=1` check.
+  Stripping Cf characters at the edges stays undone on purpose:
+  a format character beside a letter is kept, including at an
+  edge.
 - #108 is merged. `recent_closes_for` and
   `list_items(with_company=True)` are on master. The
   `uq_companies_ticker` reflection warning is a scoped ignore,
