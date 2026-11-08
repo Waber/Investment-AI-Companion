@@ -2,7 +2,7 @@
 
 ## About me
 
-- I am a experienced test automation engineer who wants to expand his programming knowledge and skills. I code mostly in Java but want to learn Python so either you should 
+- I am Przemek (also called Przemo), an experienced test automation engineer who wants to expand his programming knowledge and skills. I code mostly in Java but want to learn Python so either you should 
 - explain to me how your code works and/or document it in a way that a junior developer can understand. 
 
 ## Working Agreements
@@ -68,7 +68,7 @@ The Cloudflare `security-audit` skill in this repository is guidance unless the 
 - The application, together with an agent, may issue buy and sell signals. Raul decided on 2026-10-10 that the product does not need a notice that this is not investment advice. Do not add that notice to new copy. The rule is recorded in `docs/product-requirements.md` section 12.
 - The shipped `/ui` demo still contains the older disclaimer banner. That banner is no longer a product requirement.
 - Never infer a private portfolio, risk tolerance, or investment style from unavailable chat history. Use explicit project data or user-provided inputs.
-- Real portfolios and the later AI Portfolio stay explicit and editable. Do not put Raul's real holdings into a model prompt unless he includes them on that request. The AI Portfolio's own virtual cash and positions are inputs to the model that manages that portfolio.
+- Real portfolios and the later AI Portfolio stay explicit and editable. Do not put Przemek's real holdings into a model prompt unless he includes them on that request. The AI Portfolio's own virtual cash and positions are inputs to the model that manages that portfolio.
 
 ## Quality Gates
 

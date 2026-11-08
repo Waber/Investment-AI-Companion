@@ -32,7 +32,7 @@ are green.
    (`app/ui/origin.py`). A redirect target comes from the request. User
    text skips the bounds and checks in `clean_text`
    (`app/validation/text.py`).
-4. **Private data leaks.** Raul's real holdings go into a model prompt
+4. **Private data leaks.** Przemek's real holdings go into a model prompt
    without him adding them to that request. A secret, `.env`, or local
    configuration is committed. A test calls a live market-data provider
    instead of a deterministic fake.
@@ -97,7 +97,7 @@ Skip these, apart from checking that the change was intended:
 - old entries in `docs/development-journal.md` (review only the new
   entry).
 
-These always need Raul's review, whatever the automated review says:
+These always need Przemek's review, whatever the automated review says:
 
 - `alembic/versions/`;
 - `.github/workflows/`;
@@ -107,7 +107,7 @@ These always need Raul's review, whatever the automated review says:
 - `app/data_collectors/guard.py` and `app/data_collectors/call_budget.py`;
 - any code that sends data to an AI model.
 
-An agent's review never counts as Raul's approval, and agents never
+An agent's review never counts as Przemek's approval, and agents never
 merge.
 
 ## Rounds

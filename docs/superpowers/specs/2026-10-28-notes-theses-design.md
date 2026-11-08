@@ -7,7 +7,7 @@ out of scope: #103 (comments on buy and sell transactions), #36
 
 ## Intent
 
-Raul wants his research about a company next to the company. Short
+Przemek wants his research about a company next to the company. Short
 notes, added from a sticky-note icon like the one in the DEGIRO app,
 and investment theses: why he bought and when he would sell. His
 example: he bought an AI-infrastructure company after an analysis
@@ -193,7 +193,7 @@ Each call is described in full in the sections below.
     learns links.
   This includes "Dodaj notatkę". A duplicate note is possible only if
   the server stored the note and the answer was lost on the loopback
-  connection. Raul can delete it; that cost is accepted.
+  connection. Przemek can delete it; that cost is accepted.
 - Deleting asks first, inline: "Usunąć tę notatkę?" with "Usuń" and
   "Anuluj". Delete is a hard delete.
 - Drafts:
@@ -249,7 +249,7 @@ Each call is described in full in the sections below.
   ponownie" show those words but carry a name with the item for screen
   readers: the note's date and time, or the thesis title.
 - **Times:** stored as UTC and shown in Polish time (`Europe/Warsaw`,
-  24-hour clock) in both languages, because the app is Raul's. PL
+  24-hour clock) in both languages, because the app is Przemek's. PL
   `28.10.2026, 14:05`; EN `Oct 28, 2026, 14:05`. Theses show dates
   only, also in Polish time. Existing UTC dates elsewhere on the page
   do not change.

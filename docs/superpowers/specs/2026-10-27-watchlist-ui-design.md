@@ -6,7 +6,7 @@ summary per row).
 
 ## Intent
 
-Raul wants to keep a short list of companies he follows and see in one
+Przemek wants to keep a short list of companies he follows and see in one
 glance how each one is doing: name, latest price, the last move in
 percent, and a small trend line. He adds a company from its own page
 with one click on a heart icon, so the screen does not fill up with
@@ -136,5 +136,5 @@ text buttons.
   add and remove through plain POST and through HTMX; a repeat add
   keeps the label; PL and EN strings; the CSP header is unchanged.
 - `docs/work-state.md` and `docs/development-journal.md` updated.
-- CI green on SQLite and PostgreSQL. QA, then Code Reviewer. Raul
+- CI green on SQLite and PostgreSQL. QA, then Code Reviewer. Przemek
   merges with "Rebase and merge".

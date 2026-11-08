@@ -1,12 +1,64 @@
 # Current Work State
 
+## Current owner name (Przemek): 2026-11-08
+
+- Branch `cursor/current-owner-przemek-a83c`, from `origin/master`
+  `e71c098cbc965822db23b50aa565ee095b0bf671`. Documentation only.
+  No merge. No open pull request for this rename existed before
+  this branch.
+- The current owner is Przemek (also called Przemo). Living owner
+  lines now say Przemek. Dated journal entries, the 2026-10-08
+  requirements quote, and the dated "Raul decided" lines stay as
+  written. The journal entry for this date lists them.
+- Live GitHub, checked before the edit, after `git fetch origin
+  master`. `origin/master` is `e71c098`. Merged pull requests:
+  #124 at that SHA (2026-11-08T13:05:32Z; both Actions jobs
+  succeeded), #125 at `0ce9703` (2026-11-07T21:02:44Z), #104 at
+  `c051ced` (2026-11-07T07:30:50Z), #107 at `25af8c2`
+  (2026-11-07T07:16:56Z), #106 at `da6579d` (2026-10-30T14:17:21Z),
+  and #108 at `67974c5` (2026-10-30T10:19:46Z). Issue #86 is
+  closed since 2026-10-30T14:17:23Z. GitHub's closing reference
+  is pull request #106. Issues #33, #95, #102, #28, #34, and
+  #105 are open. No open pull requests. The Snyk draft was not
+  posted.
+- Issue #105 was read. It is not implemented, and this branch
+  does not add requirements to it. Accepted scope is the issue
+  body: `companies.is_synthetic`, `companies.source`, and
+  `financial_metrics.source`; Alembic `0009` revising `0008`;
+  the backfill from the `[IAC-DEMO-` description prefix; UI and
+  API writes set `source` to `manual` and do not change
+  `is_synthetic`; seeders and demo fixtures set the synthetic
+  flag and `source` to `demo`. Templates stay unchanged. It does
+  not close #34. #28 is not a blocker. The tree has no revision
+  `0009` or `0010`. The Alembic head is `0008`.
+- Not started: that migration and the repository changes the
+  issue describes. The issue says the badge helper stops reading
+  the description prefix, and it also says the current badges
+  still render the same. It does not say how the `demo-v1` /
+  `demo-v2` label is kept. Allowed `source` values in the issue
+  are `manual`, `demo`, and `fixture`.
+- Tests: documentation only against `e71c098`. Pytest was not
+  run. No live market-data calls. The only workflow is pytest on
+  SQLite and PostgreSQL. It does not lint docs. QA, code review,
+  and the security check of this branch are not done. The agent
+  does not merge.
+- Active agents: none besides this session. Blockers: none. The
+  owner reported account usage at 61.8% before this change. Stop
+  threshold 80%. This session did not read the meter.
+- Next action: the owner reviews this branch. Do not merge. After
+  it is on master, the next implementation step is Alembic `0009`
+  with `down_revision = "0008"`, as issue #105 states. Do not
+  start that in this branch.
+
 ## REVIEW.md for pull request reviews (#124): 2026-11-08
 
 - Branch `docs/review-md`, rebased onto `origin/master`
-  `0ce9703`. The tip before this rebase was `f010cfb`. Pull
-  request #124 is open. Refs #102. Not merged. #102 stays open.
-  No new pull request. The agent does not merge. Pull request
-  #125 is merged at that same master SHA.
+  `0ce9703`. The tip before this rebase was `f010cfb`. Refs #102.
+  #102 stays open. No second pull request was opened for that
+  rebase. The agent does not merge. Pull request #125 is merged
+  at `0ce9703`. Pull request #124 later merged at `e71c098`
+  (2026-11-08T13:05:32Z). Both Actions jobs on that commit
+  succeeded. This section is the record, not the current task.
 - Completed: `REVIEW.md` at the repository root, and one line in
   `AGENTS.md` Quality Gates. The security-audit section from
   #125 stays in `AGENTS.md`. The review fixes stayed. An action
@@ -27,8 +79,9 @@
   jobs on this head.
 - Active agents: none. Blockers: none. The owner reported
   account usage at 55.1% before this rebase. Stop threshold 80%.
-- Next action: GitHub Actions, SQLite and PostgreSQL, both green
-  on this head. Raul reviews. The agent does not merge.
+- Next action at the time of that rebase: GitHub Actions on
+  that head, then the owner's review. The agent does not merge.
+  GitHub now records #124 as merged at `e71c098`.
 
 ## Security-audit skill (#125): 2026-11-07, rebased
 
@@ -64,7 +117,8 @@
   rebase: none. Merge is not approved.
 - #125 is merged at `0ce9703`. Do not post the Snyk draft.
   #104 and #107 are merged. They are not the next action.
-  The current task is the #124 section above.
+  #124 later merged at `e71c098`. The current task is the
+  section at the top of this file.
 
 ## Notes and theses (#33): 2026-10-30, PR #104 merged
 
@@ -350,8 +404,9 @@
   422 keys in `app/core/validation.py`, copying `exc.errors()`
   before editing, docs for surrogate keys and the watchlist
   `too_long` gate, and a 201 test for an extra surrogate key.
-- #102 stays open. `REVIEW.md` is on this branch (pull request
-  #124). The Code Reviewer agent file is still not committed.
+- #102 stays open. `REVIEW.md` is on master (pull request #124
+  merged at `e71c098`). The Code Reviewer agent file is still
+  not committed.
 - #103: comments on buy and sell transactions, deferred until #57
   brings transactions.
 - #8 and #10: the instrument Alembic baseline is still open,
