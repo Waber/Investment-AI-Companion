@@ -50,6 +50,7 @@
   The coordinator reported 68.4% at dispatch. Stop threshold
   80%. No reset was redeemed. No full security audit was started.
 - Time tracking (UTC): 2026-11-08, from 16:56.
+- Pull request #127. Refs #105. Not a merge.
 - Next: both GitHub Actions jobs on this head. Przemek reviews
   the migration. Do not merge. QA, security review, and code
   review are still required. This entry is not approval.
