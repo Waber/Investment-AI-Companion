@@ -16,7 +16,7 @@ Read in this order before choosing a task:
 4. `docs/RUN_DEMO.md`: how to run the local `/ui` demo.
 5. `docs/product-requirements.md` when a task touches product behavior.
 
-Raul is the owner. Answer him in the language he uses (usually Polish).
+Przemek (also called Przemo) is the owner. Answer him in the language he uses (usually Polish).
 Code, identifiers and documentation stay in English. He is learning
 Python, so explain non-obvious choices.
 
@@ -51,7 +51,7 @@ PostgreSQL; it does not run the style checks.
 - One branch per slice, PR to `master`. Rebase onto `origin/master`;
   never merge `master` into a branch. Force-push only with
   `--force-with-lease` on your own branch.
-- Integrate with "Rebase and merge". **Agents never merge.** Raul
+- Integrate with "Rebase and merge". **Agents never merge.** Przemek
   approves every merge explicitly.
 - Every PR updates `docs/work-state.md` (replace stale state, don't pile
   up snapshots) and adds a top entry to `docs/development-journal.md`

@@ -1,5 +1,76 @@
 # Development Journal
 
+## 2026-11-08 - Current owner is Przemek
+
+- Scope: documentation only. The current owner is Przemek (also
+  called Przemo). Living docs that still described that owner as
+  Raul now say Przemek. No application code, tests, migrations,
+  lock files, skill files, or `skills-lock.json` changed. The
+  security-audit section in `AGENTS.md` and the `REVIEW.md` line
+  in Quality Gates stayed. No merge. No comments or body edits on
+  existing issues or pull requests. The Snyk draft was not posted.
+- Why some Raul lines stayed: there is no permission to rewrite
+  dated journal history, quoted statements, or dated decision
+  attributions. Those lines still say Raul on purpose. They are
+  the same owner under the name the docs used at the time, not a
+  second person.
+- Updated for the current owner: `AGENTS.md` (the about line, and
+  the holdings rule), `docs/HANDOFF.md` (who the owner is, and who
+  approves a merge), `REVIEW.md` (the holdings leak, the paths
+  that need the owner's review, and approval), `docs/product-requirements.md`
+  (owner, primary user, user stories, and the current rules),
+  `docs/research/hosting-options.md` (decisions still pending in
+  #56, and the Poland VAT assumption), the watchlist spec intent
+  and its merge line, and the notes spec intent plus two current
+  sentences. `docs/HANDOFF.md` section 2 stays the 2026-10-30
+  snapshot. That file already says to trust `docs/work-state.md`
+  when master has moved.
+- Preserved on purpose:
+  - Every older entry in this journal, including each "Raul"
+    sentence already in those entries.
+  - `AGENTS.md`: "Raul decided on 2026-10-10".
+  - Product requirements: "v0.4 records Raul's decisions of
+    2026-10-10", "confirmed by Raul", both later "Raul decided on
+    2026-10-10" sentences, and the translated quote that begins
+    "Raul, 2026-10-08".
+  - Watchlist spec: "Raul picked the table", "decided with Raul",
+    and "Raul decided to count from today".
+  - Notes spec: "Raul picked icons", "Decided with Raul
+    (2026-10-28)", and "Raul can overrule".
+- Work-state refresh used live GitHub after `git fetch origin
+  master`. `origin/master` is
+  `e71c098cbc965822db23b50aa565ee095b0bf671`. Merged pull
+  requests: #124 at that SHA (2026-11-08T13:05:32Z; both Actions
+  jobs succeeded), #125 at `0ce9703` (2026-11-07T21:02:44Z), #104
+  at `c051ced` (2026-11-07T07:30:50Z), #107 at `25af8c2`
+  (2026-11-07T07:16:56Z), #106 at `da6579d` (2026-10-30T14:17:21Z),
+  #108 at `67974c5` (2026-10-30T10:19:46Z). Issue #86 is closed
+  since 2026-10-30T14:17:23Z. GitHub's closing reference is pull
+  request #106. Issues #33, #95, #102, #28, #34, and #105 are
+  open. No open pull request, and no other branch for this rename.
+- Issue #105 was read and not implemented. Nothing in this change
+  adds a requirement to it. The next implementation step is in
+  `docs/work-state.md`. One point the issue text leaves open: the
+  badge helper must stop reading the `[IAC-DEMO-` prefix and use
+  `is_synthetic` and `source`, and the current badges must still
+  render the same. The allowed `source` values named in the issue
+  are `manual`, `demo`, and `fixture`. The issue does not say how
+  the `demo-v1` / `demo-v2` label, which today comes from that
+  prefix, stays the same.
+- Verification: the diff against `e71c098` is documentation only,
+  so pytest was not run. No live market-data calls. The only
+  GitHub Actions workflow is `.github/workflows/tests.yml`. It
+  runs pytest on SQLite and PostgreSQL. It does not lint docs.
+  Fresh Actions on this head follow the push.
+- AI model: Grok 4.7. The owner reported account usage at 61.8%
+  before this change. Stop threshold 80%. This session did not
+  read the usage meter, so no second percentage is recorded.
+- Time tracking (UTC): 2026-11-08, from 15:51.
+- Next: do not merge. After this note is on master, issue #105
+  starts with Alembic revision `0009` revising `0008`. That work
+  is not in this change. QA, code review, and the security check
+  for that later change are still ahead of it.
+
 ## 2026-11-08 - Rebase REVIEW.md onto master 0ce9703 (#124)
 
 - Scope: rebase `docs/review-md` onto `origin/master`

@@ -6,17 +6,17 @@
 
 ## TL;DR
 
-- **Recommended (pending Raul's decision in #56/Q14): a small EU VPS running Docker Compose** (Caddy or Tailscale for HTTPS → FastAPI → PostgreSQL, plus a scanner container or systemd timer). **Recommended (pending Raul's decision in #56/Q14): Hetzner Cloud CX23** (2 vCPU / 4 GB / 40 GB, Germany or Finland) with Hetzner daily backups and nightly **encrypted `pg_dump` to a Hetzner Storage Box in a different location**. That's about **€10.29 net, €12.65 / ~55 PLN gross a month**, or ~38 PLN gross without the Storage Box.
+- **Recommended (pending Przemek's decision in #56/Q14): a small EU VPS running Docker Compose** (Caddy or Tailscale for HTTPS → FastAPI → PostgreSQL, plus a scanner container or systemd timer). **Recommended (pending Przemek's decision in #56/Q14): Hetzner Cloud CX23** (2 vCPU / 4 GB / 40 GB, Germany or Finland) with Hetzner daily backups and nightly **encrypted `pg_dump` to a Hetzner Storage Box in a different location**. That's about **€10.29 net, €12.65 / ~55 PLN gross a month**, or ~38 PLN gross without the Storage Box.
   - **Cheaper equivalent: OVH VPS-1 in Warsaw**, 20.07 PLN gross a month with a daily backup included. Add an off-site backup target on top.
-- **Fallback (if Raul doesn't want to run Linux): Render in Frankfurt.** Starter web service ($7) + Postgres basic-256mb ($6, 3-day PITR) + one cron job (min $1) is about **$14 net, ~€15.4 / ~67 PLN gross**. TLS, backups and encryption at rest are managed.
+- **Fallback (if Przemek doesn't want to run Linux): Render in Frankfurt.** Starter web service ($7) + Postgres basic-256mb ($6, 3-day PITR) + one cron job (min $1) is about **$14 net, ~€15.4 / ~67 PLN gross**. TLS, backups and encryption at rest are managed.
 - **Avoid free tiers for the real (private) data.** Render Free sleeps after 15 min and its Postgres expires after 30 days. Supabase Free pauses after a week and has no backups. The Koyeb free plan is closed to new users. Oracle's Always Free tier can reclaim idle VMs. Neon Free is the only free DB that fits technically, with limits.
-- **Home Raspberry Pi + Tailscale** has the lowest running cost (~4–8 PLN/month electricity, *estimate*) and stays physically private. But it needs ~500–900 PLN of hardware up front (*estimate*), and Raul's home internet and power become the uptime.
+- **Home Raspberry Pi + Tailscale** has the lowest running cost (~4–8 PLN/month electricity, *estimate*) and stays physically private. But it needs ~500–900 PLN of hardware up front (*estimate*), and Przemek's home internet and power become the uptime.
 
 ## Assumptions
 
 - **Workload:** one user, a FastAPI app with Jinja2/HTMX, PostgreSQL (the DB stays small, well under 5 GB, *estimate*), a scanner every hour or day (yfinance + pandas), and a few Gemini calls a day. Egress is tiny (single user). *Sizing estimate (not measured):* 2 GB RAM is the minimum for app + Postgres + pandas scanner, and 4 GB is comfortable.
 - **Exchange rates:** NBP table A no. 196/A/NBP/2026 of **2026-10-08**. **1 EUR = 4.3789 PLN**, **1 USD = 3.9132 PLN** (so 1 USD ≈ 0.8936 EUR). Source: <https://api.nbp.pl/api/exchangerates/rates/a/eur/last/3/?format=json> and <https://api.nbp.pl/api/exchangerates/rates/a/usd/last/1/?format=json>.
-- **VAT:** prices are shown **net (excl. VAT)** unless marked gross. Raul is a private consumer in Poland, so EU providers charge **23% Polish VAT** on top. "Gross" below = net × 1.23. Exceptions are prices already quoted gross: Mikrus, OVH PLN gross, netcup's 19% DE VAT label. US PaaS bill in USD, and the card's FX fee is not included.
+- **VAT:** prices are shown **net (excl. VAT)** unless marked gross. Przemek is a private consumer in Poland, so EU providers charge **23% Polish VAT** on top. "Gross" below = net × 1.23. Exceptions are prices already quoted gross: Mikrus, OVH PLN gross, netcup's 19% DE VAT label. US PaaS bill in USD, and the card's FX fee is not included.
 - **Labels:** "*unverified*" means I couldn't confirm it on an official page. "*estimate*" means my calculation or assumption, not a quote.
 
 ## Comparison table
@@ -172,12 +172,12 @@ My suggestion is (b) + (c), and to decide in #56/#57.
   - Home power or internet outages stop the scanner.
   - Router/ISP changes.
   - Arm64 image builds (fine for Python/Postgres).
-  - Raul maintains the hardware.
+  - Przemek maintains the hardware.
 - **Plus:** a residential IP may be treated more kindly by Yahoo's rate limiting than datacenter IPs (*plausible, unverified; worth testing from any cloud VM before committing*).
 
-## Recommended (pending Raul's decision in #56/Q14)
+## Recommended (pending Przemek's decision in #56/Q14)
 
-### Recommended (pending Raul's decision in #56/Q14): Hetzner Cloud CX23 (or OVH VPS-1 Warsaw for the cheapest equivalent)
+### Recommended (pending Przemek's decision in #56/Q14): Hetzner Cloud CX23 (or OVH VPS-1 Warsaw for the cheapest equivalent)
 
 | Item | Net €/mo | Gross (23%) |
 |---|---|---|
@@ -200,7 +200,7 @@ Plan for **≈ 40–60 PLN/month gross** plus Gemini API usage, which is not hos
    - Hetzner daily images as a second layer.
    - **Monthly test restore** into a scratch container, documented.
    - Keep the age private key/restic password **off the server** (password manager).
-5. **Encryption at rest:** encrypted backups (above) + **column-level encryption for holdings** (#57) with a key from the secrets file. Optionally LUKS on a Hetzner Volume for `/var/lib/postgresql` if Raul accepts entering a passphrase after reboots.
+5. **Encryption at rest:** encrypted backups (above) + **column-level encryption for holdings** (#57) with a key from the secrets file. Optionally LUKS on a Hetzner Volume for `/var/lib/postgresql` if Przemek accepts entering a passphrase after reboots.
 
 ### Fallback: Render (Frankfurt), managed
 
@@ -222,9 +222,9 @@ Plan for **≈ 40–60 PLN/month gross** plus Gemini API usage, which is not hos
 - Railway: viable and cheaper than Render, but EU = Amsterdam only and backups are self-described as still in development. It's a fine second fallback.
 - Oracle Free: reclamation and account-termination risk.
 - Contabo/netcup: 24-month terms for the advertised price.
-- Mikrus: great value and Polish, but no IPv4, an LXC container (no own disk encryption) and 2 GB on 3.0. Mikrus 3.5 (16.42 PLN/mo gross) is a credible budget alternative if Raul is comfortable with Tailscale or Cloudflare.
+- Mikrus: great value and Polish, but no IPv4, an LXC container (no own disk encryption) and 2 GB on 3.0. Mikrus 3.5 (16.42 PLN/mo gross) is a credible budget alternative if Przemek is comfortable with Tailscale or Cloudflare.
 
-## Open decisions for Raul (feed #56)
+## Open decisions for Przemek (feed #56)
 1. Budget: is ~40–60 PLN/month OK (VPS), or ~70 PLN (Render) for less ops?
 2. Exposure: **Tailscale-only** (recommended to start) vs public HTTPS + login.
 3. Encryption at rest: column-level for holdings + encrypted backups (recommended) vs full LUKS.
