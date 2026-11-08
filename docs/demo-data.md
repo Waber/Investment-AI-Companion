@@ -66,13 +66,12 @@ returned 200. `demo/` is gitignored.
 - Rows from this fixture show the synthetic-data badge. The current
   `/ui` pages still show the older disclaimer banner. Product
   requirements v0.4 no longer require that notice.
-- A description that starts with `[IAC-DEMO-` gets that badge,
-  including one a person types by hand. The label can be
-  misleading. It is not a bypass of the seeder, and it is
-  acceptable for this local demo. The source is `demo-` plus the
-  token up to the next `]`, in lowercase, when that token is 1
-  to 16 ASCII letters or digits. `[IAC-DEMO-V2]` shows
-  `demo-v2`. Anything else shows `demo`.
+- The badge is the `companies.is_synthetic` column. The sqlite
+  seeder sets that flag and `source` to `demo`. Typing
+  `[IAC-DEMO-` into a description does not set the flag. The
+  page label for every synthetic row is the one word `demo`.
+  It is not `demo-v1` or `demo-v2`. A manual row leaves the
+  source cell empty, so the word `manual` is not shown.
 - A website is a link only when the view-model accepts `http` or
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".
@@ -179,9 +178,9 @@ three letters`) and leave no new row. A lowercase code such as
 `usd` is stored as `USD`. `GBp` and `ZAc` stay as sent. The API
 already rejected a bad currency; this is the direct repository path.
 
-The `/ui` synthetic badge matches a description that starts with
-`[IAC-DEMO-`, so a demo-v2 row shows it. `[IAC-DEMO-V1]` is not a
-separate check. The token rule is in the section above.
+The sqlite seeder sets `is_synthetic` and `source=demo` on a
+demo-v2 row, so the `/ui` badge shows and the source label is
+`demo`. The description prefix is not what the page reads.
 
 Seed demo-v2 without the one-command demo:
 

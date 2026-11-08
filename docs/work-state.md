@@ -1,5 +1,59 @@
 # Current Work State
 
+## Provenance slice A (#105): 2026-11-08
+
+- Branch `cursor/provenance-slice-a-105-e700`, from `origin/master`
+  `e71c098`. New pull request. Refs #105. Does not close #105
+  until Przemek says the slice is accepted, and does not close #34.
+  #28 and revision `0010` are not in this branch. Price bars were
+  not edited. Pull request #126 is merged on master at `ce77aa2`.
+  This branch did not edit that pull request. No other #105 branch,
+  pull request, or cloud run was open when this work started.
+- Completed: Alembic `0009` revises `0008` and is the only head.
+  `companies.is_synthetic` is boolean, NOT NULL, server default
+  false. `companies.source` and `financial_metrics.source` are
+  `String(64)`, NOT NULL, server default `manual`. No CHECK.
+  Allowed values `manual`, `demo`, and `fixture` are checked by
+  `require_record_source` next to the models. Backfill marks a
+  description that starts with `[IAC-DEMO-` as synthetic `demo`.
+  Other companies stay false and `manual`. A metric is `demo`
+  only when its company is synthetic. Upgrade and downgrade were
+  run on SQLite 3.45.1 and PostgreSQL 16.15. Downgrade drops the
+  columns in place. A batch copy of `companies` was not used,
+  because that copy drops the table while other tables point at
+  it. Child metric rows stayed.
+- Owner decision, 2026-11-08 17:56, not in the GitHub issue body:
+  one label `demo` replaces `demo-v1` and `demo-v2`. The runtime
+  badge reads `is_synthetic`. It does not parse the description.
+  Templates were not edited. A manual company does not show the
+  word `manual`.
+- UI and API creates store `manual` and `is_synthetic` false,
+  even when the description starts with the old prefix. An update
+  stores `manual` and does not change the flag. The sqlite seeder
+  (`seed_sqlite_database`, `run_demo`) sets true and `demo`.
+  `seed_demo --base-url` goes through the public API, so those
+  rows stay manual. That is the API rule, not a second channel.
+- A `fetch-company` update uses the same repository update, so it
+  records `manual` and leaves `is_synthetic` as stored.
+- Plan: `docs/superpowers/plans/2026-11-08-provenance-slice-a.md`.
+- Tests: no `.env`. `DATABASE_URL` and `SECRET_KEY` were not the
+  personal database. SQLite CI command on 3.45.1: 2107 passed,
+  253 deselected, coverage 97.01%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  253 passed, 2107 deselected. black, isort, and flake8 passed
+  on the Python files this branch changes. No live market-data
+  calls. The `/ui` pages were not driven in a browser.
+- Account usage: this session cannot read the meter. The
+  coordinator reported 68.4% at dispatch, under the 80% stop.
+  No reset was redeemed. No full security audit was started.
+- Active agents: none on this branch. Blockers: none for the
+  slice. Normal QA, security review, and code review are still
+  required. This note is not approval and not a merge.
+- Next action: GitHub Actions, SQLite and PostgreSQL, both green
+  on this head. Przemek reviews the migration. The agent does not
+  merge.
+
 ## Current owner name (Przemek): 2026-11-08
 
 - Branch `cursor/current-owner-przemek-a83c`, from `origin/master`
@@ -48,7 +102,9 @@
 - Next action: the owner reviews this branch. Do not merge. After
   it is on master, the next implementation step is Alembic `0009`
   with `down_revision = "0008"`, as issue #105 states. Do not
-  start that in this branch.
+  start that in this branch. This section is the record of the
+  rename. The current task is the #105 section above.
+
 
 ## REVIEW.md for pull request reviews (#124): 2026-11-08
 
@@ -81,7 +137,9 @@
   account usage at 55.1% before this rebase. Stop threshold 80%.
 - Next action at the time of that rebase: GitHub Actions on
   that head, then the owner's review. The agent does not merge.
-  GitHub now records #124 as merged at `e71c098`.
+  GitHub now records #124 as merged at `e71c098`. This section
+  is the record, not the current task. The current task is the
+  #105 section above.
 
 ## Security-audit skill (#125): 2026-11-07, rebased
 
@@ -117,8 +175,8 @@
   rebase: none. Merge is not approved.
 - #125 is merged at `0ce9703`. Do not post the Snyk draft.
   #104 and #107 are merged. They are not the next action.
-  #124 later merged at `e71c098`. The current task is the
-  section at the top of this file.
+  #124 later merged at `e71c098`. The current task is the #105
+  section at the top.
 
 ## Notes and theses (#33): 2026-10-30, PR #104 merged
 

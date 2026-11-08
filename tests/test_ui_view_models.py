@@ -113,6 +113,8 @@ def test_company_row_becomes_an_instrument_view():
         ticker="DEMO_ONE",
         isin=" US0378331005 ",
         description="[IAC-DEMO-V1] Synthetic only",
+        is_synthetic=True,
+        source="demo",
         website=" javascript:alert(1)",
         exchange=" DEMO-WSE ",
         currency="PLN",
@@ -150,7 +152,7 @@ def test_company_row_becomes_an_instrument_view():
     assert view.isin == "US0378331005"
     assert view.exchange == "DEMO-WSE"
     assert view.is_synthetic is True
-    assert view.source == "demo-v1"
+    assert view.source == "demo"
     assert view.website.href is None
     assert view.website.text == "javascript:alert(1)"
     assert view.sector is None
@@ -171,7 +173,9 @@ def test_company_row_becomes_an_instrument_view():
         name="Other",
         ticker="OTHER",
         isin=None,
-        description="User notes",
+        description="[IAC-DEMO-V2] not a flag",
+        is_synthetic=False,
+        source="manual",
         website=None,
         exchange=None,
         currency=None,
@@ -191,7 +195,7 @@ def test_company_row_becomes_an_instrument_view():
     assert plain_view.quarterly == []
 
 
-def _bare_company(description):
+def _bare_company(description, *, is_synthetic=False):
     """A company row with only the fields ``to_instrument`` reads."""
     return Row(
         id=1,
@@ -206,42 +210,30 @@ def _bare_company(description):
         sector=None,
         industry=None,
         financial_metrics=[],
+        is_synthetic=is_synthetic,
+        source="manual",
     )
 
 
-def test_synthetic_source_uses_the_marker_token():
-    """The source is demo- plus the token inside the marker.
+def test_runtime_label_is_demo_only_when_the_flag_is_set():
+    """One label, ``demo``. The description prefix is not read.
 
-    ``[IAC-DEMO-V2]`` becomes ``demo-v2``. The token is the text
-    up to the next ``]``, lowercased. It has to be short and
-    alphanumeric. A space, a hyphen, an empty token, or a long
-    token keeps the badge and uses the neutral label ``demo``.
+    Owner decision on 2026-11-08: ``demo-v1`` and ``demo-v2`` are not
+    runtime labels. A stored ``source`` of ``manual`` is not shown.
+    The flag alone turns the label on, including after the prefix
+    has been edited away.
     """
-    assert to_instrument(_bare_company("[IAC-DEMO-V1] text")).source == (
-        "demo-v1"
-    )
-    assert to_instrument(_bare_company("[IAC-DEMO-V2] text")).source == (
-        "demo-v2"
-    )
-    assert to_instrument(_bare_company("[IAC-DEMO-V3] text")).source == (
-        "demo-v3"
-    )
-    # The prefix stays case-sensitive. The token itself is folded.
-    folded = to_instrument(_bare_company("[IAC-DEMO-v2] text"))
-    assert folded.is_synthetic is True
-    assert folded.source == "demo-v2"
-
-    malformed = to_instrument(_bare_company("[IAC-DEMO-V2 extra] notes"))
-    assert malformed.is_synthetic is True
-    assert malformed.source == "demo"
-    assert to_instrument(_bare_company("[IAC-DEMO-]")).source == "demo"
-    assert to_instrument(_bare_company("[IAC-DEMO-V-2]")).source == "demo"
-    assert to_instrument(_bare_company("[IAC-DEMO-")).source == "demo"
-    short = "A" * 16
-    long = "A" * 17
-    assert to_instrument(_bare_company(f"[IAC-DEMO-{short}]")).source == (
-        "demo-" + short.lower()
-    )
-    assert to_instrument(_bare_company(f"[IAC-DEMO-{long}]")).source == (
-        "demo"
-    )
+    for description in (
+        "[IAC-DEMO-V1] text",
+        "[IAC-DEMO-V2] text",
+        "[IAC-DEMO-V3] text",
+        "[IAC-DEMO-V2 extra] notes",
+        "ordinary notes",
+        None,
+    ):
+        flagged = to_instrument(_bare_company(description, is_synthetic=True))
+        assert flagged.is_synthetic is True
+        assert flagged.source == "demo"
+        plain = to_instrument(_bare_company(description, is_synthetic=False))
+        assert plain.is_synthetic is False
+        assert plain.source is None

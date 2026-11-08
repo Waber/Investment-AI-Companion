@@ -1,5 +1,59 @@
 # Development Journal
 
+## 2026-11-08 - Provenance columns for companies and metrics (Refs #105)
+
+- Scope: slice A of #105 only. Alembic `0009` on `0008`.
+  `companies.is_synthetic`, `companies.source`, and
+  `financial_metrics.source`. Backfill, repository writes, the
+  sqlite seeder, and the runtime badge. Does not close #34.
+  Does not start #28 or revision `0010`. Price bars were not
+  edited. Templates were not edited. Pull request #126 was not
+  edited. No issue comment.
+- Live issue checked on 2026-11-08. No comments. The field names,
+  the server defaults, the allow-list, and the backfill rule
+  match the issue. `origin/master` was `e71c098`. No other #105
+  branch or pull request. The newest other cloud runs were
+  finished. This run is the #105 implementation.
+- Owner decision, verified in the task from the PM transcript
+  of 2026-11-08 17:56, and not written on the GitHub issue: one
+  label `demo` replaces `demo-v1` and `demo-v2`. No version
+  field. The page no longer parses `[IAC-DEMO-`. `docs/demo-data.md`
+  now says that. A person who types the prefix into a
+  description does not get the badge. The sqlite seeder sets
+  the flag. `seed_demo --base-url` uses the public API, which
+  always stores `manual` and leaves the flag false.
+- Decisions: the allow-list is `require_record_source` beside
+  the models. Missing, blank, wrong case, and unknown values
+  raise `ValueError`. There is no CHECK, so a raw `yahoo`
+  insert is stored and can be loaded. UI and API updates set
+  `source` to `manual` and do not assign `is_synthetic`.
+  `fetch-company` uses that update. The migration adds a column
+  only when it is missing, so a `create_all` database stamped
+  behind head still upgrades, and the backfill still runs.
+  `LIKE` is not used for the prefix: SQLite's `LIKE` is
+  case-insensitive for ASCII, and the old badge was not.
+  `substr(description, 1, 10) = '[IAC-DEMO-'` is the check on
+  both engines. Downgrade uses `DROP COLUMN` in place. A batch
+  copy of `companies` would drop that table while metrics,
+  prices, notes, theses, and the watchlist point at it.
+- Verification: no `.env`. Personal `DATABASE_URL` was not used.
+  SQLite 3.45.1, CI pytest command: 2107 passed, 253 deselected,
+  coverage 97.01%. PostgreSQL 16.15 local,
+  `TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test`,
+  `REQUIRE_POSTGRES=1`, `-m integration`: 253 passed, 2107
+  deselected. That includes upgrade, backfill, downgrade, and
+  upgrade again on both engines, and a raw `source` of `yahoo`.
+  black, isort, and flake8 passed on the Python files this
+  branch changes. No live market-data calls. The browser was
+  not driven.
+- AI model: Grok 4.7. This session cannot read the usage meter.
+  The coordinator reported 68.4% at dispatch. Stop threshold
+  80%. No reset was redeemed. No full security audit was started.
+- Time tracking (UTC): 2026-11-08, from 16:56.
+- Next: both GitHub Actions jobs on this head. Przemek reviews
+  the migration. Do not merge. QA, security review, and code
+  review are still required. This entry is not approval.
+
 ## 2026-11-08 - Current owner is Przemek
 
 - Scope: documentation only. The current owner is Przemek (also

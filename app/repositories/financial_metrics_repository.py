@@ -5,7 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.utc_datetime import as_utc
-from app.models.database_models import FinancialMetricsDB
+from app.models.database_models import (
+    RECORD_SOURCE_MANUAL,
+    FinancialMetricsDB,
+    require_record_source,
+)
 from app.models.financial_metrics import (
     FinancialMetricsCreate,
     FinancialMetricsUpdate,
@@ -26,7 +30,12 @@ class FinancialMetricsRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, metrics: FinancialMetricsCreate) -> FinancialMetricsDB:
+    def create(
+        self,
+        metrics: FinancialMetricsCreate,
+        *,
+        record_source: str = RECORD_SOURCE_MANUAL,
+    ) -> FinancialMetricsDB:
         """
         Create new financial metrics in the database.
 
@@ -46,6 +55,8 @@ class FinancialMetricsRepository:
             metrics.company_id, period_end, metrics.period_type
         ):
             raise ValueError(_UNIQUE_PERIOD)
+
+        source = require_record_source(record_source)
 
         # Create new FinancialMetricsDB instance
         db_metrics = FinancialMetricsDB(
@@ -72,6 +83,7 @@ class FinancialMetricsRepository:
             pe_ratio=metrics.pe_ratio,
             pb_ratio=metrics.pb_ratio,
             ev_ebitda=metrics.ev_ebitda,
+            source=source,
         )
 
         # Add to database session
@@ -166,6 +178,7 @@ class FinancialMetricsRepository:
         # only key this model can change. company_id and period_type
         # stay on the row.
         update_data = metrics_update.model_dump(exclude_unset=True)
+        update_data.pop("source", None)
         if "period_end" in update_data:
             update_data["period_end"] = as_utc(update_data["period_end"])
             if not self.is_unique(
@@ -179,6 +192,10 @@ class FinancialMetricsRepository:
         # Update fields
         for field, value in update_data.items():
             setattr(db_metrics, field, value)
+
+        # A UI or API edit records manual, including a row the seeder
+        # stored as demo. There is no synthetic flag on this table.
+        db_metrics.source = RECORD_SOURCE_MANUAL
 
         # Update timestamp
         db_metrics.updated_at = datetime.now(timezone.utc)

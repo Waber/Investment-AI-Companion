@@ -164,15 +164,29 @@ async def test_watchlist_english_strings(client):
 
 
 @pytest.mark.asyncio
-async def test_watchlist_shows_source_and_synthetic_badge(client):
+async def test_watchlist_shows_price_source_and_the_synthetic_column(client):
+    """The price source stays the bar's source. The badge is the flag.
+
+    A description prefix alone does not mark the row. Setting
+    ``is_synthetic`` does. The price label ``[IAC-DEMO-V2]`` is unchanged.
+    """
     company_id = _company(
         client, description="[IAC-DEMO-V2] Synthetic company"
     )
     _watch(client, company_id)
     _bars(client, company_id, [(date(2026, 10, 26), "5")], "[IAC-DEMO-V2]")
-    html = (await client.get("/ui/watchlist")).text
-    assert "źródło: [IAC-DEMO-V2]" in html
-    assert "dane syntetyczne" in html
+    before = (await client.get("/ui/watchlist")).text
+    assert "źródło: [IAC-DEMO-V2]" in before
+    assert "dane syntetyczne" not in before
+    session = _session(client)
+    try:
+        session.get(CompanyDB, company_id).is_synthetic = True
+        session.commit()
+    finally:
+        session.close()
+    after = (await client.get("/ui/watchlist")).text
+    assert "źródło: [IAC-DEMO-V2]" in after
+    assert "dane syntetyczne" in after
 
 
 @pytest.mark.asyncio

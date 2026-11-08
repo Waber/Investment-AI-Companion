@@ -5,7 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.company import CompanyCreate, CompanyUpdate, InstrumentType
-from app.models.database_models import CompanyDB
+from app.models.database_models import (
+    RECORD_SOURCE_MANUAL,
+    CompanyDB,
+    require_record_source,
+)
 from app.repositories.company_errors import (
     DuplicateIsinError,
     DuplicateTickerError,
@@ -60,7 +64,13 @@ class CompanyRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, company: CompanyCreate) -> CompanyDB:
+    def create(
+        self,
+        company: CompanyCreate,
+        *,
+        record_source: str = RECORD_SOURCE_MANUAL,
+        is_synthetic: bool = False,
+    ) -> CompanyDB:
         """
         Create a new company in the database.
 
@@ -68,7 +78,8 @@ class CompanyRepository:
             company: CompanyCreate model with company data
 
         Returns:
-            CompanyDB: The created company with database-generated fields (id, timestamps)
+            CompanyDB: The created company with database-generated
+            fields (id, timestamps)
 
         Raises:
             ValueError: If this ticker or ISIN is already stored
@@ -79,6 +90,13 @@ class CompanyRepository:
         duplicate = _duplicate_error(self, company.ticker, company.isin)
         if duplicate is not None:
             raise duplicate
+
+        # The HTTP and /ui models have no source field. Callers that
+        # omit these arguments store a manual company. The demo seeder
+        # passes demo and true. A description prefix is not consulted.
+        source = require_record_source(record_source)
+        if not isinstance(is_synthetic, bool):
+            raise ValueError("is_synthetic must be true or false")
 
         # Create new CompanyDB instance
         db_company = CompanyDB(
@@ -93,6 +111,8 @@ class CompanyRepository:
             currency=company.currency or "USD",
             instrument_type=_instrument_type_value(company.instrument_type),
             isin=company.isin,
+            source=source,
+            is_synthetic=is_synthetic,
         )
 
         # Add to database session
@@ -102,7 +122,8 @@ class CompanyRepository:
         try:
             # Commit the transaction
             self.db.commit()
-            # Refresh the object to get database-generated values (id, timestamps)
+            # Refresh the object to get database-generated values
+            # (id, timestamps)
             self.db.refresh(db_company)
             return db_company
         except IntegrityError:
@@ -197,6 +218,11 @@ class CompanyRepository:
             update_data["instrument_type"] = _instrument_type_value(
                 update_data["instrument_type"]
             )
+        # The write model does not carry these. Drop them if a future
+        # caller puts them in the dict. The flag already on the row
+        # stays. Every UI or API update records source manual.
+        update_data.pop("is_synthetic", None)
+        update_data.pop("source", None)
 
         # The same name may be stored on two tickers (BRK.A and
         # BRK.B). When the ticker or the ISIN is part of this update,
@@ -219,6 +245,10 @@ class CompanyRepository:
         # Update fields
         for field, value in update_data.items():
             setattr(db_company, field, value)
+
+        # After the field loop, so a stray source in the payload cannot
+        # stick. The synthetic flag is not assigned here.
+        db_company.source = RECORD_SOURCE_MANUAL
 
         # Update timestamp
         db_company.updated_at = datetime.now(timezone.utc)

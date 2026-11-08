@@ -146,15 +146,23 @@ def test_flat_sparkline_is_a_line_in_the_middle():
     assert line.direction == "flat"
 
 
-def test_synthetic_company_is_flagged():
+def test_synthetic_company_is_flagged_from_the_column():
+    """The watchlist badge reads ``is_synthetic``, not the description."""
+    synthetic = CompanyDB(
+        id=7,
+        name="Apple Inc.",
+        ticker="AAPL",
+        description="ordinary notes",
+        is_synthetic=True,
+    )
     entry = to_entry(
-        _item(description="[IAC-DEMO-V2] Synthetic"), None, TODAY, 7
+        WatchlistItemDB(company_id=7, company=synthetic), None, TODAY, 7
     )
     assert entry.is_synthetic is True
-    assert (
-        to_entry(_item(description="Real"), None, TODAY, 7).is_synthetic
-        is False
+    prefixed = to_entry(
+        _item(description="[IAC-DEMO-V2] Synthetic"), None, TODAY, 7
     )
+    assert prefixed.is_synthetic is False
 
 
 def test_change_that_rounds_to_zero_is_flat():
