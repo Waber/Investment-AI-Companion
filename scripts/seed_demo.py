@@ -748,6 +748,7 @@ class SqliteSeedClient:
     def request(self, method, path, payload=None):
         from app.core.utc_datetime import as_utc
         from app.models.company import CompanyCreate
+        from app.models.database_models import RECORD_SOURCE_DEMO
         from app.models.financial_metrics import FinancialMetricsCreate
 
         parsed = urlsplit(path)
@@ -765,10 +766,19 @@ class SqliteSeedClient:
             )
             return [self._metric_json(row, as_utc) for row in rows]
         if method == "POST" and parsed.path == COMPANIES:
-            created = self.companies.create(CompanyCreate(**payload))
+            # Explicit demo provenance. The public API create does not
+            # take these arguments, so a --base-url seed stays manual.
+            created = self.companies.create(
+                CompanyCreate(**payload),
+                record_source=RECORD_SOURCE_DEMO,
+                is_synthetic=True,
+            )
             return self._company_json(created)
         if method == "POST" and parsed.path == METRICS:
-            created = self.metrics.create(FinancialMetricsCreate(**payload))
+            created = self.metrics.create(
+                FinancialMetricsCreate(**payload),
+                record_source=RECORD_SOURCE_DEMO,
+            )
             return self._metric_json(created, as_utc)
         instrument_id = _price_instrument_id(parsed.path)
         if instrument_id is not None and method == "GET":
@@ -997,6 +1007,9 @@ def main(argv=None):
                 args.database_url, apply=args.apply, fixture=fixture
             )
         else:
+            # The public API stores source manual and does not set
+            # is_synthetic. The sqlite path above is the one that
+            # marks demo rows.
             result = seed_demo(
                 fixture,
                 HttpClient(args.base_url),

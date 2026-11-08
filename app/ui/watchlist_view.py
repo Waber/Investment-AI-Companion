@@ -19,7 +19,6 @@ from app.repositories.price_bar_repository import (
     RecentCloses,
 )
 from app.repositories.watchlist_repository import WatchlistRepository
-from app.ui.view_models import DEMO_MARKER
 
 # The sparkline viewBox. The template draws it at this size.
 SPARKLINE_WIDTH = 90
@@ -126,10 +125,7 @@ def to_entry(
     says "no prices" instead.
     """
     company = item.company
-    description = company.description
-    is_synthetic = isinstance(description, str) and description.startswith(
-        DEMO_MARKER
-    )
+    is_synthetic = getattr(company, "is_synthetic", False) is True
     common = {
         "company_id": company.id,
         "name": company.name,

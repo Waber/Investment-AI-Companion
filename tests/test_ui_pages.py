@@ -281,38 +281,37 @@ _SYNTHETIC_BADGE = '<span class="badge">synthetic data</span>'
 
 
 @pytest.mark.asyncio
-async def test_synthetic_badge_matches_the_demo_prefix(client):
-    """The badge follows ``[IAC-DEMO-``, not only the V1 marker.
+async def test_synthetic_badge_follows_the_column_not_the_prefix(client):
+    """The badge is ``is_synthetic``. A description prefix is not enough.
 
-    The read model still looks at the stored description, with no
-    strip and no case folding. V1 keeps the badge. V2 is the marker
-    seeded by PR #83. V3 is a later marker that does not exist yet.
-    An ordinary company has no badge. A lookalike that omits the
-    bracketed prefix has no badge either. A leading space and a
-    different letter case stay unmarked, as they do today.
+    V1, V2, a later marker, a lookalike, and a lowercase prefix are
+    unmarked when the column is false. A company with the flag set
+    is marked even when the description has no prefix.
     """
     client.cookies.set("ui_lang", "en")
     cases = (
-        ("DEMOV1", "[IAC-DEMO-V1] seeded text", True),
-        ("DEMOV2", "[IAC-DEMO-V2] seeded text", True),
-        ("DEMOV3", "[IAC-DEMO-V3] later marker", True),
-        ("ORDCO", "Ordinary company notes", False),
-        ("LOOKV2", "IAC-DEMO-V2 seeded text", False),
-        ("PADV1", " [IAC-DEMO-V1] seeded text", False),
-        ("LOWV2", "[iac-demo-v2] seeded text", False),
+        ("DEMOV1", "[IAC-DEMO-V1] seeded text", False, False),
+        ("DEMOV2", "[IAC-DEMO-V2] seeded text", False, False),
+        ("DEMOV3", "[IAC-DEMO-V3] later marker", False, False),
+        ("ORDCO", "Ordinary company notes", False, False),
+        ("LOOKV2", "IAC-DEMO-V2 seeded text", False, False),
+        ("PADV1", " [IAC-DEMO-V1] seeded text", False, False),
+        ("LOWV2", "[iac-demo-v2] seeded text", False, False),
+        ("FLAG1", "Ordinary company notes", True, True),
     )
     ids = {}
-    for ticker, description, _shows_badge in cases:
+    for ticker, description, is_synthetic, _shows_badge in cases:
         ids[ticker] = _add_company(
             client,
             name=f"Name {ticker}",
             ticker=ticker,
             description=description,
+            is_synthetic=is_synthetic,
         )
 
     page = await client.get("/ui")
     assert page.status_code == 200
-    for ticker, _description, shows_badge in cases:
+    for ticker, _description, _is_synthetic, shows_badge in cases:
         row = _list_row(page.text, ticker)
         assert (_SYNTHETIC_BADGE in row) is shows_badge, ticker
         detail = await client.get(f"/ui/instruments/{ids[ticker]}")
@@ -328,36 +327,56 @@ def _detail_source(html):
 
 
 @pytest.mark.asyncio
-async def test_synthetic_source_comes_from_the_marker(client):
-    """V2 shows demo-v2. A token that is not short and alphanumeric
-    still has the badge, and the source falls back to demo.
+async def test_synthetic_source_is_the_single_demo_label(client):
+    """V1 and V2 both show ``demo``. A false flag shows no source.
+
+    The stored column may be ``manual``. That word is not the label.
     """
     client.cookies.set("ui_lang", "en")
     cases = (
-        ("SRCV1", "[IAC-DEMO-V1] seeded text", "demo-v1"),
-        ("SRCV2", "[IAC-DEMO-V2] seeded text", "demo-v2"),
-        ("SRCV3", "[IAC-DEMO-V3] later marker", "demo-v3"),
-        ("SRCBAD", "[IAC-DEMO-V2 extra] notes", "demo"),
+        ("SRCV1", "[IAC-DEMO-V1] seeded text", True, "demo"),
+        ("SRCV2", "[IAC-DEMO-V2] seeded text", True, "demo"),
+        ("SRCV3", "[IAC-DEMO-V3] later marker", True, "demo"),
+        ("SRCMAN", "[IAC-DEMO-V1] seeded text", False, None),
     )
     ids = {}
-    for ticker, description, _source in cases:
+    for ticker, description, is_synthetic, _source in cases:
         ids[ticker] = _add_company(
             client,
             name=f"Name {ticker}",
             ticker=ticker,
             description=description,
+            is_synthetic=is_synthetic,
+            source="manual",
         )
 
     page = await client.get("/ui")
     assert page.status_code == 200
-    for ticker, _description, source in cases:
+    for ticker, _description, is_synthetic, source in cases:
         row = _list_row(page.text, ticker)
-        assert f"<td>{source}</td>" in row, ticker
-        assert _SYNTHETIC_BADGE in row
+        if source is None:
+            assert "<td>demo</td>" not in row, ticker
+            assert _SYNTHETIC_BADGE not in row
+        else:
+            assert f"<td>{source}</td>" in row, ticker
+            assert "<td>demo-v1</td>" not in row
+            assert "<td>demo-v2</td>" not in row
+            assert _SYNTHETIC_BADGE in row
         detail = await client.get(f"/ui/instruments/{ids[ticker]}")
         assert detail.status_code == 200
-        assert _detail_source(detail.text) == source
-        assert _SYNTHETIC_BADGE in detail.text
+        if source is None:
+            missing = re.search(
+                r'data-field="source">\s*'
+                r'<span class="missing">([^<]+)</span>',
+                detail.text,
+            )
+            assert missing is not None, ticker
+            assert missing.group(1).strip() == "no data"
+            assert _SYNTHETIC_BADGE not in detail.text
+        else:
+            assert _detail_source(detail.text) == source
+            assert _SYNTHETIC_BADGE in detail.text
+        assert is_synthetic is (source == "demo")
 
 
 @pytest_asyncio.fixture
@@ -382,7 +401,9 @@ async def test_pages_render_in_polish_by_default(seeded):
     assert "dane syntetyczne" in page.text
     assert "not financial advice" not in page.text.casefold()
     assert "DEMO_PL_TECH" in page.text
-    assert "demo-v1" in page.text
+    row = _list_row(page.text, "DEMO_PL_TECH")
+    assert "<td>demo</td>" in row
+    assert "<td>demo-v1</td>" not in row
     script_at = page.text.find('src="/static/vendor/htmx-2.0.10.min.js"')
     config_at = page.text.find('name="htmx-config"')
     assert script_at != -1
@@ -405,7 +426,8 @@ async def test_pages_render_in_polish_by_default(seeded):
     assert "Nie jest poradą inwestycyjną" in detail.text
     assert "dane syntetyczne" in detail.text
     assert "akcja" in detail.text
-    assert "demo-v1" in detail.text
+    assert _detail_source(detail.text) == "demo"
+    assert "[IAC-DEMO-V1]" in detail.text
     assert_no_dangerous_href(detail.text)
 
 

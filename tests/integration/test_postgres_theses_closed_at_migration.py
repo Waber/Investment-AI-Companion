@@ -118,7 +118,7 @@ def test_0008_backfills_closed_rows_and_downgrade_restores_0007(
 
             upgrade_head(connection)
             connection.commit()
-            assert _version(connection) == "0008"
+            assert _version(connection) == "0009"
             assert "closed_at" in _column_names(connection, "theses")
         finally:
             connection.rollback()

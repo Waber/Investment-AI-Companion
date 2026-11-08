@@ -3,10 +3,12 @@
 Templates bind to these objects. They do not read ``CompanyDB``.
 Issue #26 can swap the query that loads rows; the field names here
 already match an instrument (type, source, synthetic flag, as-of).
-A description that starts with the ``[IAC-DEMO-`` prefix is
-synthetic. The type on the page is the stored ``instrument_type``
-(``STOCK``, ``ETF``, or ``ETC``), shown through the catalog ids
-``stock``, ``etf``, and ``etc``.
+``is_synthetic`` is the stored column. The description prefix is not
+read. A synthetic row shows the one label ``demo``. A manual row
+shows no source, so the word ``manual`` stays off the page. The type
+on the page is the stored ``instrument_type`` (``STOCK``, ``ETF``, or
+``ETC``), shown through the catalog ids ``stock``, ``etf``, and
+``etc``.
 """
 
 import math
@@ -17,18 +19,10 @@ from urllib.parse import urlsplit
 
 from app.core.utc_datetime import as_utc
 
-# Fixture descriptions start with this prefix. The V1 marker is
-# "[IAC-DEMO-V1]". Later fixtures, including V2, use the same
-# prefix. Kept here so the UI does not import the seeder. The
-# comparison in ``to_instrument`` is case-sensitive and does not
-# strip the stored description.
-DEMO_MARKER = "[IAC-DEMO-"
-# Used when the marker has no short version token. A real token
-# becomes ``demo-`` plus that token, such as ``demo-v2``.
+# One runtime label for every synthetic company. The owner chose this
+# on 2026-11-08 instead of ``demo-v1`` and ``demo-v2``. It is not
+# parsed from the description.
 DEMO_SOURCE = "demo"
-# ``V1`` and ``V2`` are two characters. Sixteen is enough for a
-# version word and too short for a pasted sentence.
-_DEMO_TOKEN_MAX_LENGTH = 16
 # The column stores the enum in uppercase. The pages and the list
 # filter use the lowercase catalog id (``type.stock``, and the same
 # for ETF and ETC). Anything else is missing data, not a stock.
@@ -214,27 +208,6 @@ def _period_view(row):
     )
 
 
-def demo_source_label(description):
-    """Return the source label for one synthetic description.
-
-    ``description`` already starts with ``[IAC-DEMO-``. The token
-    is the text from there to the next ``]``. It is kept only when
-    it is 1 to 16 ASCII letters or digits. The label is ``demo-``
-    plus that token in lowercase, so ``[IAC-DEMO-V2]`` is
-    ``demo-v2``. A missing ``]``, a space, a hyphen, or a longer
-    token uses the neutral label ``demo``.
-    """
-    marker_length = len(DEMO_MARKER)
-    rest = description[marker_length:]
-    end = rest.find("]")
-    if end < 1 or end > _DEMO_TOKEN_MAX_LENGTH:
-        return DEMO_SOURCE
-    token = rest[:end]
-    if not token.isascii() or not token.isalnum():
-        return DEMO_SOURCE
-    return "demo-" + token.lower()
-
-
 def catalog_instrument_type(value):
     """Return the catalog id for a stored instrument type.
 
@@ -256,9 +229,10 @@ def catalog_instrument_type(value):
 def to_instrument(company):
     """Map one company row and its metrics to an instrument view."""
     description = company.description
-    is_synthetic = isinstance(description, str) and description.startswith(
-        DEMO_MARKER
-    )
+    # The column, not the description. A missing attribute (a stub
+    # that predates the column) is not synthetic. Only a real True
+    # counts, so a stored 0 or None stays off.
+    is_synthetic = getattr(company, "is_synthetic", False) is True
     annual = []
     quarterly = []
     other = []
@@ -292,7 +266,7 @@ def to_instrument(company):
         industry=_text(company.industry),
         description=_text(description),
         website=website_view(company.website),
-        source=demo_source_label(description) if is_synthetic else None,
+        source=DEMO_SOURCE if is_synthetic else None,
         is_synthetic=is_synthetic,
         as_of=latest,
         annual=annual,

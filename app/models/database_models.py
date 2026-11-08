@@ -11,9 +11,10 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -29,6 +30,34 @@ from app.models.research import (
     ThesisStatus,
 )
 from app.models.watchlist import WATCHLIST_LABEL_MAX_LENGTH
+
+# Where a company or a metric row came from. The database column is a
+# plain string with no CHECK, so adding a later collector value (for
+# example yahoo) does not need a migration. The application is the
+# check. UI and API writes use manual. The demo seeder uses demo.
+# A test or fixture loader that is not the demo seeder uses fixture.
+RECORD_SOURCE_MANUAL = "manual"
+RECORD_SOURCE_DEMO = "demo"
+RECORD_SOURCE_FIXTURE = "fixture"
+RECORD_SOURCES = frozenset(
+    {
+        RECORD_SOURCE_MANUAL,
+        RECORD_SOURCE_DEMO,
+        RECORD_SOURCE_FIXTURE,
+    }
+)
+
+
+def require_record_source(value):
+    """Return ``value`` when it is one of the three allowed sources.
+
+    ``None``, a blank, a different case, and any other value raise
+    ``ValueError``. The comparison is exact: ``demo-v1`` is not
+    ``demo``. The database does not repeat this check.
+    """
+    if not isinstance(value, str) or value not in RECORD_SOURCES:
+        raise ValueError("source must be one of: manual, demo, or fixture")
+    return value
 
 
 class CompanyDB(Base):
@@ -94,6 +123,26 @@ class CompanyDB(Base):
     )  # onupdate automatically updates this field
     is_active = Column(Boolean, default=True)
     last_data_update = Column(UTCDateTime(), nullable=True)
+    # Revision 0009 appends these two. The server default covers a raw
+    # INSERT that omits them. The Python default covers an ORM insert.
+    # ``source`` is checked by ``require_record_source`` on assignment,
+    # not by a CHECK constraint.
+    is_synthetic = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+    source = Column(
+        String(64),
+        nullable=False,
+        default=RECORD_SOURCE_MANUAL,
+        server_default=RECORD_SOURCE_MANUAL,
+    )
+
+    @validates("source")
+    def _validate_source(self, _key, value):
+        return require_record_source(value)
 
     # One company has many financial-metrics rows.
     # This creates a virtual field that allows us to access related data
@@ -229,6 +278,17 @@ class FinancialMetricsDB(Base):
     updated_at = Column(
         UTCDateTime(), server_default=func.now(), onupdate=func.now()
     )
+    # Same allow-list as ``CompanyDB.source``. Revision 0009 appends it.
+    source = Column(
+        String(64),
+        nullable=False,
+        default=RECORD_SOURCE_MANUAL,
+        server_default=RECORD_SOURCE_MANUAL,
+    )
+
+    @validates("source")
+    def _validate_source(self, _key, value):
+        return require_record_source(value)
 
     # Relationship back to company
     company = relationship("CompanyDB", back_populates="financial_metrics")

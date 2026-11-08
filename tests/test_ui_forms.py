@@ -1507,11 +1507,12 @@ async def test_polish_diacritics_emoji_and_based_marks_are_stored(
 
 
 @pytest.mark.asyncio
-async def test_editing_the_description_drops_the_demo_badge(client):
-    """The synthetic badge is the [IAC-DEMO- prefix, not a column.
+async def test_editing_the_description_keeps_the_synthetic_flag(client):
+    """A UI create is manual. Editing the description keeps the flag.
 
-    Saving a description that does not start with that prefix removes
-    the badge. That is today's read model.
+    The form does not set ``is_synthetic``. A seeded true flag stays
+    true when the prefix is removed. The stored source becomes
+    ``manual``. The page still says ``demo``, not ``manual``.
     """
     company_id, _data = await _create(
         client,
@@ -1519,10 +1520,21 @@ async def test_editing_the_description_drops_the_demo_badge(client):
         ticker="DEMOCO",
         description="[IAC-DEMO-V1] seeded text",
     )
+    assert _stored_column(client, company_id, "is_synthetic") is False
+    assert _stored_column(client, company_id, "source") == "manual"
     detail = await client.get(f"/ui/instruments/{company_id}")
     assert detail.status_code == 200
-    assert "dane syntetyczne" in detail.text
-    assert "[IAC-DEMO-V1]" in detail.text
+    assert "dane syntetyczne" not in detail.text
+    session = client.app.state.testing_session_local()
+    try:
+        row = session.get(CompanyDB, company_id)
+        row.is_synthetic = True
+        row.source = "demo"
+        session.commit()
+    finally:
+        session.close()
+    flagged = await client.get(f"/ui/instruments/{company_id}")
+    assert "dane syntetyczne" in flagged.text
     updated = await _post(
         client,
         f"/ui/companies/{company_id}/edit",
@@ -1534,9 +1546,13 @@ async def test_editing_the_description_drops_the_demo_badge(client):
     )
     assert updated.status_code == 303
     after = await client.get(f"/ui/instruments/{company_id}")
-    assert "dane syntetyczne" not in after.text
+    assert "dane syntetyczne" in after.text
     assert "[IAC-DEMO-V1]" not in after.text
     assert "seeded text" in after.text
+    assert _stored_column(client, company_id, "is_synthetic") is True
+    assert _stored_column(client, company_id, "source") == "manual"
+    assert re.search(r'data-field="source">\s*demo\s*<', after.text)
+    assert re.search(r'data-field="source">\s*manual', after.text) is None
 
 
 @pytest.mark.asyncio
