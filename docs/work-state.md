@@ -46,13 +46,18 @@
   records `manual` and leaves `is_synthetic` as stored.
 - Plan: `docs/superpowers/plans/2026-11-08-provenance-slice-a.md`.
 - Tests: no `.env`. `DATABASE_URL` was not the personal
-  database. SQLite CI command on 3.45.1 after the security nits:
-  2127 passed, 253 deselected, coverage 97.00%. PostgreSQL
+  database. SQLite CI command on 3.45.1 after the QA gaps:
+  2141 passed, 253 deselected, coverage 97.00%. PostgreSQL
   16.15, `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  253 passed, 2127 deselected. black, isort, and flake8 passed
+  253 passed, 2141 deselected. black, isort, and flake8 passed
   on the Python files this change touches. No live market-data
   calls. The `/ui` pages were not driven in a browser.
+  QA of `6052f4c` was not an approval. The added tests kill
+  an update that keeps `source=demo`, a fetch-company update
+  that clears `is_synthetic`, trust of `X-Forwarded-For` or
+  `X-Real-IP` from a remote peer, and dropping `::1`. Each
+  mutant was reverted after the matching test failed.
 - Account usage: this session cannot read the meter. The
   coordinator reported 68.4% at dispatch, under the 80% stop.
   No reset was redeemed. No full security audit was started.
@@ -66,10 +71,11 @@
   top sections stayed. No application, test, or migration file
   conflicted. Revision `0009` was not edited.
 - Security review of `0a76960` was approve with nits. Those
-  nits are in the following commit. The agent does not merge.
+  nits are committed. QA of `6052f4c` was not an approval.
+  The gap tests are the following commit. The agent does not
+  merge.
 - Next action: GitHub Actions on that commit. Przemek reviews.
-  QA and code review are still required. This note is not
-  approval.
+  Code review is still required. This note is not approval.
 
 ## Current owner name (Przemek): 2026-11-08
 

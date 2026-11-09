@@ -6,8 +6,10 @@ seeder proof: the HMAC of this process's SECRET_KEY. An update
 ignores that header.
 """
 
+import asyncio
 import json
 import re
+from urllib.parse import urlsplit
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -321,6 +323,428 @@ async def test_proxy_headers_downgrade_a_remote_forwarded_for(
     row = _stored(client, CompanyDB, created["id"])
     assert row.is_synthetic is False
     assert row.source == "manual"
+
+
+def _enable(monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_SEED_ENABLED", True)
+
+
+async def _remote_post(app, host, ticker, extra_headers):
+    """POST one company from a chosen TCP peer. No proxy middleware."""
+    transport = ASGITransport(app=app, client=(host, 9))
+    async with AsyncClient(
+        transport=transport, base_url="http://127.0.0.1"
+    ) as remote:
+        return await remote.post(
+            "/api/v1/companies/",
+            json={"name": "Spoof", "ticker": ticker},
+            headers={DEMO_SEED_HEADER: _token(), **extra_headers},
+        )
+
+
+@pytest.mark.asyncio
+async def test_metric_put_keeps_manual_source_despite_the_header(
+    client, monkeypatch
+):
+    """A valid seed header on metric update does not keep source demo."""
+    _enable(monkeypatch)
+    company = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Metric Co", "ticker": "MET1"},
+        headers={DEMO_SEED_HEADER: _token()},
+    )
+    assert company.status_code == 201
+    created = await client.post(
+        "/api/v1/financial-metrics/",
+        json={
+            "company_id": company.json()["id"],
+            "period_end": "2024-12-31T00:00:00Z",
+            "period_type": "annual",
+            "revenue": 1,
+        },
+        headers={DEMO_SEED_HEADER: _token()},
+    )
+    assert created.status_code == 201
+    metric_id = created.json()["id"]
+    assert _stored(client, FinancialMetricsDB, metric_id).source == "demo"
+    updated = await client.put(
+        f"/api/v1/financial-metrics/{metric_id}",
+        json={"revenue": 2},
+        headers={DEMO_SEED_HEADER: _token()},
+    )
+    assert updated.status_code == 200
+    row = _stored(client, FinancialMetricsDB, metric_id)
+    assert row.source == "manual"
+    assert row.revenue == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_update_keeps_the_flag_and_records_manual(
+    client, monkeypatch
+):
+    """fetch-company update ignores a valid seed header.
+
+    source becomes manual, which is what every API update records.
+    is_synthetic stays the value the row already had.
+    """
+    from app.api.data_collection import get_collector
+
+    _enable(monkeypatch)
+    created = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Before", "ticker": "FETCH1", "currency": "USD"},
+        headers={DEMO_SEED_HEADER: _token()},
+    )
+    assert created.status_code == 201
+    company_id = created.json()["id"]
+    before = _stored(client, CompanyDB, company_id)
+    assert before.is_synthetic is True
+    assert before.source == "demo"
+
+    class _Collector:
+        def fetch_company_info(self, ticker):
+            from tests.collector_stubs import sourced
+
+            return sourced(
+                {
+                    "name": "After",
+                    "sector": "Healthcare",
+                    "industry": "Biotechnology",
+                    "description": "Updated provider description",
+                    "website": "https://refreshed.example.com/",
+                    "country": "Canada",
+                    "exchange": "TSX",
+                    "currency": "CAD",
+                }
+            )
+
+    client.app.dependency_overrides[get_collector] = lambda: _Collector()
+    try:
+        response = await client.post(
+            "/api/v1/data-collection/fetch-company",
+            json={"ticker": "fetch1"},
+            headers={DEMO_SEED_HEADER: _token()},
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_collector, None)
+    assert response.status_code == 200
+    row = _stored(client, CompanyDB, company_id)
+    assert row.is_synthetic is True
+    assert row.source == "manual"
+    assert row.name == "After"
+
+
+@pytest.mark.asyncio
+async def test_remote_peer_cannot_spoof_loopback_with_forwarded_headers(
+    client, monkeypatch
+):
+    """X-Forwarded-For and X-Real-IP are not the TCP peer."""
+    _enable(monkeypatch)
+    forwarded = await _remote_post(
+        client.app, "203.0.113.5", "XFF1", {"X-Forwarded-For": "127.0.0.1"}
+    )
+    assert forwarded.status_code == 201
+    row = _stored(client, CompanyDB, forwarded.json()["id"])
+    assert row.is_synthetic is False
+    assert row.source == "manual"
+
+    real_ip = await _remote_post(
+        client.app, "203.0.113.5", "REAL1", {"X-Real-IP": "127.0.0.1"}
+    )
+    assert real_ip.status_code == 201
+    other = _stored(client, CompanyDB, real_ip.json()["id"])
+    assert other.is_synthetic is False
+    assert other.source == "manual"
+
+
+@pytest.mark.asyncio
+async def test_proxy_middleware_ignores_xff_from_a_remote_peer(
+    client, monkeypatch
+):
+    """A remote TCP peer is not in forwarded_allow_ips, so XFF is ignored.
+
+    trusted_hosts is uvicorn's default, 127.0.0.1. The peer is
+    203.0.113.5 and claims X-Forwarded-For: 127.0.0.1. The row
+    stays manual. ::1 is not in that trusted list either.
+    """
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    _enable(monkeypatch)
+    wrapped = ProxyHeadersMiddleware(client.app, trusted_hosts="127.0.0.1")
+    body = b'{"name":"Remote Proxy","ticker":"RMT1"}'
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/companies/",
+        "raw_path": b"/api/v1/companies/",
+        "query_string": b"",
+        "headers": [
+            (b"host", b"127.0.0.1"),
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode("ascii")),
+            (b"x-forwarded-for", b"127.0.0.1"),
+            (b"x-iac-demo-seed", _token().encode("ascii")),
+        ],
+        "client": ("203.0.113.5", 9),
+        "server": ("203.0.113.5", 80),
+    }
+    status = {}
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message):
+        if message["type"] == "http.response.start":
+            status["code"] = message["status"]
+        elif message["type"] == "http.response.body":
+            status["body"] = status.get("body", b"") + message.get("body", b"")
+
+    await wrapped(scope, receive, send)
+    assert status["code"] == 201
+    created = json.loads(status["body"])
+    row = _stored(client, CompanyDB, created["id"])
+    assert row.is_synthetic is False
+    assert row.source == "manual"
+
+
+@pytest.mark.asyncio
+async def test_ipv6_loopback_with_a_valid_token_is_demo(client, monkeypatch):
+    _enable(monkeypatch)
+    transport = ASGITransport(app=client.app, client=("::1", 123))
+    async with AsyncClient(
+        transport=transport, base_url="http://127.0.0.1"
+    ) as local:
+        response = await local.post(
+            "/api/v1/companies/",
+            json={"name": "IPv6", "ticker": "IPV61"},
+            headers={DEMO_SEED_HEADER: _token()},
+        )
+    assert response.status_code == 201
+    row = _stored(client, CompanyDB, response.json()["id"])
+    assert row.is_synthetic is True
+    assert row.source == "demo"
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        pytest.param("a" * 63, id="63-chars"),
+        pytest.param("a" * 65, id="65-chars"),
+        pytest.param("", id="empty"),
+        pytest.param("padded", id="whitespace-padded"),
+        pytest.param("upper", id="upper-cased-real-token"),
+    ],
+)
+def test_token_shape_is_rejected_before_compare(header):
+    """Only the 64-lowercase-hex shape reaches compare_digest.
+
+    The upper-cased real token is the same digest with A-F. The
+    regex rejects it. A later compare would also fail, but the
+    shape check is what keeps a non-hex value out of that call.
+    """
+    expected = _token()
+    if header == "padded":
+        header = f" {expected} "
+    elif header == "upper":
+        header = expected.upper()
+    assert (
+        demo_seed_authorized(
+            client_host="127.0.0.1",
+            header=header,
+            expected_token=expected,
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_upper_cased_token_is_a_manual_http_row(client, monkeypatch):
+    _enable(monkeypatch)
+    response = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Upper", "ticker": "UPPR1"},
+        headers={DEMO_SEED_HEADER: _token().upper()},
+    )
+    assert response.status_code == 201
+    row = _stored(client, CompanyDB, response.json()["id"])
+    assert row.is_synthetic is False
+    assert row.source == "manual"
+
+
+@pytest.mark.asyncio
+async def test_metric_json_cannot_set_source_or_synthetic(client):
+    """Extra JSON names are not fields. The row stays manual."""
+    company = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Plain", "ticker": "PLAIN1"},
+    )
+    assert company.status_code == 201
+    response = await client.post(
+        "/api/v1/financial-metrics/",
+        json={
+            "company_id": company.json()["id"],
+            "period_end": "2024-12-31T00:00:00Z",
+            "period_type": "annual",
+            "revenue": 3,
+            "source": "demo",
+            "is_synthetic": True,
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert "source" not in body
+    assert "is_synthetic" not in body
+    row = _stored(client, FinancialMetricsDB, body["id"])
+    assert row.source == "manual"
+
+
+def test_valid_token_is_compared_with_compare_digest(monkeypatch):
+    """The success path calls hmac.compare_digest. A bad shape does not."""
+    expected = _token()
+    calls = []
+    real = __import__("hmac").compare_digest
+
+    def spy(left, right):
+        calls.append((left, right))
+        return real(left, right)
+
+    monkeypatch.setattr("app.demo_seed_auth.hmac.compare_digest", spy)
+    assert (
+        demo_seed_authorized(
+            client_host="127.0.0.1",
+            header=expected,
+            expected_token=expected,
+        )
+        is True
+    )
+    assert calls == [(expected, expected)]
+    calls.clear()
+    assert (
+        demo_seed_authorized(
+            client_host="127.0.0.1",
+            header=expected.upper(),
+            expected_token=expected,
+        )
+        is False
+    )
+    assert calls == []
+
+
+def _asgi_from_urllib(app, request):
+    """Run one urllib request through the ASGI app. No socket is opened."""
+    parsed = urlsplit(request.full_url)
+    headers = [
+        (key.lower().encode("latin-1"), value.encode("latin-1"))
+        for key, value in request.header_items()
+    ]
+    if not any(key == b"host" for key, _value in headers):
+        headers.append((b"host", b"127.0.0.1"))
+    body = request.data or b""
+    if isinstance(body, str):
+        body = body.encode("utf-8")
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": request.get_method(),
+        "scheme": "http",
+        "path": parsed.path,
+        "raw_path": parsed.path.encode("ascii"),
+        "query_string": parsed.query.encode("ascii"),
+        "headers": headers,
+        "client": ("127.0.0.1", 123),
+        "server": ("127.0.0.1", 80),
+    }
+    status = {}
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message):
+        if message["type"] == "http.response.start":
+            status["code"] = message["status"]
+        elif message["type"] == "http.response.body":
+            status["body"] = status.get("body", b"") + message.get("body", b"")
+
+    async def call():
+        await app(scope, receive, send)
+
+    asyncio.run(call())
+
+    class Response:
+        def __init__(self):
+            self.status = status["code"]
+            self._body = status.get("body", b"")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            return self._body
+
+    return Response()
+
+
+def test_seed_demo_base_url_marks_rows_through_asgi(monkeypatch):
+    """seed_demo --base-url, with the real client, against the ASGI app.
+
+    urllib is pointed at the in-process app. Nothing is bound to a port.
+    """
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from app.core.database import Base, create_db_engine, get_db
+    from main import create_app
+
+    _enable(monkeypatch)
+    engine = create_db_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    session_factory = sessionmaker(
+        autocommit=False, autoflush=False, bind=engine
+    )
+
+    def override_get_db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app = create_app(init_database_on_startup=False)
+    app.dependency_overrides[get_db] = override_get_db
+
+    class Opener:
+        def open(self, request, timeout):
+            return _asgi_from_urllib(app, request)
+
+    monkeypatch.setattr(seed.http, "build_opener", lambda *args: Opener())
+    summary = seed.seed_demo(
+        seed.load_fixture(),
+        seed.HttpClient("http://127.0.0.1:8081"),
+        apply=True,
+    )
+    assert summary["companies"]["created"] == 6
+    assert summary["metrics"]["created"] == 20
+    session = session_factory()
+    try:
+        companies = session.query(CompanyDB).all()
+        metrics = session.query(FinancialMetricsDB).all()
+        assert {row.is_synthetic for row in companies} == {True}
+        assert {row.source for row in companies} == {"demo"}
+        assert {row.source for row in metrics} == {"demo"}
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def test_http_client_sends_the_seed_header_only_on_creates(monkeypatch):

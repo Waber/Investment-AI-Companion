@@ -1,5 +1,47 @@
 # Development Journal
 
+## 2026-11-09 - QA gaps on the demo-seed header (Refs #105)
+
+- Scope: tests for pull request #127 after `6052f4c`. No behavior
+  change except a corrected comment in `scripts/seed_demo.py` and
+  `DEMO_SEED_ENABLED=false` in `.env.example`. No rebase, no
+  force-push, no merge, no pull-request comment or body edit.
+  Revision `0009` was not edited. The owner is Przemek.
+- Added tests. A valid loopback header with the gate on does not
+  keep a metric `source` of `demo` after PUT, and a fetch-company
+  update leaves `is_synthetic` as it was and stores `manual`.
+  A remote peer sending `X-Forwarded-For: 127.0.0.1` or
+  `X-Real-IP: 127.0.0.1` stays manual. The same spoof through
+  uvicorn `ProxyHeadersMiddleware` with `trusted_hosts='127.0.0.1'`
+  and a remote peer stays manual. An ASGI client of `::1` with a
+  valid token is demo. The token matrix covers 63 and 65
+  characters, empty, whitespace around the real token, and
+  `token.upper()`. One HTTP create uses the upper-cased token
+  and stays manual. A metric create whose JSON names `source`
+  and `is_synthetic` is 201 and manual. `hmac.compare_digest` is
+  called for a valid token and not for the upper-cased one.
+  `seed_demo` with `--base-url` runs through the real client
+  into the ASGI app, with no socket, and the six companies and
+  twenty metrics are synthetic `demo`.
+- Mutants, each reverted after the test failed. Metric update
+  forced `source='demo'`: the PUT test got `demo` instead of
+  `manual`. Fetch-company cleared `is_synthetic`: the test got
+  false instead of true. Reading `X-Forwarded-For` as the peer
+  failed both the spoof test and the proxy-middleware test.
+  Reading `X-Real-IP` failed the spoof test at the `REAL1` row.
+  Dropping `::1` from the loopback set failed the IPv6 test.
+- The sqlite comment that said `--base-url` stays manual now
+  matches `main()`: that path is demo when the server flag and
+  the HMAC match.
+- Verification: no `.env`. SQLite 3.45.1, CI pytest command:
+  2141 passed, 253 deselected, coverage 97.00%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, `-m integration`: 253 passed,
+  2141 deselected. black, isort, and flake8 passed on the Python
+  files this commit changes. No live market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-09, from 20:47.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-09 - Demo-seed header nits from the security review (Refs #105)
 
 - Scope: the nits on pull request #127 at `0a76960`. No rebase,
