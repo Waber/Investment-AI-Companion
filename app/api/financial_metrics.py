@@ -1,26 +1,29 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List, Optional
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
+
+from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
+from app.core.config import settings
+from app.core.database import get_db
+from app.demo_seed_auth import request_is_demo_seed
+from app.models.database_models import RECORD_SOURCE_DEMO, FinancialMetricsDB
 from app.models.financial_metrics import (
     FinancialMetrics,
     FinancialMetricsCreate,
     FinancialMetricsUpdate,
 )
-from app.models.database_models import FinancialMetricsDB
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
 )
-from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
-from app.core.database import get_db
-from datetime import datetime, timezone
 
 router = APIRouter(prefix="/financial-metrics", tags=["financial-metrics"])
 
 
-# Helper function to convert FinancialMetricsDB to FinancialMetrics Pydantic model
+# Helper: FinancialMetricsDB to the Pydantic FinancialMetrics model.
 def db_to_metrics_model(db_metrics: FinancialMetricsDB) -> FinancialMetrics:
     """
-    Convert SQLAlchemy FinancialMetricsDB model to Pydantic FinancialMetrics model.
+    Convert a FinancialMetricsDB row to the Pydantic model.
     This handles the conversion between database and API models.
     """
     return FinancialMetrics(
@@ -129,7 +132,9 @@ def get_company_financial_metrics(
     "/", response_model=FinancialMetrics, status_code=status.HTTP_201_CREATED
 )
 def create_financial_metrics(
-    metrics: FinancialMetricsCreate, db: Session = Depends(get_db)
+    metrics: FinancialMetricsCreate,
+    request: Request,
+    db: Session = Depends(get_db),
 ):
     """
     Create new financial metrics.
@@ -147,11 +152,14 @@ def create_financial_metrics(
     repo = FinancialMetricsRepository(db)
 
     try:
-        db_metrics = repo.create(metrics)
+        if request_is_demo_seed(request, settings.SECRET_KEY):
+            db_metrics = repo.create(metrics, record_source=RECORD_SOURCE_DEMO)
+        else:
+            db_metrics = repo.create(metrics)
         return db_to_metrics_model(db_metrics)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -190,7 +198,7 @@ def update_financial_metrics(
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

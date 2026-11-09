@@ -66,8 +66,12 @@ returned 200. `demo/` is gitignored.
 - Rows from this fixture show the synthetic-data badge. The current
   `/ui` pages still show the older disclaimer banner. Product
   requirements v0.4 no longer require that notice.
-- The badge is the `companies.is_synthetic` column. The sqlite
-  seeder sets that flag and `source` to `demo`. Typing
+- The badge is the `companies.is_synthetic` column. Both
+  `seed_demo` modes set that flag and `source` to `demo`:
+  `--database-url` writes the columns in process, and
+  `--base-url` sends a loopback header that is the HMAC of
+  the same `SECRET_KEY` the server is using. The JSON body
+  has no `source` and no `is_synthetic` field. Typing
   `[IAC-DEMO-` into a description does not set the flag. The
   page label for every synthetic row is the one word `demo`.
   It is not `demo-v1` or `demo-v2`. A manual row leaves the
@@ -212,7 +216,10 @@ PYTHON=~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 Confirm the URL points at the isolated demo before applying. The client only
 accepts numeric loopback addresses and disables proxies/redirects, but loopback
 alone cannot prove that the server uses a disposable database. Never aim it at
-an API backed by valuable data. Do not use `setup_database.py --seed` for this
+an API backed by valuable data. The seeder and that server must share
+`SECRET_KEY`. The create requests carry an HMAC of that key. A different key,
+or a request that is not from loopback, stores a manual company instead.
+Do not use `setup_database.py --seed` for this
 fixture: that legacy seed uses a different dataset and skips nonempty databases.
 
 ## Repeatability And Preservation
