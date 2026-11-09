@@ -775,8 +775,10 @@ class SqliteSeedClient:
             )
             return [self._metric_json(row, as_utc) for row in rows]
         if method == "POST" and parsed.path == COMPANIES:
-            # Explicit demo provenance. The public API create does not
-            # take these arguments, so a --base-url seed stays manual.
+            # In-process seed. This is the same result main() gets from
+            # --base-url when the server has DEMO_SEED_ENABLED and the
+            # HMAC matches: the company is synthetic and source is demo.
+            # The public JSON body still cannot set those fields.
             created = self.companies.create(
                 CompanyCreate(**payload),
                 record_source=RECORD_SOURCE_DEMO,
