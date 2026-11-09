@@ -138,7 +138,11 @@ def create_company(
     try:
         # The body cannot choose provenance. The seeder proof is a
         # loopback HMAC header, and it only applies to this create.
-        if request_is_demo_seed(request, settings.SECRET_KEY):
+        if request_is_demo_seed(
+            request,
+            settings.SECRET_KEY,
+            enabled=settings.DEMO_SEED_ENABLED,
+        ):
             db_company = repo.create(
                 company,
                 record_source=RECORD_SOURCE_DEMO,

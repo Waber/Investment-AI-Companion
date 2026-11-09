@@ -34,18 +34,23 @@
   on update. Both `seed_demo` modes set true and `demo`.
   `--database-url` passes the repository arguments.
   `--base-url` sends `X-IAC-Demo-Seed`, the HMAC of the shared
-  `SECRET_KEY`, and the server honors it only when the peer is
-  `127.0.0.1` or `::1`. A remote peer or a wrong token stays
-  manual. The migration file was not changed for this.
+  `SECRET_KEY`. The server honors it only when
+  `DEMO_SEED_ENABLED` is true and the peer is `127.0.0.1` or
+  `::1`. The flag defaults to false. A value that is not 64
+  lowercase hex characters stays manual and does not return 500.
+  Uvicorn's default proxy headers rewrite `request.client` from
+  `X-Forwarded-For` when the TCP peer is `127.0.0.1`. `::1` is
+  not in that default allow list. A remote forwarded address
+  stays manual. The migration file was not changed for this.
 - A `fetch-company` update uses the same repository update, so it
   records `manual` and leaves `is_synthetic` as stored.
 - Plan: `docs/superpowers/plans/2026-11-08-provenance-slice-a.md`.
 - Tests: no `.env`. `DATABASE_URL` was not the personal
-  database. SQLite CI command on 3.45.1 after the seed header:
-  2120 passed, 253 deselected, coverage 97.00%. PostgreSQL
+  database. SQLite CI command on 3.45.1 after the security nits:
+  2127 passed, 253 deselected, coverage 97.00%. PostgreSQL
   16.15, `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  253 passed, 2120 deselected. black, isort, and flake8 passed
+  253 passed, 2127 deselected. black, isort, and flake8 passed
   on the Python files this change touches. No live market-data
   calls. The `/ui` pages were not driven in a browser.
 - Account usage: this session cannot read the meter. The
@@ -60,9 +65,11 @@
   `docs/development-journal.md` and `docs/work-state.md`. Both
   top sections stayed. No application, test, or migration file
   conflicted. Revision `0009` was not edited.
-- Next action: GitHub Actions on the rebased head. Przemek
-  reviews. The agent does not merge. QA, security review, and
-  code review are still required. This note is not approval.
+- Security review of `0a76960` was approve with nits. Those
+  nits are in the following commit. The agent does not merge.
+- Next action: GitHub Actions on that commit. Przemek reviews.
+  QA and code review are still required. This note is not
+  approval.
 
 ## Current owner name (Przemek): 2026-11-08
 
