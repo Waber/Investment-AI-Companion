@@ -67,15 +67,17 @@ returned 200. `demo/` is gitignored.
   `/ui` pages still show the older disclaimer banner. Product
   requirements v0.4 no longer require that notice.
 - The badge is the `companies.is_synthetic` column. Both
-  `seed_demo` modes set that flag and `source` to `demo`:
-  `--database-url` writes the columns in process, and
-  `--base-url` sends a loopback header that is the HMAC of
-  the same `SECRET_KEY` the server is using. The JSON body
-  has no `source` and no `is_synthetic` field. Typing
-  `[IAC-DEMO-` into a description does not set the flag. The
-  page label for every synthetic row is the one word `demo`.
-  It is not `demo-v1` or `demo-v2`. A manual row leaves the
-  source cell empty, so the word `manual` is not shown.
+  `seed_demo` modes set that flag and `source` to `demo`.
+  `--database-url` writes the columns in process and does not
+  need `DEMO_SEED_ENABLED`. `--base-url` sends a header that
+  is the HMAC of the same `SECRET_KEY` the server is using.
+  The server ignores that header unless `DEMO_SEED_ENABLED`
+  is true. The JSON body has no `source` and no
+  `is_synthetic` field. Typing `[IAC-DEMO-` into a
+  description does not set the flag. The page label for every
+  synthetic row is the one word `demo`. It is not `demo-v1`
+  or `demo-v2`. A manual row leaves the source cell empty,
+  so the word `manual` is not shown.
 - A website is a link only when the view-model accepts `http` or
   `https`. Anything else is plain text. An empty website is
   "brak danych" / "no data".
@@ -216,11 +218,26 @@ PYTHON=~/IdeaProjects/Investment-AI-Companion/.venv/bin/python
 Confirm the URL points at the isolated demo before applying. The client only
 accepts numeric loopback addresses and disables proxies/redirects, but loopback
 alone cannot prove that the server uses a disposable database. Never aim it at
-an API backed by valuable data. The seeder and that server must share
-`SECRET_KEY`. The create requests carry an HMAC of that key. A different key,
-or a request that is not from loopback, stores a manual company instead.
+an API backed by valuable data. The server process needs
+`DEMO_SEED_ENABLED=true` and the same `SECRET_KEY` as the seeder. The create
+requests carry an HMAC of that key. The flag off, a different key, or a peer
+that is not loopback stores a manual company instead.
 Do not use `setup_database.py --seed` for this
 fixture: that legacy seed uses a different dataset and skips nonempty databases.
+
+## Deploy note for the demo-seed header
+
+`DEMO_SEED_ENABLED` stays false on a deployed server. The one-command demo
+uses `--database-url` and does not need the flag.
+
+Uvicorn's default `proxy_headers=True` and `forwarded_allow_ips=127.0.0.1`
+rewrite `request.client` from `X-Forwarded-For` when the TCP peer is
+`127.0.0.1`. `::1` is not in that default list. A reverse proxy in front of
+the app must overwrite `X-Forwarded-For` with `$remote_addr`. It must not
+append `$remote_addr` to a value the client already sent. If the proxy cannot
+do that, start uvicorn with `--no-proxy-headers` and keep
+`DEMO_SEED_ENABLED` off. Once login exists, prefer a separate
+`DEMO_SEED_KEY` instead of an HMAC of `SECRET_KEY`.
 
 ## Repeatability And Preservation
 

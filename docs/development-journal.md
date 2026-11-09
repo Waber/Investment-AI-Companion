@@ -1,5 +1,48 @@
 # Development Journal
 
+## 2026-11-09 - Demo-seed header nits from the security review (Refs #105)
+
+- Scope: the nits on pull request #127 at `0a76960`. No rebase,
+  no force-push, and no merge. No pull-request comment, review,
+  or body edit. Revision `0009` was not edited. The owner is
+  Przemek.
+- Docstring. `app/demo_seed_auth.py` no longer says the check
+  ignores `X-Forwarded-For`. This helper does not read that
+  header. Uvicorn's default `proxy_headers=True` and
+  `forwarded_allow_ips=127.0.0.1` rewrite `request.client` from
+  it when the TCP peer is `127.0.0.1`. `::1` is not in that
+  default list.
+- A header that is not 64 lowercase hex characters is invalid.
+  The create stays manual and does not return 500. A raw ASGI
+  request with 64 Latin-1 `é` characters failed with 500 before
+  the check and is 201 manual after it.
+- `DEMO_SEED_ENABLED` defaults to false. While it is false the
+  header is ignored. The tests that need the header turn it on.
+  `docs/ide-startup.md` sets it for the disposable API that
+  `seed_demo --base-url` writes to. `docs/demo-data.md` says the
+  same. The sqlite `--database-url` path does not need the flag.
+  `scripts/run_demo.py` still seeds in process and does not turn
+  the flag on.
+- Deploy note in `docs/demo-data.md` and
+  `docs/research/hosting-options.md`. A reverse proxy must
+  overwrite `X-Forwarded-For` with `$remote_addr`, not append.
+  Otherwise run uvicorn with `--no-proxy-headers` and keep the
+  flag off in production. Once login exists, prefer a separate
+  `DEMO_SEED_KEY`. A test through uvicorn's
+  `ProxyHeadersMiddleware` shows a loopback TCP peer plus a
+  remote `X-Forwarded-For` stays manual.
+- RED before the behavior change: the disabled-flag test stored
+  `is_synthetic` true, and the raw ASGI non-ASCII header returned
+  500. After the check, `tests/test_demo_seed_http.py` passed.
+- Verification: no `.env`. SQLite 3.45.1, CI pytest command:
+  2127 passed, 253 deselected, coverage 97.00%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, `-m integration`: 253 passed,
+  2127 deselected. black, isort, and flake8 passed on the Python
+  files this commit changes. No live market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-09, from 20:20.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-09 - seed_demo --base-url marks demo rows (Refs #105)
 
 - Scope: the HTTP mode of `seed_demo` now stores `source=demo`

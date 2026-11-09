@@ -152,7 +152,11 @@ def create_financial_metrics(
     repo = FinancialMetricsRepository(db)
 
     try:
-        if request_is_demo_seed(request, settings.SECRET_KEY):
+        if request_is_demo_seed(
+            request,
+            settings.SECRET_KEY,
+            enabled=settings.DEMO_SEED_ENABLED,
+        ):
             db_metrics = repo.create(metrics, record_source=RECORD_SOURCE_DEMO)
         else:
             db_metrics = repo.create(metrics)

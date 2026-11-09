@@ -231,6 +231,9 @@ class Settings(BaseSettings):
 
     # Off unless a local .env turns it on. /test-config checks this flag.
     DEBUG: bool = False
+    # The demo-seed header is ignored unless this is true. Production
+    # leaves it false. The local --base-url demo turns it on.
+    DEMO_SEED_ENABLED: bool = False
     # Empty default so a missing value reaches the validator. Without
     # it, pydantic stops at "Field required" and never shows how to
     # generate a key. validate_default runs that check on the "".

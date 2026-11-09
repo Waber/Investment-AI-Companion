@@ -31,9 +31,11 @@ def _parsed_origins(settings):
 
 def test_debug_defaults_to_false(monkeypatch):
     monkeypatch.delenv("DEBUG", raising=False)
+    monkeypatch.delenv("DEMO_SEED_ENABLED", raising=False)
     settings = Settings(_env_file=None, SECRET_KEY=TEST_SECRET)
 
     assert settings.DEBUG is False
+    assert settings.DEMO_SEED_ENABLED is False
 
 
 def test_secret_key_is_required(monkeypatch):
@@ -436,7 +438,9 @@ def test_documented_commands_expand_tmpdir_and_home():
 
 
 def test_operator_guides_name_the_shared_checkout():
-    """Guides name one checkout and tell the reader to use their own temp dir."""
+    """Guides name one checkout and tell the reader to use their own
+    temp dir.
+    """
     checkout = "~/IdeaProjects/Investment-AI-Companion"
     old_checkout = "~/projects/"
     paths = (

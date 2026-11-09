@@ -131,6 +131,7 @@ individual entries, with literal values and no shell quoting:
 | `BACKEND_CORS_ORIGINS` | `[]`, or a comma-separated origin list |
 | `OPENAI_API_KEY` | Empty |
 | `SECRET_KEY` | Required. A locally generated random value |
+| `DEMO_SEED_ENABLED` | `true` for this disposable API, so `seed_demo --base-url` can mark rows demo. Leave it unset, or `false`, on any other server |
 
 Generate the secret using the selected interpreter:
 
