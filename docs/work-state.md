@@ -28,21 +28,25 @@
   Templates were not edited. A manual company does not show the
   word `manual`.
 - UI and API creates store `manual` and `is_synthetic` false,
-  even when the description starts with the old prefix. An update
-  stores `manual` and does not change the flag. The sqlite seeder
-  (`seed_sqlite_database`, `run_demo`) sets true and `demo`.
-  `seed_demo --base-url` goes through the public API, so those
-  rows stay manual. That is the API rule, not a second channel.
+  even when the description starts with the old prefix or the
+  JSON body names `source` or `is_synthetic`. An update stores
+  `manual` and does not change the flag. The header is ignored
+  on update. Both `seed_demo` modes set true and `demo`.
+  `--database-url` passes the repository arguments.
+  `--base-url` sends `X-IAC-Demo-Seed`, the HMAC of the shared
+  `SECRET_KEY`, and the server honors it only when the peer is
+  `127.0.0.1` or `::1`. A remote peer or a wrong token stays
+  manual. The migration file was not changed for this.
 - A `fetch-company` update uses the same repository update, so it
   records `manual` and leaves `is_synthetic` as stored.
 - Plan: `docs/superpowers/plans/2026-11-08-provenance-slice-a.md`.
-- Tests: no `.env`. `DATABASE_URL` and `SECRET_KEY` were not the
-  personal database. SQLite CI command on 3.45.1: 2107 passed,
-  253 deselected, coverage 97.01%. PostgreSQL 16.15,
-  `REQUIRE_POSTGRES=1`, DSN
+- Tests: no `.env`. `DATABASE_URL` was not the personal
+  database. SQLite CI command on 3.45.1 after the seed header:
+  2120 passed, 253 deselected, coverage 97.00%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  253 passed, 2107 deselected. black, isort, and flake8 passed
-  on the Python files this branch changes. No live market-data
+  253 passed, 2120 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
   calls. The `/ui` pages were not driven in a browser.
 - Account usage: this session cannot read the meter. The
   coordinator reported 68.4% at dispatch, under the 80% stop.
@@ -50,9 +54,15 @@
 - Active agents: none on this branch. Blockers: none for the
   slice. Normal QA, security review, and code review are still
   required. This note is not approval and not a merge.
-- Next action: GitHub Actions, SQLite and PostgreSQL, both green
-  on this head. Przemek reviews the migration. The agent does not
-  merge.
+- Rebase: Przemek approved, on 2026-11-09 at 21:02
+  Europe/Warsaw, rebasing this branch onto `ce77aa2` and
+  `git push --force-with-lease`. No merge. The conflicts were
+  `docs/development-journal.md` and `docs/work-state.md`. Both
+  top sections stayed. No application, test, or migration file
+  conflicted. Revision `0009` was not edited.
+- Next action: GitHub Actions on the rebased head. Przemek
+  reviews. The agent does not merge. QA, security review, and
+  code review are still required. This note is not approval.
 
 ## Current owner name (Przemek): 2026-11-08
 

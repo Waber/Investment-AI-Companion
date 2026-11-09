@@ -1,14 +1,15 @@
-from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.pagination import DEFAULT_PAGE_LIMIT, Limit, Skip
+from app.core.config import settings
 from app.core.database import get_db
+from app.demo_seed_auth import request_is_demo_seed
 from app.models.company import Company, CompanyCreate, CompanyUpdate
-from app.models.database_models import CompanyDB
+from app.models.database_models import RECORD_SOURCE_DEMO, CompanyDB
 from app.repositories.company_errors import DuplicateCompanyError
 from app.repositories.company_repository import CompanyRepository
 
@@ -33,7 +34,8 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 def db_to_company_model(db_company: CompanyDB) -> Company:
     """
     Convert SQLAlchemy CompanyDB model to Pydantic Company model.
-    This is needed because our API returns Pydantic models, but our repository works with SQLAlchemy models.
+    This is needed because our API returns Pydantic models, but our
+    repository works with SQLAlchemy models.
 
     The conversion handles:
     - Field mapping between database and API models
@@ -56,7 +58,8 @@ def db_to_company_model(db_company: CompanyDB) -> Company:
         created_at=db_company.created_at,
         updated_at=db_company.updated_at,
         is_active=db_company.is_active,
-        last_data_update=db_company.last_data_update,  # does this have to be done manually? Can it be done automatically by some mapper?
+        # The mapper does not copy this field on its own.
+        last_data_update=db_company.last_data_update,
     )
 
 
@@ -112,7 +115,11 @@ def get_company(company_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=Company, status_code=status.HTTP_201_CREATED)
-def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
+def create_company(
+    company: CompanyCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     """
     Create a new company.
 
@@ -129,15 +136,23 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
     repo = CompanyRepository(db)
 
     try:
-        # Create company using repository
-        db_company = repo.create(company)
+        # The body cannot choose provenance. The seeder proof is a
+        # loopback HMAC header, and it only applies to this create.
+        if request_is_demo_seed(request, settings.SECRET_KEY):
+            db_company = repo.create(
+                company,
+                record_source=RECORD_SOURCE_DEMO,
+                is_synthetic=True,
+            )
+        else:
+            db_company = repo.create(company)
         return db_to_company_model(db_company)
     except DuplicateCompanyError as error:
         return duplicate_company_response(error)
     except ValueError as e:
         # Handle business logic errors (e.g., duplicate name/ticker)
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         # Handle unexpected errors
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -177,7 +192,7 @@ def update_company(
     except ValueError as e:
         # Handle business logic errors
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         # Handle unexpected errors
         raise HTTPException(status_code=500, detail="Internal server error")
 

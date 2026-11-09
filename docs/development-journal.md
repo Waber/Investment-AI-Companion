@@ -1,5 +1,52 @@
 # Development Journal
 
+## 2026-11-09 - seed_demo --base-url marks demo rows (Refs #105)
+
+- Scope: the HTTP mode of `seed_demo` now stores `source=demo`
+  and `is_synthetic=true`, same as the sqlite mode. The page
+  label stays the one word `demo`. Revision
+  `alembic/versions/0009_company_provenance.py` was not edited.
+  No merge, no pull-request comment, and no body edit. The
+  owner is Przemek. Usage at the start of this session was
+  reported as 0.1% after a reset he noticed. This session did
+  not read a meter and did not redeem a reset.
+- Design. The public create models still have no `source` and
+  no `is_synthetic`. A JSON body that sends those names is
+  ignored. `seed_demo --base-url` adds one header,
+  `X-IAC-Demo-Seed`. The value is HMAC-SHA256 of the process
+  `SECRET_KEY` with the fixed message `iac-seed-demo-v1`. It
+  is not a source the caller picks. The server uses it only on
+  company create and metric create, and only when the
+  connection peer is `127.0.0.1` or `::1`. `Host` and
+  `X-Forwarded-For` are not read. Updates ignore the header, so
+  it cannot flip an existing company. A wrong token or a remote
+  peer stores `manual` and leaves the flag false. The sqlite
+  seeder still sets the columns in process and does not need
+  the header. `--base-url` and the server must share
+  `SECRET_KEY`, which the demo docs already require.
+- Why this and not a body field. A body field would let any
+  API client choose the provenance. A header without the HMAC
+  would let any local client do it. The HMAC limits it to a
+  process that knows the server secret. Loopback limits a
+  stolen header to a machine that can already open the local
+  port. The header is a fixed "this create is the seeder"
+  switch, not a free-form source.
+- Verification: no `.env`. SQLite 3.45.1, CI pytest command:
+  2120 passed, 253 deselected, coverage 97.00%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, `-m integration`: 253 passed,
+  2120 deselected. black, isort, and flake8 passed on the
+  Python files this commit changes. No live market-data calls.
+  The migration file is not in the diff. The browser was not
+  driven.
+- AI model: Grok 4.7.
+- Time tracking (UTC): 2026-11-09, from 18:06.
+- Live master at the time of that note was `ce77aa2`. Przemek
+  later approved a rebase onto that commit, on 2026-11-09 at
+  21:02 Europe/Warsaw, including `git push --force-with-lease`.
+  The only conflicts were this journal and `docs/work-state.md`.
+  Both top sections stayed. No application file conflicted.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-08 - Provenance columns for companies and metrics (Refs #105)
 
 - Scope: slice A of #105 only. Alembic `0009` on `0008`.
@@ -51,9 +98,9 @@
   80%. No reset was redeemed. No full security audit was started.
 - Time tracking (UTC): 2026-11-08, from 16:56.
 - Pull request #127. Refs #105. Not a merge.
-- Next: both GitHub Actions jobs on this head. Przemek reviews
-  the migration. Do not merge. QA, security review, and code
-  review are still required. This entry is not approval.
+- Next at that commit: both GitHub Actions jobs. Przemek
+  reviews the migration. Do not merge. QA, security review, and
+  code review are still required. This entry is not approval.
 
 ## 2026-11-08 - Current owner is Przemek
 

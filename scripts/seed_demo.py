@@ -112,11 +112,20 @@ class HttpClient:
             if payload is None
             else json.dumps(payload, allow_nan=False).encode("utf-8")
         )
+        headers = {"Content-Type": "application/json"}
+        # Company and metric creates only. The header is the HMAC of
+        # SECRET_KEY, not a source the caller picks. Price posts do
+        # not send it. GET does not send it.
+        if method == "POST" and urlsplit(path).path in {COMPANIES, METRICS}:
+            from app.core.config import settings
+            from app.demo_seed_auth import DEMO_SEED_HEADER, demo_seed_token
+
+            headers[DEMO_SEED_HEADER] = demo_seed_token(settings.SECRET_KEY)
         request = http.Request(
             self.base_url + path,
             data=data,
             method=method,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
         with self.opener.open(request, timeout=10) as response:
             expected = 200 if method == "GET" else 201
@@ -1007,9 +1016,9 @@ def main(argv=None):
                 args.database_url, apply=args.apply, fixture=fixture
             )
         else:
-            # The public API stores source manual and does not set
-            # is_synthetic. The sqlite path above is the one that
-            # marks demo rows.
+            # --base-url sends the seeder HMAC on company and metric
+            # creates. The server marks those rows demo. The JSON
+            # body still has no source field.
             result = seed_demo(
                 fixture,
                 HttpClient(args.base_url),

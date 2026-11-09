@@ -14,7 +14,7 @@
 - Revision `0009`, `down_revision` `0008`. No newer revision exists on `origin/master` `e71c098`. #28's `0010` is not this task. Price bars already have `source` and stay out of scope.
 - Backfill: a company description that starts with `[IAC-DEMO-` is `is_synthetic` true and `source` `demo`. Every other company is false and `manual`. A metric is `demo` only when its company is synthetic, otherwise `manual`.
 - UI and API create/update set `source` to `manual` and do not change an existing `is_synthetic`. A description edit must keep the flag.
-- Seeders and demo fixtures set `is_synthetic` true and `source` `demo` on the in-process sqlite writer. The public HTTP API does not accept a caller-chosen source, so `seed_demo --base-url` stays on that API rule.
+- Seeders and demo fixtures set `is_synthetic` true and `source` `demo`. The 2026-11-08 plan left `--base-url` on the public API, which stored `manual`. On 2026-11-09 that gap was closed without a body field: a loopback create with the HMAC of `SECRET_KEY` is the seeder proof. The JSON models still have no `source` or `is_synthetic`. Updates ignore the header. Revision `0009` was not changed.
 - Owner decision, PM transcript 2026-11-08 17:56 (not in the GitHub issue body): one shared label `demo` replaces `demo-v1` and `demo-v2`. Do not add a version field. Do not keep prefix parsing for the runtime label. Document and test this acceptance change. Templates are not edited. If a template edit were required, stop and report the blocker.
 - No edit-time column, no visible `manual` badge, no ETF/ETC work, no #34 close, no #28 / `0010`.
 - No live market data. No secrets. Do not edit PR #126 or its branch. `Refs #105`. Do not use a closing keyword.
