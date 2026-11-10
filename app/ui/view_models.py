@@ -14,7 +14,7 @@ on the page is the stored ``instrument_type`` (``STOCK``, ``ETF``, or
 import math
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timezone
 from urllib.parse import urlsplit
 
 from app.core.utc_datetime import as_utc
@@ -94,6 +94,52 @@ class PeriodView:
 
 
 @dataclass(frozen=True)
+class FundAttributesView:
+    """ETF or ETC facts. A missing value is None, never zero.
+
+    ``source`` is the word ``demo`` when the row is synthetic, and
+    None for a manual row, matching the company badge. ``ter`` is
+    the stored fraction (0.0022 means 0.22 percent).
+    """
+
+    issuer: str | None
+    underlying: str | None
+    ter: float | None
+    domicile: str | None
+    replication_method: str | None
+    distribution_policy: str | None
+    aum: float | None
+    aum_currency: str | None
+    aum_as_of: datetime | None
+    as_of: datetime | None
+    source: str | None
+    is_synthetic: bool
+
+
+@dataclass(frozen=True)
+class DerivedMetricView:
+    """One price-derived number, or a reason it is missing."""
+
+    value: float | None
+    reason: str | None
+    start: datetime | None
+    end: datetime | None
+    source: str | None
+
+
+@dataclass(frozen=True)
+class PriceMetricsView:
+    """The four metrics for the instrument's default price series."""
+
+    source: str | None
+    as_of: datetime | None
+    return_1y: DerivedMetricView
+    return_3y: DerivedMetricView
+    volatility: DerivedMetricView
+    max_drawdown: DerivedMetricView
+
+
+@dataclass(frozen=True)
 class InstrumentView:
     """One instrument, as the templates render it."""
 
@@ -115,6 +161,8 @@ class InstrumentView:
     annual: list
     quarterly: list
     other: list
+    fund_attributes: FundAttributesView | None = None
+    price_metrics: PriceMetricsView | None = None
 
 
 def http_website_href(value):
@@ -226,8 +274,69 @@ def catalog_instrument_type(value):
     return _CATALOG_INSTRUMENT_TYPES.get(value.strip().upper())
 
 
-def to_instrument(company):
-    """Map one company row and its metrics to an instrument view."""
+def _midnight(value):
+    """A calendar date as midnight UTC, so the date formatter can show it."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return as_utc(value)
+    if isinstance(value, date):
+        return datetime(
+            value.year, value.month, value.day, tzinfo=timezone.utc
+        )
+    return None
+
+
+def _fund_view(row):
+    if row is None:
+        return None
+    synthetic = getattr(row, "is_synthetic", False) is True
+    return FundAttributesView(
+        issuer=_text(row.issuer),
+        underlying=_text(row.underlying),
+        ter=_finite_number(row.ter),
+        domicile=_text(row.domicile),
+        replication_method=_text(row.replication_method),
+        distribution_policy=_text(row.distribution_policy),
+        aum=_finite_number(row.aum),
+        aum_currency=_text(row.aum_currency),
+        aum_as_of=_midnight(row.aum_as_of),
+        as_of=_midnight(row.as_of),
+        source=DEMO_SOURCE if synthetic else None,
+        is_synthetic=synthetic,
+    )
+
+
+def _metric_view(metric):
+    return DerivedMetricView(
+        value=_finite_number(metric.value),
+        reason=metric.reason,
+        start=_midnight(metric.start),
+        end=_midnight(metric.end),
+        source=_text(metric.source),
+    )
+
+
+def _price_view(metrics):
+    if metrics is None:
+        return None
+    return PriceMetricsView(
+        source=_text(metrics.source),
+        as_of=_midnight(metrics.as_of),
+        return_1y=_metric_view(metrics.return_1y),
+        return_3y=_metric_view(metrics.return_3y),
+        volatility=_metric_view(metrics.volatility),
+        max_drawdown=_metric_view(metrics.max_drawdown),
+    )
+
+
+def to_instrument(company, fund_attributes=None, price_metrics=None):
+    """Map one company row and its metrics to an instrument view.
+
+    ``fund_attributes`` is the stored ETF or ETC row, or None.
+    ``price_metrics`` is the result of ``derive_price_metrics``, or
+    None on the list, which does not compute them.
+    """
     description = company.description
     # The column, not the description. A missing attribute (a stub
     # that predates the column) is not synthetic. Only a real True
@@ -272,4 +381,6 @@ def to_instrument(company):
         annual=annual,
         quarterly=quarterly,
         other=other,
+        fund_attributes=_fund_view(fund_attributes),
+        price_metrics=_price_view(price_metrics),
     )

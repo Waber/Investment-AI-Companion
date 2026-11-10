@@ -77,4 +77,51 @@
 {% include "partials/metric_table.html" %}
 {% endwith %}
 {% endif %}
+{% if instrument.fund_attributes %}
+<h2>{{ t['fund.title'] }}</h2>
+<dl>
+  {% set fund = instrument.fund_attributes %}
+  <dt>{{ t['fund.issuer'] }}</dt>
+  <dd data-field="fund-issuer">{% if fund.issuer %}{{ fund.issuer }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.underlying'] }}</dt>
+  <dd data-field="fund-underlying">{% if fund.underlying %}{{ fund.underlying }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.ter'] }}</dt>
+  <dd data-field="fund-ter">{% if fund.ter is not none %}{{ format_number(fund.ter * 100, language) }}%{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.domicile'] }}</dt>
+  <dd data-field="fund-domicile">{% if fund.domicile %}{{ fund.domicile }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.replication'] }}</dt>
+  <dd data-field="fund-replication">{% if fund.replication_method %}{{ fund.replication_method }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.distribution'] }}</dt>
+  <dd data-field="fund-distribution">{% if fund.distribution_policy %}{{ fund.distribution_policy }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.aum'] }}</dt>
+  <dd data-field="fund-aum">{% if fund.aum is not none %}{{ format_number(fund.aum, language) }} {{ fund.aum_currency or '' }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['fund.aum_as_of'] }}</dt>
+  <dd data-field="fund-aum-as-of">{% if fund.aum_as_of %}{{ format_date(fund.aum_as_of, language) }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['field.as_of'] }}</dt>
+  <dd data-field="fund-as-of">{% if fund.as_of %}{{ format_date(fund.as_of, language) }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dt>{{ t['field.source'] }}</dt>
+  <dd data-field="fund-source">{% if fund.source %}{{ fund.source }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+</dl>
+{% endif %}
+{% if instrument.price_metrics %}
+<h2>{{ t['price.title'] }}</h2>
+<dl>
+  {% set prices = instrument.price_metrics %}
+  {% for code, metric in (('return_1y', prices.return_1y), ('return_3y', prices.return_3y), ('volatility', prices.volatility), ('drawdown', prices.max_drawdown)) %}
+  <dt>{{ t['price.' ~ code] }}</dt>
+  <dd data-field="price-{{ code }}">
+    {% if metric.value is not none %}
+    {{ format_number(metric.value * 100, language) }}%
+    {% if metric.start and metric.end %}
+    <span class="metric-range">{{ t['price.range'] }}: {{ format_date(metric.start, language) }} – {{ format_date(metric.end, language) }}</span>
+    {% endif %}
+    {% else %}
+    <span class="missing">{{ t['missing'] }}</span>
+    {% if metric.reason == 'no_prices' %}{{ t['price.no_prices'] }}{% elif metric.reason == 'insufficient_history' %}{{ t['price.insufficient'] }}{% endif %}
+    {% endif %}
+    {% if metric.source %}<span class="metric-source">{{ t['watchlist.source'].format(source=metric.source) }}</span>{% endif %}
+  </dd>
+  {% endfor %}
+</dl>
+{% endif %}
 {% endblock %}
