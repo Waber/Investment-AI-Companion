@@ -15,7 +15,6 @@ from tests.company_migration import (
     LEGACY_COMPANIES,
     LEGACY_METRICS,
     downgrade_to,
-    upgrade_head,
     upgrade_to,
 )
 from tests.test_provenance_migration import (
@@ -55,7 +54,7 @@ def test_0009_backfills_demo_rows_and_downgrade_keeps_children(
             _insert_metrics(connection)
             connection.commit()
 
-            upgrade_head(connection)
+            upgrade_to(connection, "0009")
             connection.commit()
             assert _version(connection) == "0009"
             assert {"is_synthetic", "source"} <= _names(
@@ -125,7 +124,7 @@ def test_0009_backfills_demo_rows_and_downgrade_keeps_children(
             ).all()
             assert list(metrics) == [(1, 1), (2, 3), (3, 2)]
 
-            upgrade_head(connection)
+            upgrade_to(connection, "0009")
             connection.commit()
             assert _version(connection) == "0009"
             again = connection.execute(
