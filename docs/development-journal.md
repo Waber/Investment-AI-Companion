@@ -73,7 +73,10 @@
   A desktop browser was not driven.
 - AI model: Grok 4.7. This session did not read the usage meter.
 - Time tracking (UTC): 2026-11-10, from 09:48.
-- Next: GitHub Actions on this head. Do not merge.
+- GitHub Actions run 42799268379 on head `9892408` succeeded.
+  Both jobs passed: pytest (Python 3.12, SQLite) and pytest
+  (Python 3.12, PostgreSQL). Pull request #128.
+- Next: Przemek reviews. Do not merge.
 
 ## 2026-11-09 - QA gaps on the demo-seed header (Refs #105)
 
