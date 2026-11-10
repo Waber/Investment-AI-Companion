@@ -43,8 +43,9 @@
   percentage is recorded. No reset was redeemed.
 - Active agents: none. Blockers: none for the slice. This note
   is not approval and not a merge.
-- Next action: GitHub Actions on the pushed head. Przemek
-  reviews. Do not merge.
+- Next action: Przemek reviews. GitHub Actions run
+  42799268379 on head `9892408` succeeded (SQLite and
+  PostgreSQL). Do not merge.
 
 ## Provenance slice A (#105): 2026-11-08
 
