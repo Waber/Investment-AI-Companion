@@ -211,3 +211,13 @@ def test_a_non_positive_close_is_skipped_before_the_anchor_search():
 def test_blank_source_is_rejected():
     with pytest.raises(ValueError, match="source"):
         derive_price_metrics([(date(2026, 1, 2), 1)], "  ")
+
+
+def test_a_missing_source_is_kept_only_when_there_is_no_series():
+    """The detail route has no series name when the instrument has no bars."""
+    result = derive_price_metrics([], None)
+    assert result.source is None
+    assert result.return_1y.reason == REASON_NO_PRICES
+    assert result.return_1y.source is None
+    with pytest.raises(ValueError, match="source"):
+        derive_price_metrics([(date(2026, 1, 2), 1)], None)

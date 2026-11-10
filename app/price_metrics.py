@@ -103,9 +103,17 @@ def derive_price_metrics(points, source):
     not have to be sorted. ``source`` is the name of that series.
     A blank source is a caller error.
     """
-    if not isinstance(source, str) or not source.strip():
+    if source is None:
+        # No series was chosen. A later usable close still needs a name.
+        named = None
+    elif not isinstance(source, str) or not source.strip():
         raise ValueError("source must not be blank")
+    else:
+        named = source
+    source = named
     usable = _usable_closes(points)
+    if usable and source is None:
+        raise ValueError("source must not be blank")
     if not usable:
         missing = _missing(REASON_NO_PRICES, source, None)
         return PriceDerivedMetrics(
