@@ -59,7 +59,12 @@ def format_number(value, language):
     """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        # A Python int can be larger than any float. That is missing
+        # data on the page, not a 500.
+        return None
     if not math.isfinite(number):
         return None
     separators = _NUMBER_SEPARATORS.get(language, _NUMBER_SEPARATORS["pl"])

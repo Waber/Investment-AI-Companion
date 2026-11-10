@@ -130,9 +130,9 @@ class HttpClient:
             else json.dumps(payload, allow_nan=False).encode("utf-8")
         )
         headers = {"Content-Type": "application/json"}
-        # Company and metric creates only. The header is the HMAC of
-        # SECRET_KEY, not a source the caller picks. Price posts do
-        # not send it. GET does not send it.
+        # Company, metric, and fund-attribute creates. The header is
+        # the HMAC of SECRET_KEY, not a source the caller picks.
+        # Price posts do not send it. GET does not send it.
         if method == "POST" and _demo_seed_path(urlsplit(path).path):
             from app.core.config import settings
             from app.demo_seed_auth import DEMO_SEED_HEADER, demo_seed_token

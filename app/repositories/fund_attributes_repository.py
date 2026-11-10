@@ -18,6 +18,7 @@ from app.models.database_models import (
     FundAttributesDB,
     require_record_source,
 )
+from app.models.fund_attributes import AUM_MAX, TER_MAX
 from app.repositories.company_errors import CompanyNotFoundError
 
 _FUND_TYPES = frozenset({"ETF", "ETC"})
@@ -195,6 +196,10 @@ def _check_numbers(data):
             raise ValueError(f"{field} must be a number")
         if not math.isfinite(float(value)) or float(value) < 0:
             raise ValueError(f"{field} must not be negative")
+        if field == "ter" and float(value) > TER_MAX:
+            raise ValueError("ter is a fraction from 0 to 1; 1 is 100 percent")
+        if field == "aum" and float(value) > AUM_MAX:
+            raise ValueError("aum must not be greater than 1e15")
         data[field] = float(value)
 
 

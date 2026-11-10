@@ -1,5 +1,51 @@
 # Development Journal
 
+## 2026-11-10 - Security nits on the attribute routes (Refs #28)
+
+- Scope: the five nits from the security review of pull request
+  #128 at `31a7ce5`. Approve with nits. No High and no Medium.
+  New commits on `cursor/etf-etc-attributes-28-0a55`. No
+  force-push, no history rewrite, no merge, no pull-request
+  comment. The owner is Przemek.
+- RED first. `tests/test_fund_attributes_security.py` failed
+  before the fixes. An id of `2**63` raised `OverflowError` on
+  GET, POST, and PUT. `ter=1e308` was stored (201). Hidden
+  characters in the issuer were stored (201). A blank price
+  source raised `ValueError: source must not be blank`. The
+  seeder comment still said company and metric creates only.
+- L1. Every `instrument_id` on `app/api/instruments.py` uses the
+  research `ItemId` (`gt=0`, `le=2**63-1`). A larger id is 422.
+  `2**63-1` is still a 404.
+- L2. `ter` is a fraction. The page shows it times 100 with a
+  percent sign, so `0.0022` is 0.22 percent and `1` is 100
+  percent. The write model rejects a TER above 1 and an AUM
+  above `1e15`. The values stay floats. The read model does not
+  repeat the cap, so a row planted in the database can still be
+  read. `_finite_number` drops a number above `1e15` instead of
+  turning `1e308` into a huge int. `format_number` returns None
+  on `OverflowError` and `ValueError`. The detail page for a
+  planted `1e308` is 200 and shows missing data.
+- L3. Issuer, underlying, domicile, replication method, and
+  distribution policy go through `clean_text` with newlines
+  disallowed and blanks allowed. A bidi mark, a NUL, a newline,
+  or another control character is 422 and is not stored. A
+  blank string is stored as null.
+- N1. `metrics_from_bars` treats a blank price source as no
+  usable series. GET detail and `/ui` stay 200 with
+  `no_prices`.
+- N2. The seeder comment now names fund-attribute creates.
+- Verification: no `.env`. `DATABASE_URL` was not the personal
+  database. SQLite 3.45.1, CI pytest command: 2194 passed, 254
+  deselected, coverage 97.07%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2194 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-10, from 10:42.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-10 - ETF and ETC attributes and price-derived metrics (Refs #28)
 
 - Scope: the attribute row for an ETF or an ETC, and the four
