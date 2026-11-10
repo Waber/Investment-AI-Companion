@@ -21,7 +21,6 @@ from tests.company_migration import (
     LEGACY_METRICS,
     downgrade_to,
     stamp,
-    upgrade_head,
     upgrade_to,
 )
 
@@ -101,10 +100,11 @@ def _truthy(value):
     return value in (True, 1)
 
 
-def test_alembic_head_is_0009_revising_0008():
-    """One head. 0009 revises 0008. 0008 still revises 0007."""
+def test_0009_revises_0008_and_is_not_a_second_head():
+    """0010 is the only head. 0009 still revises 0008."""
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["0009"]
+    assert script.get_heads() == ["0010"]
+    assert script.get_revision("0010").down_revision == "0009"
     revision = script.get_revision("0009")
     assert revision.down_revision == "0008"
     assert script.get_revision("0008").down_revision == "0007"
@@ -135,7 +135,7 @@ def test_0009_backfills_demo_rows_and_downgrade_keeps_children(tmp_path):
         _insert_metrics(connection)
         connection.commit()
 
-        upgrade_head(connection)
+        upgrade_to(connection, "0009")
         connection.commit()
         assert _version(connection) == "0009"
         assert {"is_synthetic", "source"} <= _names(connection, "companies")
@@ -201,7 +201,7 @@ def test_0009_backfills_demo_rows_and_downgrade_keeps_children(tmp_path):
         ).all()
         assert metrics == [(1, 1), (2, 3), (3, 2)]
 
-        upgrade_head(connection)
+        upgrade_to(connection, "0009")
         connection.commit()
         assert _version(connection) == "0009"
         again = connection.execute(
@@ -231,7 +231,7 @@ def test_0009_upgrade_of_the_legacy_stub_does_not_require_description(
         connection.execute(text(LEGACY_COMPANIES))
         connection.execute(text(LEGACY_METRICS))
     with engine.connect() as connection:
-        upgrade_head(connection)
+        upgrade_to(connection, "0009")
         connection.commit()
         assert _version(connection) == "0009"
         connection.execute(
@@ -269,7 +269,7 @@ def test_0009_upgrade_is_safe_when_create_all_already_has_the_columns(
             )
         )
         connection.commit()
-        upgrade_head(connection)
+        upgrade_to(connection, "0009")
         connection.commit()
         row = connection.execute(
             text("SELECT is_synthetic, source FROM companies WHERE id = 1")

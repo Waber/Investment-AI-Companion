@@ -191,6 +191,17 @@ class CompanyDB(Base):
         back_populates="company",
         passive_deletes="all",
     )
+    # One fund-attribute row, and only for an ETF or an ETC. The
+    # repository rejects a stock. The database cascade removes the
+    # row when the company is deleted. passive_deletes leaves that
+    # DELETE to the foreign key.
+    fund_attributes = relationship(
+        "FundAttributesDB",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
 
     # Database constraints
     __table_args__ = (
@@ -301,6 +312,93 @@ class FinancialMetricsDB(Base):
             "period_end",
             "period_type",
             name="uq_metrics_company_period",
+        ),
+    )
+
+
+class FundAttributesDB(Base):
+    """ETF or ETC facts for one instrument. One row, or none.
+
+    Every fact column is nullable. A missing TER or AUM is null.
+    The table does not fill either one with zero. ``source`` uses
+    the same allow-list as ``CompanyDB.source``. ``as_of`` is the
+    date this snapshot describes. ``aum_as_of`` is the date of the
+    assets-under-management figure, which can be older than the
+    snapshot.
+
+    The application stores a row only when the company type is ETF
+    or ETC. The table itself does not repeat that rule: a CHECK
+    would have to read ``companies.instrument_type``, and SQLite
+    cannot do that in a column CHECK.
+    """
+
+    __tablename__ = "fund_attributes"
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(
+        Integer,
+        ForeignKey(
+            "companies.id",
+            name="fk_fund_attributes_company_id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    issuer = Column(String(255), nullable=True)
+    # Tracked index for an ETF, or the commodity or asset for an ETC.
+    underlying = Column(String(255), nullable=True)
+    # A fraction: 0.0022 is 0.22 percent. Null means the fee is unknown.
+    ter = Column(Float, nullable=True)
+    domicile = Column(String(100), nullable=True)
+    replication_method = Column(String(64), nullable=True)
+    distribution_policy = Column(String(64), nullable=True)
+    aum = Column(Float, nullable=True)
+    aum_currency = Column(String(3), nullable=True)
+    aum_as_of = Column(Date, nullable=True)
+    as_of = Column(Date, nullable=True)
+    is_synthetic = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+    source = Column(
+        String(64),
+        nullable=False,
+        default=RECORD_SOURCE_MANUAL,
+        server_default=RECORD_SOURCE_MANUAL,
+    )
+    created_at = Column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    @validates("source")
+    def _validate_source(self, _key, value):
+        return require_record_source(value)
+
+    company = relationship("CompanyDB", back_populates="fund_attributes")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            name="uq_fund_attributes_company_id",
+        ),
+        # A CHECK is true or unknown. Null TER and null AUM pass.
+        # A negative number does not.
+        CheckConstraint(
+            "ter >= 0",
+            name="ck_fund_attributes_ter_gte_zero",
+        ),
+        CheckConstraint(
+            "aum >= 0",
+            name="ck_fund_attributes_aum_gte_zero",
         ),
     )
 
