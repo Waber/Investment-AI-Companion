@@ -221,9 +221,11 @@ def test_fund_attributes():
         "ter": 0.0022,
         "aum": 1250000000,
         "aum_currency": "EUR",
+        "aum_as_of": "2026-09-30",
         "issuer": "Demo Issuer",
         "underlying": "Synthetic World Equity Index",
         "domicile": "Ireland",
+        "replication_method": "physical",
         "distribution_policy": "accumulating",
     }
     assert etc["fund_type"] == "ETC"
@@ -232,6 +234,26 @@ def test_fund_attributes():
     assert etc["underlying"] == "Physical gold (synthetic)"
     assert etc["domicile"] == "Jersey"
     assert etc["distribution_policy"] is None
+    assert etc["replication_method"] == "physical"
+    assert etc["aum_as_of"] == "2026-09-30"
+
+
+def test_one_etf_has_no_ter_and_still_names_its_source():
+    """A missing fee is null. The collector still names the snapshot.
+
+    The stored demo rows use source ``demo``. This offline collector's
+    provenance source stays ``fake``, which is the provider name the
+    price series already uses. ``synthetic`` is true and ``as_of`` is
+    the fixture date.
+    """
+    result = FakeCollector().fetch_fund_attributes("DEMO_ETF_GPW")
+    assert result.provenance.source == "fake"
+    assert result.provenance.synthetic is True
+    assert result.provenance.as_of == FAKE_AS_OF
+    assert result.value["ter"] is None
+    assert result.value["aum"] == 250000000
+    assert result.value["aum_as_of"] == "2026-09-30"
+    assert result.value["replication_method"] == "physical"
 
 
 def test_fund_attributes_none_for_stocks():

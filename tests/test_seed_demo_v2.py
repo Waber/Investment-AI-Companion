@@ -42,6 +42,7 @@ def _fixture():
                         "revenue": 10,
                     }
                 ],
+                "attributes": None,
                 "prices": [
                     {
                         "date": "2026-01-05",
@@ -340,3 +341,55 @@ def test_a_price_without_the_marker_is_rejected_before_writes():
     else:
         raise AssertionError("invalid price source was accepted")
     assert client.companies == []
+
+
+def test_sqlite_seed_stores_fund_attributes_as_demo(tmp_path):
+    """The in-process seeder writes source demo and the synthetic flag.
+
+    TER is null on this ETF. A second apply skips the row.
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    from app.core.database import create_db_engine
+    from app.models.database_models import RECORD_SOURCE_DEMO, FundAttributesDB
+
+    fixture = _fixture()
+    company = fixture["companies"][0]
+    company["company"]["instrument_type"] = "ETF"
+    company["company"]["ticker"] = "DEMO_ETF_ONE"
+    company["attributes"] = {
+        "issuer": "Demo Issuer",
+        "underlying": "Synthetic Index",
+        "ter": None,
+        "domicile": "Ireland",
+        "replication_method": "physical",
+        "distribution_policy": "accumulating",
+        "aum": 10,
+        "aum_currency": "PLN",
+        "aum_as_of": "2026-09-30",
+        "as_of": "2026-09-30",
+        "source": "demo",
+    }
+    url = f"sqlite:///{tmp_path / 'demo.db'}"
+    first = seed.seed_sqlite_database(url, apply=True, fixture=fixture)
+    assert first["attributes"]["created"] == 1
+    engine = create_db_engine(url)
+    try:
+        db = sessionmaker(bind=engine)()
+        try:
+            row = db.query(FundAttributesDB).one()
+            assert row.ter is None
+            assert row.source == RECORD_SOURCE_DEMO
+            assert row.is_synthetic is True
+            assert row.as_of.isoformat() == "2026-09-30"
+            assert row.aum_currency == "PLN"
+        finally:
+            db.close()
+    finally:
+        engine.dispose()
+    second = seed.seed_sqlite_database(url, apply=True, fixture=fixture)
+    assert second["attributes"] == {
+        "created": 0,
+        "skipped": 1,
+        "pending": 0,
+    }
