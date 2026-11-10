@@ -1,5 +1,80 @@
 # Development Journal
 
+## 2026-11-10 - ETF and ETC attributes and price-derived metrics (Refs #28)
+
+- Scope: the attribute row for an ETF or an ETC, and the four
+  numbers computed from stored closes. Alembic `0010` revises
+  `0009` and is the only head. `0009` was not edited. One pull
+  request to master. No merge. The owner is Przemek.
+- RED then GREEN. The price-metric tests failed first with
+  `ModuleNotFoundError: app.price_metrics` (commit `8ea9ca9`).
+  The migration tests failed because the only head was `0009`,
+  not `0010`. The API tests failed with
+  `ModuleNotFoundError: app.repositories.fund_attributes_repository`.
+  Each of those was then made to pass.
+- Decisions. The table is `fund_attributes`, one row per company.
+  Issuer, underlying (the tracked index for an ETF, or the asset
+  for an ETC), TER, domicile, replication method, distribution
+  policy, and AUM are nullable. A missing TER or AUM stays null.
+  It is not stored as zero. TER and AUM, when present, must be
+  at least zero. `source` is a string with no CHECK. The
+  application accepts `manual`, `demo`, and `fixture`.
+  `is_synthetic` defaults to false and `source` defaults to
+  `manual`. There was nothing to backfill. Downgrade drops the
+  table and leaves companies, metrics, and price bars. Upgrade
+  again starts from an empty table. A `create_all` database
+  already has the table, so the create runs only when it is
+  missing.
+- The public JSON models have no `source` and no `is_synthetic`.
+  A create or update that sends those keys still stores
+  `manual` and does not set the flag. The demo-seed header is
+  the only HTTP way to store `demo`, and only on create. An
+  update records `manual` and leaves the flag. A stock is
+  rejected.
+- Price metrics are computed, not stored. The one-year and
+  three-year figures are total price returns: last usable close
+  divided by the latest usable close on or before the same
+  calendar day one or three years earlier, minus one. February
+  29 steps back to February 28. They are not annualized and they
+  do not include dividends. Volatility and maximum drawdown use
+  that same one-year window. Volatility is the sample standard
+  deviation of close-to-close log returns, multiplied by the
+  square root of `365.25 / average gap in days`. That is not the
+  252-trading-day convention, because the stored bars may be
+  weekly. Maximum drawdown is the worst `price / peak - 1` in
+  the window. It is zero when the price never falls, and
+  negative when it does. Too little history is null with the
+  reason `insufficient_history`. No usable close is
+  `no_prices`. A zero or negative close is skipped. Each metric
+  carries the price series source and the as-of date.
+- The shared label is `demo`. There is no `demo-v2` source.
+  `fixtures/demo-v2.json` now has an `attributes` object on each
+  fund. `source` in that object is `demo`, and `as_of` is the
+  fixture date. `DEMO_ETF_GPW` leaves TER null. Stocks have
+  `attributes` null. The price-bar `source` on those bars stays
+  `[IAC-DEMO-V2]`. That string names the series. It is not the
+  attribute column. The fake collector's provenance source stays
+  `fake`, with `synthetic` true and an as-of date. Changing it
+  to `demo` would change the price-series tie with
+  `[IAC-DEMO-V2]`. The rows the seeder writes use `source=demo`
+  and `is_synthetic` true.
+- The detail page shows the attributes and the four metrics.
+  A missing TER is "brak danych" / "no data", not zero. A manual
+  row does not show the word `manual`. Edit forms are not in
+  this slice.
+- Verification: no `.env`. `DATABASE_URL` was not the personal
+  database. SQLite 3.45.1, CI pytest command: 2181 passed, 254
+  deselected, coverage 97.16%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2181 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls. The detail HTML was checked through the test client.
+  A desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-10, from 09:48.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-09 - QA gaps on the demo-seed header (Refs #105)
 
 - Scope: tests for pull request #127 after `6052f4c`. No behavior

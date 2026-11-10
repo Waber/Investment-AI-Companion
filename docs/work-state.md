@@ -1,5 +1,51 @@
 # Current Work State
 
+## ETF and ETC attributes and price metrics (#28): 2026-11-10
+
+- Branch `cursor/etf-etc-attributes-28-0a55`, from `origin/master`
+  `b4873c6`. One pull request to master. Refs #28. The agent
+  does not merge. `0009` was not edited. No live market data.
+- Completed: Alembic `0010` revises `0009` and is the only head.
+  `fund_attributes` is one row per company. Fact columns are
+  nullable. TER and AUM have no server default and a CHECK that
+  rejects a negative number. `is_synthetic` defaults to false.
+  `source` defaults to `manual` and has no CHECK. Upgrade does
+  not invent values. Downgrade drops the table and keeps
+  companies, metrics, and price bars. A second upgrade starts
+  empty. A `create_all` database can upgrade without creating
+  the table twice.
+- Price metrics are computed from the default stored series:
+  1-year and 3-year total price return, annualized volatility,
+  and maximum drawdown. The formulas are in `app/price_metrics.py`.
+  A short series is null with `insufficient_history`. No usable
+  close is `no_prices`. Each value carries the series source
+  and the as-of date.
+- Public JSON cannot set `source` or `is_synthetic`. Creates
+  and updates are `manual`. The demo-seed header is the only
+  HTTP way to store `demo`, and only on create. An update
+  records `manual` and leaves the flag. A stock is rejected.
+- The fixture label is `demo`. `DEMO_ETF_GPW` has a null TER.
+  Price bars in the fixture still use source `[IAC-DEMO-V2]`.
+  The fake collector's provenance source stays `fake`.
+- The `/ui` detail page shows the attributes and the four
+  metrics. Edit forms are not in this slice. Yahoo still does
+  not implement `FundAttributes`.
+- Tests: no `.env`. `DATABASE_URL` was not the personal
+  database. SQLite 3.45.1, CI command: 2181 passed, 254
+  deselected, coverage 97.16%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2181 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. The detail HTML was
+  checked through the test client. A desktop browser was not
+  driven.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none for the slice. This note
+  is not approval and not a merge.
+- Next action: GitHub Actions on the pushed head. Przemek
+  reviews. Do not merge.
+
 ## Provenance slice A (#105): 2026-11-08
 
 - Branch `cursor/provenance-slice-a-105-e700`, from `origin/master`
@@ -512,8 +558,9 @@
   (`demo_source_label` in `app/ui/view_models.py`).
 - #99: named watchlists (several lists per company).
 - #100: on-demand AI summary of recent moves in a watchlist row.
-- #28: ETF/ETC attribute columns, fund attributes, and the
-  attribute forms. Yahoo still does not implement
+- #28: this branch adds the attribute table, the price-derived
+  metrics, the detail API, and the read-only detail section.
+  Edit forms are still later. Yahoo still does not implement
   `FundAttributes`.
 - Local SQLite 3.54 casts a float to text with more digits than
   the SQLite in CI. Two `0006` boundary tests fail locally on
