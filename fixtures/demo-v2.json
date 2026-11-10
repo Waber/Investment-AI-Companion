@@ -16,6 +16,7 @@
         "website": "https://vistula.example.com/",
         "instrument_type": "STOCK"
       },
+      "attributes": null,
       "metrics": [
         {
           "period_end": "2023-12-31T00:00:00Z",
@@ -2369,6 +2370,7 @@
         "website": "https://pacific.example.com/",
         "instrument_type": "STOCK"
       },
+      "attributes": null,
       "metrics": [
         {
           "period_end": "2023-12-31T00:00:00Z",
@@ -4726,6 +4728,7 @@
         "website": "https://rhine.example.com/",
         "instrument_type": "STOCK"
       },
+      "attributes": null,
       "metrics": [
         {
           "period_end": "2023-12-31T00:00:00Z",
@@ -7079,6 +7082,7 @@
         "website": "https://sakura.example.com/",
         "instrument_type": "STOCK"
       },
+      "attributes": null,
       "metrics": [
         {
           "period_end": "2023-12-31T00:00:00Z",
@@ -8288,6 +8292,7 @@
         "website": null,
         "instrument_type": "STOCK"
       },
+      "attributes": null,
       "metrics": [
         {
           "period_end": "2023-12-31T00:00:00Z",
@@ -10641,6 +10646,7 @@
         "website": null,
         "instrument_type": "STOCK"
       },
+      "attributes": null,
       "metrics": [],
       "prices": []
     },
@@ -10656,6 +10662,19 @@
         "exchange": "XETRA",
         "currency": "EUR",
         "instrument_type": "ETF"
+      },
+      "attributes": {
+        "issuer": "Demo Issuer",
+        "underlying": "Synthetic World Equity Index",
+        "ter": 0.0022,
+        "domicile": "Ireland",
+        "replication_method": "physical",
+        "distribution_policy": "accumulating",
+        "aum": 1250000000,
+        "aum_currency": "EUR",
+        "aum_as_of": "2026-09-30",
+        "as_of": "2026-09-30",
+        "source": "demo"
       },
       "metrics": [],
       "prices": [
@@ -12973,6 +12992,19 @@
         "currency": "PLN",
         "instrument_type": "ETF"
       },
+      "attributes": {
+        "issuer": "Demo Issuer",
+        "underlying": "Synthetic GPW Equity Index",
+        "ter": null,
+        "domicile": "Poland",
+        "replication_method": "physical",
+        "distribution_policy": "distributing",
+        "aum": 250000000,
+        "aum_currency": "PLN",
+        "aum_as_of": "2026-09-30",
+        "as_of": "2026-09-30",
+        "source": "demo"
+      },
       "metrics": [],
       "prices": [
         {
@@ -15289,6 +15321,19 @@
         "currency": "EUR",
         "instrument_type": "ETC"
       },
+      "attributes": {
+        "issuer": "Demo Issuer",
+        "underlying": "Physical gold (synthetic)",
+        "ter": 0.0015,
+        "domicile": "Jersey",
+        "replication_method": "physical",
+        "distribution_policy": null,
+        "aum": 450000000,
+        "aum_currency": "EUR",
+        "aum_as_of": "2026-09-30",
+        "as_of": "2026-09-30",
+        "source": "demo"
+      },
       "metrics": [],
       "prices": [
         {
@@ -17604,6 +17649,19 @@
         "exchange": "NASDAQ",
         "currency": "USD",
         "instrument_type": "ETC"
+      },
+      "attributes": {
+        "issuer": "Demo Issuer",
+        "underlying": "Silver (synthetic)",
+        "ter": 0.003,
+        "domicile": "Ireland",
+        "replication_method": "synthetic",
+        "distribution_policy": null,
+        "aum": 80000000,
+        "aum_currency": "USD",
+        "aum_as_of": "2026-06-30",
+        "as_of": "2026-09-30",
+        "source": "demo"
       },
       "metrics": [],
       "prices": [

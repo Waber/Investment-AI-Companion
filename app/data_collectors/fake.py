@@ -80,10 +80,37 @@ FUNDS: Dict[str, Dict[str, Any]] = {
             "ter": 0.0022,
             "aum": 1250000000,
             "aum_currency": "EUR",
+            "aum_as_of": "2026-09-30",
             "issuer": "Demo Issuer",
             "underlying": "Synthetic World Equity Index",
             "domicile": "Ireland",
+            "replication_method": "physical",
             "distribution_policy": "accumulating",
+        },
+    },
+    "DEMO_ETF_GPW": {
+        "profile": {
+            "name": "Demo GPW Equity ETF",
+            "sector": None,
+            "industry": None,
+            "description": _FUND_DESCRIPTION.format(kind="GPW equity ETF"),
+            "website": None,
+            "country": None,
+            "exchange": "DEMO-GPW",
+            "currency": "PLN",
+        },
+        # TER is missing on purpose. A missing fee is null, not zero.
+        "attributes": {
+            "fund_type": "ETF",
+            "ter": None,
+            "aum": 250000000,
+            "aum_currency": "PLN",
+            "aum_as_of": "2026-09-30",
+            "issuer": "Demo Issuer",
+            "underlying": "Synthetic GPW Equity Index",
+            "domicile": "Poland",
+            "replication_method": "physical",
+            "distribution_policy": "distributing",
         },
     },
     "DEMO_ETC_GOLD": {
@@ -102,9 +129,11 @@ FUNDS: Dict[str, Dict[str, Any]] = {
             "ter": 0.0015,
             "aum": 450000000,
             "aum_currency": "EUR",
+            "aum_as_of": "2026-09-30",
             "issuer": "Demo Issuer",
             "underlying": "Physical gold (synthetic)",
             "domicile": "Jersey",
+            "replication_method": "physical",
             # Does not apply to an ETC.
             "distribution_policy": None,
         },
@@ -181,6 +210,7 @@ PRICE_PARAMS: Dict[str, tuple] = {
     "DEMO_JP_STABLE": (3400.0, 0.0001, 0.02, 90.0, 900000),
     "DEMO_SG_EARLY": (6.5, 0.0009, 0.12, 30.0, 400000),
     "DEMO_ETF_WORLD": (95.0, 0.0003, 0.03, 80.0, 300000),
+    "DEMO_ETF_GPW": (40.0, 0.0003, 0.03, 50.0, 80000),
     "DEMO_ETC_GOLD": (55.0, 0.0002, 0.025, 65.0, 120000),
 }
 

@@ -39,6 +39,7 @@ MARKER_V2 = "[IAC-DEMO-V2]"
 # The price route is not paged. One GET returns one source. The seeder
 # names the fixture marker so a second seed can see its own rows.
 PRICES = "/api/v1/instruments/{instrument_id}/prices"
+ATTRIBUTES = "/api/v1/instruments/{instrument_id}/fund-attributes"
 COMPANIES = "/api/v1/companies/"
 METRICS = "/api/v1/financial-metrics/"
 COMPANY_FIELDS = {
@@ -87,6 +88,22 @@ PRICE_FIELDS = {
     "retrieved_at",
 }
 INSTRUMENT_TYPES = {"STOCK", "ETF", "ETC"}
+# The file records source demo. The seeder does not POST that key.
+# The write model ignores it, and the header or the sqlite client
+# sets the stored source.
+ATTRIBUTE_FIELDS = {
+    "issuer",
+    "underlying",
+    "ter",
+    "domicile",
+    "replication_method",
+    "distribution_policy",
+    "aum",
+    "aum_currency",
+    "aum_as_of",
+    "as_of",
+    "source",
+}
 
 
 class SeedError(RuntimeError):
@@ -116,7 +133,7 @@ class HttpClient:
         # Company and metric creates only. The header is the HMAC of
         # SECRET_KEY, not a source the caller picks. Price posts do
         # not send it. GET does not send it.
-        if method == "POST" and urlsplit(path).path in {COMPANIES, METRICS}:
+        if method == "POST" and _demo_seed_path(urlsplit(path).path):
             from app.core.config import settings
             from app.demo_seed_auth import DEMO_SEED_HEADER, demo_seed_token
 
@@ -359,8 +376,9 @@ def validate_fixture_v2(fixture):
         for entry in fixture["companies"]:
             _require(
                 isinstance(entry, dict)
-                and set(entry) == {"company", "metrics", "prices"},
-                "each entry requires company, metrics and prices",
+                and set(entry)
+                == {"company", "metrics", "prices", "attributes"},
+                "each entry requires company, metrics, prices and attributes",
             )
             company = entry["company"]
             _require(
@@ -405,6 +423,9 @@ def validate_fixture_v2(fixture):
                     url.scheme in {"http", "https"} and bool(url.hostname),
                     f"{ticker}: website must be an HTTP(S) URL",
                 )
+            _validate_attributes(
+                ticker, company["instrument_type"], entry["attributes"]
+            )
             _require(
                 isinstance(entry["metrics"], list),
                 "metrics must be a list",
@@ -472,6 +493,94 @@ def validate_fixture_v2(fixture):
         raise SeedError(f"Invalid fixture: {error}") from error
 
 
+def _demo_seed_path(path):
+    """True when this POST may carry the demo-seed header.
+
+    Company, metric, and fund-attribute creates. Price posts do not.
+    GET does not. The header is not a source the body can choose.
+    """
+    if path in {COMPANIES, METRICS}:
+        return True
+    prefix = "/api/v1/instruments/"
+    suffix = "/fund-attributes"
+    if not path.startswith(prefix) or not path.endswith(suffix):
+        return False
+    middle = path.removeprefix(prefix).removesuffix(suffix)
+    return middle.isdigit()
+
+
+def _validate_attributes(ticker, instrument_type, attributes):
+    """A stock has no attributes. An ETF or ETC has one snapshot.
+
+    ``source`` in the file is the word ``demo``. TER may be null.
+    A null TER is not written as zero. AUM, when present, has a
+    currency and its own as-of date.
+    """
+    if instrument_type == "STOCK":
+        _require(
+            attributes is None,
+            f"{ticker}: a stock has no fund attributes",
+        )
+        return
+    _require(
+        isinstance(attributes, dict) and set(attributes) == ATTRIBUTE_FIELDS,
+        f"{ticker}: attributes have missing or unknown fields",
+    )
+    _require(
+        attributes["source"] == "demo",
+        f"{ticker}: attribute source must be demo",
+    )
+    _iso_date(attributes["as_of"])
+    if attributes["aum_as_of"] is not None:
+        _iso_date(attributes["aum_as_of"])
+    _finite_or_null(attributes["ter"], f"{ticker}: ter")
+    if attributes["ter"] is not None:
+        _require(attributes["ter"] >= 0, f"{ticker}: ter must not be negative")
+    _finite_or_null(attributes["aum"], f"{ticker}: aum")
+    if attributes["aum"] is None:
+        _require(
+            attributes["aum_currency"] is None
+            and attributes["aum_as_of"] is None,
+            f"{ticker}: aum currency and aum_as_of require aum",
+        )
+    else:
+        _require(
+            attributes["aum"] >= 0,
+            f"{ticker}: aum must not be negative",
+        )
+        currency = attributes["aum_currency"]
+        _require(
+            isinstance(currency, str)
+            and len(currency) == 3
+            and currency.isalpha(),
+            f"{ticker}: aum_currency must be three letters",
+        )
+        _require(
+            attributes["aum_as_of"] is not None,
+            f"{ticker}: aum requires an as-of date",
+        )
+    for field in ("issuer", "underlying", "domicile", "replication_method"):
+        value = attributes[field]
+        _require(
+            value is None or (isinstance(value, str) and bool(value.strip())),
+            f"{ticker}: {field} must be a nonempty string or null",
+        )
+    policy = attributes["distribution_policy"]
+    _require(
+        policy is None or (isinstance(policy, str) and bool(policy.strip())),
+        f"{ticker}: distribution_policy must be a nonempty string or null",
+    )
+
+
+def _attributes_path(instrument_id):
+    return ATTRIBUTES.format(instrument_id=instrument_id)
+
+
+def _attribute_payload(attributes):
+    """The write body. ``source`` stays in the file and off the POST."""
+    return {key: value for key, value in attributes.items() if key != "source"}
+
+
 def seed_demo_v2(fixture, client, *, apply=False):
     """Seed demo-v2 companies, metrics, and prices. Never overwrite.
 
@@ -518,9 +627,21 @@ def seed_demo_v2(fixture, client, *, apply=False):
             }
             items.append(item)
             price_items.append(item)
-        plans.append((entry, company_item, metric_items, price_items))
+        attribute_item = None
+        if entry["attributes"] is not None:
+            attribute_item = {
+                "kind": "attributes",
+                "ticker": ticker,
+                "status": "pending",
+                "id": None,
+                "company_id": None,
+            }
+            items.append(attribute_item)
+        plans.append(
+            (entry, company_item, metric_items, price_items, attribute_item)
+        )
 
-    kinds = ("companies", "metrics", "prices")
+    kinds = ("companies", "metrics", "prices", "attributes")
     try:
         wanted = {entry["company"]["ticker"] for entry in fixture["companies"]}
         existing = {}
@@ -539,7 +660,13 @@ def seed_demo_v2(fixture, client, *, apply=False):
             )
             existing[ticker] = row
 
-        for entry, company_item, metric_items, price_items in plans:
+        for (
+            entry,
+            company_item,
+            metric_items,
+            price_items,
+            attribute_item,
+        ) in plans:
             company = existing.get(company_item["ticker"])
             if company is None:
                 continue
@@ -587,9 +714,26 @@ def seed_demo_v2(fixture, client, *, apply=False):
                 key = (item["date"], item["source"])
                 if key in existing_prices:
                     item.update(status="skipped", id=existing_prices[key])
+            if attribute_item is not None:
+                attribute_item["company_id"] = company_id
+                current = client.request("GET", _attributes_path(company_id))
+                if current is not None:
+                    _require(
+                        isinstance(current, dict),
+                        "attributes: expected an object or null",
+                    )
+                    attribute_item.update(
+                        status="skipped", id=_row_id(current)
+                    )
 
         if apply:
-            for entry, company_item, metric_items, price_items in plans:
+            for (
+                entry,
+                company_item,
+                metric_items,
+                price_items,
+                attribute_item,
+            ) in plans:
                 if company_item["status"] == "pending":
                     row = client.request("POST", COMPANIES, entry["company"])
                     company_item.update(status="created", id=_row_id(row))
@@ -611,6 +755,17 @@ def seed_demo_v2(fixture, client, *, apply=False):
                         continue
                     row = client.request("POST", price_path, payload)
                     item.update(status="created", id=_row_id(row))
+                if (
+                    attribute_item is not None
+                    and attribute_item["status"] == "pending"
+                ):
+                    attribute_item["company_id"] = company_id
+                    row = client.request(
+                        "POST",
+                        _attributes_path(company_id),
+                        _attribute_payload(entry["attributes"]),
+                    )
+                    attribute_item.update(status="created", id=_row_id(row))
     except Exception as error:
         raise SeedError(
             f"Seeding stopped: {error}. No rollback or overwrite; "
@@ -748,11 +903,15 @@ class SqliteSeedClient:
         from app.repositories.financial_metrics_repository import (
             FinancialMetricsRepository,
         )
+        from app.repositories.fund_attributes_repository import (
+            FundAttributesRepository,
+        )
         from app.repositories.price_bar_repository import PriceBarRepository
 
         self.companies = CompanyRepository(session)
         self.metrics = FinancialMetricsRepository(session)
         self.prices = PriceBarRepository(session)
+        self.attributes = FundAttributesRepository(session)
 
     def request(self, method, path, payload=None):
         from app.core.utc_datetime import as_utc
@@ -791,6 +950,22 @@ class SqliteSeedClient:
                 record_source=RECORD_SOURCE_DEMO,
             )
             return self._metric_json(created, as_utc)
+        attribute_id = _attribute_instrument_id(parsed.path)
+        if attribute_id is not None and method == "GET":
+            row = self.attributes.get_by_company(attribute_id)
+            if row is None:
+                return None
+            return self._attribute_json(row)
+        if attribute_id is not None and method == "POST":
+            from app.models.fund_attributes import FundAttributesCreate
+
+            created = self.attributes.create(
+                attribute_id,
+                FundAttributesCreate(**payload),
+                record_source=RECORD_SOURCE_DEMO,
+                is_synthetic=True,
+            )
+            return self._attribute_json(created)
         instrument_id = _price_instrument_id(parsed.path)
         if instrument_id is not None and method == "GET":
             start, end = _price_query_range(query)
@@ -821,6 +996,18 @@ class SqliteSeedClient:
             "company_id": row.company_id,
             "period_type": row.period_type,
             "period_end": as_utc(row.period_end).isoformat(),
+        }
+
+    @staticmethod
+    def _attribute_json(row):
+        return {
+            "id": row.id,
+            "company_id": row.company_id,
+            "issuer": row.issuer,
+            "ter": row.ter,
+            "as_of": None if row.as_of is None else row.as_of.isoformat(),
+            "source": row.source,
+            "is_synthetic": row.is_synthetic,
         }
 
     @staticmethod
@@ -890,6 +1077,18 @@ def _sqlite_file_url(database_url):
         if str(parent) not in {"", "."}:
             parent.mkdir(parents=True, exist_ok=True)
     return database_url
+
+
+def _attribute_instrument_id(path):
+    """Return the id when ``path`` is the attribute row, else None."""
+    prefix = "/api/v1/instruments/"
+    suffix = "/fund-attributes"
+    if not path.startswith(prefix) or not path.endswith(suffix):
+        return None
+    middle = path.removeprefix(prefix).removesuffix(suffix)
+    if not middle.isdigit():
+        return None
+    return int(middle)
 
 
 def _price_instrument_id(path):

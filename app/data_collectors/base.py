@@ -85,9 +85,11 @@ FUND_ATTRIBUTE_FIELDS = (
     "ter",
     "aum",
     "aum_currency",
+    "aum_as_of",
     "issuer",
     "underlying",
     "domicile",
+    "replication_method",
     "distribution_policy",
 )
 

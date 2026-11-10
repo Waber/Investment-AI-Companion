@@ -119,9 +119,13 @@ stored as `STOCK`.
 loads. The marker is `[IAC-DEMO-V2]`, on every company description and
 on every price `source`. The six v1 companies are stocks. Two synthetic
 ETFs (`DEMO_ETF_WORLD`, `DEMO_ETF_GPW`) and two synthetic ETCs
-(`DEMO_ETC_GOLD`, `DEMO_ETC_SILVER`) are added. ETF and ETC attribute
-columns (TER, issuer, and the rest) are issue #28 and are not in this
-file.
+(`DEMO_ETC_GOLD`, `DEMO_ETC_SILVER`) are added. Each fund entry has
+an `attributes` object. Stocks have `attributes` null. Every
+attribute object has `source` `demo` and an `as_of` date. The seeder
+stores `is_synthetic` true and `source` `demo`. `DEMO_ETF_GPW` leaves
+`ter` null. A missing fee is not zero. The price `source` on each
+bar stays `[IAC-DEMO-V2]`. That string is the series name. It is not
+the company or attribute `source` column.
 
 Prices are weekly session dates (Mondays) from 2022-10-03 through
 2026-09-28, in the instrument's own currency. There is no FX

@@ -101,6 +101,31 @@ def test_demo_v2_covers_the_score_ready_cases():
     assert sum(len(entry["prices"]) for entry in companies) == 1777
 
 
+def test_fund_attributes_use_source_demo_and_one_etf_has_no_ter():
+    """Attributes carry source demo and an as-of date.
+
+    Stocks have no attribute object. One ETF leaves TER null so a
+    missing fee is not shown as zero.
+    """
+    from scripts.seed_demo import validate_fixture_v2
+
+    fixture = _load()
+    validate_fixture_v2(fixture)
+    missing = []
+    for entry in fixture["companies"]:
+        kind = entry["company"]["instrument_type"]
+        attributes = entry["attributes"]
+        if kind == "STOCK":
+            assert attributes is None
+            continue
+        assert attributes["source"] == "demo"
+        assert attributes["as_of"] == fixture["as_of"]
+        if attributes["ter"] is None:
+            missing.append(entry["company"]["ticker"])
+            assert attributes["aum"] is not None
+    assert missing == ["DEMO_ETF_GPW"]
+
+
 def test_demo_v2_stale_retrieval_is_older_than_the_as_of_date():
     """The stale instrument was retrieved when its series ended."""
     fixture = _load()
