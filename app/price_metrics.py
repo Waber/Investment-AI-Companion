@@ -230,10 +230,9 @@ def _one_year_risk(closes, one_year, as_of, source):
     if one_year.start is None:
         missing = _missing(REASON_INSUFFICIENT_HISTORY, source, as_of)
         return missing, missing
+    # The anchor is on or before as-of minus one year, and as-of is
+    # the last close, so the window always holds at least those two.
     window = [row for row in closes if row[0] >= one_year.start]
-    if len(window) < 2:
-        missing = _missing(REASON_INSUFFICIENT_HISTORY, source, as_of)
-        return missing, missing
     drawdown = DerivedMetric(
         value=float(_max_drawdown(window)),
         reason=None,
