@@ -43,9 +43,20 @@
   percentage is recorded. No reset was redeemed.
 - Active agents: none. Blockers: none for the slice. This note
   is not approval and not a merge.
-- Next action: Przemek reviews. GitHub Actions run
-  42799268379 on head `9892408` succeeded (SQLite and
-  PostgreSQL). Do not merge.
+- Security review of `31a7ce5` was approve with nits. The
+  fixes are on this branch, each behind a failing test:
+  instrument ids use `ItemId` so `2**63` is 422; TER is a
+  fraction capped at 1 (the page shows percent) and AUM is
+  capped at `1e15`; the five text fields use `clean_text`; a
+  blank price source is `no_prices` instead of 500; the seeder
+  comment names fund-attribute creates.
+- Tests after those fixes: no `.env`. SQLite 3.45.1, CI
+  command: 2194 passed, 254 deselected, coverage 97.07%.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`: 254 passed, 2194
+  deselected. black, isort, and flake8 passed on the Python
+  files this change touches. No live market-data calls.
+- Next action: GitHub Actions on this head. Przemek reviews.
+  Do not merge.
 
 ## Provenance slice A (#105): 2026-11-08
 

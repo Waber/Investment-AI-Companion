@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.research import ItemId
 from app.core.config import settings
 from app.core.database import get_db
 from app.demo_seed_auth import request_is_demo_seed
@@ -26,7 +27,7 @@ from app.models.fund_attributes import (
     FundAttributesCreate,
     FundAttributesUpdate,
 )
-from app.price_metrics import derive_price_metrics
+from app.price_metrics import metrics_from_bars
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.fund_attributes_repository import (
     FundAttributesRepository,
@@ -86,13 +87,7 @@ def _metric_body(metric):
 
 def _price_metrics(db, instrument_id):
     bars = PriceBarRepository(db).get_range(instrument_id)
-    if not bars:
-        derived = derive_price_metrics([], None)
-    else:
-        derived = derive_price_metrics(
-            [(bar.bar_date, bar.close_price) for bar in bars],
-            bars[0].source,
-        )
+    derived = metrics_from_bars(bars)
     return PriceMetricsBody(
         source=derived.source,
         as_of=derived.as_of,
@@ -111,7 +106,9 @@ def _company_or_404(db, instrument_id):
 
 
 @router.get("/{instrument_id}", response_model=InstrumentDetail)
-def get_instrument_detail(instrument_id: int, db: Session = Depends(get_db)):
+def get_instrument_detail(
+    instrument_id: ItemId, db: Session = Depends(get_db)
+):
     """Attributes and price-derived metrics for one instrument.
 
     A stock has ``fund_attributes`` null. An ETF or ETC with no row
@@ -137,7 +134,7 @@ def get_instrument_detail(instrument_id: int, db: Session = Depends(get_db)):
     "/{instrument_id}/fund-attributes",
     response_model=Optional[FundAttributes],
 )
-def get_fund_attributes(instrument_id: int, db: Session = Depends(get_db)):
+def get_fund_attributes(instrument_id: ItemId, db: Session = Depends(get_db)):
     """The one attribute row, or null when the instrument has none."""
     _company_or_404(db, instrument_id)
     row = FundAttributesRepository(db).get_by_company(instrument_id)
@@ -152,7 +149,7 @@ def get_fund_attributes(instrument_id: int, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
 )
 def create_fund_attributes(
-    instrument_id: int,
+    instrument_id: ItemId,
     attributes: FundAttributesCreate,
     request: Request,
     db: Session = Depends(get_db),
@@ -185,7 +182,7 @@ def create_fund_attributes(
     response_model=FundAttributes,
 )
 def update_fund_attributes(
-    instrument_id: int,
+    instrument_id: ItemId,
     attributes: FundAttributesUpdate,
     db: Session = Depends(get_db),
 ):

@@ -231,11 +231,25 @@ def _text(value):
     return text or None
 
 
+# Same ceiling as ``AUM_MAX``. A larger float is still finite, and
+# turning it into an int makes ``format_number`` overflow. The page
+# shows that number as missing.
+_DISPLAY_MAX = 1e15
+
+
 def _finite_number(value):
-    """Keep a real number, including zero. Drop missing and non-finite."""
+    """Keep a real number, including zero. Drop missing and non-finite.
+
+    A float whose absolute value is above ``_DISPLAY_MAX`` is not
+    turned into an int. ``1e308`` is finite and ``is_integer()`` is
+    true, and the resulting int is hundreds of digits. Multiplying
+    that int by 100 then overflows ``float``.
+    """
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)) and math.isfinite(value):
+        if abs(value) > _DISPLAY_MAX:
+            return None
         if isinstance(value, float) and value.is_integer():
             return int(value)
         return value

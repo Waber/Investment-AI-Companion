@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import selectinload
 
 from app.models.database_models import CompanyDB
-from app.price_metrics import derive_price_metrics
+from app.price_metrics import metrics_from_bars
 from app.repositories.fund_attributes_repository import (
     FundAttributesRepository,
 )
@@ -92,13 +92,7 @@ def get_instrument(db, instrument_id):
         return None
     attributes = FundAttributesRepository(db).get_by_company(company.id)
     bars = PriceBarRepository(db).get_range(company.id)
-    if not bars:
-        derived = derive_price_metrics([], None)
-    else:
-        derived = derive_price_metrics(
-            [(bar.bar_date, bar.close_price) for bar in bars],
-            bars[0].source,
-        )
+    derived = metrics_from_bars(bars)
     return to_instrument(
         company, fund_attributes=attributes, price_metrics=derived
     )

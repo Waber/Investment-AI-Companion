@@ -96,6 +96,24 @@ class PriceDerivedMetrics:
     max_drawdown: DerivedMetric
 
 
+def metrics_from_bars(bars):
+    """Metrics for one stored series.
+
+    No bars, or a blank source on a corrupt row, is ``no_prices``.
+    A blank source is not a name, and passing it into
+    ``derive_price_metrics`` would raise. The page then stays up.
+    """
+    if not bars:
+        return derive_price_metrics([], None)
+    source = bars[0].source
+    if not isinstance(source, str) or not source.strip():
+        return derive_price_metrics([], None)
+    return derive_price_metrics(
+        [(bar.bar_date, bar.close_price) for bar in bars],
+        source,
+    )
+
+
 def derive_price_metrics(points, source):
     """Return the four metrics for ``points``.
 
