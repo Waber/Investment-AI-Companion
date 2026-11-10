@@ -74,8 +74,10 @@
   nits are committed. QA of `6052f4c` was not an approval.
   The gap tests are the following commit. The agent does not
   merge.
-- Next action: GitHub Actions on that commit. Przemek reviews.
-  Code review is still required. This note is not approval.
+- Next action: none on this slice. Pull request #127 is merged
+  on master at `b4873c6`. GitHub Actions run 42793437467 succeeded
+  on that commit (SQLite and PostgreSQL). This section is the
+  record. The next implementation is issue #28.
 
 ## Current owner name (Przemek): 2026-11-08
 
