@@ -28,7 +28,8 @@ raw strings are returned unchanged for the inputs.
 """
 
 import math
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from pydantic import ValidationError
 
@@ -42,6 +43,10 @@ from app.models.company import (
 from app.models.financial_metrics import (
     FinancialMetricsCreate,
     FinancialMetricsUpdate,
+)
+from app.models.fund_attributes import (
+    FundAttributesCreate,
+    FundAttributesUpdate,
 )
 from app.ui.view_models import METRIC_FIELDS
 from app.validation.text import TextValidationError, clean_text
@@ -88,12 +93,48 @@ _VALUE_ERROR_KEYS = {
 }
 
 
+# Order is the order of the fund form. The values are the catalog
+# keys the detail page already uses, so the form does not invent a
+# second name for the same fact.
+_FUND_LABEL_KEYS = {
+    "issuer": "fund.issuer",
+    "underlying": "fund.underlying",
+    "ter": "fund.ter",
+    "domicile": "fund.domicile",
+    "replication_method": "fund.replication",
+    "distribution_policy": "fund.distribution",
+    "aum": "fund.aum",
+    "aum_currency": "field.currency",
+    "aum_as_of": "fund.aum_as_of",
+    "as_of": "field.as_of",
+}
+FUND_FIELDS = tuple(_FUND_LABEL_KEYS)
+_FUND_TEXT = (
+    "issuer",
+    "underlying",
+    "domicile",
+    "replication_method",
+    "distribution_policy",
+)
+_HUNDRED = Decimal("100")
+# Repository ValueError text. The form matches the whole sentence.
+# A changed sentence falls through to error.constraint.
+_AUM_NEEDS = "aum requires a currency and an as-of date"
+_AUM_EXTRA = "aum currency and aum_as_of require aum"
+_FUND_EXISTS = "Fund attributes for this instrument already exist"
+
+
 def field_label_key(field):
     """Catalog key for one form field's label.
 
     The type control posts ``instrument_type``. Its label is the
     same ``field.type`` string the detail page already uses.
+    Fund fields use the ``fund.*`` keys the detail page already
+    has. Currency and the snapshot date reuse ``field.currency``
+    and ``field.as_of``.
     """
+    if field in _FUND_LABEL_KEYS:
+        return _FUND_LABEL_KEYS[field]
     if field in METRIC_FIELDS:
         return "metric." + field
     if field == "instrument_type":
@@ -455,3 +496,285 @@ def described_by(field, errors, form_error, invalid_fields, hints):
     elif form_error and field in invalid_fields:
         parts.append("form-error")
     return " ".join(parts)
+
+
+def ter_percent_to_fraction(value):
+    """Turn a percent into the fraction the attribute row stores.
+
+    The form asks for a percent. ``0.07`` means 0.07 percent, which
+    is the fraction ``0.0007``. The division uses ``Decimal``, so it
+    does not become the float value ``0.0007000000000000001``.
+
+    ``None`` and a blank string are a missing fee. A value that is
+    not a finite decimal raises ``ValueError``. This function does
+    not check the 0..100 bound. The write model rejects a fraction
+    above 1, and that is a percent above 100.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, str):
+        raise ValueError("ter percent is not a number")
+    text = value.strip()
+    if text == "":
+        return None
+    try:
+        number = Decimal(text)
+    except InvalidOperation as exc:
+        raise ValueError("ter percent is not a number") from exc
+    if not number.is_finite():
+        raise ValueError("ter percent is not a number")
+    return number / _HUNDRED
+
+
+def ter_fraction_to_percent(value):
+    """Turn a stored fraction into the percent the form showed.
+
+    ``Decimal("0.0007")`` becomes ``Decimal("0.07")``. A float uses
+    ``str`` first, which is the shortest round-trip, so a fraction
+    that was stored from ``0.07`` percent comes back as ``0.07``
+    and not as the binary expansion. ``None`` stays ``None``.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        raise ValueError("ter fraction is not a number")
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("ter fraction is not a number")
+        number = Decimal(str(value))
+    elif isinstance(value, Decimal):
+        number = value
+    elif isinstance(value, int):
+        number = Decimal(value)
+    elif isinstance(value, str):
+        try:
+            number = Decimal(value.strip())
+        except InvalidOperation as exc:
+            raise ValueError("ter fraction is not a number") from exc
+    else:
+        raise ValueError("ter fraction is not a number")
+    if not number.is_finite():
+        raise ValueError("ter fraction is not a number")
+    return number * _HUNDRED
+
+
+def ter_percent_text(value):
+    """The percent to put in the edit input, or ``""`` when it is missing.
+
+    Trailing zeros are dropped, so a stored ``1`` (100 percent) is
+    the text ``100`` and a stored ``0`` is ``0``. A fee the helper
+    cannot read is an empty input, not a 500.
+    """
+    try:
+        percent = ter_fraction_to_percent(value)
+    except ValueError:
+        return ""
+    if percent is None:
+        return ""
+    text = format(percent, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def blank_fund():
+    """Empty strings for a create form."""
+    return {field: "" for field in FUND_FIELDS}
+
+
+def _input_date(value):
+    """ISO date for an input. A datetime keeps its calendar day."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if value is None:
+        return ""
+    return _text(value)
+
+
+def fund_values(row):
+    """Stored fund columns, as the edit form should show them.
+
+    TER is the percent, not the stored fraction. Provenance is not
+    included. The form cannot post ``source`` or ``is_synthetic``.
+    """
+    return {
+        "issuer": _text(row.issuer),
+        "underlying": _text(row.underlying),
+        "ter": ter_percent_text(row.ter),
+        "domicile": _text(row.domicile),
+        "replication_method": _text(row.replication_method),
+        "distribution_policy": _text(row.distribution_policy),
+        "aum": _input_number(row.aum),
+        "aum_currency": _text(row.aum_currency),
+        "aum_as_of": _input_date(row.aum_as_of),
+        "as_of": _input_date(row.as_of),
+    }
+
+
+def fund_form_values(values):
+    """Posted strings, unchanged, for a form that has to be shown again."""
+    shown = {}
+    for field in FUND_FIELDS:
+        raw = values.get(field, "")
+        if not isinstance(raw, str):
+            raw = "" if raw is None else str(raw)
+        shown[field] = raw
+    return shown
+
+
+def _raw_field(values, field):
+    raw = values.get(field, "")
+    if not isinstance(raw, str):
+        raw = "" if raw is None else str(raw)
+    return raw
+
+
+def fund_payload(values, *, update):
+    """Map posted strings onto a fund create or update model.
+
+    TER is converted from a percent to a fraction before the model
+    sees it. A percent that is not a decimal is left as text so the
+    model reports a number error. Text fields are not stripped here:
+    ``clean_text`` on the model rejects a newline, and stripping
+    first would hide one that sits at the end.
+
+    A blank ``as_of`` is omitted on create, so the model says the
+    field is required. On update a blank clears the stored date.
+    ``source`` and ``is_synthetic`` are not copied, even when the
+    posted dict has them.
+    """
+    payload = {}
+    for field in _FUND_TEXT:
+        payload[field] = _raw_field(values, field)
+    ter_raw = _raw_field(values, "ter")
+    if ter_raw.strip() == "":
+        payload["ter"] = None
+    else:
+        try:
+            payload["ter"] = ter_percent_to_fraction(ter_raw)
+        except ValueError:
+            payload["ter"] = ter_raw.strip()
+    aum_raw = _raw_field(values, "aum").strip()
+    payload["aum"] = None if aum_raw == "" else aum_raw
+    currency = _raw_field(values, "aum_currency").strip()
+    payload["aum_currency"] = None if currency == "" else currency
+    for field in ("aum_as_of", "as_of"):
+        raw = _raw_field(values, field).strip()
+        if raw == "":
+            if field == "as_of" and not update:
+                continue
+            payload[field] = None
+        else:
+            payload[field] = raw
+    return payload
+
+
+def fund_catalog_key(field, kind, message):
+    """Catalog key for one fund-attribute validation error."""
+    text = message.casefold()
+    if kind == "missing":
+        return "error.required"
+    if kind == "string_too_long":
+        return "error.too_long"
+    if "100 percent" in text or "fraction from 0 to 1" in text:
+        return "error.ter_percent"
+    if "1e15" in text:
+        return "error.number"
+    if "control character" in text:
+        return "error.control_char"
+    if "bidi" in text:
+        return "error.bidi"
+    if "surrogate" in text:
+        return "error.surrogate"
+    if field == "aum_currency" or "currency" in text:
+        return "error.currency"
+    if field in {"as_of", "aum_as_of"} or kind.startswith("date"):
+        return "error.date"
+    if (
+        field in {"ter", "aum"}
+        or kind in _NUMBER_KINDS
+        or kind in {"greater_than_equal", "less_than_equal"}
+    ):
+        return "error.number"
+    return "error.invalid"
+
+
+def _fund_error_field(error):
+    """The form field for one Pydantic error.
+
+    The TER and AUM caps are model validators, so ``loc`` is empty.
+    The sentence names the field. Any other model-level error stays
+    on the summary.
+    """
+    loc = error.get("loc") or ()
+    if loc and isinstance(loc[-1], str):
+        return loc[-1]
+    message = str(error.get("msg") or "").casefold()
+    if "ter" in message:
+        return "ter"
+    if "aum" in message and "currency" not in message:
+        return "aum"
+    return None
+
+
+def fund_validation_errors(exc):
+    """Return ``(field_errors, form_error_key)`` in form order."""
+    found = {}
+    form_key = None
+    for error in exc.errors():
+        field = _fund_error_field(error)
+        key = fund_catalog_key(
+            field,
+            str(error.get("type") or ""),
+            str(error.get("msg") or ""),
+        )
+        if field is None:
+            if form_key is None:
+                form_key = key
+            continue
+        if field not in found:
+            found[field] = key
+    ordered = {}
+    for name in FUND_FIELDS:
+        if name in found:
+            ordered[name] = found.pop(name)
+    ordered.update(found)
+    return ordered, form_key
+
+
+def validate_fund(values, *, update):
+    """Return ``(model, field_errors, form_error_key)``.
+
+    ``model`` is None when validation failed. Create requires
+    ``as_of``. Update uses ``FundAttributesUpdate``, which leaves
+    out a field that was not sent. This form sends every fact, so
+    a blank optional fact clears the stored value.
+    """
+    model_type = FundAttributesUpdate if update else FundAttributesCreate
+    try:
+        model = model_type.model_validate(fund_payload(values, update=update))
+    except ValidationError as exc:
+        errors, form_key = fund_validation_errors(exc)
+        return None, errors, form_key
+    return model, {}, None
+
+
+def fund_repository_error(exc):
+    """Return ``(catalog key, fields)`` for a repository ``ValueError``.
+
+    The AUM amount, its currency, and its date travel together.
+    The model does not check that trio. The repository does, and
+    that failure is a 400 on the form. Any other sentence, including
+    a constraint failure, uses ``error.constraint`` and no field.
+    """
+    text = str(exc)
+    trio = ("aum", "aum_currency", "aum_as_of")
+    if text == _AUM_NEEDS:
+        return "error.aum_needs", trio
+    if text == _AUM_EXTRA:
+        return "error.aum_extra", trio
+    if text == _FUND_EXISTS:
+        return "error.fund_exists", ()
+    return "error.constraint", ()
