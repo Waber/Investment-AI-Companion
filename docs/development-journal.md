@@ -1,5 +1,60 @@
 # Development Journal
 
+## 2026-11-12 - QA gaps on fund-attribute delete (Refs #28)
+
+- Scope: the four mutants QA left alive on pull request #130
+  at `7bf3e3f`, plus the bare commit and two nits. Branch
+  `cursor/delete-fund-attributes-ddd6`. New commits. No amend,
+  no force-push, no rebase, no merge. Refs #28. Does not close
+  #28. The owner is Przemek.
+- RED first for the failed commit. The new test raised
+  `IntegrityError` from the bare `commit` and did not roll the
+  delete back. The other new tests passed on the code that was
+  already there. They fail when the mutant is put back:
+  - deleting every `fund_attributes` row fails
+    `test_repository_delete_leaves_the_other_fund` (`count`
+    is 0) and `test_http_delete_leaves_the_keeper_fund`;
+  - deleting `.first()` and ignoring `company_id` fails those
+    same two tests (the keeper, inserted first, is the row
+    that disappears);
+  - deleting only when `instrument_type == "ETF"` fails
+    `test_delete_an_etc_returns_204_and_keeps_prices_and_notes`
+    (404 instead of 204);
+  - calling `request_is_demo_seed(..., enabled=True)` from
+    DELETE fails `test_demo_seed_header_is_ignored_on_delete`
+    with `RuntimeError: DELETE must not call request_is_demo_seed`.
+    Each mutant was reverted after that failure.
+- A keeper and a victim both have attributes. Delete targets
+  the victim. One row remains, with the keeper's `company_id`
+  and issuer. The HTTP delete also sends a JSON body and
+  `?company_id=<keeper id>`. Both are ignored. An ETC with a
+  row is 204 and an empty body, then GET shows
+  `fund_attributes` null, and the prices, note, and thesis
+  stay. The first DELETE of an ETC with no row is 404
+  `{"detail": "Fund attributes not found"}`.
+- The Latin-1 comment was wrong. `_is_seed_token` returns
+  false before `compare_digest`, so that header does not
+  raise. The test now patches
+  `app.api.instruments.request_is_demo_seed` to raise.
+- `FundAttributesRepository.delete` catches `IntegrityError`,
+  rolls back, and raises `ValueError` with
+  `Delete failed due to constraint violation`. The route
+  turns that into 400, the same shape as an update. A later
+  `commit` on that session leaves the row in place. The
+  stock PUT test now requires that exact detail:
+  `fund attributes are only stored for an ETF or an ETC`.
+- Verification: no `.env`. `DATABASE_URL` was not set.
+  SQLite 3.45.1, CI pytest command: 2222 passed, 256
+  deselected, coverage 97.19%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2222 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 15:54.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - Delete fund attributes (Refs #28)
 
 - Scope: remove one instrument's fund-attribute row without
