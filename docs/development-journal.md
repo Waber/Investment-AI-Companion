@@ -1,5 +1,62 @@
 # Development Journal
 
+## 2026-11-12 - QA test gaps on the attribute slice (Refs #28)
+
+- Scope: tests that kill the mutants QA found, plus two comments
+  and one decision. Branch
+  `cursor/etf-etc-attributes-28-0a55`. New commits on top of
+  `1ba5cd5`. No rebase, no force-push, no amend, no merge, and
+  no pull-request edit or comment. The owner is Przemek.
+- Tests first. They lock behavior that was already in the code:
+  - three closes (2025-01-02, 2025-07-01, 2026-01-02) have a
+    volatility. Two log returns are enough. `len(returns) < 3`
+    would report `insufficient_history`.
+  - `ter=1` and `aum=1e15` are stored. `math.nextafter` of each,
+    toward infinity, is rejected. The HTTP models return 201 and
+    422. The repository guard is called directly and raises.
+  - Each text field stores its model `max_length` and rejects
+    one more character as `string_too_long` with that
+    `ctx.max_length`. The widths read from the model are 255,
+    255, 100, 64, and 64.
+  - After Alembic `0010`, on SQLite and PostgreSQL, `ter=0` and
+    `aum=0` insert. `ter=-1` and `aum=-1` raise `IntegrityError`.
+    A check written as `> 0` would reject the zeros.
+- Anchor. No code change. The latest close on or before the
+  target date is used, with no maximum gap. A series ending
+  2027-02-28 whose only earlier close is 2024-02-29 has a
+  one-year return from 2024-02-29 (`100 / 80 - 1 = 0.25`) and a
+  missing three-year return, because 2024-02-29 is after
+  2024-02-28. A close on 2024-01-02 is the start of the one-year
+  return for a series that ends 2026-01-02. The module docstring
+  says the start date and the as-of date show that gap.
+- GET `/api/v1/instruments/{id}` for a stock is 200.
+  `fund_attributes` is null. Every price metric is `no_prices`.
+  Only POST and PUT of attributes on a stock are 400.
+- Synthetic flag. A public update, and an update that sends the
+  demo-seed header, both record `source=manual` and leave
+  `is_synthetic` true. The flag is not cleared. Reason: the flag
+  means the row was created as demo data. One later edit of a
+  field does not make the rest hand-entered. `demo_seed_auth`
+  does not apply the header to updates, so the seeder proof
+  cannot rewrite an existing row. That is the same rule as the
+  provenance slice. A test locks both the public update and the
+  header update.
+- The `--base-url` comment in `scripts/seed_demo.py` now names
+  fund-attribute creates.
+- Verification: no `.env`. `DATABASE_URL` was not the personal
+  database. SQLite 3.45.1, CI pytest command: 2206 passed, 254
+  deselected, coverage 97.18%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2206 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 08:03.
+- Next: GitHub Actions on this head, then QA, code review, and
+  security look at the delta. Przemek decides on merge. Do not
+  merge.
+
 ## 2026-11-10 - Security nits on the attribute routes (Refs #28)
 
 - Scope: the five nits from the security review of pull request

@@ -30,6 +30,15 @@
 - The `/ui` detail page shows the attributes and the four
   metrics. Edit forms are not in this slice. Yahoo still does
   not implement `FundAttributes`.
+- GET `/api/v1/instruments/{id}` for a stock is 200.
+  `fund_attributes` is null and every price metric is
+  `no_prices`. Only POST and PUT of attributes on a stock
+  are 400.
+- A public update of a demo attribute row records
+  `source=manual` and leaves `is_synthetic` true. The
+  demo-seed header on that update does the same. The flag
+  stays because the row was created as demo data. The header
+  is not applied to updates.
 - Tests: no `.env`. `DATABASE_URL` was not the personal
   database. SQLite 3.45.1, CI command: 2181 passed, 254
   deselected, coverage 97.16%. PostgreSQL 16.15,
@@ -55,8 +64,21 @@
   PostgreSQL 16.15, `REQUIRE_POSTGRES=1`: 254 passed, 2194
   deselected. black, isort, and flake8 passed on the Python
   files this change touches. No live market-data calls.
-- Next action: GitHub Actions on this head. Przemek reviews.
-  Do not merge.
+- Tests for the QA gaps: SQLite 3.45.1, CI command: 2206
+  passed, 254 deselected, coverage 97.18%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`: 254 passed, 2206 deselected. black,
+  isort, and flake8 passed on the Python files this change
+  touches. No live market-data calls.
+- QA test-gap round: the surviving mutants are locked by
+  tests (three-close volatility, TER and AUM caps including
+  the repository guard, text `max_length`, and `ter=0` /
+  `aum=0` on both databases). The anchor has no maximum gap;
+  that behavior is tested and described, not changed.
+- Next action: GitHub Actions on this head, then QA, code
+  review, and security check the delta. Przemek decides
+  whether to merge. Do not merge. The Actions run id is not
+  in this file: writing it here would move the head the run
+  is for.
 
 ## Provenance slice A (#105): 2026-11-08
 
