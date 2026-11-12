@@ -1,11 +1,12 @@
 """Delete the fund-attribute row and leave the instrument.
 
 ``DELETE /api/v1/instruments/{id}/fund-attributes`` removes that one
-row. The company, its prices, and its notes stay. A second delete,
+row. The company, its prices, its notes, and its theses stay. A
+second company that also has attributes stays too. A second delete,
 a stock, and an instrument with no row are 404. An id ItemId rejects
-is 422, the same body as the other instrument routes. The demo-seed
-header is not read: a valid token and a non-token both leave the
-outcome unchanged, and a non-token does not become a 500.
+is 422, the same body as the other instrument routes. Delete does
+not call ``request_is_demo_seed``. A patch that raises from that
+function still gets 204.
 """
 
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy.orm import sessionmaker
 
+import app.api.instruments as instruments_api
 from app.core.config import settings
 from app.core.database import Base, create_db_engine
 from app.demo_seed_auth import DEMO_SEED_HEADER, demo_seed_token
@@ -183,6 +185,73 @@ def test_repository_delete_missing_is_a_no_op(session):
     assert_repository_delete_missing(session)
 
 
+def assert_repository_delete_leaves_the_other_row(session):
+    """One company is deleted. The other company's row stays.
+
+    The keeper is inserted first. Deleting every row, or deleting
+    whichever row the query returns first, removes the keeper.
+    """
+    keeper = _company(session, "KEEP", "ETF")
+    victim = _company(session, "DROP", "ETF")
+    repo = FundAttributesRepository(session)
+    kept = repo.create(keeper.id, _payload(issuer="Keeper"))
+    gone = repo.create(victim.id, _payload(issuer="Victim"))
+
+    assert repo.delete(victim.id) is True
+
+    assert session.query(FundAttributesDB).count() == 1
+    row = session.get(FundAttributesDB, kept.id)
+    assert row is not None
+    assert row.company_id == keeper.id
+    assert row.issuer == "Keeper"
+    assert session.get(FundAttributesDB, gone.id) is None
+    assert session.get(CompanyDB, victim.id) is not None
+
+
+def test_repository_delete_leaves_the_other_fund(session):
+    assert_repository_delete_leaves_the_other_row(session)
+
+
+def assert_failed_delete_commit_rolls_back(session, ticker="ROLL"):
+    """A failed commit undoes the delete. A later commit keeps the row."""
+    from sqlalchemy.exc import IntegrityError
+
+    repo = FundAttributesRepository(session)
+    fund = _company(session, ticker, "ETF")
+    created = repo.create(fund.id, _payload(issuer="Stay"))
+    rollbacks = []
+    real_rollback = session.rollback
+
+    def rollback():
+        rollbacks.append(1)
+        return real_rollback()
+
+    def boom():
+        raise IntegrityError("DELETE", {}, Exception("constraint"))
+
+    monkeypatch_commit = session.commit
+    session.rollback = rollback
+    session.commit = boom
+    try:
+        with pytest.raises(
+            ValueError, match="Delete failed due to constraint violation"
+        ):
+            repo.delete(fund.id)
+    finally:
+        session.rollback = real_rollback
+        session.commit = monkeypatch_commit
+    assert rollbacks
+    session.commit()
+    row = session.get(FundAttributesDB, created.id)
+    assert row is not None
+    assert row.company_id == fund.id
+    assert row.issuer == "Stay"
+
+
+def test_failed_delete_commit_rolls_back_and_keeps_the_row(session):
+    assert_failed_delete_commit_rolls_back(session)
+
+
 async def _instrument(client, ticker, instrument_type):
     response = await client.post(
         "/api/v1/companies/",
@@ -197,10 +266,10 @@ async def _instrument(client, ticker, instrument_type):
     return response.json()["id"]
 
 
-async def _store_attributes(client, instrument_id, headers=None):
+async def _store_attributes(client, instrument_id, headers=None, **overrides):
     response = await client.post(
         _attributes_url(instrument_id),
-        json=_payload(),
+        json=_payload(**overrides),
         headers=headers,
     )
     assert response.status_code == 201, response.text
@@ -235,11 +304,23 @@ async def _store_note(client, instrument_id):
     return response.json()
 
 
-async def assert_delete_keeps_the_instrument(client):
-    instrument_id = await _instrument(client, "FUND", "ETF")
+async def _store_thesis(client, instrument_id):
+    response = await client.post(
+        f"/api/v1/instruments/{instrument_id}/theses",
+        json={"title": "Kept", "body": "The thesis stays."},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def assert_delete_keeps_the_instrument(
+    client, ticker="FUND", instrument_type="ETF"
+):
+    instrument_id = await _instrument(client, ticker, instrument_type)
     await _store_attributes(client, instrument_id)
     price = await _store_price(client, instrument_id)
     note = await _store_note(client, instrument_id)
+    thesis = await _store_thesis(client, instrument_id)
 
     deleted = await client.delete(_attributes_url(instrument_id))
     assert deleted.status_code == 204
@@ -249,8 +330,8 @@ async def assert_delete_keeps_the_instrument(client):
     assert detail.status_code == 200
     body = detail.json()
     assert body["id"] == instrument_id
-    assert body["ticker"] == "FUND"
-    assert body["instrument_type"] == "ETF"
+    assert body["ticker"] == ticker
+    assert body["instrument_type"] == instrument_type
     assert body["fund_attributes"] is None
     attributes = await client.get(_attributes_url(instrument_id))
     assert attributes.status_code == 200
@@ -259,13 +340,15 @@ async def assert_delete_keeps_the_instrument(client):
     assert [row["id"] for row in prices.json()] == [price["id"]]
     notes = await client.get(f"/api/v1/instruments/{instrument_id}/notes")
     assert [row["id"] for row in notes.json()] == [note["id"]]
+    theses = await client.get(f"/api/v1/instruments/{instrument_id}/theses")
+    assert [row["id"] for row in theses.json()] == [thesis["id"]]
 
     again = await client.delete(_attributes_url(instrument_id))
     assert again.status_code == 404
     assert again.json() == _NO_ATTRIBUTES
     still = await client.get(f"/api/v1/instruments/{instrument_id}")
     assert still.status_code == 200
-    assert still.json()["ticker"] == "FUND"
+    assert still.json()["ticker"] == ticker
     assert still.json()["fund_attributes"] is None
 
 
@@ -301,13 +384,13 @@ async def assert_delete_rejects_id(client, raw):
 
 
 async def assert_delete_header_is_ignored(client, monkeypatch):
-    """Creates honor the header. Delete does not read it.
+    """Creates honor the header. Delete does not call the helper.
 
-    ``DEMO_SEED_ENABLED`` is on, which is the only mode where a
-    header is inspected. A valid token still deletes the row. A
-    value that is not 64 lowercase hex characters would raise
-    inside the token compare, so a 500 here would mean delete
-    started to read the header.
+    ``_is_seed_token`` returns false for a non-hex value before
+    ``compare_digest``, so a Latin-1 header does not raise inside
+    ``request_is_demo_seed``. The patch raises on any call. A 500
+    means DELETE started to read the header, including a call with
+    ``enabled=True``.
     """
     monkeypatch.setattr(settings, "DEMO_SEED_ENABLED", True)
     token = demo_seed_token(settings.SECRET_KEY)
@@ -318,6 +401,13 @@ async def assert_delete_header_is_ignored(client, monkeypatch):
     assert created.json()["source"] == "demo"
     assert created.json()["is_synthetic"] is True
 
+    def _refuse_demo_seed(*args, **kwargs):
+        raise RuntimeError("DELETE must not call request_is_demo_seed")
+
+    original = instruments_api.request_is_demo_seed
+    monkeypatch.setattr(
+        instruments_api, "request_is_demo_seed", _refuse_demo_seed
+    )
     deleted = await client.delete(
         _attributes_url(instrument_id),
         headers={DEMO_SEED_HEADER: token},
@@ -329,11 +419,16 @@ async def assert_delete_header_is_ignored(client, monkeypatch):
     assert detail.json()["fund_attributes"] is None
     assert detail.json()["ticker"] == "SEED"
 
+    monkeypatch.setattr(instruments_api, "request_is_demo_seed", original)
     other_id = await _instrument(client, "SEED2", "ETF")
     await _store_attributes(client, other_id)
+    monkeypatch.setattr(
+        instruments_api, "request_is_demo_seed", _refuse_demo_seed
+    )
     # httpx refuses a non-ASCII header, so this call is raw ASGI.
-    # 64 Latin-1 characters is the token length. compare_digest
-    # raises TypeError on that string. Delete must not read it.
+    # 64 Latin-1 characters is the token length. ``_is_seed_token``
+    # rejects that text before ``compare_digest``, so this request
+    # alone does not prove DELETE skips the helper. The patch does.
     messy = await _raw_delete(
         client, other_id, ("\u00e9" * 64).encode("latin-1")
     )
@@ -369,3 +464,82 @@ async def test_delete_rejects_an_id_outside_item_id(client, raw):
 @pytest.mark.asyncio
 async def test_demo_seed_header_is_ignored_on_delete(client, monkeypatch):
     await assert_delete_header_is_ignored(client, monkeypatch)
+
+
+def _attribute_rows(client):
+    session = client.app.state.testing_session_local()
+    try:
+        return list(session.query(FundAttributesDB).all())
+    finally:
+        session.close()
+
+
+async def assert_http_delete_leaves_the_other_fund(client):
+    """A body and a company_id query do not choose another row."""
+    keeper_id = await _instrument(client, "KEEP", "ETF")
+    victim_id = await _instrument(client, "DROP", "ETF")
+    kept = await _store_attributes(client, keeper_id, issuer="Keeper")
+    gone = await _store_attributes(client, victim_id, issuer="Victim")
+    deleted = await client.request(
+        "DELETE",
+        _attributes_url(victim_id),
+        params={"company_id": keeper_id},
+        json={"company_id": keeper_id, "issuer": "Victim"},
+    )
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    rows = _attribute_rows(client)
+    assert len(rows) == 1
+    assert rows[0].id == kept.json()["id"]
+    assert rows[0].company_id == keeper_id
+    assert rows[0].issuer == "Keeper"
+    assert all(row.id != gone.json()["id"] for row in rows)
+    victim = await client.get(f"/api/v1/instruments/{victim_id}")
+    assert victim.json()["fund_attributes"] is None
+    assert victim.json()["ticker"] == "DROP"
+    keeper = await client.get(f"/api/v1/instruments/{keeper_id}")
+    assert keeper.json()["fund_attributes"]["issuer"] == "Keeper"
+    assert keeper.json()["fund_attributes"]["id"] == kept.json()["id"]
+
+
+async def assert_etc_without_a_row_is_404(client):
+    instrument_id = await _instrument(client, "ETC0", "ETC")
+    deleted = await client.delete(_attributes_url(instrument_id))
+    assert deleted.status_code == 404
+    assert deleted.json() == _NO_ATTRIBUTES
+    detail = await client.get(f"/api/v1/instruments/{instrument_id}")
+    assert detail.status_code == 200
+    assert detail.json()["instrument_type"] == "ETC"
+    assert detail.json()["fund_attributes"] is None
+
+
+@pytest.mark.asyncio
+async def test_http_delete_leaves_the_keeper_fund(client):
+    await assert_http_delete_leaves_the_other_fund(client)
+
+
+@pytest.mark.asyncio
+async def test_delete_an_etc_returns_204_and_keeps_prices_and_notes(client):
+    await assert_delete_keeps_the_instrument(client, "ETC1", "ETC")
+
+
+@pytest.mark.asyncio
+async def test_first_delete_of_an_etc_with_no_row_is_404(client):
+    await assert_etc_without_a_row_is_404(client)
+
+
+@pytest.mark.asyncio
+async def test_delete_maps_a_constraint_error_to_400(client, monkeypatch):
+    instrument_id = await _instrument(client, "ROLL", "ETF")
+    await _store_attributes(client, instrument_id)
+
+    def boom(self, company_id):
+        raise ValueError("Delete failed due to constraint violation")
+
+    monkeypatch.setattr(FundAttributesRepository, "delete", boom)
+    response = await client.delete(_attributes_url(instrument_id))
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Delete failed due to constraint violation"
+    }
+    assert _attribute_rows(client)
