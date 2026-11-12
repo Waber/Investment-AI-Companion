@@ -34,6 +34,22 @@ _TEXT_FIELDS = (
 _DATE_FIELDS = ("aum_as_of", "as_of")
 _AUM_NEEDS = "aum requires a currency and an as-of date"
 _AUM_EXTRA = "aum currency and aum_as_of require aum"
+_DELETE_CONSTRAINT = "Delete failed due to constraint violation"
+
+
+class FundAttributesDeleteError(RuntimeError):
+    """The delete commit failed and the session was rolled back.
+
+    The message is fixed. It does not include driver text, which
+    differs between SQLite and PostgreSQL. This is a ``RuntimeError``,
+    not a ``ValueError``. The route catches this class and returns
+    one fixed 400 sentence. An ``except ValueError`` that copies
+    ``str(error)`` into the response does not see this error, so a
+    later ``ValueError`` cannot be echoed from this path.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_DELETE_CONSTRAINT)
 
 
 class FundAttributesRepository:
@@ -137,19 +153,27 @@ class FundAttributesRepository:
         relationship cascades the other way: deleting the company
         deletes the attributes, not the reverse. A commit that raises
         ``IntegrityError`` is rolled back and reported as
-        ``ValueError``, the same way ``update`` reports a failed
-        write, so the row is still stored afterwards.
+        ``FundAttributesDeleteError``, so the row is still stored
+        afterwards. The typed error is raised after the handler.
+        Raised inside it, the driver error would stay on
+        ``__context__``. ``OperationalError`` is not caught here.
+        ``create`` and ``update`` do not catch it either. The request
+        session is closed by ``get_db``, which rolls the connection
+        back, and the client sees Starlette's plain 500.
         """
         self._company(company_id)
         row = self.get_by_company(company_id)
         if row is None:
             return False
         self.db.delete(row)
+        failed = False
         try:
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
-            raise ValueError("Delete failed due to constraint violation")
+            failed = True
+        if failed:
+            raise FundAttributesDeleteError()
         return True
 
     def _company(self, company_id):

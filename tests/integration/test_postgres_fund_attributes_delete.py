@@ -11,12 +11,15 @@ import pytest
 
 from tests.test_fund_attributes_delete import (
     _HUGE_ID,
+    assert_delete_does_not_echo_a_value_error,
+    assert_delete_does_not_read_the_demo_seed_header,
     assert_delete_header_is_ignored,
     assert_delete_keeps_the_instrument,
     assert_delete_on_a_stock_keeps_the_stock,
     assert_delete_rejects_id,
     assert_etc_without_a_row_is_404,
     assert_failed_delete_commit_rolls_back,
+    assert_http_delete_constraint_rolls_back,
     assert_http_delete_leaves_the_other_fund,
     assert_repository_delete_happy_path,
     assert_repository_delete_leaves_the_other_row,
@@ -53,4 +56,13 @@ async def test_http_delete_on_postgresql(postgres_client, monkeypatch):
     await assert_delete_on_a_stock_keeps_the_stock(postgres_client)
     for raw in ("0", "-1", _HUGE_ID):
         await assert_delete_rejects_id(postgres_client, raw)
+    await assert_http_delete_constraint_rolls_back(
+        postgres_client, monkeypatch
+    )
+    await assert_delete_does_not_echo_a_value_error(
+        postgres_client, monkeypatch
+    )
+    await assert_delete_does_not_read_the_demo_seed_header(
+        postgres_client, monkeypatch
+    )
     await assert_delete_header_is_ignored(postgres_client, monkeypatch)
