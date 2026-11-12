@@ -84,6 +84,12 @@ _THESIS_FORM = re.compile(
     r"^/ui/companies/(?P<company_id>[^/]+)/theses/"
     r"(?P<thesis_id>[^/]+)/(?:edit|delete)$"
 )
+# Create and edit of fund attributes are the same path for GET and
+# POST, the same way a company edit is. A 422 must not send the
+# language switch to a URL that only accepts POST.
+_FUND_FORM = re.compile(
+    r"^/ui/companies/(?P<company_id>[^/]+)/fund-attributes/(?:new|edit)$"
+)
 
 
 def _path_with_query(path, query):
@@ -122,7 +128,13 @@ def _get_form_for_post(path):
             return f"/ui/companies/{company_id}/research"
     if any(
         pattern.match(path)
-        for pattern in (_COMPANY_FORM, _METRICS_FORM, _NOTE_FORM, _THESIS_FORM)
+        for pattern in (
+            _COMPANY_FORM,
+            _METRICS_FORM,
+            _NOTE_FORM,
+            _THESIS_FORM,
+            _FUND_FORM,
+        )
     ):
         return path
     return None

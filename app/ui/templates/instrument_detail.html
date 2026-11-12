@@ -77,8 +77,18 @@
 {% include "partials/metric_table.html" %}
 {% endwith %}
 {% endif %}
-{% if instrument.fund_attributes %}
+{% if instrument.instrument_type in ['etf', 'etc'] or instrument.fund_attributes %}
 <h2>{{ t['fund.title'] }}</h2>
+{% if instrument.instrument_type in ['etf', 'etc'] %}
+<p class="form-actions">
+  {% if instrument.fund_attributes %}
+  <a href="/ui/companies/{{ instrument.id }}/fund-attributes/edit">{{ t['action.edit_fund'] }}</a>
+  {% else %}
+  <a href="/ui/companies/{{ instrument.id }}/fund-attributes/new">{{ t['action.add_fund'] }}</a>
+  {% endif %}
+</p>
+{% endif %}
+{% if instrument.fund_attributes %}
 <dl>
   {% set fund = instrument.fund_attributes %}
   <dt>{{ t['fund.issuer'] }}</dt>
@@ -102,6 +112,7 @@
   <dt>{{ t['field.source'] }}</dt>
   <dd data-field="fund-source">{% if fund.source %}{{ fund.source }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
 </dl>
+{% endif %}
 {% endif %}
 {% if instrument.price_metrics %}
 <h2>{{ t['price.title'] }}</h2>
