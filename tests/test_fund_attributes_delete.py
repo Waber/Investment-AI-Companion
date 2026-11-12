@@ -23,11 +23,13 @@ from app.models.database_models import (
     FundAttributesDB,
     NoteDB,
     PriceBarDB,
+    ThesisDB,
 )
 from app.models.price_bar import PriceBarCreate
 from app.models.research import NoteCreate
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.fund_attributes_repository import (
+    FundAttributesDeleteError,
     FundAttributesRepository,
 )
 from app.repositories.note_repository import NoteRepository
@@ -233,10 +235,14 @@ def assert_failed_delete_commit_rolls_back(session, ticker="ROLL"):
     session.rollback = rollback
     session.commit = boom
     try:
-        with pytest.raises(
-            ValueError, match="Delete failed due to constraint violation"
-        ):
+        with pytest.raises(FundAttributesDeleteError) as caught:
             repo.delete(fund.id)
+        assert str(caught.value) == (
+            "Delete failed due to constraint violation"
+        )
+        assert not isinstance(caught.value, ValueError)
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
     finally:
         session.rollback = real_rollback
         session.commit = monkeypatch_commit
@@ -340,6 +346,15 @@ async def assert_delete_keeps_the_instrument(
     assert [row["id"] for row in prices.json()] == [price["id"]]
     notes = await client.get(f"/api/v1/instruments/{instrument_id}/notes")
     assert [row["id"] for row in notes.json()] == [note["id"]]
+    session = client.app.state.testing_session_local()
+    try:
+        stored_thesis = session.get(ThesisDB, thesis["id"])
+        assert stored_thesis is not None
+        assert stored_thesis.id == thesis["id"]
+        assert stored_thesis.company_id == instrument_id
+        assert stored_thesis.title == "Kept"
+    finally:
+        session.close()
     theses = await client.get(f"/api/v1/instruments/{instrument_id}/theses")
     assert [row["id"] for row in theses.json()] == [thesis["id"]]
 
@@ -528,18 +543,191 @@ async def test_first_delete_of_an_etc_with_no_row_is_404(client):
     await assert_etc_without_a_row_is_404(client)
 
 
-@pytest.mark.asyncio
-async def test_delete_maps_a_constraint_error_to_400(client, monkeypatch):
+async def assert_http_delete_constraint_rolls_back(client, monkeypatch):
+    """A failed commit is 400 and the same row is still stored.
+
+    ``commit`` flushes, so the DELETE reaches the database, then
+    raises ``IntegrityError``. The repository rolls that back. The
+    route answers 400 with the fixed sentence. The row id and the
+    issuer are the ones ``POST`` stored.
+    """
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import Session
+
     instrument_id = await _instrument(client, "ROLL", "ETF")
-    await _store_attributes(client, instrument_id)
+    created = await _store_attributes(client, instrument_id, issuer="Stay")
+    row_id = created.json()["id"]
+    driver = "secret-driver-token"
 
-    def boom(self, company_id):
-        raise ValueError("Delete failed due to constraint violation")
+    def commit_flushes_then_fails(self):
+        self.flush()
+        raise IntegrityError("DELETE", {}, Exception(driver))
 
-    monkeypatch.setattr(FundAttributesRepository, "delete", boom)
-    response = await client.delete(_attributes_url(instrument_id))
+    original = Session.commit
+    monkeypatch.setattr(Session, "commit", commit_flushes_then_fails)
+    try:
+        response = await client.delete(_attributes_url(instrument_id))
+    finally:
+        monkeypatch.setattr(Session, "commit", original)
     assert response.status_code == 400
     assert response.json() == {
         "detail": "Delete failed due to constraint violation"
     }
-    assert _attribute_rows(client)
+    assert driver not in response.text
+    session = client.app.state.testing_session_local()
+    try:
+        row = session.get(FundAttributesDB, row_id)
+        assert row is not None
+        assert row.id == row_id
+        assert row.issuer == "Stay"
+        assert row.company_id == instrument_id
+    finally:
+        session.close()
+
+
+async def assert_delete_does_not_echo_a_value_error(client, monkeypatch):
+    """A ``ValueError`` from delete is not copied into the response.
+
+    The constraint 400 uses one fixed sentence. Any other
+    ``ValueError`` stays Starlette's plain 500, so a future message
+    cannot become the JSON ``detail``.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    instrument_id = await _instrument(client, "LEAK", "ETF")
+    await _store_attributes(client, instrument_id, issuer="Stay")
+    secret = "driver said unique violation"
+
+    def boom(self, company_id):
+        raise ValueError(secret)
+
+    original_delete = FundAttributesRepository.delete
+    monkeypatch.setattr(FundAttributesRepository, "delete", boom)
+    try:
+        transport = ASGITransport(app=client.app, raise_app_exceptions=False)
+        async with AsyncClient(
+            transport=transport, base_url="http://127.0.0.1"
+        ) as quiet:
+            response = await quiet.delete(_attributes_url(instrument_id))
+    finally:
+        monkeypatch.setattr(
+            FundAttributesRepository, "delete", original_delete
+        )
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+    assert secret not in response.text
+    session = client.app.state.testing_session_local()
+    try:
+        row = (
+            session.query(FundAttributesDB)
+            .filter(FundAttributesDB.company_id == instrument_id)
+            .one()
+        )
+        assert row.issuer == "Stay"
+    finally:
+        session.close()
+
+
+def _forbid_demo_seed_header_read(monkeypatch):
+    """Raise when code reads ``X-IAC-Demo-Seed`` from request headers.
+
+    ``get``, ``__getitem__``, ``getlist``, and ``in`` are the lookups
+    on that key. A route that calls any of them fails the delete.
+    Reading a different header, such as ``host``, still works.
+    """
+    from starlette.datastructures import Headers
+
+    forbidden = "x-iac-demo-seed"
+
+    def forbidden_key(key):
+        return str(key).lower() == forbidden
+
+    real_get = Headers.get
+    real_getitem = Headers.__getitem__
+    real_getlist = Headers.getlist
+    real_contains = Headers.__contains__
+
+    def guarded_get(self, key, default=None):
+        if forbidden_key(key):
+            raise RuntimeError("DELETE must not read X-IAC-Demo-Seed")
+        return real_get(self, key, default)
+
+    def guarded_getitem(self, key):
+        if forbidden_key(key):
+            raise RuntimeError("DELETE must not read X-IAC-Demo-Seed")
+        return real_getitem(self, key)
+
+    def guarded_getlist(self, key):
+        if forbidden_key(key):
+            raise RuntimeError("DELETE must not read X-IAC-Demo-Seed")
+        return real_getlist(self, key)
+
+    def guarded_contains(self, key):
+        if forbidden_key(key):
+            raise RuntimeError("DELETE must not read X-IAC-Demo-Seed")
+        return real_contains(self, key)
+
+    monkeypatch.setattr(Headers, "get", guarded_get)
+    monkeypatch.setattr(Headers, "__getitem__", guarded_getitem)
+    monkeypatch.setattr(Headers, "getlist", guarded_getlist)
+    monkeypatch.setattr(Headers, "__contains__", guarded_contains)
+    return (real_get, real_getitem, real_getlist, real_contains)
+
+
+async def assert_delete_does_not_read_the_demo_seed_header(
+    client, monkeypatch
+):
+    """DELETE does not read ``X-IAC-Demo-Seed`` off the request.
+
+    Patching ``request_is_demo_seed`` misses a route that calls
+    ``request.headers.get("X-IAC-Demo-Seed")`` itself. The header
+    spy fails that read. The row is still deleted.
+    """
+    from httpx import ASGITransport, AsyncClient
+    from starlette.datastructures import Headers
+
+    instrument_id = await _instrument(client, "HEAD", "ETF")
+    created = await _store_attributes(client, instrument_id, issuer="Stay")
+    originals = _forbid_demo_seed_header_read(monkeypatch)
+    try:
+        transport = ASGITransport(app=client.app, raise_app_exceptions=False)
+        async with AsyncClient(
+            transport=transport, base_url="http://127.0.0.1"
+        ) as quiet:
+            deleted = await quiet.delete(
+                _attributes_url(instrument_id),
+                headers={DEMO_SEED_HEADER: "ab" * 32},
+            )
+    finally:
+        (
+            real_get,
+            real_getitem,
+            real_getlist,
+            real_contains,
+        ) = originals
+        monkeypatch.setattr(Headers, "get", real_get)
+        monkeypatch.setattr(Headers, "__getitem__", real_getitem)
+        monkeypatch.setattr(Headers, "getlist", real_getlist)
+        monkeypatch.setattr(Headers, "__contains__", real_contains)
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    session = client.app.state.testing_session_local()
+    try:
+        assert session.get(FundAttributesDB, created.json()["id"]) is None
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_maps_a_constraint_error_to_400(client, monkeypatch):
+    await assert_http_delete_constraint_rolls_back(client, monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_delete_does_not_echo_a_value_error(client, monkeypatch):
+    await assert_delete_does_not_echo_a_value_error(client, monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_delete_does_not_read_the_demo_seed_header(client, monkeypatch):
+    await assert_delete_does_not_read_the_demo_seed_header(client, monkeypatch)

@@ -173,48 +173,48 @@ def assert_no_dangerous_href(html):
         assert scheme in {"", "http", "https"}
 
 
-def _utc(text):
+def utc(text):
     """``"2026-10-28T13:05"`` as an aware UTC datetime."""
     return datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
 
 
-def _session(client):
+def session(client):
     return client.app.state.testing_session_local()
 
 
-def _company(client, name="Apple Inc.", ticker="AAPL"):
-    session = _session(client)
+def company(client, name="Apple Inc.", ticker="AAPL"):
+    db = session(client)
     try:
         row = CompanyDB(name=name, ticker=ticker, currency="USD")
-        session.add(row)
-        session.commit()
+        db.add(row)
+        db.commit()
         return row.id
     finally:
-        session.close()
+        db.close()
 
 
-def _note(client, company_id, body, created, edited=None):
+def note(client, company_id, body, created, edited=None):
     """Store a note, edit it when ``edited`` is set, then pin the times.
 
     A note that was not edited keeps ``updated_at == created_at``, as
     the insert leaves it.
     """
-    session = _session(client)
+    db = session(client)
     try:
-        notes = NoteRepository(session)
+        notes = NoteRepository(db)
         note_id = notes.create(company_id, NoteCreate(body=body)).id
         if edited is not None:
             notes.update(company_id, note_id, NoteUpdate(body=body))
-        row = session.get(NoteDB, note_id)
-        row.created_at = _utc(created)
-        row.updated_at = _utc(edited or created)
-        session.commit()
+        row = db.get(NoteDB, note_id)
+        row.created_at = utc(created)
+        row.updated_at = utc(edited or created)
+        db.commit()
         return note_id
     finally:
-        session.close()
+        db.close()
 
 
-def _thesis(
+def thesis(
     client,
     company_id,
     title,
@@ -230,25 +230,25 @@ def _thesis(
     ``updated`` defaults to the last change: the closing, else the
     creation.
     """
-    session = _session(client)
+    db = session(client)
     try:
-        theses = ThesisRepository(session)
+        theses = ThesisRepository(db)
         thesis = ThesisCreate(title=title, body=body, thesis_breakers=breakers)
         thesis_id = theses.create(company_id, thesis).id
         if closed is not None:
             theses.set_status(company_id, thesis_id, ThesisStatus.CLOSED)
-        row = session.get(ThesisDB, thesis_id)
-        row.created_at = _utc(created)
-        row.updated_at = _utc(updated or closed or created)
+        row = db.get(ThesisDB, thesis_id)
+        row.created_at = utc(created)
+        row.updated_at = utc(updated or closed or created)
         if closed is not None:
-            row.closed_at = _utc(closed)
-        session.commit()
+            row.closed_at = utc(closed)
+        db.commit()
         return thesis_id
     finally:
-        session.close()
+        db.close()
 
 
-class _Tags(HTMLParser):
+class Tags(HTMLParser):
     """Every start tag in document order, with its attributes."""
 
     def __init__(self):
@@ -259,34 +259,34 @@ class _Tags(HTMLParser):
         self.tags.append((tag, dict(attrs)))
 
 
-def _tags(html):
-    parser = _Tags()
+def tags(html):
+    parser = Tags()
     parser.feed(html)
     return parser.tags
 
 
-def _between(html, start_marker, end_marker):
+def between(html, start_marker, end_marker):
     """From ``start_marker`` up to the next ``end_marker``."""
     start = html.index(start_marker)
     end = html.index(end_marker, start)
     return html[start:end]
 
 
-def _panel(html):
+def panel(html):
     """The open panel, from its start tag to its end tag."""
-    return _between(html, '<section id="research"', "</section>")
+    return between(html, '<section id="research"', "</section>")
 
 
-def _panel_actions(html):
+def panel_actions(html):
     """Every form and every HTMX link inside the open panel."""
     return [
         (tag, attrs)
-        for tag, attrs in _tags(_panel(html))
+        for tag, attrs in tags(panel(html))
         if tag == "form" or (tag == "a" and "hx-get" in attrs)
     ]
 
 
-def _is_create_post(tag, attrs):
+def is_create_post(tag, attrs):
     """The note add or the new-thesis post. Repeating either inserts.
 
     An edit, a delete, a close, and a reopen are other actions on
