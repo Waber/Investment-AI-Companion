@@ -635,6 +635,57 @@ async def test_stock_with_a_stored_row_keeps_the_detail_and_hides_the_form(
     assert _facts(client, company_id)["source"] == RECORD_SOURCE_MANUAL
 
 
+def _set_ter(client, company_id, fraction):
+    session = client.app.state.testing_session_local()
+    try:
+        row = (
+            session.query(FundAttributesDB)
+            .filter(FundAttributesDB.company_id == company_id)
+            .one()
+        )
+        row.ter = float(fraction)
+        session.commit()
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fraction,polish,english",
+    [
+        (Decimal("0.0000001"), "0,00001%", "0.00001%"),
+        (Decimal("0.0007"), "0,07%", "0.07%"),
+        (Decimal("0"), "0%", "0%"),
+    ],
+)
+async def test_detail_ter_keeps_small_percents_in_both_languages(
+    client, fraction, polish, english
+):
+    company_id = await _company(
+        client,
+        ticker="TINY" + polish[:1] + str(fraction)[-1],
+        instrument_type="ETF",
+        name="Tiny TER",
+    )
+    created = await _post(
+        client,
+        _new(company_id),
+        _form(ter="0", aum="", aum_currency="", aum_as_of=""),
+    )
+    assert created.status_code == 303
+    _set_ter(client, company_id, fraction)
+    page = await client.get(_detail(company_id))
+    assert page.status_code == 200
+    ter = page.text.split('data-field="fund-ter">', 1)[1].split("</dd>", 1)[0]
+    assert polish in ter
+    client.cookies.set("ui_lang", "en")
+    english_page = await client.get(_detail(company_id))
+    ter_en = english_page.text.split('data-field="fund-ter">', 1)[1].split(
+        "</dd>", 1
+    )[0]
+    assert english in ter_en
+
+
 def _location_next(response):
     parts = urlsplit(response.headers["location"])
     return parts.path, parse_qs(parts.query).get("next", [])
