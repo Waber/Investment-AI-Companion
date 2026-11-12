@@ -1,7 +1,8 @@
 """Create, edit, and delete forms for companies and their metrics.
 
-Fund attributes have a create form and an edit form. There is no
-delete form: the repository has no delete yet. Those posts use
+Fund attributes have a create form and an edit form. This branch
+has no UI delete form. ``FundAttributesRepository.delete`` is not
+in this checkout. Those posts use
 ``FundAttributesCreate`` and ``FundAttributesUpdate`` and write
 through ``FundAttributesRepository``. They do not call the JSON
 API. The demo-seed header is not read. Create stores ``manual``
@@ -27,6 +28,8 @@ database removes its notes, theses, price bars, and watchlist row
 (``ON DELETE CASCADE`` on their foreign keys). The delete warning
 names the metrics, notes, and theses.
 """
+
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
@@ -926,6 +929,27 @@ def _posted_next(values, company_id):
     return raw
 
 
+def _query_next(request):
+    """The ``next`` query value, or ``""`` when the page has none."""
+    raw = request.query_params.get("next", "")
+    if not isinstance(raw, str):
+        return ""
+    return raw
+
+
+def _edit_redirect(company_id, next_value):
+    """The edit form, keeping a safe ``next`` when one was sent.
+
+    An unsafe ``next`` becomes ``/ui``. The edit page reads that
+    query into the hidden field, so the following save stays on
+    this site.
+    """
+    path = _fund_action(company_id, True)
+    if not isinstance(next_value, str) or next_value.strip() == "":
+        return path
+    return path + "?" + urlencode({"next": safe_next(next_value)})
+
+
 def _after_save(company_id, values):
     """Where a successful save sends the browser.
 
@@ -1078,12 +1102,18 @@ def _post_fund(request, db, raw_id, values, *, update):
 def new_fund_form(
     request: Request, company_id: str, db: Session = Depends(get_db)
 ):
-    """Empty create form. GET does not insert a row."""
-    company, _row, missing = _load_fund_company(
+    """Empty create form. GET does not insert a row.
+
+    When the instrument already has a row, this GET redirects to
+    the edit form. The POST still answers 400 in that case.
+    """
+    company, row, missing = _load_fund_company(
         request, db, company_id, need_row=False
     )
     if missing is not None:
         return missing
+    if row is not None:
+        return see_other(_edit_redirect(company.id, _query_next(request)))
     return _fund_page(
         request,
         title_key="page.create_fund",
@@ -1121,13 +1151,18 @@ def edit_fund_form(
     )
     if missing is not None:
         return missing
+    posted_next = _query_next(request)
+    if posted_next.strip():
+        next_value = safe_next(posted_next)
+    else:
+        next_value = _instrument_path(company.id)
     return _fund_page(
         request,
         title_key="page.edit_fund",
         action=_fund_action(company.id, True),
         values=fund_values(row),
         cancel_href=_instrument_path(company.id),
-        next_value=_instrument_path(company.id),
+        next_value=next_value,
         updated_at=row.updated_at,
     )
 

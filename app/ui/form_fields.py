@@ -506,9 +506,11 @@ def ter_percent_to_fraction(value):
     does not become the float value ``0.0007000000000000001``.
 
     ``None`` and a blank string are a missing fee. A value that is
-    not a finite decimal raises ``ValueError``. This function does
-    not check the 0..100 bound. The write model rejects a fraction
-    above 1, and that is a percent above 100.
+    not a finite decimal raises ``ValueError``. One comma is the
+    decimal mark, so ``1,5`` is 1.5 percent. A second comma, or a
+    comma mixed with a period (``1,5.2``), is not a number. This
+    function does not check the 0..100 bound. The write model
+    rejects a fraction above 1, and that is a percent above 100.
     """
     if value is None:
         return None
@@ -517,6 +519,11 @@ def ter_percent_to_fraction(value):
     text = value.strip()
     if text == "":
         return None
+    if "," in text:
+        # One comma is a decimal mark. Two separators are not.
+        if text.count(",") != 1 or "." in text:
+            raise ValueError("ter percent is not a number")
+        text = text.replace(",", ".", 1)
     try:
         number = Decimal(text)
     except InvalidOperation as exc:
@@ -712,9 +719,12 @@ def _fund_error_field(error):
     if loc and isinstance(loc[-1], str):
         return loc[-1]
     message = str(error.get("msg") or "").casefold()
-    if "ter" in message:
+    # Word match. ``ter`` is inside ``greater``, and that sentence
+    # is the AUM cap, so a substring check would mark the TER field.
+    padded = f" {message} "
+    if " ter " in padded:
         return "ter"
-    if "aum" in message and "currency" not in message:
+    if " aum " in padded and " currency " not in padded:
         return "aum"
     return None
 
