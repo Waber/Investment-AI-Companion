@@ -156,6 +156,8 @@ _POLISH = {
     "action.delete_company": "Usuń instrument",
     "action.add_metrics": "Dodaj wskaźniki",
     "action.edit_metrics": "Edytuj wskaźniki",
+    "action.add_fund": "Dodaj atrybuty",
+    "action.edit_fund": "Edytuj atrybuty",
     "action.delete_metrics": "Usuń wskaźniki",
     "action.save": "Zapisz",
     "action.confirm_delete": "Usuń",
@@ -171,6 +173,8 @@ _POLISH = {
     "page.delete_company": "Usuwanie instrumentu",
     "page.create_metrics": "Nowe wskaźniki",
     "page.edit_metrics": "Edycja wskaźników",
+    "page.create_fund": "Nowe atrybuty funduszu",
+    "page.edit_fund": "Edycja atrybutów funduszu",
     "page.delete_metrics": "Usuwanie wskaźników",
     "form.error_summary": "Popraw zaznaczone pola.",
     "field.period_end": "Koniec okresu",
@@ -200,6 +204,8 @@ _POLISH = {
         "Puste pole oznacza brak danych. "
         "NaN i nieskończoność nie są liczbami."
     ),
+    "hint.ter": ("Podaj TER w procentach od 0 do 100. 0.07 oznacza 0.07%."),
+    "hint.date": ("Data w postaci RRRR-MM-DD, na przykład 2026-09-30."),
     "error.required": "To pole jest wymagane.",
     "error.too_long": "Za długa wartość.",
     "error.max_200": "Najwyżej 200 znaków.",
@@ -217,6 +223,11 @@ _POLISH = {
         "Podaj adres http:// lub https:// albo zostaw pole puste."
     ),
     "error.number": "Podaj skończoną liczbę albo zostaw pole puste.",
+    "error.ter_percent": "TER musi być procentem od 0 do 100.",
+    "error.date": "Podaj datę, na przykład 2026-09-30.",
+    "error.aum_needs": "Podaj walutę i datę aktywów razem z kwotą.",
+    "error.aum_extra": "Waluta i data aktywów wymagają kwoty.",
+    "error.fund_exists": "Atrybuty tego instrumentu są już zapisane.",
     "error.datetime": ("Podaj datę i czas, na przykład 2024-12-31T00:00:00."),
     "error.invalid": "Ta wartość jest nieprawidłowa.",
     "error.control_char": "To pole nie może zawierać znaków sterujących.",
@@ -385,6 +396,8 @@ _ENGLISH = {
     "action.delete_company": "Delete instrument",
     "action.add_metrics": "Add metrics",
     "action.edit_metrics": "Edit metrics",
+    "action.add_fund": "Add attributes",
+    "action.edit_fund": "Edit attributes",
     "action.delete_metrics": "Delete metrics",
     "action.save": "Save",
     "action.confirm_delete": "Delete",
@@ -400,6 +413,8 @@ _ENGLISH = {
     "page.delete_company": "Delete instrument",
     "page.create_metrics": "New metrics",
     "page.edit_metrics": "Edit metrics",
+    "page.create_fund": "New fund attributes",
+    "page.edit_fund": "Edit fund attributes",
     "page.delete_metrics": "Delete metrics",
     "form.error_summary": "Correct the highlighted fields.",
     "field.period_end": "Period end",
@@ -431,6 +446,8 @@ _ENGLISH = {
         "Leave a field empty when the number is missing. "
         "NaN and infinity are not numbers."
     ),
+    "hint.ter": ("Enter TER as a percent from 0 to 100. 0.07 means 0.07%."),
+    "hint.date": ("A date as YYYY-MM-DD, for example 2026-09-30."),
     "error.required": "This field is required.",
     "error.too_long": "This value is too long.",
     "error.max_200": "At most 200 characters.",
@@ -446,6 +463,13 @@ _ENGLISH = {
         "Enter an http:// or https:// address, or leave the field empty."
     ),
     "error.number": "Enter a finite number, or leave the field empty.",
+    "error.ter_percent": "TER must be a percent from 0 to 100.",
+    "error.date": "Enter a date, such as 2026-09-30.",
+    "error.aum_needs": (
+        "Enter the currency and the assets date with the amount."
+    ),
+    "error.aum_extra": "The assets currency and date need an amount.",
+    "error.fund_exists": ("Attributes for this instrument are already saved."),
     "error.datetime": ("Enter a date and time, such as 2024-12-31T00:00:00."),
     "error.invalid": "This value is not valid.",
     "error.control_char": "This field must not contain control characters.",
