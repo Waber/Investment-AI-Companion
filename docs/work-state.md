@@ -1,5 +1,39 @@
 # Current Work State
 
+## Delete fund attributes, QA gaps (#28): 2026-11-12
+
+- Branch `cursor/delete-fund-attributes-ddd6`. Pull request
+  #130. Refs #28. Does not close #28. The agent does not
+  merge. No amend, no force-push, no rebase. No Alembic
+  revision. No live market data.
+- `7bf3e3f` had green GitHub Actions run 43249146900 (SQLite
+  and PostgreSQL both success). QA did not approve: 4 of 16
+  mutants survived. Those four are now killed by tests, and
+  each was re-applied and reverted after the matching test
+  failed.
+- Completed: a keeper and a victim. Delete removes only the
+  victim. An ETC happy path is 204, and an ETC with no row
+  is 404 `Fund attributes not found`. DELETE does not call
+  `request_is_demo_seed`. A failed commit rolls back and
+  raises `ValueError`; the route returns 400
+  `Delete failed due to constraint violation`. The stock PUT
+  detail is the exact ETF/ETC sentence. The HTTP happy path
+  keeps the thesis as well as the note and the prices.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI command: 2222 passed, 256 deselected, coverage
+  97.19%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2222 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## Delete fund attributes (#28): 2026-11-12
 
 - Branch `cursor/delete-fund-attributes-ddd6`, from `origin/master`
@@ -37,9 +71,10 @@
   percentage is recorded. No reset was redeemed.
 - Active agents: none. Blockers: none. This note is not
   approval and not a merge.
-- Next action: GitHub Actions on this head, both jobs. Then
-  Przemek reviews. Do not merge. The run id is not written
-  here, because this file is part of the commit the run tests.
+- Next action at `7bf3e3f`: GitHub Actions run 43249146900
+  succeeded for both jobs. QA then found four surviving
+  mutants. That follow-up is the section above. This
+  section is the record of the first delete commit.
 
 ## ETF and ETC attributes and price metrics (#28): 2026-11-10
 

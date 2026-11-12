@@ -8,10 +8,8 @@ computed from the stored closes.
 A public body cannot set ``source`` or ``is_synthetic``. Create uses
 ``manual`` unless the demo-seed header is valid. Update always
 records ``manual`` and does not read that header. Delete does not
-read it either. The header is honored on creates only, because that
-is the request that stores ``source``. A delete removes the row, so
-there is no source left to set, and a header that is not a token
-cannot turn the response into a 500.
+call ``request_is_demo_seed``. The header is honored on creates
+only, because that is the request that stores ``source``.
 """
 
 from datetime import date
@@ -217,15 +215,18 @@ def delete_fund_attributes(
 ):
     """Remove the attribute row. The instrument and its prices stay.
 
-    The demo-seed header is not an argument and is not read. A
-    missing instrument is 404 ``Instrument not found``. An instrument
-    with no row, including a stock, is 404 ``Fund attributes not
-    found``. Success is 204 with an empty body.
+    The demo-seed header is not an argument and is not read. Delete
+    does not call ``request_is_demo_seed``. A missing instrument is
+    404 ``Instrument not found``. An instrument with no row, including
+    a stock, is 404 ``Fund attributes not found``. A commit that fails
+    the constraint check is 400. Success is 204 with an empty body.
     """
     repo = FundAttributesRepository(db)
     try:
         deleted = repo.delete(instrument_id)
     except CompanyNotFoundError:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
     if not deleted:
         raise HTTPException(status_code=404, detail=_NO_ATTRIBUTES)

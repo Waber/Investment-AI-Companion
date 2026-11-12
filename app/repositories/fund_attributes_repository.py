@@ -135,14 +135,21 @@ class FundAttributesRepository:
 
         ``self.db.delete`` removes this child row only. The company
         relationship cascades the other way: deleting the company
-        deletes the attributes, not the reverse.
+        deletes the attributes, not the reverse. A commit that raises
+        ``IntegrityError`` is rolled back and reported as
+        ``ValueError``, the same way ``update`` reports a failed
+        write, so the row is still stored afterwards.
         """
         self._company(company_id)
         row = self.get_by_company(company_id)
         if row is None:
             return False
         self.db.delete(row)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise ValueError("Delete failed due to constraint violation")
         return True
 
     def _company(self, company_id):
