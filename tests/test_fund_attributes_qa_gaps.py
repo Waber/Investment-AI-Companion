@@ -138,9 +138,26 @@ def test_a_multi_month_gap_keeps_the_older_start_date():
     assert result.return_1y.value == pytest.approx(0.6, abs=1e-12)
 
 
+def _value_error(response):
+    """The one model ``value_error``. A repository 400 is a string."""
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    matched = [item for item in detail if item.get("type") == "value_error"]
+    assert len(matched) == 1
+    return matched[0]
+
+
 @pytest.mark.asyncio
 async def test_ter_and_aum_accept_the_cap_and_reject_the_next_float(client):
-    """``1`` and ``1e15`` are stored. The next float above each is 422."""
+    """``1`` and ``1e15`` are the caps. The next float above each is 422.
+
+    The numbers are literals. A test that sent ``AUM_MAX`` would still
+    pass if that constant became ``1e30``. The 422 is the write model's
+    ``value_error``, not a repository 400.
+    """
+    assert TER_MAX == 1
+    assert AUM_MAX == 1e15
     created = await client.post(
         "/api/v1/companies/",
         json={"name": "Fund", "ticker": "CAP1", "instrument_type": "ETF"},
@@ -148,11 +165,11 @@ async def test_ter_and_aum_accept_the_cap_and_reject_the_next_float(client):
     company_id = created.json()["id"]
     at_cap = await client.post(
         f"/api/v1/instruments/{company_id}/fund-attributes",
-        json=_payload(ter=TER_MAX, aum=AUM_MAX),
+        json=_payload(ter=1, aum=1e15),
     )
     assert at_cap.status_code == 201
-    assert at_cap.json()["ter"] == pytest.approx(TER_MAX)
-    assert at_cap.json()["aum"] == pytest.approx(AUM_MAX)
+    assert at_cap.json()["ter"] == pytest.approx(1)
+    assert at_cap.json()["aum"] == pytest.approx(1e15)
 
     over_ter = await client.post(
         "/api/v1/companies/",
@@ -160,9 +177,10 @@ async def test_ter_and_aum_accept_the_cap_and_reject_the_next_float(client):
     )
     rejected_ter = await client.post(
         f"/api/v1/instruments/{over_ter.json()['id']}/fund-attributes",
-        json=_payload(ter=math.nextafter(TER_MAX, math.inf)),
+        json=_payload(ter=math.nextafter(1, math.inf)),
     )
-    assert rejected_ter.status_code == 422
+    ter_error = _value_error(rejected_ter)
+    assert "fraction from 0 to 1" in ter_error["msg"]
 
     over_aum = await client.post(
         "/api/v1/companies/",
@@ -170,23 +188,30 @@ async def test_ter_and_aum_accept_the_cap_and_reject_the_next_float(client):
     )
     rejected_aum = await client.post(
         f"/api/v1/instruments/{over_aum.json()['id']}/fund-attributes",
-        json=_payload(aum=math.nextafter(AUM_MAX, math.inf)),
+        json=_payload(aum=math.nextafter(1e15, math.inf)),
     )
-    assert rejected_aum.status_code == 422
+    aum_error = _value_error(rejected_aum)
+    assert "1e15" in aum_error["msg"]
 
 
 def test_repository_rejects_the_float_just_above_each_cap(session):
-    """The repository guard, not only the HTTP model, rejects the cap."""
+    """The repository guard uses the same literals, not a second cap.
+
+    It imports ``TER_MAX`` and ``AUM_MAX``. It does not keep its own
+    copies. ``1`` and ``1e15`` are stored. The next float raises.
+    """
+    assert TER_MAX == 1
+    assert AUM_MAX == 1e15
     repo = FundAttributesRepository(session)
     fund = _company(session, "CAPR", "ETF")
-    stored = repo.create(fund.id, _payload(ter=TER_MAX, aum=AUM_MAX))
-    assert stored.ter == pytest.approx(TER_MAX)
-    assert stored.aum == pytest.approx(AUM_MAX)
+    stored = repo.create(fund.id, _payload(ter=1, aum=1e15))
+    assert stored.ter == pytest.approx(1)
+    assert stored.aum == pytest.approx(1e15)
     other = _company(session, "CAPQ", "ETF")
-    with pytest.raises(ValueError, match="fraction"):
-        repo.create(other.id, _payload(ter=math.nextafter(TER_MAX, math.inf)))
+    with pytest.raises(ValueError, match="fraction from 0 to 1"):
+        repo.create(other.id, _payload(ter=math.nextafter(1, math.inf)))
     with pytest.raises(ValueError, match="1e15"):
-        repo.create(other.id, _payload(aum=math.nextafter(AUM_MAX, math.inf)))
+        repo.create(other.id, _payload(aum=math.nextafter(1e15, math.inf)))
 
 
 @pytest.mark.asyncio
