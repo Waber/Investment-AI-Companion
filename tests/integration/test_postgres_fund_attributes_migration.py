@@ -97,12 +97,46 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(
             assert _truthy(stored[3]) is False
             assert stored[4] == "manual"
 
+            connection.execute(
+                text(
+                    "INSERT INTO fund_attributes (company_id, ter, aum) "
+                    "VALUES (2, 0, 0)"
+                )
+            )
+            zeros = connection.execute(
+                text(
+                    "SELECT ter, aum FROM fund_attributes "
+                    "WHERE company_id = 2"
+                )
+            ).one()
+            assert float(zeros[0]) == 0.0
+            assert float(zeros[1]) == 0.0
+            connection.execute(
+                text("DELETE FROM fund_attributes WHERE company_id = 2")
+            )
+
             with pytest.raises(IntegrityError):
                 with connection.begin_nested():
                     connection.execute(
                         text(
                             "INSERT INTO fund_attributes (company_id, ter) "
                             "VALUES (2, -0.01)"
+                        )
+                    )
+            with pytest.raises(IntegrityError):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO fund_attributes (company_id, aum) "
+                            "VALUES (2, -1)"
+                        )
+                    )
+            with pytest.raises(IntegrityError):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO fund_attributes (company_id, ter) "
+                            "VALUES (2, -1)"
                         )
                     )
             assert _version(connection) == "0010"
