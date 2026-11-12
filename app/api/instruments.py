@@ -32,6 +32,7 @@ from app.models.fund_attributes import (
 from app.price_metrics import metrics_from_bars
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.fund_attributes_repository import (
+    FundAttributesDeleteError,
     FundAttributesRepository,
 )
 from app.repositories.price_bar_repository import PriceBarRepository
@@ -40,6 +41,8 @@ router = APIRouter(prefix="/instruments", tags=["instruments"])
 
 _NOT_FOUND = "Instrument not found"
 _NO_ATTRIBUTES = "Fund attributes not found"
+# Not ``str(error)``. A later ``ValueError`` must not become this body.
+_DELETE_CONSTRAINT = "Delete failed due to constraint violation"
 
 
 class DerivedMetricBody(BaseModel):
@@ -219,14 +222,17 @@ def delete_fund_attributes(
     does not call ``request_is_demo_seed``. A missing instrument is
     404 ``Instrument not found``. An instrument with no row, including
     a stock, is 404 ``Fund attributes not found``. A commit that fails
-    the constraint check is 400. Success is 204 with an empty body.
+    the constraint check is 400 with one fixed sentence. The handler
+    does not copy ``str(error)``. Success is 204 with an empty body.
     """
     repo = FundAttributesRepository(db)
     try:
         deleted = repo.delete(instrument_id)
     except CompanyNotFoundError:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
+    except FundAttributesDeleteError:
+        raise HTTPException(
+            status_code=400, detail=_DELETE_CONSTRAINT
+        ) from None
     if not deleted:
         raise HTTPException(status_code=404, detail=_NO_ATTRIBUTES)

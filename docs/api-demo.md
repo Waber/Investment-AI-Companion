@@ -95,7 +95,10 @@ prices, notes, and theses stay. `GET /api/v1/instruments/{id}` then
 has `fund_attributes` set to `null`. A second `DELETE`, or a `DELETE`
 when there is no row (a stock, or an ETF that never had one), is 404
 `{"detail": "Fund attributes not found"}`. An unknown instrument is
-404 `{"detail": "Instrument not found"}`. An id of `0`, a negative id,
+404 `{"detail": "Instrument not found"}`. A commit that fails a
+constraint check is 400
+`{"detail": "Delete failed due to constraint violation"}`. The row
+stays. An id of `0`, a negative id,
 or an id above 9223372036854775807 (2^63 - 1) is 422, the same body
 the other instrument routes return for that id. The `X-IAC-Demo-Seed`
 header is honored on creates only. `PUT` and `DELETE` ignore it.

@@ -1,5 +1,77 @@
 # Development Journal
 
+## 2026-11-12 - Review nits from the panel and the attribute delete (Refs #104, Refs #28)
+
+- Scope: the three test nits left from pull request #104, the two
+  deferred code-review minors from #130, and the QA and security
+  nits from that same delete. One branch,
+  `cursor/cleanup-104-130-nits-f107`, from `origin/master`
+  `883718e` (pull request #130, merged). No Alembic revision.
+  `instrument_detail.html` and `app/ui/templating.py` were not
+  edited. No live market data. The owner is Przemek. Refs #104.
+  Refs #28. Does not finish either issue.
+- RED first for the echoed delete error. A `ValueError` whose
+  text was `driver said unique violation` came back as HTTP 400
+  with that text. After the change it is Starlette's plain 500,
+  `Internal Server Error`, and the sentence is absent.
+- Delete now raises `FundAttributesDeleteError`, a `RuntimeError`,
+  after the rollback and outside the `except`, so `__cause__` and
+  `__context__` stay empty. The route catches that class only and
+  returns the constant
+  `Delete failed due to constraint violation`. It does not copy
+  `str(error)`. `OperationalError` is still not caught.
+  `create` and `update` do not catch it either. `get_db` closes
+  the request session, which rolls the connection back, and the
+  client sees the plain 500.
+- The HTTP 400 test no longer stubs `repo.delete`. It patches
+  `Session.commit` to flush and then raise `IntegrityError`. The
+  answer is 400 with that exact detail. The same row, same id
+  and issuer `Stay`, is still stored. The driver token
+  `secret-driver-token` is not in the body.
+- The happy path reads `ThesisDB` for that thesis id. The row
+  is still there, with the same id, company, and title `Kept`.
+- DELETE does not read `X-IAC-Demo-Seed`. The test spies on
+  `Headers.get`, `__getitem__`, `getlist`, and `in`. A read of
+  that key becomes a 500.
+- Panel. A failed thesis status change carries
+  `HX-Research-Panel: 1`. An unhandled `RuntimeError` on the note
+  add is the plain 500 and has no marker. The test client does
+  not re-raise, so the headers on the response Starlette already
+  sent can be read. The helpers in `tests/ui_html.py` are public
+  names. Call sites that would hide the function use `db`,
+  `opened`, `note_path`, or `thesis_path` for the local.
+- Docs. `docs/api-demo.md` and `README.md` record the DELETE 400
+  body. The row stays.
+- Mutants, each reverted after the matching test failed:
+  - the panel marker only when `prefix == "note-new"`:
+    `test_failed_thesis_close_marks_the_research_panel` raises
+    `KeyError: 'hx-research-panel'`. The note-add test still
+    passed;
+  - the note add catches `Exception` and renders the marked
+    panel: `test_unhandled_research_error_has_no_panel_marker`
+    no longer sees `Internal Server Error`;
+  - DELETE's `except ValueError` copies `str(error)`:
+    `test_delete_does_not_echo_a_value_error` gets 400, not 500;
+  - DELETE calls `request.headers.get("X-IAC-Demo-Seed")`:
+    `test_delete_does_not_read_the_demo_seed_header` gets 500,
+    not 204;
+  - `delete` also removes `ThesisDB` rows:
+    `test_delete_returns_204_then_a_second_delete_is_404` finds
+    no thesis row (`assert None is not None`);
+  - `delete` lets `IntegrityError` out of `commit`:
+    `test_delete_maps_a_constraint_error_to_400` raises
+    `IntegrityError` with `secret-driver-token`.
+- Verification: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI pytest command: 2226 passed, 256 deselected,
+  coverage 97.19%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2226 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 17:47.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - QA gaps on fund-attribute delete (Refs #28)
 
 - Scope: the four mutants QA left alive on pull request #130

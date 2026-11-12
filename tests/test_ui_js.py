@@ -15,13 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.ui_html import (
-    _company,
-    _is_create_post,
-    _note,
-    _panel_actions,
-    _thesis,
-)
+from tests.ui_html import company, is_create_post, note, panel_actions, thesis
 
 UI_JS = Path(__file__).resolve().parents[1] / "static" / "ui.js"
 # The href of the marked link in the harness.
@@ -402,9 +396,9 @@ async def test_create_forms_do_not_repeat_and_a_research_500_swaps(
     response carries ``HX-Research-Panel: 1``. A 500 without that
     header is left unswapped.
     """
-    company_id = _company(client)
-    note_id = _note(client, company_id, "Notatka", "2026-10-28T13:05")
-    thesis_id = _thesis(client, company_id, "Teza", "2026-10-28T13:05")
+    company_id = company(client)
+    note_id = note(client, company_id, "Notatka", "2026-10-28T13:05")
+    thesis_id = thesis(client, company_id, "Teza", "2026-10-28T13:05")
     base = f"/ui/companies/{company_id}"
     headers = {"hx-request": "true"}
     pages = (
@@ -418,9 +412,9 @@ async def test_create_forms_do_not_repeat_and_a_research_500_swaps(
     creates, edits, deletes = set(), set(), set()
     for response in pages:
         assert response.status_code == 200
-        for tag, attrs in _panel_actions(response.text):
+        for tag, attrs in panel_actions(response.text):
             action = attrs.get("action", attrs.get("href", ""))
-            if _is_create_post(tag, attrs):
+            if is_create_post(tag, attrs):
                 assert "data-plain-fallback" not in attrs, action
                 creates.add(action)
             else:

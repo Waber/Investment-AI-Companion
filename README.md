@@ -237,9 +237,11 @@ read-only preview, and explicit, non-overwriting seed command.
   (`GET`, `POST`, `PUT`, `DELETE`). `DELETE` returns 204 and removes
   that row only. The instrument stays. A missing instrument is 404
   `{"detail": "Instrument not found"}`. No attribute row, including a
-  stock, is 404 `{"detail": "Fund attributes not found"}`. An id of
-  `0`, a negative id, or an id above `2**63 - 1` is 422. The demo-seed
-  header is honored on `POST` only.
+  stock, is 404 `{"detail": "Fund attributes not found"}`. A commit
+  that fails a constraint check is 400
+  `{"detail": "Delete failed due to constraint violation"}`. The row
+  stays. An id of `0`, a negative id, or an id above `2**63 - 1` is
+  422. The demo-seed header is honored on `POST` only.
 
 ## Tests And Quality Checks
 

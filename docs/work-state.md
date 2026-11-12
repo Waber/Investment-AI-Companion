@@ -1,5 +1,43 @@
 # Current Work State
 
+## Review nits from #104 and the attribute delete (#28): 2026-11-12
+
+- Branch `cursor/cleanup-104-130-nits-f107`, from `origin/master`
+  `883718e` (pull request #130, merged). One pull request to
+  master. Refs #104. Refs #28. Does not finish either issue.
+  The agent does not merge. No Alembic revision. No live market
+  data. The detail template and `app/ui/templating.py` were not
+  edited.
+- Completed: a failed thesis status change carries
+  `HX-Research-Panel: 1`. An unhandled note-add error is the
+  plain 500 and has no marker. The helpers in `tests/ui_html.py`
+  are public. `docs/api-demo.md` and `README.md` record DELETE
+  400 `{"detail": "Delete failed due to constraint violation"}`.
+  The HTTP 400 test flushes, raises `IntegrityError`, and checks
+  that the same id and issuer remain. The happy path reads
+  `ThesisDB`. DELETE does not read `X-IAC-Demo-Seed`.
+- `FundAttributesRepository.delete` rolls back `IntegrityError`
+  and raises `FundAttributesDeleteError` (`RuntimeError`) after
+  the handler. The route returns the fixed sentence and does not
+  copy `str(error)`. A different `ValueError` is a plain 500.
+  `OperationalError` is not caught, the same as create and
+  update. `get_db` closes the session.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite 3.45.1,
+  CI command: 2226 passed, 256 deselected, coverage 97.19%.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2226 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls. Each new guard was failed by its mutant, then the
+  mutant was reverted. The journal lists those failures.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## Delete fund attributes, QA gaps (#28): 2026-11-12
 
 - Branch `cursor/delete-fund-attributes-ddd6`. Pull request
