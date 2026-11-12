@@ -24,6 +24,7 @@ from app.ui.formatting import (
     format_local_datetime,
     format_number,
     format_price,
+    format_ter_percent,
 )
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -166,6 +167,7 @@ def render(request, template_name, *, status_code=200, **extra):
         "language": language,
         "t": MessageCatalog(language),
         "format_number": format_number,
+        "format_ter_percent": format_ter_percent,
         "format_date": format_date,
         "format_day": format_day,
         "format_local_datetime": format_local_datetime,

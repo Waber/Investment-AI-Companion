@@ -39,14 +39,15 @@
   DELETE exists on master in #130. This slice has no UI
   delete form yet. `GET /new` when a row already exists
   redirects to the edit form. `POST /new` in that case is
-  still 400. Yahoo still does not implement
-  `FundAttributes`.
+  still 400. The detail page formats TER with `Decimal`
+  so 0.00001 percent is not shown as 0. Yahoo still does not
+  implement `FundAttributes`.
 - Tests: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, CI pytest command: 2243 passed,
-  254 deselected, coverage 97.06%. PostgreSQL 16.15,
+  database. SQLite 3.45.1, CI pytest command: 2247 passed,
+  254 deselected, coverage 96.97%. PostgreSQL 16.15,
   `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  254 passed, 2243 deselected. black, isort, and flake8 passed
+  254 passed, 2247 deselected. black, isort, and flake8 passed
   on the Python files this change touches. No live market-data
   calls. The HTML was checked through the test client. A
   desktop browser was not driven.
@@ -58,7 +59,7 @@
   Do not merge. A UI delete form needs a rebase onto master
   `883718e` (owner approval) before it can call
   `FundAttributesRepository.delete`. Do not copy that method
-  onto this branch.
+  onto this branch. The small-TER display is on this branch.
 
 ## ETF and ETC attributes and price metrics (#28): 2026-11-10
 

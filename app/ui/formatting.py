@@ -87,6 +87,47 @@ def format_number(value, language):
     return f"{sign}{body}"
 
 
+def format_ter_percent(fraction, language):
+    """Format a stored TER fraction as a percent.
+
+    ``0.0007`` is 0.07 percent. ``format_number`` keeps four decimal
+    places, so a fee of 0.00001 percent would print as 0. This
+    multiplies with ``Decimal`` and keeps the significant digits.
+    Zero stays ``0``. A missing or non-finite value is ``None``.
+    """
+    if fraction is None or isinstance(fraction, bool):
+        return None
+    if isinstance(fraction, float):
+        if not math.isfinite(fraction):
+            return None
+        number = Decimal(str(fraction))
+    elif isinstance(fraction, Decimal):
+        number = fraction
+    elif isinstance(fraction, int):
+        number = Decimal(fraction)
+    else:
+        return None
+    if not number.is_finite():
+        return None
+    percent = number * Decimal("100")
+    sign = "-" if percent < 0 else ""
+    text = format(abs(percent), "f")
+    if "." in text:
+        whole, digits = text.split(".", 1)
+        digits = digits.rstrip("0")
+    else:
+        whole, digits = text, ""
+    if whole in {"", "0"} and digits == "":
+        return "0"
+    thousands, decimal_mark = _NUMBER_SEPARATORS.get(
+        language, _NUMBER_SEPARATORS["pl"]
+    )
+    body = _group_thousands(whole, thousands)
+    if digits:
+        body = f"{body}{decimal_mark}{digits}"
+    return f"{sign}{body}"
+
+
 def format_date(value, language):
     """Format a datetime as a UTC calendar date, or return None.
 

@@ -1,5 +1,38 @@
 # Development Journal
 
+## 2026-11-12 - Small TER percents stay visible (Refs #34, Refs #28)
+
+- Scope: the detail page only. One commit on top of the review
+  follow-up. No rebase, no force-push, and master was not
+  merged in. Branch `cursor/ui-fund-attributes-forms-98e5`.
+  Pull request #131. Refs #34 and Refs #28.
+- `format_number` rounds to four decimal places, so a TER of
+  0.00001 percent was shown as 0%. The detail page now formats
+  the stored fraction with `Decimal` (`fraction * 100`) and
+  keeps the significant digits. 0.00001 percent, 0.07 percent,
+  and 0 are covered in Polish and English. Zero stays 0. A
+  missing TER is still "brak danych" / "no data".
+- The UI delete form is not in this commit.
+  `FundAttributesRepository.delete` is not on this branch
+  (base `1dab8fc`). It landed on master in pull request #130
+  at `883718e`. The method was not copied here. The delete
+  form needs the owner's approved rebase first.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2247
+  passed, 254 deselected, coverage 96.97%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2247 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. The HTML was checked through the test
+  client. A desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage
+  meter.
+- Time tracking (UTC): 2026-11-12, from 17:47.
+- Next: rebase onto master `883718e` only after the owner
+  approves it, then the UI delete form can call the
+  repository delete. Do not merge.
+
 ## 2026-11-12 - Fund form review follow-up (Refs #34, Refs #28)
 
 - Scope: one commit on `ac5ef91`. No rebase, no force-push,

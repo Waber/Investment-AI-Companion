@@ -96,7 +96,7 @@
   <dt>{{ t['fund.underlying'] }}</dt>
   <dd data-field="fund-underlying">{% if fund.underlying %}{{ fund.underlying }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
   <dt>{{ t['fund.ter'] }}</dt>
-  <dd data-field="fund-ter">{% if fund.ter is not none %}{{ format_number(fund.ter * 100, language) }}%{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dd data-field="fund-ter">{% if fund.ter is not none %}{{ format_ter_percent(fund.ter, language) }}%{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
   <dt>{{ t['fund.domicile'] }}</dt>
   <dd data-field="fund-domicile">{% if fund.domicile %}{{ fund.domicile }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
   <dt>{{ t['fund.replication'] }}</dt>
