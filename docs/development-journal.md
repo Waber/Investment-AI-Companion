@@ -1,5 +1,47 @@
 # Development Journal
 
+## 2026-11-12 - Fund form review follow-up (Refs #34, Refs #28)
+
+- Scope: one commit on `ac5ef91`. No rebase, no force-push,
+  and master was not merged into the branch. Branch
+  `cursor/ui-fund-attributes-forms-98e5`. Pull request #131.
+  Refs #34 and Refs #28. Both issues stay open.
+- A single comma in a TER percent is a decimal mark. `0,07`
+  is 0.07 percent and stores the fraction `0.0007`. `1,5`
+  stores `0.015`. `1,2,3` and a mix such as `1,5.2` are 422
+  `error.number`. The typed text stays, and no row is
+  created. The edit field still shows a period.
+- `ter=100.0001` is 422. The page says "TER musi być
+  procentem od 0 do 100." No row is created.
+- `GET /ui/companies/{id}/fund-attributes/new` when a row
+  already exists is 303 to the edit form. A safe `next`
+  query is kept. `//evil` becomes `next=/ui`. `POST /new`
+  when a row exists stays 400.
+- The detail page has no `fund-attributes/delete` link.
+  The JSON DELETE exists on master in #130. This slice has
+  no UI delete form yet. `FundAttributesRepository.delete`
+  is not in this checkout, and the method was not copied
+  onto this branch.
+- The AUM cap sentence contains the letters `ter` inside
+  `greater`. The form matches `ter` and `aum` as whole
+  words, so that error stays on the AUM field.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2243
+  passed, 254 deselected, coverage 97.06%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2243 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. The HTML was checked through the test
+  client. A desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage
+  meter.
+- Time tracking (UTC): 2026-11-12, from 17:47.
+- Next: show a very small TER on the detail page without
+  rounding it to zero. A UI delete form needs a rebase onto
+  master `883718e` before it can call the repository
+  delete. That rebase waits for the owner's approval.
+
 ## 2026-11-12 - ETF and ETC attribute forms (Refs #34, Refs #28)
 
 - Scope: the `/ui` create and edit forms for fund attributes.
@@ -9,8 +51,10 @@
   open. No merge. No Alembic revision. `0009` and `0010` were
   not edited. Models, the schema, collectors, scoring, AI
   adapters, and the Yahoo collector were not edited.
-  `FundAttributesRepository.delete` was not added, and no JSON
-  route was added.
+  This slice did not add a JSON route. Pull request #130,
+  merged on master, adds `FundAttributesRepository.delete`
+  and the JSON DELETE. This checkout does not have that
+  method, and this slice has no UI delete form yet.
 - Routes: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
   and `.../edit`. There is no delete form. Invalid input is
   422 and the form is rendered again with the field error.
@@ -45,9 +89,11 @@
   detail page still shows the issuer. The form routes answer
   404, and the page has no add or edit link. A test locks
   that. A later change can decide what to do with the row.
-- Also left: there is still no delete for fund attributes.
-  Opening the create form when a row already exists shows an
-  empty form; saving it is 400 because the row exists.
+- The JSON DELETE exists on master in #130. This slice has
+  no UI delete form yet. Opening the create form when a row
+  already exists shows an empty form; saving it is 400
+  because the row exists. The follow-up on this branch
+  changes that GET to a redirect.
   Yahoo still does not implement `FundAttributes`.
 - Verification: no `.env`. `DATABASE_URL` was not a personal
   database. SQLite 3.45.1, the CI pytest command: 2234 passed,

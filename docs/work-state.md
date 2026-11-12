@@ -8,8 +8,10 @@
   issues stay open. The agent does not merge. No Alembic
   revision. `0009` and `0010` were not edited. Models, the
   schema, collectors, scoring, AI adapters, and the Yahoo
-  collector were not edited. No repository delete and no new
-  JSON route.
+  collector were not edited. Pull request #130 on master
+  adds `FundAttributesRepository.delete` and the JSON
+  DELETE. This checkout does not have that method, and this
+  slice has no UI delete form yet.
 - Completed: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
   and `.../edit`. The forms validate with
   `FundAttributesCreate` and `FundAttributesUpdate` and write
@@ -20,28 +22,31 @@
   `is_synthetic` are ignored. `as_of` is required on create.
   The edit page shows `updated_at`.
 - TER is a percent on the form (0 to 100; `0.07` means 0.07%)
-  and a fraction in the row. The conversion uses `Decimal`
-  both ways, including the bounds and a null TER. The `Float`
-  column is unchanged, so the stored value is still a float
-  after the model accepts the fraction.
+  and a fraction in the row. One comma is a decimal mark, so
+  `1,5` is 1.5 percent. Two separators are a 422. The
+  conversion uses `Decimal` both ways, including the bounds
+  and a null TER. The edit field still shows a period. The
+  `Float` column is unchanged, so the stored value is still
+  a float after the model accepts the fraction.
 - Detail links: add when an ETF or ETC has no row, edit when
   it has one, nothing for a stock. Invalid input is 422.
   A repository `ValueError` is 400. A bad id, an unknown id,
   or a stock is the HTML 404. CSRF is `require_same_origin`.
   Redirects use `safe_next`.
-- Leftover, behaviour unchanged: an ETF or ETC changed to
-  STOCK while a row exists keeps the row. The detail page
-  still shows it and has no form link. The form routes answer
-  404. No delete form, because the repository has no delete.
-  The create form stays available when a row already exists;
-  saving it is 400. Yahoo still does not implement
+- Leftover: an ETF or ETC changed to STOCK while a row
+  exists keeps the row. The detail page still shows it and
+  has no form link. The form routes answer 404. The JSON
+  DELETE exists on master in #130. This slice has no UI
+  delete form yet. `GET /new` when a row already exists
+  redirects to the edit form. `POST /new` in that case is
+  still 400. Yahoo still does not implement
   `FundAttributes`.
 - Tests: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, CI pytest command: 2234 passed,
-  254 deselected, coverage 96.67%. PostgreSQL 16.15,
+  database. SQLite 3.45.1, CI pytest command: 2243 passed,
+  254 deselected, coverage 97.06%. PostgreSQL 16.15,
   `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  254 passed, 2234 deselected. black, isort, and flake8 passed
+  254 passed, 2243 deselected. black, isort, and flake8 passed
   on the Python files this change touches. No live market-data
   calls. The HTML was checked through the test client. A
   desktop browser was not driven.
@@ -50,7 +55,10 @@
 - Active agents: none. Blockers: none for this slice. This
   note is not approval and not a merge.
 - Next action: GitHub Actions on this head, then review.
-  Do not merge.
+  Do not merge. A UI delete form needs a rebase onto master
+  `883718e` (owner approval) before it can call
+  `FundAttributesRepository.delete`. Do not copy that method
+  onto this branch.
 
 ## ETF and ETC attributes and price metrics (#28): 2026-11-10
 

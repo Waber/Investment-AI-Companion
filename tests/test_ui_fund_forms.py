@@ -10,6 +10,7 @@ cannot set ``source`` or ``is_synthetic``.
 """
 
 from decimal import Decimal
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -20,8 +21,13 @@ from app.models.database_models import (
     RECORD_SOURCE_MANUAL,
     FundAttributesDB,
 )
+from app.repositories.company_errors import CompanyNotFoundError
+from app.repositories.fund_attributes_repository import (
+    FundAttributesRepository,
+)
 from app.ui.catalog import CATALOGS
 from app.ui.form_fields import (
+    fund_repository_error,
     ter_fraction_to_percent,
     ter_percent_text,
     ter_percent_to_fraction,
@@ -55,6 +61,8 @@ def test_ter_percent_and_fraction_convert_both_ways():
     assert ter_percent_to_fraction("0") == Decimal("0")
     assert ter_percent_to_fraction("100") == Decimal("1")
     assert ter_percent_to_fraction("100.0") == Decimal("1")
+    assert ter_percent_to_fraction("0,07") == Decimal("0.0007")
+    assert ter_percent_to_fraction("1,5") == Decimal("0.015")
     assert ter_fraction_to_percent(Decimal("0")) == Decimal("0")
     assert ter_fraction_to_percent(Decimal("1")) == Decimal("100")
     assert ter_fraction_to_percent(Decimal("0.0007")) == Decimal("0.07")
@@ -72,6 +80,27 @@ def test_ter_percent_and_fraction_convert_both_ways():
         ter_percent_to_fraction("nope")
     with pytest.raises(ValueError):
         ter_percent_to_fraction("NaN")
+    with pytest.raises(ValueError):
+        ter_percent_to_fraction("1,2,3")
+    with pytest.raises(ValueError):
+        ter_percent_to_fraction("1,5.2")
+    with pytest.raises(ValueError):
+        ter_percent_to_fraction(True)
+    with pytest.raises(ValueError):
+        ter_percent_to_fraction(1.5)
+    with pytest.raises(ValueError):
+        ter_fraction_to_percent(True)
+    with pytest.raises(ValueError):
+        ter_fraction_to_percent(float("nan"))
+    with pytest.raises(ValueError):
+        ter_fraction_to_percent("nope")
+    with pytest.raises(ValueError):
+        ter_fraction_to_percent("NaN")
+    with pytest.raises(ValueError):
+        ter_fraction_to_percent(object())
+    assert ter_fraction_to_percent("0.0007") == Decimal("0.07")
+    assert ter_percent_text(True) == ""
+    assert ter_percent_text(float("inf")) == ""
 
 
 def test_validate_fund_maps_a_surrogate_to_the_invalid_text_key():
@@ -86,6 +115,29 @@ def test_validate_fund_maps_a_surrogate_to_the_invalid_text_key():
     )
     assert errors["issuer"] == "error.surrogate"
     assert _model is None
+
+
+def test_a_huge_aum_uses_the_number_sentence():
+    """The model cap is a percent-sized number error on the AUM field."""
+    model, errors, _form_key = validate_fund(
+        {
+            "as_of": "2026-09-30",
+            "aum": "1e16",
+            "aum_currency": "EUR",
+            "aum_as_of": "2026-09-30",
+        },
+        update=False,
+    )
+    assert model is None
+    assert errors["aum"] == "error.number"
+
+
+def test_an_unknown_repository_sentence_is_the_constraint_error():
+    key, fields = fund_repository_error(
+        ValueError("Failed to create fund attributes")
+    )
+    assert key == "error.constraint"
+    assert fields == ()
 
 
 def _row(client, company_id):
@@ -374,6 +426,8 @@ async def test_detail_links_follow_the_instrument_type(client):
     assert "fund-attributes" not in share.text
     assert _sentence("pl", "action.add_fund") not in share.text
     assert _sentence("pl", "action.edit_fund") not in share.text
+    for page in (empty, filled, share):
+        assert "fund-attributes/delete" not in page.text
 
 
 @pytest.mark.asyncio
@@ -579,3 +633,166 @@ async def test_stock_with_a_stored_row_keeps_the_detail_and_hides_the_form(
     assert edit.status_code == 404
     assert _facts(client, company_id)["issuer"] == "Still here"
     assert _facts(client, company_id)["source"] == RECORD_SOURCE_MANUAL
+
+
+def _location_next(response):
+    parts = urlsplit(response.headers["location"])
+    return parts.path, parse_qs(parts.query).get("next", [])
+
+
+@pytest.mark.asyncio
+async def test_a_comma_ter_is_stored_as_a_fraction_and_edited_with_a_period(
+    client,
+):
+    company_id = await _company(
+        client, ticker="COMMAS", instrument_type="ETF", name="Comma TER"
+    )
+    small = await _post(
+        client,
+        _new(company_id),
+        _form(ter="0,07", aum="", aum_currency="", aum_as_of=""),
+    )
+    assert small.status_code == 303, small.text
+    assert ter_fraction_to_percent(_facts(client, company_id)["ter"]) == (
+        Decimal("0.07")
+    )
+    edit = await client.get(_edit(company_id))
+    assert 'value="0.07"' in edit.text
+    assert 'value="0,07"' not in edit.text
+
+    other = await _company(
+        client, ticker="COMMA2", instrument_type="ETC", name="One and a half"
+    )
+    one_half = await _post(
+        client,
+        _new(other),
+        _form(ter="1,5", aum="", aum_currency="", aum_as_of=""),
+    )
+    assert one_half.status_code == 303, one_half.text
+    stored = _facts(client, other)["ter"]
+    assert ter_fraction_to_percent(stored) == Decimal("1.5")
+    assert Decimal(str(stored)) == Decimal("0.015")
+
+
+@pytest.mark.asyncio
+async def test_more_than_one_ter_separator_is_422(client):
+    company_id = await _company(
+        client, ticker="BADSEP", instrument_type="ETF", name="Bad separator"
+    )
+    response = await _post(client, _new(company_id), _form(ter="1,2,3"))
+    assert response.status_code == 422
+    assert _sentence("pl", "error.number") in response.text
+    assert "1,2,3" in response.text
+    assert _row(client, company_id) is None
+    mixed = await _post(client, _new(company_id), _form(ter="1,5.2"))
+    assert mixed.status_code == 422
+    assert _sentence("pl", "error.number") in mixed.text
+    assert "1,5.2" in mixed.text
+    assert _row(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_ter_just_above_100_percent_is_422(client):
+    company_id = await _company(
+        client, ticker="TERCAP", instrument_type="ETF", name="TER cap"
+    )
+    response = await _post(client, _new(company_id), _form(ter="100.0001"))
+    assert response.status_code == 422
+    assert "TER musi być procentem od 0 do 100." in response.text
+    assert "100.0001" in response.text
+    assert _row(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_get_new_redirects_when_a_row_exists_and_post_stays_400(client):
+    company_id = await _company(
+        client, ticker="HASONE", instrument_type="ETF", name="Has one"
+    )
+    created = await _post(client, _new(company_id), _form(issuer="First"))
+    assert created.status_code == 303
+    home = _detail(company_id)
+    again = await client.get(_new(company_id))
+    assert again.status_code == 303
+    path, nxt = _location_next(again)
+    assert path == _edit(company_id)
+    assert nxt == []
+
+    kept = await client.get(_new(company_id), params={"next": home})
+    assert kept.status_code == 303
+    path, nxt = _location_next(kept)
+    assert path == _edit(company_id)
+    assert nxt == [home]
+    edit = await client.get(kept.headers["location"])
+    assert edit.status_code == 200
+    assert f'name="next" value="{home}"' in edit.text
+
+    unsafe = await client.get(
+        _new(company_id), params={"next": "//evil.example/phish"}
+    )
+    assert unsafe.status_code == 303
+    assert "evil" not in unsafe.headers["location"]
+    path, nxt = _location_next(unsafe)
+    assert path == _edit(company_id)
+    assert nxt == ["/ui"]
+
+    posted = await _post(client, _new(company_id), _form(issuer="Second"))
+    assert posted.status_code == 400
+    assert _facts(client, company_id)["issuer"] == "First"
+
+
+@pytest.mark.asyncio
+async def test_a_missing_company_during_save_is_the_html_404(
+    client, monkeypatch
+):
+    company_id = await _company(
+        client, ticker="GONECO", instrument_type="ETF", name="Gone"
+    )
+
+    def missing(self, company_id, attributes, **kwargs):
+        raise CompanyNotFoundError(company_id)
+
+    monkeypatch.setattr(FundAttributesRepository, "create", missing)
+    response = await _post(client, _new(company_id), _form())
+    assert response.status_code == 404
+    assert "text/html" in response.headers["content-type"]
+    assert _row(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_an_update_that_returns_none_is_the_html_404(
+    client, monkeypatch
+):
+    company_id = await _company(
+        client, ticker="VANISH", instrument_type="ETF", name="Vanish"
+    )
+    created = await _post(client, _new(company_id), _form(issuer="Kept"))
+    assert created.status_code == 303
+
+    def vanish(self, company_id, attributes):
+        return None
+
+    monkeypatch.setattr(FundAttributesRepository, "update", vanish)
+    response = await _post(client, _edit(company_id), _form(issuer="Later"))
+    assert response.status_code == 404
+    assert _facts(client, company_id)["issuer"] == "Kept"
+
+
+@pytest.mark.asyncio
+async def test_a_single_repository_field_error_is_inline(client, monkeypatch):
+    company_id = await _company(
+        client, ticker="ONEFLD", instrument_type="ETF", name="One field"
+    )
+
+    def boom(self, company_id, attributes, **kwargs):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(FundAttributesRepository, "create", boom)
+    monkeypatch.setattr(
+        "app.ui.forms.fund_repository_error",
+        lambda exc: ("error.constraint", ("issuer",)),
+    )
+    response = await _post(client, _new(company_id), _form())
+    assert response.status_code == 400
+    assert 'id="field-issuer-error"' in response.text
+    assert _sentence("pl", "error.constraint") in response.text
+    assert _row(client, company_id) is None
