@@ -1217,9 +1217,9 @@ def main(argv=None):
                 args.database_url, apply=args.apply, fixture=fixture
             )
         else:
-            # --base-url sends the seeder HMAC on company and metric
-            # creates. The server marks those rows demo. The JSON
-            # body still has no source field.
+            # --base-url sends the seeder HMAC on company, metric,
+            # and fund-attribute creates. The server marks those
+            # rows demo. The JSON body still has no source field.
             result = seed_demo(
                 fixture,
                 HttpClient(args.base_url),

@@ -17,6 +17,14 @@ close on or before the same calendar day one year earlier. The
 three-year anchor uses three years. When that earlier year has no
 February 29, February 29 steps back to February 28.
 
+There is no maximum gap. A close from years earlier is still the
+anchor when nothing newer falls on or before the target date. The
+metric's start date is that close, and the as-of date is ``T``, so
+the gap is visible on the result. A series that ends on 2027-02-28
+with its only earlier close on 2024-02-29 uses 2024-02-29 for the
+one-year return. The three-year target is 2024-02-28, which is
+before that close, so the three-year return is missing.
+
 The total price return is ``end / start - 1``. It is not annualized.
 A price bar has no dividend, so this is a price return, not a total
 return with distributions reinvested. When no usable close falls on
