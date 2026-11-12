@@ -74,11 +74,11 @@
   the repository guard, text `max_length`, and `ter=0` /
   `aum=0` on both databases). The anchor has no maximum gap;
   that behavior is tested and described, not changed.
-- Next action: GitHub Actions on this head, then QA, code
-  review, and security check the delta. Przemek decides
-  whether to merge. Do not merge. The Actions run id is not
-  in this file: writing it here would move the head the run
-  is for.
+- Next action: GitHub Actions on the literal-cap test pin,
+  then QA, code review, and security check that delta.
+  Przemek decides whether to merge. Do not merge. The run
+  id is not written here, because this file is part of the
+  commit the run tests.
 
 ## Provenance slice A (#105): 2026-11-08
 

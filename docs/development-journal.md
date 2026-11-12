@@ -1,5 +1,33 @@
 # Development Journal
 
+## 2026-11-12 - Pin the TER and AUM cap literals (Refs #28)
+
+- Scope: tests only, plus the work-state next action. The caps
+  stay `1` and `1e15`. Branch
+  `cursor/etf-etc-attributes-28-0a55`. One new commit. No
+  rebase, no force-push, no amend, no merge, and no
+  pull-request edit or comment. The owner is Przemek.
+- The HTTP and repository tests used `TER_MAX` and `AUM_MAX`,
+  so changing `AUM_MAX` to `1e30` still passed. They now send
+  the literals `1` and `1e15`, and `math.nextafter` of those
+  literals. They also assert `TER_MAX == 1` and
+  `AUM_MAX == 1e15`. The repository imports those constants
+  and does not keep a second copy.
+- A cap rejection is 422 `value_error` with the cap sentence.
+  A repository 400 is a string `detail` and does not satisfy
+  that check.
+- Verification: no `.env`. `DATABASE_URL` was not the personal
+  database. SQLite 3.45.1, CI pytest command: 2206 passed, 254
+  deselected, coverage 97.18%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2206 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 08:27.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - QA test gaps on the attribute slice (Refs #28)
 
 - Scope: tests that kill the mutants QA found, plus two comments
