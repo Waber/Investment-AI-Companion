@@ -11,6 +11,7 @@ from app.ui.formatting import (
     format_local_datetime,
     format_number,
     format_price,
+    format_ter_percent,
 )
 
 
@@ -21,6 +22,20 @@ def test_missing_and_non_finite_numbers_are_not_zero():
     assert format_number(float("nan"), "pl") is None
     assert format_number(float("inf"), "en") is None
     assert format_number("100", "pl") is None
+
+
+def test_ter_percent_keeps_a_small_fee_and_zero():
+    """Four-decimal rounding would print 0.00001 percent as 0."""
+    tiny = float(Decimal("0.0000001"))
+    fee = float(Decimal("0.0007"))
+    assert format_ter_percent(tiny, "pl") == "0,00001"
+    assert format_ter_percent(tiny, "en") == "0.00001"
+    assert format_ter_percent(fee, "pl") == "0,07"
+    assert format_ter_percent(fee, "en") == "0.07"
+    assert format_ter_percent(0, "pl") == "0"
+    assert format_ter_percent(0.0, "en") == "0"
+    assert format_ter_percent(None, "pl") is None
+    assert format_number(tiny * 100, "pl") == "0"
 
 
 def test_zero_stays_zero_in_both_languages():
