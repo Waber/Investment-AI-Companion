@@ -233,6 +233,13 @@ read-only preview, and explicit, non-overwriting seed command.
 - Data collection endpoints: `/api/v1/data-collection`
 - Note endpoints: `/api/v1/instruments/{instrument_id}/notes`
 - Investment thesis endpoints: `/api/v1/instruments/{instrument_id}/theses`
+- Fund attribute endpoints: `/api/v1/instruments/{instrument_id}/fund-attributes`
+  (`GET`, `POST`, `PUT`, `DELETE`). `DELETE` returns 204 and removes
+  that row only. The instrument stays. A missing instrument is 404
+  `{"detail": "Instrument not found"}`. No attribute row, including a
+  stock, is 404 `{"detail": "Fund attributes not found"}`. An id of
+  `0`, a negative id, or an id above `2**63 - 1` is 422. The demo-seed
+  header is honored on `POST` only.
 
 ## Tests And Quality Checks
 

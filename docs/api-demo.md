@@ -86,6 +86,20 @@ that refresh into 400. A discarded earlier copy is not validated, so
 a bad currency on that copy does not reject the batch when the last
 copy is valid.
 
+Fund attributes for one instrument are
+`/api/v1/instruments/{id}/fund-attributes`, with no trailing slash.
+`GET` returns the row, or JSON `null` when the instrument exists and
+has no row. `POST` creates it (201). `PUT` edits it. `DELETE` removes
+that row only and returns 204 with an empty body. The instrument, its
+prices, notes, and theses stay. `GET /api/v1/instruments/{id}` then
+has `fund_attributes` set to `null`. A second `DELETE`, or a `DELETE`
+when there is no row (a stock, or an ETF that never had one), is 404
+`{"detail": "Fund attributes not found"}`. An unknown instrument is
+404 `{"detail": "Instrument not found"}`. An id of `0`, a negative id,
+or an id above 9223372036854775807 (2^63 - 1) is 422, the same body
+the other instrument routes return for that id. The `X-IAC-Demo-Seed`
+header is honored on creates only. `PUT` and `DELETE` ignore it.
+
 `instrument_type` is `STOCK`, `ETF`, or `ETC`. Omitting it on create
 stores `STOCK`. On update, omit it to keep the stored type. JSON
 `null` is 422. A value already stored outside those three is returned

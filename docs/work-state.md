@@ -1,5 +1,46 @@
 # Current Work State
 
+## Delete fund attributes (#28): 2026-11-12
+
+- Branch `cursor/delete-fund-attributes-ddd6`, from `origin/master`
+  `1dab8fc` (pull request #128, merged 2026-11-12T15:20:38Z).
+  One pull request to master. Refs #28. Does not close #28.
+  The agent does not merge. No Alembic revision. Head stays
+  `0010`. No live market data. No UI change.
+- Completed: `FundAttributesRepository.delete` removes the one
+  attribute row. The company, its prices, and its notes stay.
+  A missing company raises `CompanyNotFoundError`. No row,
+  including a stock, returns False and deletes nothing.
+  `DELETE /api/v1/instruments/{instrument_id}/fund-attributes`
+  is 204 with an empty body. A missing instrument is 404
+  `{"detail": "Instrument not found"}`. No attribute row is
+  404 `{"detail": "Fund attributes not found"}`. An id of 0,
+  a negative id, or `2**63` is 422, the same body as GET on
+  that id. The demo-seed header is not read. A valid token
+  still deletes. A 64-character Latin-1 header is 204, not
+  500. The header stays honored on creates only.
+- Decision: a stock is 404, not 400. POST and PUT reject a
+  stock because a stock must not gain a row. DELETE of a
+  missing row is the same 404 an ETF with no row already
+  gets. The table does not need a new revision: the row is
+  removed with the existing foreign key, and that key
+  cascades from the company to the attributes, not the
+  reverse.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite 3.45.1,
+  CI command: 2216 passed, 256 deselected, coverage 97.19%.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2216 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## ETF and ETC attributes and price metrics (#28): 2026-11-10
 
 - Branch `cursor/etf-etc-attributes-28-0a55`, from `origin/master`
@@ -74,11 +115,9 @@
   the repository guard, text `max_length`, and `ter=0` /
   `aum=0` on both databases). The anchor has no maximum gap;
   that behavior is tested and described, not changed.
-- Next action: GitHub Actions on the literal-cap test pin,
-  then QA, code review, and security check that delta.
-  Przemek decides whether to merge. Do not merge. The run
-  id is not written here, because this file is part of the
-  commit the run tests.
+- Pull request #128 merged at `1dab8fc` on 2026-11-12. This
+  section is the record of that slice, not the current task.
+  The current task is the delete section above.
 
 ## Provenance slice A (#105): 2026-11-08
 
