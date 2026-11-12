@@ -1,5 +1,67 @@
 # Development Journal
 
+## 2026-11-12 - ETF and ETC attribute forms (Refs #34, Refs #28)
+
+- Scope: the `/ui` create and edit forms for fund attributes.
+  Branch `cursor/ui-fund-attributes-forms-98e5`, from
+  `origin/master` `1dab8fc` (pull request #128). One pull
+  request to master. Refs #34 and Refs #28. Both issues stay
+  open. No merge. No Alembic revision. `0009` and `0010` were
+  not edited. Models, the schema, collectors, scoring, AI
+  adapters, and the Yahoo collector were not edited.
+  `FundAttributesRepository.delete` was not added, and no JSON
+  route was added.
+- Routes: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
+  and `.../edit`. There is no delete form. Invalid input is
+  422 and the form is rendered again with the field error.
+  A repository `ValueError` is 400. A bad id, an unknown id,
+  a stock, and an edit when the instrument has no row are the
+  HTML 404. `require_same_origin` is the CSRF check. There is
+  no token. A successful save redirects through `safe_next`.
+- The handlers validate with `FundAttributesCreate` and
+  `FundAttributesUpdate` and write through
+  `FundAttributesRepository`. They do not call the JSON API.
+  The demo-seed header is not read. Create stores
+  `source=manual` and `is_synthetic` false. Update stores
+  `source=manual` and leaves `is_synthetic`. A posted `source`
+  or `is_synthetic` is ignored. `as_of` is required on create.
+  The edit page shows `updated_at`.
+- TER is entered as a percent from 0 to 100. The hint says
+  `0.07` means 0.07 percent. The form converts that to the
+  stored fraction `0.0007` with `Decimal`, so `0.07 / 100`
+  does not become the float `0.0007000000000000001`. The edit
+  field converts the stored fraction back to the percent,
+  using `str` of the float so the shortest round-trip comes
+  back as `0.07`. Empty TER stays null. `0` and `100` percent
+  are the fractions `0` and `1`. The write model and the
+  `Float` column still store a float. That is the existing
+  column. This slice does not add a numeric column.
+- The detail page shows "Dodaj atrybuty" when an ETF or ETC
+  has no row, and "Edytuj atrybuty" when it has one. A stock
+  has neither link. Polish is the default. English uses the
+  paired catalog strings.
+- Leftover, behaviour unchanged: changing an ETF or ETC to
+  STOCK while a row exists does not delete the row. The
+  detail page still shows the issuer. The form routes answer
+  404, and the page has no add or edit link. A test locks
+  that. A later change can decide what to do with the row.
+- Also left: there is still no delete for fund attributes.
+  Opening the create form when a row already exists shows an
+  empty form; saving it is 400 because the row exists.
+  Yahoo still does not implement `FundAttributes`.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2234 passed,
+  254 deselected, coverage 96.67%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2234 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls. The HTML was checked through the test client. A
+  desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 15:21.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - Pin the TER and AUM cap literals (Refs #28)
 
 - Scope: tests only, plus the work-state next action. The caps

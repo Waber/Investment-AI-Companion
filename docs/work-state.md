@@ -1,5 +1,57 @@
 # Current Work State
 
+## Fund attribute forms (#28, #34): 2026-11-12
+
+- Branch `cursor/ui-fund-attributes-forms-98e5`, from
+  `origin/master` `1dab8fc` (pull request #128 is merged).
+  One pull request to master. Refs #34 and Refs #28. Both
+  issues stay open. The agent does not merge. No Alembic
+  revision. `0009` and `0010` were not edited. Models, the
+  schema, collectors, scoring, AI adapters, and the Yahoo
+  collector were not edited. No repository delete and no new
+  JSON route.
+- Completed: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
+  and `.../edit`. The forms validate with
+  `FundAttributesCreate` and `FundAttributesUpdate` and write
+  through `FundAttributesRepository`. They do not call the
+  JSON API and they do not read the demo-seed header. Create
+  stores `manual` and `is_synthetic` false. Update stores
+  `manual` and keeps `is_synthetic`. Posted `source` and
+  `is_synthetic` are ignored. `as_of` is required on create.
+  The edit page shows `updated_at`.
+- TER is a percent on the form (0 to 100; `0.07` means 0.07%)
+  and a fraction in the row. The conversion uses `Decimal`
+  both ways, including the bounds and a null TER. The `Float`
+  column is unchanged, so the stored value is still a float
+  after the model accepts the fraction.
+- Detail links: add when an ETF or ETC has no row, edit when
+  it has one, nothing for a stock. Invalid input is 422.
+  A repository `ValueError` is 400. A bad id, an unknown id,
+  or a stock is the HTML 404. CSRF is `require_same_origin`.
+  Redirects use `safe_next`.
+- Leftover, behaviour unchanged: an ETF or ETC changed to
+  STOCK while a row exists keeps the row. The detail page
+  still shows it and has no form link. The form routes answer
+  404. No delete form, because the repository has no delete.
+  The create form stays available when a row already exists;
+  saving it is 400. Yahoo still does not implement
+  `FundAttributes`.
+- Tests: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, CI pytest command: 2234 passed,
+  254 deselected, coverage 96.67%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2234 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls. The HTML was checked through the test client. A
+  desktop browser was not driven.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none for this slice. This
+  note is not approval and not a merge.
+- Next action: GitHub Actions on this head, then review.
+  Do not merge.
+
 ## ETF and ETC attributes and price metrics (#28): 2026-11-10
 
 - Branch `cursor/etf-etc-attributes-28-0a55`, from `origin/master`
@@ -74,11 +126,11 @@
   the repository guard, text `max_length`, and `ter=0` /
   `aum=0` on both databases). The anchor has no maximum gap;
   that behavior is tested and described, not changed.
-- Next action: GitHub Actions on the literal-cap test pin,
-  then QA, code review, and security check that delta.
-  Przemek decides whether to merge. Do not merge. The run
-  id is not written here, because this file is part of the
-  commit the run tests.
+- Next action at the time of that pin: GitHub Actions, then
+  QA, code review, and the security check. Pull request #128
+  merged at `1dab8fc`. This section is the record of that
+  slice, not the current task. The current task is the fund
+  attribute forms section above.
 
 ## Provenance slice A (#105): 2026-11-08
 

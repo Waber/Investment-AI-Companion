@@ -1,5 +1,14 @@
 """Create, edit, and delete forms for companies and their metrics.
 
+Fund attributes have a create form and an edit form. There is no
+delete form: the repository has no delete yet. Those posts use
+``FundAttributesCreate`` and ``FundAttributesUpdate`` and write
+through ``FundAttributesRepository``. They do not call the JSON
+API. The demo-seed header is not read. Create stores ``manual``
+and ``is_synthetic`` false. Update stores ``manual`` and leaves
+the flag. The form has no ``source`` field and no ``is_synthetic``
+field. TER is typed as a percent and stored as a fraction.
+
 HTML forms only send GET and POST, so an edit is a POST and not a PUT.
 The path is still under /ui. HTMX is not required: a 4xx response is
 the whole form again, and these forms post without HTMX. The shared
@@ -28,6 +37,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.database_models import CompanyDB
 from app.repositories.company_errors import (
+    CompanyNotFoundError,
     DuplicateIsinError,
     DuplicateTickerError,
 )
@@ -35,24 +45,33 @@ from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
 )
+from app.repositories.fund_attributes_repository import (
+    FundAttributesRepository,
+)
 from app.repositories.watchlist_repository import WatchlistRepository
 from app.ui import watchlist_view
 from app.ui.form_fields import (
     COMPANY_FIELDS,
+    FUND_FIELDS,
     INSTRUMENT_TYPE_CHOICES,
     blank_company,
+    blank_fund,
     blank_metrics,
     catalog_key_for_repository_error,
     company_values,
     described_by,
     field_label_key,
+    fund_form_values,
+    fund_repository_error,
+    fund_values,
     instrument_type_for_payload,
     metrics_values,
     validate_company,
+    validate_fund,
     validate_metrics,
 )
 from app.ui.origin import require_same_origin
-from app.ui.router import instrument_id, is_htmx, with_ui_headers
+from app.ui.router import instrument_id, is_htmx, safe_next, with_ui_headers
 from app.ui.templating import render
 from app.ui.view_models import METRIC_FIELDS
 
@@ -66,6 +85,13 @@ _COMPANY_HINTS = {}
 _METRIC_HINTS = {field: "hint-numbers" for field in METRIC_FIELDS}
 _METRIC_HINTS["period_end"] = "hint-period_end"
 _METRIC_HINTS["period_type"] = "hint-period_type"
+_FUND_HINTS = {
+    "ter": "hint-ter",
+    "aum": "hint-numbers",
+    "aum_as_of": "hint-date",
+    "as_of": "hint-date",
+}
+_FUND_TYPES = frozenset({"ETF", "ETC"})
 
 
 def posted_company(
@@ -842,6 +868,282 @@ def delete_metrics(
         return missing
     FinancialMetricsRepository(db).delete(row.id)
     return see_other(f"/ui/instruments/{company.id}")
+
+
+def posted_fund(
+    issuer: str = Form(""),
+    underlying: str = Form(""),
+    ter: str = Form(""),
+    domicile: str = Form(""),
+    replication_method: str = Form(""),
+    distribution_policy: str = Form(""),
+    aum: str = Form(""),
+    aum_currency: str = Form(""),
+    aum_as_of: str = Form(""),
+    as_of: str = Form(""),
+    next_url: str = Form("", alias="next"),
+):
+    """Posted fund fields. Extra keys such as ``source`` are dropped.
+
+    Defaults keep a missing key from becoming a 500. ``next`` is the
+    return path. It is not a fact column.
+    """
+    return {
+        "issuer": issuer,
+        "underlying": underlying,
+        "ter": ter,
+        "domicile": domicile,
+        "replication_method": replication_method,
+        "distribution_policy": distribution_policy,
+        "aum": aum,
+        "aum_currency": aum_currency,
+        "aum_as_of": aum_as_of,
+        "as_of": as_of,
+        "next": next_url,
+    }
+
+
+def _instrument_path(company_id):
+    return f"/ui/instruments/{company_id}"
+
+
+def _fund_action(company_id, update):
+    suffix = "edit" if update else "new"
+    return f"/ui/companies/{company_id}/fund-attributes/{suffix}"
+
+
+def _fund_title(update):
+    if update:
+        return "page.edit_fund"
+    return "page.create_fund"
+
+
+def _posted_next(values, company_id):
+    """The hidden return path, or the detail page when it was omitted."""
+    raw = values.get("next", "")
+    if not isinstance(raw, str) or raw.strip() == "":
+        return _instrument_path(company_id)
+    return raw
+
+
+def _after_save(company_id, values):
+    """Where a successful save sends the browser.
+
+    A blank ``next`` is the instrument page. Any other value goes
+    through ``safe_next``, so a posted absolute URL stays on /ui.
+    """
+    raw = values.get("next", "")
+    if not isinstance(raw, str) or raw.strip() == "":
+        return safe_next(_instrument_path(company_id))
+    return safe_next(raw)
+
+
+def _load_fund_company(request, db, raw_id, *, need_row):
+    """Return ``(company, attributes, response)``.
+
+    A bad id, an unknown id, and a stock are the HTML 404. Edit
+    also 404s when the ETF or ETC has no attribute row yet.
+    """
+    company, missing = load_company(request, db, raw_id)
+    if missing is not None:
+        return None, None, missing
+    if company.instrument_type not in _FUND_TYPES:
+        return None, None, not_found(request)
+    row = FundAttributesRepository(db).get_by_company(company.id)
+    if need_row and row is None:
+        return None, None, not_found(request)
+    return company, row, None
+
+
+def _fund_page(
+    request,
+    *,
+    title_key,
+    action,
+    values,
+    cancel_href,
+    next_value,
+    updated_at=None,
+    errors=None,
+    form_error=None,
+    invalid_fields=None,
+    status_code=200,
+):
+    errors = errors or {}
+    invalid = tuple(invalid_fields or ())
+    return with_ui_headers(
+        render(
+            request,
+            "fund_attributes_form.html",
+            status_code=status_code,
+            title_key=title_key,
+            action=action,
+            values=values,
+            cancel_href=cancel_href,
+            next_value=next_value,
+            updated_at=updated_at,
+            errors=errors,
+            form_error=form_error,
+            invalid_fields=invalid,
+            described_by=_descriptions(
+                FUND_FIELDS, errors, form_error, invalid, _FUND_HINTS
+            ),
+            fund_fields=FUND_FIELDS,
+            field_label_key=field_label_key,
+        )
+    )
+
+
+def _fund_invalid(request, values, errors, form_error, **page):
+    return _fund_page(
+        request,
+        values=values,
+        errors=errors,
+        form_error=form_error,
+        invalid_fields=tuple(errors),
+        status_code=422,
+        **page,
+    )
+
+
+def _fund_conflict(request, values, error, **page):
+    key, fields = fund_repository_error(error)
+    errors = {}
+    if len(fields) == 1:
+        errors[fields[0]] = key
+    return _fund_page(
+        request,
+        values=values,
+        errors=errors,
+        form_error=key,
+        invalid_fields=fields,
+        status_code=400,
+        **page,
+    )
+
+
+def _save_fund(db, company_id, model, *, update):
+    """Write the row. Provenance is not taken from the model.
+
+    Create uses the repository defaults: ``manual`` and
+    ``is_synthetic`` false. Update records ``manual`` and leaves
+    the flag. This function does not read the demo-seed header.
+    """
+    repo = FundAttributesRepository(db)
+    if update:
+        return repo.update(company_id, model)
+    return repo.create(company_id, model)
+
+
+def _fund_page_kwargs(company, values, *, update, updated_at):
+    return {
+        "title_key": _fund_title(update),
+        "action": _fund_action(company.id, update),
+        "cancel_href": _instrument_path(company.id),
+        "next_value": _posted_next(values, company.id),
+        "updated_at": updated_at,
+    }
+
+
+def _post_fund(request, db, raw_id, values, *, update):
+    company, row, missing = _load_fund_company(
+        request, db, raw_id, need_row=update
+    )
+    if missing is not None:
+        return missing
+    shown = fund_form_values(values)
+    updated_at = None if row is None else row.updated_at
+    page = _fund_page_kwargs(
+        company, values, update=update, updated_at=updated_at
+    )
+    model, errors, form_error = validate_fund(values, update=update)
+    if model is None:
+        return _fund_invalid(request, shown, errors, form_error, **page)
+    try:
+        saved = _save_fund(db, company.id, model, update=update)
+    except CompanyNotFoundError:
+        return not_found(request)
+    except ValueError as error:
+        db.rollback()
+        return _fund_conflict(request, shown, error, **page)
+    if saved is None:
+        return not_found(request)
+    return see_other(_after_save(company.id, values))
+
+
+@router.get(
+    "/companies/{company_id}/fund-attributes/new",
+    include_in_schema=False,
+)
+def new_fund_form(
+    request: Request, company_id: str, db: Session = Depends(get_db)
+):
+    """Empty create form. GET does not insert a row."""
+    company, _row, missing = _load_fund_company(
+        request, db, company_id, need_row=False
+    )
+    if missing is not None:
+        return missing
+    return _fund_page(
+        request,
+        title_key="page.create_fund",
+        action=_fund_action(company.id, False),
+        values=blank_fund(),
+        cancel_href=_instrument_path(company.id),
+        next_value=_instrument_path(company.id),
+    )
+
+
+@router.post(
+    "/companies/{company_id}/fund-attributes/new",
+    include_in_schema=False,
+)
+def create_fund_attributes(
+    request: Request,
+    company_id: str,
+    values: dict = Depends(posted_fund),
+    db: Session = Depends(get_db),
+):
+    """Validate with FundAttributesCreate and insert the row."""
+    return _post_fund(request, db, company_id, values, update=False)
+
+
+@router.get(
+    "/companies/{company_id}/fund-attributes/edit",
+    include_in_schema=False,
+)
+def edit_fund_form(
+    request: Request, company_id: str, db: Session = Depends(get_db)
+):
+    """Edit form filled from the stored row. TER is shown as a percent."""
+    company, row, missing = _load_fund_company(
+        request, db, company_id, need_row=True
+    )
+    if missing is not None:
+        return missing
+    return _fund_page(
+        request,
+        title_key="page.edit_fund",
+        action=_fund_action(company.id, True),
+        values=fund_values(row),
+        cancel_href=_instrument_path(company.id),
+        next_value=_instrument_path(company.id),
+        updated_at=row.updated_at,
+    )
+
+
+@router.post(
+    "/companies/{company_id}/fund-attributes/edit",
+    include_in_schema=False,
+)
+def update_fund_attributes(
+    request: Request,
+    company_id: str,
+    values: dict = Depends(posted_fund),
+    db: Session = Depends(get_db),
+):
+    """Validate with FundAttributesUpdate. The seed header is ignored."""
+    return _post_fund(request, db, company_id, values, update=True)
 
 
 def _watchlist_response(request, db, company_id, origin, position=0):
