@@ -286,6 +286,9 @@ async def test_stock_detail_has_null_attributes_and_no_prices(client):
         json={"issuer": "Nope"},
     )
     assert updated.status_code == 400
+    assert updated.json() == {
+        "detail": "fund attributes are only stored for an ETF or an ETC"
+    }
 
 
 @pytest.mark.asyncio
