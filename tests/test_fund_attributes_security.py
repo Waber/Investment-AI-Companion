@@ -44,6 +44,7 @@ async def _etf(client, ticker="FUND"):
         ("GET", "/fund-attributes", None),
         ("POST", "/fund-attributes", _payload()),
         ("PUT", "/fund-attributes", {"issuer": "Later"}),
+        ("DELETE", "/fund-attributes", None),
     ],
 )
 async def test_instrument_id_above_signed_64_bit_is_422_not_500(

@@ -3,7 +3,9 @@
 Only an ETF or an ETC may have that row. A stock is rejected. The
 public write payload cannot carry ``source`` or ``is_synthetic``.
 Those are arguments of ``create``, and an update always records
-``manual`` without changing the synthetic flag.
+``manual`` without changing the synthetic flag. ``delete`` removes
+the row and does not take a source: the company, its prices, and
+its notes stay.
 """
 
 import math
@@ -119,6 +121,29 @@ class FundAttributesRepository:
             raise ValueError("Update failed due to constraint violation")
         self.db.refresh(row)
         return row
+
+    def delete(self, company_id):
+        """Remove the attribute row. Everything else stays.
+
+        Returns True when a row was deleted, and False when this
+        company has no row. A stock is that second case: it has no
+        attributes, so this method returns False and leaves the
+        stock in place. A missing company raises
+        ``CompanyNotFoundError``, the same split ``update`` uses, so
+        the route can name the instrument or the attributes in the
+        404.
+
+        ``self.db.delete`` removes this child row only. The company
+        relationship cascades the other way: deleting the company
+        deletes the attributes, not the reverse.
+        """
+        self._company(company_id)
+        row = self.get_by_company(company_id)
+        if row is None:
+            return False
+        self.db.delete(row)
+        self.db.commit()
+        return True
 
     def _company(self, company_id):
         company = self.db.get(CompanyDB, company_id)

@@ -7,7 +7,11 @@ computed from the stored closes.
 
 A public body cannot set ``source`` or ``is_synthetic``. Create uses
 ``manual`` unless the demo-seed header is valid. Update always
-records ``manual`` and does not read that header.
+records ``manual`` and does not read that header. Delete does not
+read it either. The header is honored on creates only, because that
+is the request that stores ``source``. A delete removes the row, so
+there is no source left to set, and a header that is not a token
+cannot turn the response into a 500.
 """
 
 from datetime import date
@@ -201,3 +205,27 @@ def update_fund_attributes(
     if row is None:
         raise HTTPException(status_code=404, detail=_NO_ATTRIBUTES)
     return FundAttributes.model_validate(row)
+
+
+@router.delete(
+    "/{instrument_id}/fund-attributes",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_fund_attributes(
+    instrument_id: ItemId,
+    db: Session = Depends(get_db),
+):
+    """Remove the attribute row. The instrument and its prices stay.
+
+    The demo-seed header is not an argument and is not read. A
+    missing instrument is 404 ``Instrument not found``. An instrument
+    with no row, including a stock, is 404 ``Fund attributes not
+    found``. Success is 204 with an empty body.
+    """
+    repo = FundAttributesRepository(db)
+    try:
+        deleted = repo.delete(instrument_id)
+    except CompanyNotFoundError:
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=_NO_ATTRIBUTES)

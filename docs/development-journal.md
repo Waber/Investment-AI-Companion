@@ -1,5 +1,59 @@
 # Development Journal
 
+## 2026-11-12 - Delete fund attributes (Refs #28)
+
+- Scope: remove one instrument's fund-attribute row without
+  removing the instrument, its prices, or its notes. Branch
+  `cursor/delete-fund-attributes-ddd6`, from `origin/master`
+  `1dab8fc` (pull request #128). One pull request to master.
+  Refs #28. Does not close #28. No Alembic revision. No merge.
+  The owner is Przemek.
+- RED first. The repository tests failed with
+  `AttributeError: FundAttributesRepository has no delete`.
+  The HTTP tests failed with 405, because the path had no
+  DELETE yet. An id of `2**63` on that missing route was 405,
+  not 422. One price-bar fixture was invalid (`high` below
+  `close`) and was corrected before the missing-method
+  failure was the one that counted.
+- `FundAttributesRepository.delete` looks up the company, then
+  the attribute row. True means the row was deleted. False
+  means there was no row. A missing company raises
+  `CompanyNotFoundError`. `self.db.delete` deletes that child
+  row only. The foreign key cascades the other way.
+- `DELETE /api/v1/instruments/{instrument_id}/fund-attributes`
+  uses the same `ItemId` as the other instrument routes
+  (`gt=0`, `le=2**63-1`). Success is 204 and the body is
+  empty. `GET /api/v1/instruments/{id}` then has
+  `fund_attributes` null, and the instrument is still there.
+  A second DELETE is 404
+  `{"detail": "Fund attributes not found"}`. An unknown
+  instrument is 404 `{"detail": "Instrument not found"}`.
+  Id `0` and a negative id are 422 `greater_than` with
+  `ctx.gt` 0. Id `2**63` is 422 `less_than_equal` with
+  `ctx.le` 9223372036854775807. The `loc` is
+  `["path", "instrument_id"]`.
+- Decision. A stock is that same 404, not 400. POST and PUT
+  still reject a stock, because those requests would store a
+  row the type does not allow. DELETE finds no row, which is
+  the same fact as an ETF that never had attributes. The
+  demo-seed header is not read. A valid HMAC still deletes
+  the row. A 64-character Latin-1 header, sent as raw ASGI
+  because httpx refuses it, is 204 and not 500. Creates
+  remain the only request that honors the header.
+- No migration. The table from revision `0010` already holds
+  the row. Nothing about the columns changes.
+- Verification: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI pytest command: 2216 passed, 256 deselected,
+  coverage 97.19%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`,
+  DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2216 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 15:21.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - Pin the TER and AUM cap literals (Refs #28)
 
 - Scope: tests only, plus the work-state next action. The caps
