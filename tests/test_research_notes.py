@@ -37,19 +37,20 @@ def session():
         engine.dispose()
 
 
-def test_revision_0005_follows_0004_and_the_head_is_0010():
-    """0005 sits on the watchlist revision. 0010 is the only head.
+def test_revision_0005_follows_0004_and_the_head_is_0011():
+    """0005 sits on the watchlist revision. 0011 is the only head.
 
     The price revision 0006 revises 0005, 0007 revises 0006, the
     thesis closing date 0008 revises 0007, provenance 0009 revises
-    0008, and fund attributes 0010 revises 0009, so ``upgrade head``
-    has one place to go. ``get_current_head`` is empty when two
-    heads exist, and the length check fails first.
+    0008, fund attributes 0010 revises 0009, and score weights 0011
+    revises 0010, so ``upgrade head`` has one place to go.
+    ``get_current_head`` is empty when two heads exist, and the
+    length check fails first.
     """
     script = ScriptDirectory.from_config(Config("alembic.ini"))
     heads = script.get_heads()
     assert len(heads) == 1
-    assert heads[0] == "0010"
+    assert heads[0] == "0011"
     notes = script.get_revision("0005")
     assert notes.down_revision == "0004"
     prices = script.get_revision("0006")
@@ -62,6 +63,8 @@ def test_revision_0005_follows_0004_and_the_head_is_0010():
     assert provenance.down_revision == "0008"
     funds = script.get_revision("0010")
     assert funds.down_revision == "0009"
+    weights = script.get_revision("0011")
+    assert weights.down_revision == "0010"
 
 
 def test_sqlite_loads_a_stored_row_the_write_models_would_reject(session):

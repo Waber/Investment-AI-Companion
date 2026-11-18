@@ -56,6 +56,69 @@
   send PR content to a model, so REVIEW.md puts them on his list.
   Agents do not merge.
 
+## Backend instrument score (Refs #35): 2026-11-18
+
+- Branch `cursor/instrument-score-s1-90ae`, from `origin/master`
+  `7402df2`. One pull request to master. Refs #35. Does not
+  finish the issue. The agent does not merge. No live market
+  data. No `/ui` change. Alembic head is `0011`.
+- Completed: a pure score in `app/scoring.py`, a loader in
+  `app/instrument_score.py`, `ScoreWeightsDB`, revision `0011`,
+  and the JSON routes. The score is computed on request. A
+  missing total is `no_score`, not zero. `DEMO_ETF_GPW` is
+  `3 of 4` on the fixture date because TER is null.
+  `DEMO_PL_EMPTY` is `no_score`.
+- Decisions, for review:
+  - Components are the named groups. A stock has profitability
+    (ROE, net margin), valuation (P/E, P/B), balance sheet
+    (debt-to-equity, current ratio), and growth (revenue YoY).
+    An ETF and an ETC share cost (TER), size (AUM), volatility,
+    and max drawdown, with a separate weight row per type.
+    Tracking difference is not included.
+  - Ratios are fractions (`0.15` is 15 percent).
+    Debt-to-equity is a multiple (`1` is one times equity).
+    TER is a fraction. The legacy sample that stores ROE as
+    `15.6` would clamp to 100. The score does not recompute a
+    ratio from the statement lines.
+  - Straight scales are in `docs/scoring.md`. AUM is `log10`
+    from 10 million (0) to 100 billion (100). P/E and P/B at
+    or below 0 are no data. A negative ROE still scores.
+  - Freshness is counted back from UTC today. 548 days for a
+    statement, 366 days for TER and AUM, 7 days for the price
+    metrics. The exact last day counts. A missing date is no
+    data. The newest finite value of each stock column is
+    used. The same instant prefers the annual row.
+  - Equal weights are the number 1. Scoring divides by the
+    sum of the weights that enter the total. A weight of 0
+    shows the component score and leaves it out. All zeros
+    are rejected. Numbers must be finite and from 0 to
+    1000000. The stored numbers are not pre-divided.
+  - Contributions are rounded half up to a hundredth. The
+    total is the unrounded sum, rounded the same way. The
+    last included contribution absorbs the cent so the
+    column adds up. `effective_weight` is four decimal places.
+  - Version 1 is the built-in set and is not a row. The first
+    PUT stores version 2. Every later PUT adds 1. PUT returns
+    200. It does not read `X-IAC-Demo-Seed` and it does not
+    check `Origin`, matching the other JSON updates.
+  - The API label for a missing or stale figure is `no data`.
+    The status is `no_data` or `stale`. No disclaimer was added.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite 3.45.1,
+  CI command: 2316 passed, 257 deselected, coverage 97.36%.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  257 passed, 2316 deselected. Upgrade and downgrade of `0011`
+  were run on both engines from a legacy schema. black, isort,
+  and flake8 passed on the Python files this change touches.
+  No live market-data calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## Test debt from the cleanup pull request (#133): 2026-11-18
 
 - Branch `cursor/test-debt-133-8a99`, from `origin/master`

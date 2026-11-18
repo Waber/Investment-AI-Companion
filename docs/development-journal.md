@@ -125,6 +125,54 @@
   its instructions file), and a check that the head marker survives
   a real submit.
 
+## 2026-11-18 - Backend instrument score (Refs #35)
+
+- Scope: the first slice of the instrument score. One branch,
+  `cursor/instrument-score-s1-90ae`, from `origin/master`
+  `7402df2`. One pull request to master. Refs #35. Does not
+  finish the issue. The agent does not merge. No live market
+  data. The `/ui` templates, catalogs, and the files named in
+  the task were not edited. No score history, no ranking, and
+  no language-model call.
+- Tests first. `tests/test_instrument_score.py` failed with
+  `ModuleNotFoundError: app.scoring`. The API tests then failed
+  with `ModuleNotFoundError: app.api.scores`. The migration
+  tests failed because the head was still `0010`.
+- Completed: `app/scoring.py` is pure. It takes stored figures
+  and a weight set and returns a 0–100 total, or `no_score`
+  with a null total when nothing is usable. Each component
+  carries the raw input, the normalized score, the configured
+  weight, the share after renormalizing, the contribution, the
+  source, and the as-of date. Missing and stale figures are
+  labelled `no data` and left out. Alembic `0011` revises
+  `0010` and creates an empty `score_weights` table. The
+  built-in equal weights are version 1 and are not inserted.
+  The first PUT stores version 2. Each later PUT adds 1.
+  `GET /api/v1/instruments/{id}/score` computes on request.
+  `GET` and `PUT /api/v1/score-weights/{instrument_type}` read
+  and replace the set. PUT does not read the demo-seed header
+  and does not check `Origin`. Weight errors are fixed
+  sentences and do not repeat the payload. The rules are in
+  `docs/scoring.md`.
+- Decisions are in `docs/work-state.md` for this date. The
+  scales, the three freshness windows, and the cent adjustment
+  on the last contribution are the ones a reviewer should
+  check. Tracking difference is not a component. The score
+  reads stored ratio columns and does not recompute them.
+- Verification: no `.env`. `DATABASE_URL` was not set for the
+  pytest runs. SQLite 3.45.1, CI command: 2316 passed, 257
+  deselected, coverage 97.36%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  257 passed, 2316 deselected. On a legacy schema, upgrade
+  reached `0011`, downgrade returned to `0010` and dropped
+  `score_weights`, and upgrade reached `0011` again, on SQLite
+  and on PostgreSQL. black, isort, and flake8 passed on the
+  Python files this change touches. No live market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-18, from 16:46.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-18 - Test debt from the cleanup pull request (Refs #133)
 
 - Scope: the test debt left from the cleanup pull request.

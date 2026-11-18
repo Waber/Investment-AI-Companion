@@ -73,7 +73,7 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(
 
             upgrade_head(connection)
             connection.commit()
-            assert _version(connection) == "0010"
+            assert _version(connection) == "0011"
             assert "fund_attributes" in inspect(connection).get_table_names()
             assert _names(connection, "fund_attributes") == _FUND_COLUMNS
             assert _fund_diff(connection) == []
@@ -139,7 +139,7 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(
                             "VALUES (2, -1)"
                         )
                     )
-            assert _version(connection) == "0010"
+            assert _version(connection) == "0011"
             connection.commit()
 
             with warnings.catch_warnings():
@@ -164,7 +164,7 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(
 
             upgrade_head(connection)
             connection.commit()
-            assert _version(connection) == "0010"
+            assert _version(connection) == "0011"
             count = connection.execute(
                 text("SELECT COUNT(*) FROM fund_attributes")
             ).scalar()

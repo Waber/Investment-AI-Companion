@@ -101,9 +101,10 @@ def _truthy(value):
 
 
 def test_0009_revises_0008_and_is_not_a_second_head():
-    """0010 is the only head. 0009 still revises 0008."""
+    """0011 is the only head. 0009 still revises 0008."""
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["0010"]
+    assert script.get_heads() == ["0011"]
+    assert script.get_revision("0011").down_revision == "0010"
     assert script.get_revision("0010").down_revision == "0009"
     revision = script.get_revision("0009")
     assert revision.down_revision == "0008"

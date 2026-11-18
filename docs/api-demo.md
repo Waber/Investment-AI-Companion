@@ -103,6 +103,29 @@ or an id above 9223372036854775807 (2^63 - 1) is 422, the same body
 the other instrument routes return for that id. The `X-IAC-Demo-Seed`
 header is honored on creates only. `PUT` and `DELETE` ignore it.
 
+The instrument score is `GET /api/v1/instruments/{id}/score`.
+The weight set is `GET` and `PUT /api/v1/score-weights/{instrument_type}`
+with `instrument_type` exactly `STOCK`, `ETF`, or `ETC`. The formulas
+are in `docs/scoring.md`. The total is a string with two decimal
+places, or JSON `null` when the status is `no_score`. A null total
+is not the number zero. `weight_set_version` is the set that was
+used. Version 1 is the built-in equal weights and is not a stored
+row (`stored` is false). The first PUT stores version 2. Each later
+PUT adds 1. PUT returns 200. It does not read `X-IAC-Demo-Seed` and
+it does not check `Origin`. An unknown instrument is 404
+`{"detail": "Instrument not found"}`. An id of `0`, a negative id,
+or an id above 9223372036854775807 is 422, the same body as the
+other instrument routes. Any other type string, including `stock`
+and `BOND`, is 422 `{"detail": "Unknown instrument type"}`. A weight
+body that is not the object `{"weights": {...}}`, or weights that
+are not finite numbers from 0 to 1000000, or a set that is all
+zeros, or a set that names the wrong components, is 422 with one
+fixed `detail` sentence. The sentence does not repeat the payload.
+A stored weight row that is not valid JSON is 500
+`{"detail": "Score weights could not be read"}`. A commit that
+fails the constraint check is 400
+`{"detail": "Score weights could not be saved"}`.
+
 `instrument_type` is `STOCK`, `ETF`, or `ETC`. Omitting it on create
 stores `STOCK`. On update, omit it to keep the stored type. JSON
 `null` is 422. A value already stored outside those three is returned

@@ -108,10 +108,11 @@ def _prepare(tmp_path):
     return engine, connection
 
 
-def test_alembic_head_is_0010_revising_0009():
-    """One head. 0010 revises 0009. 0009 still revises 0008."""
+def test_alembic_head_is_0011_and_0010_revises_0009():
+    """One head. 0011 revises 0010. 0010 still revises 0009."""
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["0010"]
+    assert script.get_heads() == ["0011"]
+    assert script.get_revision("0011").down_revision == "0010"
     revision = script.get_revision("0010")
     assert revision.down_revision == "0009"
     assert script.get_revision("0009").down_revision == "0008"
@@ -132,7 +133,7 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(tmp_path):
     try:
         upgrade_head(connection)
         connection.commit()
-        assert _version(connection) == "0010"
+        assert _version(connection) == "0011"
         assert "fund_attributes" in inspect(connection).get_table_names()
         assert _names(connection, "fund_attributes") == _FUND_COLUMNS
         assert _fund_diff(connection) == []
@@ -180,7 +181,7 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(tmp_path):
         connection.rollback()
         # The downgrade must not be undone by that rollback. The
         # insert above was not committed.
-        assert _version(connection) == "0010"
+        assert _version(connection) == "0011"
         with pytest.raises(IntegrityError):
             connection.execute(
                 text(
@@ -235,7 +236,7 @@ def test_0010_creates_nullable_attributes_and_downgrade_keeps_rows(tmp_path):
 
         upgrade_head(connection)
         connection.commit()
-        assert _version(connection) == "0010"
+        assert _version(connection) == "0011"
         count = connection.execute(
             text("SELECT COUNT(*) FROM fund_attributes")
         ).scalar()
@@ -273,7 +274,7 @@ def test_0010_upgrade_is_safe_when_create_all_already_has_the_table(
         connection.commit()
         upgrade_head(connection)
         connection.commit()
-        assert _version(connection) == "0010"
+        assert _version(connection) == "0011"
         assert "fund_attributes" in inspect(connection).get_table_names()
         assert metadata_diff(connection) == []
     engine.dispose()

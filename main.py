@@ -17,6 +17,7 @@ from app.api.financial_metrics import router as financial_metrics_router
 from app.api.instruments import router as instruments_router
 from app.api.prices import router as prices_router
 from app.api.research import notes_router, theses_router
+from app.api.scores import router as scores_router
 from app.api.watchlist import router as watchlist_router
 from app.core.config import settings
 from app.core.init_db import init_db
@@ -157,6 +158,7 @@ def create_app(init_database_on_startup: bool = True) -> FastAPI:
     )
     application.include_router(prices_router, prefix=settings.API_V1_STR)
     application.include_router(instruments_router, prefix=settings.API_V1_STR)
+    application.include_router(scores_router, prefix=settings.API_V1_STR)
     application.include_router(watchlist_router, prefix=settings.API_V1_STR)
     application.include_router(notes_router, prefix=settings.API_V1_STR)
     application.include_router(theses_router, prefix=settings.API_V1_STR)
