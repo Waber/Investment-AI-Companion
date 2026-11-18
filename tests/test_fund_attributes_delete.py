@@ -258,32 +258,40 @@ def test_failed_delete_commit_rolls_back_and_keeps_the_row(session):
     assert_failed_delete_commit_rolls_back(session)
 
 
-def assert_operational_error_on_delete_propagates(session, ticker="OPER"):
+def assert_operational_error_on_delete_propagates(
+    session, monkeypatch, ticker="OPER"
+):
     """A locked database is not the constraint 400.
 
     ``delete`` catches ``IntegrityError`` only. ``OperationalError``
-    propagates. It is not ``FundAttributesDeleteError``. A fresh
-    session still sees the row: the failed commit did not remove it.
+    propagates. It is not ``FundAttributesDeleteError``. ``delete``
+    does not call ``session.rollback()`` for that error: the recorded
+    list stays empty. A fresh session still sees the row, because the
+    commit that raised never removed it.
     """
     from sqlalchemy.exc import OperationalError
 
     repo = FundAttributesRepository(session)
     fund = _company(session, ticker, "ETF")
     created = repo.create(fund.id, _payload(issuer="Stay"))
-    original = session.commit
+    rollbacks = []
+    real_rollback = session.rollback
 
     def boom():
         raise OperationalError("DELETE", {}, Exception("database is locked"))
 
-    session.commit = boom
-    try:
-        with pytest.raises(OperationalError) as caught:
-            repo.delete(fund.id)
-        assert not isinstance(caught.value, FundAttributesDeleteError)
-        assert "database is locked" in str(caught.value)
-    finally:
-        session.commit = original
-        session.rollback()
+    def record_rollback():
+        rollbacks.append("rollback")
+        return real_rollback()
+
+    monkeypatch.setattr(session, "commit", boom)
+    monkeypatch.setattr(session, "rollback", record_rollback)
+    with pytest.raises(OperationalError) as caught:
+        repo.delete(fund.id)
+    assert not isinstance(caught.value, FundAttributesDeleteError)
+    assert "database is locked" in str(caught.value)
+    assert rollbacks == []
+    real_rollback()
 
     fresh = sessionmaker(bind=session.get_bind())()
     try:
@@ -296,8 +304,8 @@ def assert_operational_error_on_delete_propagates(session, ticker="OPER"):
         fresh.close()
 
 
-def test_operational_error_on_delete_propagates(session):
-    assert_operational_error_on_delete_propagates(session)
+def test_operational_error_on_delete_propagates(session, monkeypatch):
+    assert_operational_error_on_delete_propagates(session, monkeypatch)
 
 
 async def _instrument(client, ticker, instrument_type):
@@ -763,11 +771,14 @@ async def assert_delete_does_not_read_the_demo_seed_header(
 async def assert_http_operational_error_is_not_the_constraint_400(
     client, monkeypatch
 ):
-    """A locked commit is a plain 500, not the constraint sentence.
+    """A locked commit is Starlette's plain 500.
 
     ``TestClient(..., raise_server_exceptions=False)`` keeps the
-    response Starlette sent. The body is not the 400 detail. The
-    attribute row is still stored afterwards.
+    response Starlette sent. The body is the text
+    ``Internal Server Error``, the same as a ``ValueError`` from
+    delete. The driver text ``database is locked`` is not in it,
+    and neither is the constraint sentence. The attribute row is
+    still stored afterwards.
     """
     from fastapi.testclient import TestClient
     from sqlalchemy.exc import OperationalError
@@ -792,6 +803,8 @@ async def assert_http_operational_error_is_not_the_constraint_400(
     finally:
         monkeypatch.setattr(Session, "commit", original)
     assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+    assert "database is locked" not in response.text
     assert "Delete failed due to constraint violation" not in response.text
     session = client.app.state.testing_session_local()
     try:

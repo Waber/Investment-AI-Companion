@@ -42,12 +42,14 @@ def session(postgres_session_factory):
         db.close()
 
 
-def test_repository_delete_on_postgresql(session):
+def test_repository_delete_on_postgresql(session, monkeypatch):
     assert_repository_delete_happy_path(session)
     assert_repository_delete_missing(session)
     assert_repository_delete_leaves_the_other_row(session)
     assert_failed_delete_commit_rolls_back(session, ticker="ROLL")
-    assert_operational_error_on_delete_propagates(session, ticker="OPER")
+    assert_operational_error_on_delete_propagates(
+        session, monkeypatch, ticker="OPER"
+    )
 
 
 @pytest.mark.asyncio

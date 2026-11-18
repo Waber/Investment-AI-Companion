@@ -1501,9 +1501,10 @@ async def test_failed_thesis_close_marks_the_research_panel(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("htmx", [False, True])
 @pytest.mark.parametrize("route", ["note-add", "thesis-status"])
 async def test_unhandled_research_error_has_no_panel_marker(
-    client, monkeypatch, route
+    client, monkeypatch, route, htmx
 ):
     """An exception that is not a storage error has no panel marker.
 
@@ -1512,8 +1513,10 @@ async def test_unhandled_research_error_has_no_panel_marker(
     The test client is told not to re-raise: Starlette sends the
     500 and then raises, and the headers are on the response it
     already sent. Note add and a thesis status change both do this.
-    Catching ``Exception`` on either route and returning the marked
-    panel would put the marker on this answer.
+    One case sends ``HX-Request``. The other does not, so a handler
+    that marks only the plain request is still caught. Catching
+    ``Exception`` on either route and returning the marked panel
+    would put the marker on this answer.
     """
     from httpx import ASGITransport, AsyncClient
 
@@ -1531,15 +1534,14 @@ async def test_unhandled_research_error_has_no_panel_marker(
         monkeypatch.setattr(ThesisRepository, "set_status", boom)
         path = f"/ui/companies/{company_id}/theses/{thesis_id}/close"
         data = {}
+    headers = {"origin": _ORIGIN}
+    if htmx:
+        headers.update(_HTMX)
     transport = ASGITransport(app=client.app, raise_app_exceptions=False)
     async with AsyncClient(
         transport=transport, base_url="http://127.0.0.1"
     ) as quiet:
-        failed = await quiet.post(
-            path,
-            data=data,
-            headers={"origin": _ORIGIN, **_HTMX},
-        )
+        failed = await quiet.post(path, data=data, headers=headers)
     assert failed.status_code == 500
     assert failed.text == "Internal Server Error"
     assert "hx-research-panel" not in failed.headers
