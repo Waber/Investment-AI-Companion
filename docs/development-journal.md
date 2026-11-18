@@ -125,6 +125,41 @@
   its instructions file), and a check that the head marker survives
   a real submit.
 
+## 2026-11-18 - QA pass on the score head (Refs #35, Refs #136)
+
+- Scope: the QA checklist on pull request #135 at `beee628`.
+  New commits on `cursor/instrument-score-s1-90ae`. No rebase
+  and no force-push. Refs #35. Refs #136. Does not finish
+  either issue. The agent does not merge. No live market data.
+- Tests first. A Content-Length of the character `²` passed
+  `isdigit` and `int` raised `ValueError`. The route now
+  accepts only ASCII digits, and that header is 413 with the
+  same sentence as an oversized body. The body is not read.
+  A body of exactly 16 KiB is still accepted. One more byte
+  is 413. An instrument id that is not a number is 422.
+- Mutants, each reverted after its test failed: dropping
+  `scaleb(-2)`; skipping the leftover cents; `>` changed to
+  `>=` on the declared length; removing the stream cap;
+  reading the body before the Content-Length check; adding 1
+  in Python; a missing score returned as `0.00`.
+- `docs/demo-data.md` names `python -m scripts.run_demo`,
+  which deletes the demo file and seeds it again. `--keep`
+  does not.
+- Verification: no `.env`. `DATABASE_URL` was not set for the
+  pytest runs. SQLite 3.45.1, CI command: 2332 passed, 258
+  deselected, coverage 97.32%. One warning, the known
+  `StarletteDeprecationWarning` from importing `TestClient`.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  258 passed, 2332 deselected, the same warning. Alembic
+  upgrade, `downgrade -1`, and upgrade again on SQLite and
+  PostgreSQL dropped only `score_weights` and then recreated
+  it. black, isort, and flake8 passed on the Python files
+  this change touches. No live market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-18, from 20:36 to 20:41.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-18 - Score cent strings and the body cap (Refs #35, Refs #136)
 
 - Scope: the follow-up review of pull request #135, from

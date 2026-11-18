@@ -258,7 +258,9 @@ def _declared_length(request):
     raw = request.headers.get("content-length")
     if raw is None:
         return None
-    if not raw.isdigit():
+    # ``isdigit`` is true for ``²``. ``int`` then raises, and the
+    # client sees a 500. A size is ASCII digits only.
+    if not raw.isascii() or not raw.isdigit():
         raise HTTPException(status_code=413, detail=_TOO_LARGE)
     return int(raw)
 
