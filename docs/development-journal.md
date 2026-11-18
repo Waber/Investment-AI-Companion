@@ -9,13 +9,12 @@
   edited.
 - Tests first. `FundAttributesRepository.delete` still
   catches only `IntegrityError`. When `commit` raises
-  `OperationalError`, the method does not call
-  `session.rollback()`. The test records those calls. The
-  list is empty. The row is still there on a fresh session,
-  because that commit never removed it. `get_db` closes the
-  request session afterwards. That close is not this method.
-  QA and code review can decide whether a rollback belongs
-  in `delete`. This change does not add one.
+  `OperationalError`, that error propagates and is not
+  `FundAttributesDeleteError`. A fresh session still has
+  the row, because that commit never removed it. The test
+  does not count `session.rollback()` calls. CR: no
+  rollback in delete; get_db close handles it. Production
+  code was not edited.
 - The HTTP check uses
   `TestClient(app, raise_server_exceptions=False)`. DELETE
   is 500. The body is the text `Internal Server Error`, the
@@ -28,8 +27,8 @@
   `HX-Research-Panel` is absent.
 - The helper
   `assert_operational_error_on_delete_propagates` sets
-  `commit` and `rollback` with `monkeypatch.setattr`. The
-  manual assign and the `finally` restore are gone.
+  `commit` with `monkeypatch.setattr`. It does not patch
+  `rollback` and does not assert that `rollback` was skipped.
 - Already covered, checked on this master, no new test:
   - a DELETE that reads `request.scope["headers"]` and
     raises fails
@@ -51,8 +50,6 @@
     `test_operational_error_on_delete_is_a_plain_500` gets
     JSON containing `database is locked`, not
     `Internal Server Error`;
-  - `delete` rolls back `OperationalError` and raises it
-    again: `assert rollbacks == []` sees `['rollback']`;
   - note add catches `Exception` when the request has no
     `HX-Request`: `[note-add-False]` is the full page. The
     other three cases passed;
@@ -68,12 +65,14 @@
   256 passed, 2232 deselected. The same warning on the
   PostgreSQL HTTP delete. black, isort, and flake8 passed
   on the Python files this change touches. No live
-  market-data calls.
+  market-data calls. The CR follow-up, which drops the
+  rollback-call assert, re-ran those commands with the same
+  counts.
 - AI model: Grok 4.7. This session did not read the usage meter.
 - Time tracking (UTC): 2026-11-18, from 15:54.
-- Next: GitHub Actions on this head. Code Reviewer review,
-  QA check, then CR merges after Przemek's OK. The agent
-  does not merge.
+- Next: GitHub Actions on this head. Then Code Reviewer
+  review, QA check, and CR merges under Przemek's standing
+  merge rule (non-critical change). The agent does not merge.
 
 ## 2026-11-18 - QA follow-up on the cleanup pull request (Refs #104, Refs #28)
 

@@ -264,34 +264,26 @@ def assert_operational_error_on_delete_propagates(
     """A locked database is not the constraint 400.
 
     ``delete`` catches ``IntegrityError`` only. ``OperationalError``
-    propagates. It is not ``FundAttributesDeleteError``. ``delete``
-    does not call ``session.rollback()`` for that error: the recorded
-    list stays empty. A fresh session still sees the row, because the
-    commit that raised never removed it.
+    propagates. It is not ``FundAttributesDeleteError``. A fresh
+    session still sees the row: the commit that raised never
+    removed it. This test does not count ``session.rollback()``
+    calls. ``get_db`` closes the request session.
     """
     from sqlalchemy.exc import OperationalError
 
     repo = FundAttributesRepository(session)
     fund = _company(session, ticker, "ETF")
     created = repo.create(fund.id, _payload(issuer="Stay"))
-    rollbacks = []
-    real_rollback = session.rollback
 
     def boom():
         raise OperationalError("DELETE", {}, Exception("database is locked"))
 
-    def record_rollback():
-        rollbacks.append("rollback")
-        return real_rollback()
-
     monkeypatch.setattr(session, "commit", boom)
-    monkeypatch.setattr(session, "rollback", record_rollback)
     with pytest.raises(OperationalError) as caught:
         repo.delete(fund.id)
     assert not isinstance(caught.value, FundAttributesDeleteError)
     assert "database is locked" in str(caught.value)
-    assert rollbacks == []
-    real_rollback()
+    session.rollback()
 
     fresh = sessionmaker(bind=session.get_bind())()
     try:
