@@ -146,6 +146,12 @@ def test_language_next_path_uses_the_get_form_for_a_post():
         )
         == "/ui/companies/7/fund-attributes/edit?x=1"
     )
+    assert (
+        language_next_path(
+            _page_request("POST", "/ui/companies/7/fund-attributes/delete")
+        )
+        == "/ui/companies/7/fund-attributes/delete"
+    )
     assert language_next_path(_page_request("POST", "/ui")) == "/ui"
     assert (
         language_next_path(_page_request("POST", "/ui/instruments/1")) == "/ui"

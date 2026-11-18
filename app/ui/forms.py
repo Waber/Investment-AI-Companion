@@ -1,8 +1,7 @@
 """Create, edit, and delete forms for companies and their metrics.
 
-Fund attributes have a create form and an edit form. This branch
-has no UI delete form. ``FundAttributesRepository.delete`` is not
-in this checkout. Those posts use
+Fund attributes have create, edit, and delete forms. Delete calls
+``FundAttributesRepository.delete`` directly. Those posts use
 ``FundAttributesCreate`` and ``FundAttributesUpdate`` and write
 through ``FundAttributesRepository``. They do not call the JSON
 API. The demo-seed header is not read. Create stores ``manual``
@@ -49,6 +48,7 @@ from app.repositories.financial_metrics_repository import (
     FinancialMetricsRepository,
 )
 from app.repositories.fund_attributes_repository import (
+    FundAttributesDeleteError,
     FundAttributesRepository,
 )
 from app.repositories.watchlist_repository import WatchlistRepository
@@ -307,11 +307,14 @@ def _confirm_page(
     company_name,
     period_end=None,
     period_type=None,
+    next_value=None,
+    status_code=200,
 ):
     return with_ui_headers(
         render(
             request,
             "confirm_delete.html",
+            status_code=status_code,
             title_key=title_key,
             warning_key=warning_key,
             question_key=question_key,
@@ -320,6 +323,7 @@ def _confirm_page(
             company_name=company_name,
             period_end=period_end,
             period_type=period_type,
+            next_value=next_value,
         )
     )
 
@@ -1179,6 +1183,102 @@ def update_fund_attributes(
 ):
     """Validate with FundAttributesUpdate. The seed header is ignored."""
     return _post_fund(request, db, company_id, values, update=True)
+
+
+def _fund_delete_page(request, company, *, status_code=200, warning_key=None):
+    """Confirmation page. The row is still there after this render."""
+    return _confirm_page(
+        request,
+        title_key="page.delete_fund",
+        warning_key=warning_key or "delete.fund_warning",
+        question_key="delete.fund_question",
+        action=_delete_path(company.id),
+        cancel_href=_instrument_path(company.id),
+        company_name=company.name,
+        next_value=_instrument_path(company.id),
+        status_code=status_code,
+    )
+
+
+def _delete_path(company_id):
+    return f"/ui/companies/{company_id}/fund-attributes/delete"
+
+
+@router.get(
+    "/companies/{company_id}/fund-attributes/delete",
+    include_in_schema=False,
+)
+def delete_fund_form(
+    request: Request, company_id: str, db: Session = Depends(get_db)
+):
+    """Ask before deleting. GET does not remove the row.
+
+    A stock, a bad id, and an instrument with no row are the HTML
+    404. A stock that still has a leftover row is also 404, and
+    the row stays.
+    """
+    company, _row, missing = _load_fund_company(
+        request, db, company_id, need_row=True
+    )
+    if missing is not None:
+        return missing
+    return _fund_delete_page(request, company)
+
+
+@router.post(
+    "/companies/{company_id}/fund-attributes/delete",
+    include_in_schema=False,
+)
+def delete_fund_attributes_ui(
+    request: Request,
+    company_id: str,
+    next_url: str = Form("", alias="next"),
+    db: Session = Depends(get_db),
+):
+    """Delete through the repository. The JSON route is not called.
+
+    A constraint failure is ``FundAttributesDeleteError`` after the
+    repository rolls the session back. A ``ValueError`` or an
+    ``IntegrityError`` that escapes is rolled back here. Both render
+    the confirmation page again with 400. The page does not show
+    the driver text.
+    """
+    company, _row, missing = _load_fund_company(
+        request, db, company_id, need_row=True
+    )
+    if missing is not None:
+        return missing
+    try:
+        deleted = FundAttributesRepository(db).delete(company.id)
+    except CompanyNotFoundError:
+        return not_found(request)
+    except FundAttributesDeleteError:
+        db.rollback()
+        return _fund_delete_page(
+            request,
+            company,
+            status_code=400,
+            warning_key="error.fund_delete",
+        )
+    except IntegrityError:
+        db.rollback()
+        return _fund_delete_page(
+            request,
+            company,
+            status_code=400,
+            warning_key="error.fund_delete",
+        )
+    except ValueError:
+        db.rollback()
+        return _fund_delete_page(
+            request,
+            company,
+            status_code=400,
+            warning_key="error.fund_delete",
+        )
+    if not deleted:
+        return not_found(request)
+    return see_other(_after_save(company.id, {"next": next_url}))
 
 
 def _watchlist_response(request, db, company_id, origin, position=0):

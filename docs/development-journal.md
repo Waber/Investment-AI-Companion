@@ -1,5 +1,49 @@
 # Development Journal
 
+## 2026-11-18 - UI delete form for fund attributes (Refs #34, Refs #28)
+
+- Scope: one normal commit on `f5e0964`. No rebase and no
+  force-push. The branch stays based on `1db5931`. Master
+  has since moved to `7402df2` (#134, tests and docs). That
+  second rebase waits for the owner. Branch
+  `cursor/ui-fund-attributes-forms-98e5`. Pull request #131.
+  Refs #34 and Refs #28. Both issues stay open.
+- `GET /ui/companies/{id}/fund-attributes/delete` reuses
+  `confirm_delete.html`. GET does not delete. `POST` calls
+  `FundAttributesRepository.delete` directly. The demo-seed
+  header is not read. Success is 303 to the instrument page,
+  or to `safe_next` when `next` was posted. `//evil`,
+  `https://evil`, and `javascript:` become `/ui`.
+- A stock, a bad id, an unknown id, and an ETF or ETC with
+  no row are the HTML 404. A stock that still has a leftover
+  row is 404 and the row stays. `FundAttributesDeleteError`,
+  `IntegrityError`, and `ValueError` render the confirmation
+  page again with 400. The session is rolled back. The page
+  uses the catalog sentence and does not show driver text.
+- The detail page shows "Usuń atrybuty" / "Delete attributes"
+  only when an ETF or ETC has a row. A stock and an empty
+  fund do not.
+- The happy path removes the attribute row and keeps the
+  company, its price bar, its note, and its thesis.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2282
+  passed, 256 deselected, coverage 96.93%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2282 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. The HTML was checked through the test
+  client. A desktop browser was not driven. One
+  `StarletteDeprecationWarning` on the PostgreSQL job comes
+  from importing Starlette's `TestClient`. It is not a
+  `DeprecationWarning`, so `-W error::DeprecationWarning`
+  still exits 0.
+- AI model: Grok 4.7. This session did not read the usage
+  meter.
+- Time tracking (UTC): 2026-11-18, from 16:36.
+- Next: GitHub Actions on this commit. Do not rebase onto
+  `7402df2` until the owner agrees. Do not merge.
+
 ## 2026-11-12 - Small TER percents stay visible (Refs #34, Refs #28)
 
 - Scope: the detail page only. One commit on top of the review

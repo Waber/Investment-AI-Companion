@@ -10,8 +10,9 @@
   schema, collectors, scoring, AI adapters, and the Yahoo
   collector were not edited. Pull request #130 on master
   adds `FundAttributesRepository.delete` and the JSON
-  DELETE. This checkout does not have that method, and this
-  slice has no UI delete form yet.
+  DELETE. This branch includes that method because it was
+  rebased onto `1db5931`. The UI delete form is the commit
+  on top of `f5e0964`.
 - Completed: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
   and `.../edit`. The forms validate with
   `FundAttributesCreate` and `FundAttributesUpdate` and write
@@ -28,26 +29,32 @@
   and a null TER. The edit field still shows a period. The
   `Float` column is unchanged, so the stored value is still
   a float after the model accepts the fraction.
-- Detail links: add when an ETF or ETC has no row, edit when
-  it has one, nothing for a stock. Invalid input is 422.
-  A repository `ValueError` is 400. A bad id, an unknown id,
-  or a stock is the HTML 404. CSRF is `require_same_origin`.
-  Redirects use `safe_next`.
+- Detail links: add when an ETF or ETC has no row, edit and
+  delete when it has one, nothing for a stock. Invalid input
+  is 422. A repository `ValueError` is 400. A bad id, an
+  unknown id, or a stock is the HTML 404. CSRF is
+  `require_same_origin`. Redirects use `safe_next`.
+- The UI delete form is `GET` and `POST
+  /ui/companies/{id}/fund-attributes/delete`. It reuses
+  `confirm_delete.html` and calls
+  `FundAttributesRepository.delete`. A missing row is 404.
+  `FundAttributesDeleteError`, `IntegrityError`, and
+  `ValueError` are 400 after rollback. The company, prices,
+  notes, and theses stay.
 - Leftover: an ETF or ETC changed to STOCK while a row
   exists keeps the row. The detail page still shows it and
-  has no form link. The form routes answer 404. The JSON
-  DELETE exists on master in #130. This slice has no UI
-  delete form yet. `GET /new` when a row already exists
-  redirects to the edit form. `POST /new` in that case is
-  still 400. The detail page formats TER with `Decimal`
-  so 0.00001 percent is not shown as 0. Yahoo still does not
-  implement `FundAttributes`.
+  has no form link. The form routes, including delete, answer
+  404. `GET /new` when a row already exists redirects to the
+  edit form. `POST /new` in that case is still 400. The
+  detail page formats TER with `Decimal` so 0.00001 percent
+  is not shown as 0. Yahoo still does not implement
+  `FundAttributes`.
 - Tests: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, CI pytest command: 2247 passed,
-  254 deselected, coverage 96.97%. PostgreSQL 16.15,
+  database. SQLite 3.45.1, CI pytest command: 2282 passed,
+  256 deselected, coverage 96.93%. PostgreSQL 16.15,
   `REQUIRE_POSTGRES=1`, DSN
   `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  254 passed, 2247 deselected. black, isort, and flake8 passed
+  256 passed, 2282 deselected. black, isort, and flake8 passed
   on the Python files this change touches. No live market-data
   calls. The HTML was checked through the test client. A
   desktop browser was not driven.
@@ -55,11 +62,11 @@
   percentage is recorded. No reset was redeemed.
 - Active agents: none. Blockers: none for this slice. This
   note is not approval and not a merge.
-- Next action: GitHub Actions on this head, then review.
-  Do not merge. A UI delete form needs a rebase onto master
-  `883718e` (owner approval) before it can call
-  `FundAttributesRepository.delete`. Do not copy that method
-  onto this branch. The small-TER display is on this branch.
+- Next action: GitHub Actions on the delete-form commit,
+  then review. Do not merge. Do not rebase onto `7402df2`
+  until the owner agrees. The published rebase is `f5e0964`
+  on `1db5931`. GitHub Actions run 44348789397 on that SHA
+  passed both jobs, including SQLite.
 
 ## QA follow-up on the cleanup pull request: 2026-11-18
 

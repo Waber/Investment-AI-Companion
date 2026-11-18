@@ -83,6 +83,7 @@
 <p class="form-actions">
   {% if instrument.fund_attributes %}
   <a href="/ui/companies/{{ instrument.id }}/fund-attributes/edit">{{ t['action.edit_fund'] }}</a>
+  <a href="/ui/companies/{{ instrument.id }}/fund-attributes/delete">{{ t['action.delete_fund'] }}</a>
   {% else %}
   <a href="/ui/companies/{{ instrument.id }}/fund-attributes/new">{{ t['action.add_fund'] }}</a>
   {% endif %}
