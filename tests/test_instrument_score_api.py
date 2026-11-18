@@ -1144,6 +1144,65 @@ async def test_streamed_body_stops_at_the_size_cap(client):
     assert delivered["n"] <= 16 * 1024 + len(chunk)
 
 
+@pytest.mark.asyncio
+async def test_superscript_content_length_is_413(client):
+    """``²`` counts as a digit in ``str.isdigit`` and then ``int`` fails.
+
+    The header is a size only when every character is an ASCII digit.
+    The answer is the same 413, and it does not repeat the character.
+    """
+    reads = {"n": 0}
+
+    async def receive():
+        reads["n"] += 1
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    status, payload = await _put_raw(
+        client.app,
+        [
+            (b"host", b"127.0.0.1"),
+            (b"content-type", b"application/json"),
+            (b"content-length", "²".encode("latin-1")),
+        ],
+        receive,
+    )
+    assert status == 413
+    assert json.loads(payload) == {"detail": "Score weights are too large"}
+    assert "²".encode() not in payload
+    assert reads["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_body_of_exactly_16_kib_is_accepted(client):
+    """16 KiB is the largest body. One more byte is 413."""
+    inner = '"profitability":1,"valuation":1,"balance_sheet":1,"growth":1'
+    pad = (16 * 1024) - len(('{"weights":{' + inner + "}}").encode())
+    exact = '{"weights":{' + (" " * pad) + inner + "}}"
+    assert len(exact.encode()) == 16 * 1024
+    ok = await client.put(
+        "/api/v1/score-weights/STOCK",
+        content=exact.encode(),
+        headers={"content-type": "application/json"},
+    )
+    assert ok.status_code == 200
+    assert ok.json()["stored"] is True
+    over = exact.encode() + b" "
+    rejected = await client.put(
+        "/api/v1/score-weights/STOCK",
+        content=over,
+        headers={"content-type": "application/json"},
+    )
+    assert rejected.status_code == 413
+    assert rejected.json() == {"detail": "Score weights are too large"}
+
+
+@pytest.mark.asyncio
+async def test_a_score_id_that_is_not_a_number_is_422(client):
+    response = await client.get("/api/v1/instruments/abc/score")
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["path", "instrument_id"]
+
+
 def _quiet(client):
     from httpx import ASGITransport, AsyncClient
 

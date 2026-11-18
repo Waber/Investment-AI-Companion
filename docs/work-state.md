@@ -56,6 +56,37 @@
   send PR content to a model, so REVIEW.md puts them on his list.
   Agents do not merge.
 
+## QA pass on the score head (Refs #35, Refs #136): 2026-11-18
+
+- Branch `cursor/instrument-score-s1-90ae`. Head under test was
+  `beee628`; this note is the commit on top of it. No rebase
+  and no force-push. Refs #35. Refs #136. Does not finish
+  either issue. The agent does not merge. No live market data.
+- Completed: Content-Length must be ASCII digits. `²` is 413
+  `Score weights are too large` and the body is not read. A
+  body of exactly 16 KiB is accepted. An id that is not a
+  number is 422. The seven mutants in the QA list were each
+  killed by an existing or new test, then reverted.
+- The reseed note matches `python -m scripts.run_demo`: the
+  default deletes `demo/investment_demo.db` and seeds again.
+  `--keep` does not update the old metric rows.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI command: 2332 passed, 258 deselected, coverage
+  97.32%. One warning, the known `StarletteDeprecationWarning`.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  258 passed, 2332 deselected. Alembic upgrade, downgrade one
+  step, and upgrade again dropped only `score_weights` on
+  both engines. black, isort, and flake8 passed on the Python
+  files this change touches. No live market-data calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge. Merge still waits for the owner.
+- Next action: GitHub Actions on this head, both jobs. Then
+  the owner. Do not merge. The run id is not written here,
+  because this file is part of the commit the run tests.
+
 ## Score cent strings and the body cap (Refs #35, Refs #136): 2026-11-18
 
 - Branch `cursor/instrument-score-s1-90ae`, on top of `37a3345`.
