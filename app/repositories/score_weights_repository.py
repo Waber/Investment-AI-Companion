@@ -70,13 +70,29 @@ class ScoreWeightsRepository:
         return weights, row.version, True
 
     def save(self, instrument_type, weights):
-        """Insert version 2, or add 1 to the stored version.
+        """Insert version 2, or add 1 to the version stored in the table.
 
         ``weights`` is the dict ``parse_weights`` already checked.
         The JSON keeps the component order and the numbers that were
-        sent. It does not divide them by their sum.
+        sent. It does not divide them by their sum. The returned row
+        is the one that was committed, including its version.
+
+        Two callers can both see an empty table. The second insert
+        hits the unique type. That attempt is rolled back and tried
+        once more, which then updates the row the first caller stored.
+        A second conflict is ``ScoreWeightsSaveError``. The message
+        does not include driver text.
         """
         encoded = _encode(instrument_type, weights)
+        for attempt in (1, 2):
+            try:
+                return self._write(instrument_type, encoded)
+            except IntegrityError:
+                self.db.rollback()
+                if attempt == 2:
+                    raise ScoreWeightsSaveError() from None
+
+    def _write(self, instrument_type, encoded):
         row = self.get(instrument_type)
         if row is None:
             row = ScoreWeightsDB(
@@ -86,16 +102,12 @@ class ScoreWeightsRepository:
             )
             self.db.add(row)
         else:
-            row.version = row.version + 1
+            # The SQL adds 1 to the stored version. Using the number
+            # already loaded in this session would ignore a commit
+            # that landed after that load.
+            row.version = ScoreWeightsDB.version + 1
             row.weights = encoded
-        failed = False
-        try:
-            self.db.commit()
-        except IntegrityError:
-            self.db.rollback()
-            failed = True
-        if failed:
-            raise ScoreWeightsSaveError()
+        self.db.commit()
         self.db.refresh(row)
         return row
 
@@ -104,7 +116,7 @@ def _decode(instrument_type, raw):
     try:
         payload = json.loads(raw)
         return parse_weights(instrument_type, {"weights": payload})
-    except (WeightValidationError, TypeError, ValueError):
+    except (WeightValidationError, TypeError, ValueError, RecursionError):
         raise ScoreWeightsReadError() from None
 
 

@@ -16,12 +16,15 @@ The scales and the day counts are the rules in ``docs/scoring.md``.
 import math
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 # A statement can be a year old and still be the latest filing.
 STATEMENT_FRESH_DAYS = 548
-# Same edge as the watchlist: the day that is exactly 7 days back counts.
-PRICE_FRESH_DAYS = 7
+# One-year volatility and drawdown describe a year of weekly closes.
+# A missed week is not stale. 92 days is about a quarter, the same
+# length the watchlist uses for a trend window. The 7-day watchlist
+# rule is for the latest price, not for this one-year figure.
+PRICE_FRESH_DAYS = 92
 # TER and fund size are slow facts. One year, including a leap day.
 FUND_FRESH_DAYS = 366
 
@@ -132,12 +135,13 @@ def _specs():
     balance_sheet = _ComponentSpec(
         "balance_sheet",
         (
-            # 0 scores 100. 2 scores 0. A negative number is negative
-            # equity, which this scale does not describe.
+            # Stored like Yahoo's debtToEquity: 45 means 0.45x.
+            # 0 scores 100. 200 (2x) scores 0. A negative number is
+            # negative equity, which this scale does not describe.
             _InputSpec(
                 "debt_to_equity",
                 statement,
-                Decimal(2),
+                Decimal(200),
                 Decimal(0),
                 "linear",
                 "non_negative",
@@ -524,11 +528,9 @@ def _component(spec, inputs, weight, on_date):
 def _with_contributions(components, used):
     """Fill contribution and effective weight for the parts that count.
 
-    Each contribution is the share times the component score, rounded
-    half up to a hundredth. The total those shares should make is the
-    same sum rounded half up before each part is rounded. When the
-    hundredths do not add to that total, the last used component
-    absorbs the difference, which is one or two hundredths.
+    Each contribution is the share times the component score. The
+    published cents are the largest-remainder split of that sum, so
+    they add up to the rounded total and none of them is negative.
     """
     weight_sum = sum(component.weight for component in used)
     unrounded = []
@@ -537,9 +539,7 @@ def _with_contributions(components, used):
         share = component.weight / weight_sum
         shares.append(share)
         unrounded.append(share * component.normalized)
-    rounded = [_cents(number) for number in unrounded]
-    target = _cents(sum(unrounded))
-    rounded[-1] = _cents(rounded[-1] + (target - sum(rounded)))
+    rounded = _largest_remainder(unrounded)
     by_name = {}
     for component, share, contribution in zip(used, shares, rounded):
         by_name[component.name] = ComponentScore(
@@ -557,6 +557,31 @@ def _with_contributions(components, used):
     return tuple(
         by_name.get(component.name, component) for component in components
     )
+
+
+def _largest_remainder(unrounded):
+    """Split the rounded total into contributions that are never negative.
+
+    Each unrounded contribution is cut down to a whole cent. The cents
+    that are left, so the pieces add up to the rounded total, go to the
+    largest discarded fractions. A tie goes to the earlier component.
+    Giving the whole difference to the last component can make that
+    contribution negative.
+    """
+    target = _cents(sum(unrounded, Decimal(0)))
+    cents = [number * 100 for number in unrounded]
+    floors = [
+        int(item.to_integral_value(rounding=ROUND_FLOOR)) for item in cents
+    ]
+    leftover = int(target * 100) - sum(floors)
+    order = sorted(
+        range(len(floors)),
+        key=lambda index: (-(cents[index] - floors[index]), index),
+    )
+    given = list(floors)
+    for step in range(max(leftover, 0)):
+        given[order[step]] += 1
+    return [(Decimal(item) / Decimal(100)) for item in given]
 
 
 def _oldest_used(components):
