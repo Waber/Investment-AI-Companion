@@ -158,6 +158,7 @@ _POLISH = {
     "action.edit_metrics": "Edytuj wskaźniki",
     "action.add_fund": "Dodaj atrybuty",
     "action.edit_fund": "Edytuj atrybuty",
+    "action.delete_fund": "Usuń atrybuty",
     "action.delete_metrics": "Usuń wskaźniki",
     "action.save": "Zapisz",
     "action.confirm_delete": "Usuń",
@@ -175,6 +176,7 @@ _POLISH = {
     "page.edit_metrics": "Edycja wskaźników",
     "page.create_fund": "Nowe atrybuty funduszu",
     "page.edit_fund": "Edycja atrybutów funduszu",
+    "page.delete_fund": "Usuwanie atrybutów funduszu",
     "page.delete_metrics": "Usuwanie wskaźników",
     "form.error_summary": "Popraw zaznaczone pola.",
     "field.period_end": "Koniec okresu",
@@ -187,6 +189,11 @@ _POLISH = {
     "delete.company_question": "Usunąć tę spółkę?",
     "delete.metrics_warning": ("Usunięcie tych wskaźników nie usuwa spółki."),
     "delete.metrics_question": "Usunąć te wskaźniki?",
+    "delete.fund_warning": (
+        "Usunięcie atrybutów nie usuwa instrumentu, "
+        "jego notowań, notatek ani tez."
+    ),
+    "delete.fund_question": "Usunąć te atrybuty?",
     "delete.note_question": "Usunąć tę notatkę?",
     "delete.thesis_question": "Usunąć tę tezę?",
     "hint.period_end": (
@@ -228,6 +235,7 @@ _POLISH = {
     "error.aum_needs": "Podaj walutę i datę aktywów razem z kwotą.",
     "error.aum_extra": "Waluta i data aktywów wymagają kwoty.",
     "error.fund_exists": "Atrybuty tego instrumentu są już zapisane.",
+    "error.fund_delete": "Nie udało się usunąć atrybutów.",
     "error.datetime": ("Podaj datę i czas, na przykład 2024-12-31T00:00:00."),
     "error.invalid": "Ta wartość jest nieprawidłowa.",
     "error.control_char": "To pole nie może zawierać znaków sterujących.",
@@ -398,6 +406,7 @@ _ENGLISH = {
     "action.edit_metrics": "Edit metrics",
     "action.add_fund": "Add attributes",
     "action.edit_fund": "Edit attributes",
+    "action.delete_fund": "Delete attributes",
     "action.delete_metrics": "Delete metrics",
     "action.save": "Save",
     "action.confirm_delete": "Delete",
@@ -415,6 +424,7 @@ _ENGLISH = {
     "page.edit_metrics": "Edit metrics",
     "page.create_fund": "New fund attributes",
     "page.edit_fund": "Edit fund attributes",
+    "page.delete_fund": "Delete fund attributes",
     "page.delete_metrics": "Delete metrics",
     "form.error_summary": "Correct the highlighted fields.",
     "field.period_end": "Period end",
@@ -429,6 +439,11 @@ _ENGLISH = {
         "Deleting these metrics does not delete the company."
     ),
     "delete.metrics_question": "Delete these metrics?",
+    "delete.fund_warning": (
+        "Deleting these attributes does not delete the instrument, "
+        "its prices, notes, or theses."
+    ),
+    "delete.fund_question": "Delete these attributes?",
     "delete.note_question": "Delete this note?",
     "delete.thesis_question": "Delete this thesis?",
     "hint.period_end": (
@@ -470,6 +485,7 @@ _ENGLISH = {
     ),
     "error.aum_extra": "The assets currency and date need an amount.",
     "error.fund_exists": ("Attributes for this instrument are already saved."),
+    "error.fund_delete": "Could not delete the attributes.",
     "error.datetime": ("Enter a date and time, such as 2024-12-31T00:00:00."),
     "error.invalid": "This value is not valid.",
     "error.control_char": "This field must not contain control characters.",

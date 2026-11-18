@@ -89,7 +89,8 @@ _THESIS_FORM = re.compile(
 # POST, the same way a company edit is. A 422 must not send the
 # language switch to a URL that only accepts POST.
 _FUND_FORM = re.compile(
-    r"^/ui/companies/(?P<company_id>[^/]+)/fund-attributes/(?:new|edit)$"
+    r"^/ui/companies/(?P<company_id>[^/]+)/fund-attributes/"
+    r"(?:new|edit|delete)$"
 )
 
 

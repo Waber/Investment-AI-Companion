@@ -9,22 +9,34 @@ JSON API and they do not read the demo-seed header. A form body
 cannot set ``source`` or ``is_synthetic``.
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.demo_seed_auth import DEMO_SEED_HEADER, demo_seed_token
 from app.models.database_models import (
     RECORD_SOURCE_DEMO,
     RECORD_SOURCE_MANUAL,
+    CompanyDB,
     FundAttributesDB,
+    NoteDB,
+    PriceBarDB,
+    ThesisDB,
 )
+from app.models.price_bar import PriceBarCreate
+from app.models.research import NoteCreate, ThesisCreate
 from app.repositories.company_errors import CompanyNotFoundError
 from app.repositories.fund_attributes_repository import (
     FundAttributesRepository,
 )
+from app.repositories.note_repository import NoteRepository
+from app.repositories.price_bar_repository import PriceBarRepository
+from app.repositories.thesis_repository import ThesisRepository
 from app.ui.catalog import CATALOGS
 from app.ui.form_fields import (
     fund_repository_error,
@@ -227,6 +239,10 @@ def _edit(company_id):
     return f"/ui/companies/{company_id}/fund-attributes/edit"
 
 
+def _delete(company_id):
+    return f"/ui/companies/{company_id}/fund-attributes/delete"
+
+
 def _detail(company_id):
     return f"/ui/instruments/{company_id}"
 
@@ -421,19 +437,22 @@ async def test_detail_links_follow_the_instrument_type(client):
     filled = await client.get(_detail(etc))
     assert f'href="{_edit(etc)}"' in filled.text
     assert _sentence("pl", "action.edit_fund") in filled.text
+    assert f'href="{_delete(etc)}"' in filled.text
+    assert _sentence("pl", "action.delete_fund") in filled.text
     assert f'href="{_new(etc)}"' not in filled.text
     share = await client.get(_detail(stock))
     assert "fund-attributes" not in share.text
     assert _sentence("pl", "action.add_fund") not in share.text
     assert _sentence("pl", "action.edit_fund") not in share.text
-    for page in (empty, filled, share):
-        assert "fund-attributes/delete" not in page.text
+    assert _sentence("pl", "action.delete_fund") not in share.text
+    assert f'href="{_delete(etf)}"' not in empty.text
+    assert "fund-attributes/delete" not in share.text
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "path",
-    ["new", "edit"],
+    ["new", "edit", "delete"],
 )
 async def test_stock_and_unknown_ids_are_html_404(client, path):
     stock = await _company(
@@ -631,6 +650,10 @@ async def test_stock_with_a_stored_row_keeps_the_detail_and_hides_the_form(
     assert "fund-attributes" not in detail.text
     edit = await client.get(_edit(company_id))
     assert edit.status_code == 404
+    removed = await client.get(_delete(company_id))
+    assert removed.status_code == 404
+    posted = await _post(client, _delete(company_id), {})
+    assert posted.status_code == 404
     assert _facts(client, company_id)["issuer"] == "Still here"
     assert _facts(client, company_id)["source"] == RECORD_SOURCE_MANUAL
 
@@ -847,3 +870,224 @@ async def test_a_single_repository_field_error_is_inline(client, monkeypatch):
     assert 'id="field-issuer-error"' in response.text
     assert _sentence("pl", "error.constraint") in response.text
     assert _row(client, company_id) is None
+
+
+def _plant_kept_rows(client, company_id):
+    """A price, a note, and a thesis that delete must leave in place."""
+    session = client.app.state.testing_session_local()
+    try:
+        PriceBarRepository(session).create(
+            company_id,
+            PriceBarCreate(
+                date="2026-01-02",
+                open="10",
+                high="11",
+                low="10",
+                close="11",
+                currency="EUR",
+                source="demo",
+                retrieved_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            ),
+        )
+        NoteRepository(session).create(
+            company_id, NoteCreate(body="Kept when attributes go.")
+        )
+        ThesisRepository(session).create(
+            company_id,
+            ThesisCreate(title="Kept thesis", body="Still the thesis."),
+        )
+    finally:
+        session.close()
+
+
+def _neighbors(client, company_id):
+    session = client.app.state.testing_session_local()
+    try:
+        company = session.get(CompanyDB, company_id)
+        return {
+            "company": company.ticker if company is not None else None,
+            "attributes": (
+                session.query(FundAttributesDB)
+                .filter(FundAttributesDB.company_id == company_id)
+                .count()
+            ),
+            "prices": (
+                session.query(PriceBarDB)
+                .filter(PriceBarDB.instrument_id == company_id)
+                .count()
+            ),
+            "notes": (
+                session.query(NoteDB)
+                .filter(NoteDB.company_id == company_id)
+                .count()
+            ),
+            "theses": (
+                session.query(ThesisDB)
+                .filter(ThesisDB.company_id == company_id)
+                .count()
+            ),
+        }
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_form_removes_only_the_attribute_row(client):
+    company_id = await _company(
+        client, ticker="DELFUND", instrument_type="ETF", name="Delete fund"
+    )
+    created = await _post(client, _new(company_id), _form(issuer="Going"))
+    assert created.status_code == 303
+    _plant_kept_rows(client, company_id)
+    confirm = await client.get(_delete(company_id))
+    assert confirm.status_code == 200
+    assert "text/html" in confirm.headers["content-type"]
+    assert _sentence("pl", "page.delete_fund") in confirm.text
+    assert _sentence("pl", "delete.fund_question") in confirm.text
+    assert _sentence("pl", "delete.fund_warning") in confirm.text
+    assert "Delete fund" in confirm.text
+    assert f'action="{_delete(company_id)}"' in confirm.text
+    assert _neighbors(client, company_id)["attributes"] == 1
+
+    removed = await _post(client, _delete(company_id), {})
+    assert removed.status_code == 303
+    assert removed.headers["location"].split("?", 1)[0] == _detail(company_id)
+    kept = _neighbors(client, company_id)
+    assert kept["attributes"] == 0
+    assert kept["company"] == "DELFUND"
+    assert kept["prices"] == 1
+    assert kept["notes"] == 1
+    assert kept["theses"] == 1
+    detail = await client.get(_detail(company_id))
+    assert f'href="{_new(company_id)}"' in detail.text
+    assert f'href="{_delete(company_id)}"' not in detail.text
+    assert "Going" not in detail.text
+
+    again = await _post(client, _delete(company_id), {})
+    assert again.status_code == 404
+    assert kept["prices"] == _neighbors(client, company_id)["prices"]
+
+
+@pytest.mark.asyncio
+async def test_get_delete_does_not_remove_the_row(client):
+    company_id = await _company(
+        client, ticker="GETDEL", instrument_type="ETC", name="Get delete"
+    )
+    await _post(client, _new(company_id), _form())
+    page = await client.get(_delete(company_id))
+    assert page.status_code == 200
+    assert _row(client, company_id) is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_form_renders_in_english(client):
+    company_id = await _company(
+        client, ticker="ENDEL", instrument_type="ETF", name="EN delete"
+    )
+    await _post(client, _new(company_id), _form())
+    client.cookies.set("ui_lang", "en")
+    page = await client.get(_delete(company_id))
+    assert _sentence("en", "page.delete_fund") in page.text
+    assert _sentence("en", "delete.fund_question") in page.text
+    assert _sentence("en", "action.confirm_delete") in page.text
+    detail = await client.get(_detail(company_id))
+    assert _sentence("en", "action.delete_fund") in detail.text
+    assert f'href="{_delete(company_id)}"' in detail.text
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_delete_is_rejected(client):
+    company_id = await _company(
+        client, ticker="CSRFDEL", instrument_type="ETF", name="CSRF delete"
+    )
+    await _post(client, _new(company_id), _form())
+    response = await _post(
+        client, _delete(company_id), {}, origin="http://evil.example"
+    )
+    assert response.status_code == 403
+    assert "text/html" in response.headers["content-type"]
+    assert "Żądanie zostało odrzucone" in response.text
+    assert _row(client, company_id) is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "target",
+    [
+        "//evil.example/phish",
+        "https://evil.example/phish",
+        "javascript:alert(1)",
+    ],
+)
+async def test_delete_redirect_rejects_an_unsafe_next(client, target):
+    company_id = await _company(
+        client,
+        ticker="NXT" + str(abs(hash(target)) % 10000),
+        instrument_type="ETF",
+        name="Unsafe next",
+    )
+    await _post(client, _new(company_id), _form())
+    response = await _post(client, _delete(company_id), {"next": target})
+    assert response.status_code == 303
+    location = response.headers["location"]
+    assert "evil" not in location.casefold()
+    assert "javascript" not in location.casefold()
+    assert location.split("?", 1)[0] == "/ui"
+    assert _row(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_delete_without_a_row_is_html_404(client):
+    company_id = await _company(
+        client, ticker="NOROWD", instrument_type="ETF", name="No row delete"
+    )
+    got = await client.get(_delete(company_id))
+    assert got.status_code == 404
+    assert "text/html" in got.headers["content-type"]
+    posted = await _post(client, _delete(company_id), {})
+    assert posted.status_code == 404
+    assert not posted.text.lstrip().startswith("{")
+
+
+@pytest.mark.asyncio
+async def test_failed_delete_commit_is_400_and_keeps_the_row(
+    client, monkeypatch
+):
+    company_id = await _company(
+        client, ticker="ROLLBACK", instrument_type="ETF", name="Rollback"
+    )
+    await _post(client, _new(company_id), _form(issuer="Stay"))
+    driver = "secret-driver-token"
+
+    def commit_flushes_then_fails(self):
+        self.flush()
+        raise IntegrityError("DELETE", {}, Exception(driver))
+
+    monkeypatch.setattr(Session, "commit", commit_flushes_then_fails)
+    response = await _post(client, _delete(company_id), {})
+    assert response.status_code == 400
+    assert "text/html" in response.headers["content-type"]
+    assert _sentence("pl", "error.fund_delete") in response.text
+    assert driver not in response.text
+    assert _facts(client, company_id)["issuer"] == "Stay"
+
+
+@pytest.mark.asyncio
+async def test_delete_value_error_is_400_and_does_not_echo_the_text(
+    client, monkeypatch
+):
+    company_id = await _company(
+        client, ticker="VALDEL", instrument_type="ETF", name="Value delete"
+    )
+    await _post(client, _new(company_id), _form(issuer="Stay"))
+    secret = "driver said unique violation"
+
+    def explode(self, company_id):
+        raise ValueError(secret)
+
+    monkeypatch.setattr(FundAttributesRepository, "delete", explode)
+    response = await _post(client, _delete(company_id), {})
+    assert response.status_code == 400
+    assert _sentence("pl", "error.fund_delete") in response.text
+    assert secret not in response.text
+    assert _facts(client, company_id)["issuer"] == "Stay"
