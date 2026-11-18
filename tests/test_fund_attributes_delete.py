@@ -258,6 +258,48 @@ def test_failed_delete_commit_rolls_back_and_keeps_the_row(session):
     assert_failed_delete_commit_rolls_back(session)
 
 
+def assert_operational_error_on_delete_propagates(session, ticker="OPER"):
+    """A locked database is not the constraint 400.
+
+    ``delete`` catches ``IntegrityError`` only. ``OperationalError``
+    propagates. It is not ``FundAttributesDeleteError``. A fresh
+    session still sees the row: the failed commit did not remove it.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    repo = FundAttributesRepository(session)
+    fund = _company(session, ticker, "ETF")
+    created = repo.create(fund.id, _payload(issuer="Stay"))
+    original = session.commit
+
+    def boom():
+        raise OperationalError("DELETE", {}, Exception("database is locked"))
+
+    session.commit = boom
+    try:
+        with pytest.raises(OperationalError) as caught:
+            repo.delete(fund.id)
+        assert not isinstance(caught.value, FundAttributesDeleteError)
+        assert "database is locked" in str(caught.value)
+    finally:
+        session.commit = original
+        session.rollback()
+
+    fresh = sessionmaker(bind=session.get_bind())()
+    try:
+        row = fresh.get(FundAttributesDB, created.id)
+        assert row is not None
+        assert row.id == created.id
+        assert row.issuer == "Stay"
+        assert row.company_id == fund.id
+    finally:
+        fresh.close()
+
+
+def test_operational_error_on_delete_propagates(session):
+    assert_operational_error_on_delete_propagates(session)
+
+
 async def _instrument(client, ticker, instrument_type):
     response = await client.post(
         "/api/v1/companies/",
@@ -718,9 +760,111 @@ async def assert_delete_does_not_read_the_demo_seed_header(
         session.close()
 
 
+async def assert_http_operational_error_is_not_the_constraint_400(
+    client, monkeypatch
+):
+    """A locked commit is a plain 500, not the constraint sentence.
+
+    ``TestClient(..., raise_server_exceptions=False)`` keeps the
+    response Starlette sent. The body is not the 400 detail. The
+    attribute row is still stored afterwards.
+    """
+    from fastapi.testclient import TestClient
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm import Session
+
+    instrument_id = await _instrument(client, "OPER", "ETF")
+    created = await _store_attributes(client, instrument_id, issuer="Stay")
+    row_id = created.json()["id"]
+
+    def boom(self):
+        raise OperationalError("DELETE", {}, Exception("database is locked"))
+
+    original = Session.commit
+    monkeypatch.setattr(Session, "commit", boom)
+    try:
+        with TestClient(
+            client.app,
+            raise_server_exceptions=False,
+            base_url="http://127.0.0.1",
+        ) as sync_client:
+            response = sync_client.delete(_attributes_url(instrument_id))
+    finally:
+        monkeypatch.setattr(Session, "commit", original)
+    assert response.status_code == 500
+    assert "Delete failed due to constraint violation" not in response.text
+    session = client.app.state.testing_session_local()
+    try:
+        row = session.get(FundAttributesDB, row_id)
+        assert row is not None
+        assert row.id == row_id
+        assert row.issuer == "Stay"
+        assert row.company_id == instrument_id
+    finally:
+        session.close()
+
+
+async def assert_delete_result_ignores_the_demo_seed_header(
+    client, monkeypatch
+):
+    """The header value does not change the delete.
+
+    No header, the real demo-seed token, and a 64-character value
+    that is not that token all delete the row. Status, body, and
+    the stored row match. A route that branches on
+    ``request.scope["headers"]`` would make one of them differ.
+    """
+    monkeypatch.setattr(settings, "DEMO_SEED_ENABLED", True)
+    token = demo_seed_token(settings.SECRET_KEY)
+    headers = (
+        None,
+        {DEMO_SEED_HEADER: token},
+        {DEMO_SEED_HEADER: "ab" * 32},
+    )
+    outcomes = []
+    for index, header in enumerate(headers):
+        instrument_id = await _instrument(client, f"H{index}X", "ETF")
+        created = await _store_attributes(client, instrument_id, issuer="Stay")
+        kwargs = {}
+        if header is not None:
+            kwargs["headers"] = header
+        deleted = await client.delete(_attributes_url(instrument_id), **kwargs)
+        session = client.app.state.testing_session_local()
+        try:
+            row = session.get(FundAttributesDB, created.json()["id"])
+            company_row = session.get(CompanyDB, instrument_id)
+        finally:
+            session.close()
+        outcomes.append(
+            (
+                deleted.status_code,
+                deleted.content,
+                row is None,
+                company_row is not None and company_row.ticker == f"H{index}X",
+            )
+        )
+    assert outcomes[0] == (204, b"", True, True)
+    assert outcomes[1] == outcomes[0]
+    assert outcomes[2] == outcomes[0]
+
+
 @pytest.mark.asyncio
 async def test_delete_maps_a_constraint_error_to_400(client, monkeypatch):
     await assert_http_delete_constraint_rolls_back(client, monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_operational_error_on_delete_is_a_plain_500(client, monkeypatch):
+    await assert_http_operational_error_is_not_the_constraint_400(
+        client, monkeypatch
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_result_ignores_the_demo_seed_header(client, monkeypatch):
+    await assert_delete_result_ignores_the_demo_seed_header(
+        client, monkeypatch
+    )
 
 
 @pytest.mark.asyncio
