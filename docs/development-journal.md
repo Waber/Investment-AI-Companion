@@ -1,5 +1,80 @@
 # Development Journal
 
+## 2026-11-18 - Test debt from the cleanup pull request (Refs #133)
+
+- Scope: the test debt left from the cleanup pull request.
+  Branch `cursor/test-debt-133-8a99`, from `origin/master`
+  `1db5931`. No Alembic revision. No live market data.
+  The owner is Przemek. Refs #133. Production code was not
+  edited.
+- Tests first. `FundAttributesRepository.delete` still
+  catches only `IntegrityError`. When `commit` raises
+  `OperationalError`, the method does not call
+  `session.rollback()`. The test records those calls. The
+  list is empty. The row is still there on a fresh session,
+  because that commit never removed it. `get_db` closes the
+  request session afterwards. That close is not this method.
+  QA and code review can decide whether a rollback belongs
+  in `delete`. This change does not add one.
+- The HTTP check uses
+  `TestClient(app, raise_server_exceptions=False)`. DELETE
+  is 500. The body is the text `Internal Server Error`, the
+  same plain body as the `ValueError` check. `database is
+  locked` is not in the body, and neither is
+  `Delete failed due to constraint violation`. The row stays.
+- The unhandled panel error now runs with `HX-Request` and
+  without it, for `note-add` and for `thesis-status`. Each
+  is 500, the body is `Internal Server Error`, and
+  `HX-Research-Panel` is absent.
+- The helper
+  `assert_operational_error_on_delete_propagates` sets
+  `commit` and `rollback` with `monkeypatch.setattr`. The
+  manual assign and the `finally` restore are gone.
+- Already covered, checked on this master, no new test:
+  - a DELETE that reads `request.scope["headers"]` and
+    raises fails
+    `test_delete_result_ignores_the_demo_seed_header` with
+    `RuntimeError: scope read`. That test is in
+    `tests/test_fund_attributes_delete.py`
+    (`assert_delete_result_ignores_the_demo_seed_header`),
+    from `8d0636d` (master `35338dd`, same tree);
+  - `_set_thesis_status` with `except Exception` fails
+    `test_unhandled_research_error_has_no_panel_marker` for
+    `thesis-status`. The body is the panel, not
+    `Internal Server Error`. `note-add` still passed. That
+    parameter is from `d8c3d3e` (master `1db5931`, same
+    tree). The handler in `app/ui/research_forms.py` still
+    catches only `ResearchStorageError`.
+- Mutants for the new assertions, each reverted after the
+  test failed:
+  - the route returns HTTP 500 `detail=str(error)`:
+    `test_operational_error_on_delete_is_a_plain_500` gets
+    JSON containing `database is locked`, not
+    `Internal Server Error`;
+  - `delete` rolls back `OperationalError` and raises it
+    again: `assert rollbacks == []` sees `['rollback']`;
+  - note add catches `Exception` when the request has no
+    `HX-Request`: `[note-add-False]` is the full page. The
+    other three cases passed;
+  - thesis status does the same: `[thesis-status-False]`
+    is the full page. The other three cases passed.
+- Verification: no `.env`. `DATABASE_URL` was not set.
+  SQLite 3.45.1, CI pytest command: 2232 passed, 256
+  deselected, coverage 97.19%. One
+  `StarletteDeprecationWarning` (`UserWarning`, not
+  `DeprecationWarning`) from importing `TestClient`.
+  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2232 deselected. The same warning on the
+  PostgreSQL HTTP delete. black, isort, and flake8 passed
+  on the Python files this change touches. No live
+  market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-18, from 15:54.
+- Next: GitHub Actions on this head. Code Reviewer review,
+  QA check, then CR merges after Przemek's OK. The agent
+  does not merge.
+
 ## 2026-11-18 - QA follow-up on the cleanup pull request (Refs #104, Refs #28)
 
 - Scope: QA of pull request #132 at `cd513ec` did not approve.

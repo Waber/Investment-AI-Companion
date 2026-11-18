@@ -1,5 +1,51 @@
 # Current Work State
 
+## Test debt from the cleanup pull request (#133): 2026-11-18
+
+- Branch `cursor/test-debt-133-8a99`, from `origin/master`
+  `1db5931`. One pull request to master. Refs #133. The agent
+  does not merge. No Alembic revision. No live market data.
+  Production code was not edited.
+- Completed: the fund-attribute DELETE `OperationalError`
+  response is the plain text `Internal Server Error`. The
+  driver text `database is locked` is not in the body. The
+  repository test records `session.rollback()` and the list
+  is empty: `delete` does not roll that error back. The row
+  stays because the commit never removed it. The unhandled
+  panel error is checked with `HX-Request` and without it,
+  for note add and for a thesis status change. Both are the
+  plain 500 and have no `HX-Research-Panel` marker.
+- Decision: do not add a rollback on `OperationalError`.
+  `FundAttributesRepository.delete` still catches only
+  `IntegrityError`. QA and code review can decide whether
+  that method should roll back. This note records the calls
+  the test saw.
+- Already on master, checked again, no new test:
+  `test_delete_result_ignores_the_demo_seed_header` fails
+  when DELETE reads `request.scope["headers"]` and raises
+  (`8d0636d`, master `35338dd`, same tree).
+  `test_unhandled_research_error_has_no_panel_marker` with
+  `thesis-status` fails when `_set_thesis_status` catches
+  `Exception` (`d8c3d3e`, master `1db5931`, same tree).
+  `_set_thesis_status` still catches only
+  `ResearchStorageError`.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI command: 2232 passed, 256 deselected, coverage
+  97.19%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2232 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. Each new assertion was failed by its
+  mutant, then the mutant was reverted.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Code Reviewer review, QA check, then CR merges after
+  Przemek's OK. The run id is not written here, because this
+  file is part of the commit the run tests.
+
 ## QA follow-up on the cleanup pull request: 2026-11-18
 
 - Branch `cursor/cleanup-104-130-nits-f107`. Pull request #132.
@@ -26,8 +72,9 @@
 - Active agents: none. Blockers: none. This note is not
   approval and not a merge.
 - Next action: GitHub Actions on this head, both jobs. Then
-  Przemek reviews. Do not merge. The run id is not written
-  here, because this file is part of the commit the run tests.
+  Code Reviewer review, QA check, then CR merges after
+  Przemek's OK. The run id is not written here, because this
+  file is part of the commit the run tests.
 
 ## Review nits from #104 and the attribute delete (#28): 2026-11-12
 
