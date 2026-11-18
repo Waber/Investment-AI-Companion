@@ -77,8 +77,18 @@
 {% include "partials/metric_table.html" %}
 {% endwith %}
 {% endif %}
-{% if instrument.fund_attributes %}
+{% if instrument.instrument_type in ['etf', 'etc'] or instrument.fund_attributes %}
 <h2>{{ t['fund.title'] }}</h2>
+{% if instrument.instrument_type in ['etf', 'etc'] %}
+<p class="form-actions">
+  {% if instrument.fund_attributes %}
+  <a href="/ui/companies/{{ instrument.id }}/fund-attributes/edit">{{ t['action.edit_fund'] }}</a>
+  {% else %}
+  <a href="/ui/companies/{{ instrument.id }}/fund-attributes/new">{{ t['action.add_fund'] }}</a>
+  {% endif %}
+</p>
+{% endif %}
+{% if instrument.fund_attributes %}
 <dl>
   {% set fund = instrument.fund_attributes %}
   <dt>{{ t['fund.issuer'] }}</dt>
@@ -86,7 +96,7 @@
   <dt>{{ t['fund.underlying'] }}</dt>
   <dd data-field="fund-underlying">{% if fund.underlying %}{{ fund.underlying }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
   <dt>{{ t['fund.ter'] }}</dt>
-  <dd data-field="fund-ter">{% if fund.ter is not none %}{{ format_number(fund.ter * 100, language) }}%{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
+  <dd data-field="fund-ter">{% if fund.ter is not none %}{{ format_ter_percent(fund.ter, language) }}%{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
   <dt>{{ t['fund.domicile'] }}</dt>
   <dd data-field="fund-domicile">{% if fund.domicile %}{{ fund.domicile }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
   <dt>{{ t['fund.replication'] }}</dt>
@@ -102,6 +112,7 @@
   <dt>{{ t['field.source'] }}</dt>
   <dd data-field="fund-source">{% if fund.source %}{{ fund.source }}{% else %}<span class="missing">{{ t['missing'] }}</span>{% endif %}</dd>
 </dl>
+{% endif %}
 {% endif %}
 {% if instrument.price_metrics %}
 <h2>{{ t['price.title'] }}</h2>
