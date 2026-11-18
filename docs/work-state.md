@@ -1,5 +1,34 @@
 # Current Work State
 
+## QA follow-up on the cleanup pull request: 2026-11-18
+
+- Branch `cursor/cleanup-104-130-nits-f107`. Pull request #132.
+  New commits on top of `cd513ec`. No rebase, no force-push,
+  no pull-request edit. Refs #104. Refs #28. The agent does
+  not merge. No live market data.
+- QA of `cd513ec` did not approve. Completed: tests pin
+  `OperationalError` on fund-attribute delete (repository and
+  HTTP 500, row kept). The demo-seed header does not change
+  the delete result. The unhandled panel error is parametrized
+  over note add and thesis status. `_set_thesis_status`
+  already catches only `ResearchStorageError`, so
+  `research_forms.py` was not edited. Delete production code
+  was not edited.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI command: 2230 passed, 256 deselected, coverage
+  97.19%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2230 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## Review nits from #104 and the attribute delete (#28): 2026-11-12
 
 - Branch `cursor/cleanup-104-130-nits-f107`, from `origin/master`
