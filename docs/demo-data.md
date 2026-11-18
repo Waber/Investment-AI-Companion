@@ -123,7 +123,13 @@ ETFs (`DEMO_ETF_WORLD`, `DEMO_ETF_GPW`) and two synthetic ETCs
 an `attributes` object. Stocks have `attributes` null. Every
 attribute object has `source` `demo` and an `as_of` date. The seeder
 stores `is_synthetic` true and `source` `demo`. `DEMO_ETF_GPW` leaves
-`ter` null. A missing fee is not zero. The price `source` on each
+`ter` null. A missing fee is not zero. The 2025 annual row of each
+stock except `DEMO_PL_EMPTY` also stores the ratios from the fake
+collector: fractions for ROE, net margin, and revenue growth, and
+debt-to-equity as a percent (`45` means 0.45 times equity). The
+collector calls net margin `profit_margin`. The fixture stores that
+number in `net_margin`. `DEMO_PL_EMPTY` still has no metric rows.
+The price `source` on each
 bar stays `[IAC-DEMO-V2]`. That string is the series name. It is not
 the company or attribute `source` column.
 
