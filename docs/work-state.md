@@ -56,6 +56,44 @@
   send PR content to a model, so REVIEW.md puts them on his list.
   Agents do not merge.
 
+## Score review fixes (Refs #35): 2026-11-18
+
+- Branch `cursor/instrument-score-s1-90ae`, on top of `20facf5`.
+  No rebase and no force-push. Refs #35. Does not finish the
+  issue. The agent does not merge. No live market data.
+- Completed: debt-to-equity is scored as a percent (0 is 100,
+  200 is 0). Price volatility and drawdown stay fresh for 92
+  days. Demo-v2 2025 annual rows store the collector ratios.
+  Contributions use largest-remainder rounding and are never
+  negative. The weight PUT is sync. The body is capped at
+  16 KiB (413). `ValueError` and `RecursionError` on a PUT
+  are 422. A stored row that cannot be parsed is the fixed
+  500. The version update adds 1 in SQL. A unique conflict
+  on the first insert is retried once. `save` returns the
+  committed row, and the route answers from that row.
+- Live coverage on 2026-11-18, with the fixture prices ending
+  2026-09-28: `DEMO_PL_TECH`, `DEMO_US_GROWTH`,
+  `DEMO_DE_INDUSTRY`, `DEMO_JP_STABLE`, `DEMO_ETF_WORLD`,
+  `DEMO_ETC_GOLD`, and `DEMO_ETC_SILVER` are scored, 4 of 4.
+  `DEMO_ETF_GPW` is scored, 3 of 4. `DEMO_SG_EARLY` is scored,
+  3 of 4.   `DEMO_PL_EMPTY` is `no_score`, 0 of 4. 2026-12-30 is the
+  first day those price figures are stale.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI command: 2325 passed, 258 deselected, coverage
+  97.33%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  258 passed, 2325 deselected. Upgrade, downgrade, and
+  upgrade of `0011` ran on both engines. black, isort, and
+  flake8 passed on the Python files this change touches.
+  No live market-data calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## Backend instrument score (Refs #35): 2026-11-18
 
 - Branch `cursor/instrument-score-s1-90ae`, from `origin/master`

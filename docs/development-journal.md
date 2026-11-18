@@ -125,6 +125,48 @@
   its instructions file), and a check that the head marker survives
   a real submit.
 
+## 2026-11-18 - Score review fixes (Refs #35)
+
+- Scope: the review of pull request #135 at `20facf5`. New
+  commits on `cursor/instrument-score-s1-90ae`. No rebase and
+  no force-push. Refs #35. Does not finish the issue. The
+  agent does not merge. No live market data.
+- Tests first. Each review item has a test that failed on
+  `20facf5` before the change: collector debt-to-equity 45
+  scored 0, a tiny score produced a contribution of -0.01, a
+  bad weight body was 500, the route was a coroutine, a deep
+  stored row was not the fixed 500, a stale in-memory version
+  became 3 instead of 10, and a lost first insert raised
+  instead of retrying. The demo coverage test uses
+  2026-11-18, not the fixture date.
+- Debt-to-equity is a percent. 0 scores 100 and 200 scores 0.
+  Price volatility and drawdown stay fresh for 92 days. The
+  2025 annual demo rows now store the collector ratios.
+  Contributions use largest-remainder rounding. The weight
+  PUT is a sync route. Its body is read by an async
+  dependency, capped at 16 KiB (413), and `ValueError` plus
+  `RecursionError` are 422. A stored row that cannot be
+  parsed, including a deep array, is the fixed 500. The
+  version update is `version + 1` in SQL. A unique conflict
+  on the first insert is rolled back and tried once.
+- On 2026-11-18 the demo scores are the table in
+  `docs/scoring.md`. `DEMO_ETF_GPW` is 3 of 4. The five stocks
+  that have ratios score. `DEMO_PL_EMPTY` is `no_score`.
+  `DEMO_SG_EARLY` is 3 of 4. 2026-12-30 is the first day
+  those price figures are stale.
+- Verification: no `.env`. `DATABASE_URL` was not set for the
+  pytest runs. SQLite 3.45.1, CI command: 2325 passed, 258
+  deselected, coverage 97.33%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  258 passed, 2325 deselected. Upgrade, downgrade, and upgrade
+  of `0011` ran on both engines from a legacy schema. black,
+  isort, and flake8 passed on the Python files this change
+  touches. No live market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-18, from 17:22 to 17:32.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-18 - Backend instrument score (Refs #35)
 
 - Scope: the first slice of the instrument score. One branch,
@@ -170,7 +212,7 @@
   and on PostgreSQL. black, isort, and flake8 passed on the
   Python files this change touches. No live market-data calls.
 - AI model: Grok 4.7. This session did not read the usage meter.
-- Time tracking (UTC): 2026-11-18, from 16:46.
+- Time tracking (UTC): 2026-11-18, from 16:46 to 17:15.
 - Next: GitHub Actions on this head. Do not merge.
 
 ## 2026-11-18 - Test debt from the cleanup pull request (Refs #133)

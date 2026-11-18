@@ -44,9 +44,12 @@ The price return over one year and three years is computed in
 The score reads the ratio columns. It does not divide net income by
 equity itself. A row that stores revenue but leaves `roe` empty
 contributes no profitability from that row. The ratios are
-fractions: `0.15` means 15 percent. `debt_to_equity` is a multiple:
-`1` means debt equals equity. `ter` is a fraction of assets per
-year: `0.0022` means 0.22 percent. The legacy sample in
+fractions: `0.15` means 15 percent. `debt_to_equity` is a percent,
+the same unit Yahoo's `debtToEquity` uses and the same unit
+`STOCK_METRICS` in `app/data_collectors/fake.py` stores. `45` means
+0.45 times equity, not 45 times. `ter` is a fraction of assets per
+year: `0.0022` means 0.22 percent. The collector's `profit_margin`
+is stored on the score as `net_margin`. The legacy sample in
 `app/core/init_db.py` stores ROE as `15.6` with a comment that means
 15.6 percent. This score would treat `15.6` as far above the top of
 the scale and clamp it to 100.
@@ -75,7 +78,7 @@ That is how "cheaper" and "calmer" work.
 | Net margin | 0 | 0.20 |
 | P/E | 30 | 10 |
 | P/B | 5 | 1 |
-| Debt to equity | 2 | 0 |
+| Debt to equity (percent) | 200 | 0 |
 | Current ratio | 0.5 | 2 |
 | Revenue growth | -0.10 | 0.20 |
 | TER | 0.01 (1 percent) | 0 |
@@ -85,8 +88,9 @@ That is how "cheaper" and "calmer" work.
 Worked example. ROE `0.10` is halfway from 0 to 0.20, so 50. Net
 margin `0.20` is the top, so 100. Profitability is the average, 75.
 P/E 20 is halfway from 30 to 10, so 50. The same halfway reading
-gives 50 for P/B 3, debt-to-equity 1, current ratio 1.25, and
-revenue growth 0.05.
+gives 50 for P/B 3, debt-to-equity 100 (1.0 times equity), current
+ratio 1.25, and revenue growth 0.05. Debt-to-equity 45, the figure
+stored for `DEMO_PL_TECH`, scores 77.50.
 
 AUM uses a logarithm, because a fund ten times larger is the step
 that matters, not a fixed amount of currency. `log10` of the AUM is
@@ -117,12 +121,16 @@ A date in the future still counts. A missing date does not.
 | --- | --- |
 | Stock ratios (`period_end`) | 548 days |
 | TER and AUM | 366 days |
-| Volatility and max drawdown | 7 days |
+| Volatility and max drawdown | 92 days |
 
 548 days is about eighteen months, so an annual filing can still be
 the latest one. 366 days keeps a leap year inside one year for a
-fee or a fund size. 7 days is the same edge the watchlist uses for a
-price: the day that is exactly 7 days back is fresh.
+fee or a fund size. Volatility and max drawdown already describe a
+year of weekly closes. A missed week does not make that year stale.
+92 days is about one quarter, the same length the watchlist uses for
+a trend window. The watchlist's 7-day rule is for the latest price,
+not for this one-year figure. The day that is exactly 92 days back
+is still fresh.
 
 TER uses the attribute row's `as_of`. AUM uses `aum_as_of` when that
 date is stored, and otherwise the row's `as_of`. A stock ratio uses
@@ -178,12 +186,12 @@ two decimal places. Python's `round` uses half-to-even. This code
 uses `Decimal` and `ROUND_HALF_UP`, which is the school rule: 0.005
 rounds away from zero to 0.01.
 
-The contribution is the renormalized weight times the component
-score, then that same rounding. The total is the sum of the
-unrounded contributions, rounded half up to two decimal places.
-When the rounded contributions do not add up to that total, the
-last included component's contribution changes by the difference.
-That difference is one or two hundredths. Adding the published
+The contribution starts as the renormalized weight times the
+component score. The total is the sum of those values, rounded
+half up to two decimal places. Each contribution is then cut down
+to a whole cent, and the cents still needed to reach that total go
+to the largest discarded fractions. A tie goes to the earlier
+component. A contribution is never negative. Adding the published
 contributions gives the published total.
 
 `effective_weight` is the renormalized share rounded half up to
@@ -192,7 +200,9 @@ can be a hundredth away from the contribution. Add the
 contributions, not the rounded shares.
 
 Three components that each score 50, with equal weight, are
-`16.67`, `16.67` and `16.66`. The total is `50.00`.
+`16.67`, `16.67` and `16.66`. The total is `50.00`. Four equal
+components that score `0.02`, `0.02`, `0.02` and `0.00` are
+`0.01`, `0.01`, `0.00` and `0.00`. The total is `0.02`.
 
 ## Coverage and the oldest date
 
@@ -217,7 +227,32 @@ date.
 replace the weight set. The shapes, status codes, and the fixed
 error sentences are in `docs/api-demo.md`.
 
-`DEMO_ETF_GPW` in `fixtures/demo-v2.json` has no TER. On the
-fixture as-of date, 2026-09-30, cost is no data and the other three
-ETF components score, so coverage is `3 of 4`. `DEMO_PL_EMPTY` has
-no metric rows, so the stock score is `no_score`.
+`DEMO_ETF_GPW` in `fixtures/demo-v2.json` has no TER. Cost is no
+data. The 2025 annual row of each demo stock except `DEMO_PL_EMPTY`
+stores the ratios from `STOCK_METRICS`, including debt-to-equity as
+a percent and the collector's profit margin in `net_margin`.
+`DEMO_PL_EMPTY` has no metric rows.
+
+On 2026-11-18 the fixture prices still end on 2026-09-28, which is
+51 days earlier. That is inside the 92-day window, and the 2025
+annual ratios are inside the 548-day window. A score on that date
+shows:
+
+| Ticker | Status | Coverage |
+| --- | --- | --- |
+| `DEMO_PL_TECH` | scored | 4 of 4 |
+| `DEMO_US_GROWTH` | scored | 4 of 4 |
+| `DEMO_DE_INDUSTRY` | scored | 4 of 4 |
+| `DEMO_JP_STABLE` | scored | 4 of 4 |
+| `DEMO_SG_EARLY` | scored | 3 of 4 |
+| `DEMO_PL_EMPTY` | no_score | 0 of 4 |
+| `DEMO_ETF_WORLD` | scored | 4 of 4 |
+| `DEMO_ETF_GPW` | scored | 3 of 4 |
+| `DEMO_ETC_GOLD` | scored | 4 of 4 |
+| `DEMO_ETC_SILVER` | scored | 4 of 4 |
+
+`DEMO_SG_EARLY` has no P/E and no revenue growth, so growth is no
+data and valuation uses P/B alone. 2026-12-29 is still inside the
+window (92 days after 2026-09-28). 2026-12-30 is the first stale
+day. Until the fixture gains a later close, a score on or after
+that date drops volatility and max drawdown.

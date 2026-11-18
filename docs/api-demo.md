@@ -121,10 +121,16 @@ body that is not the object `{"weights": {...}}`, or weights that
 are not finite numbers from 0 to 1000000, or a set that is all
 zeros, or a set that names the wrong components, is 422 with one
 fixed `detail` sentence. The sentence does not repeat the payload.
-A stored weight row that is not valid JSON is 500
+A stored weight row that is not valid JSON, including one nested
+so deeply that parsing it overflows, is 500
 `{"detail": "Score weights could not be read"}`. A commit that
 fails the constraint check is 400
-`{"detail": "Score weights could not be saved"}`.
+`{"detail": "Score weights could not be saved"}`. A body larger
+than 16 KiB is 413
+`{"detail": "Score weights are too large"}`. Invalid text, a
+number too big to parse, and a deeply nested value are 422
+`{"detail": "Score weights must be an object"}`. None of those
+sentences repeats the body.
 
 `instrument_type` is `STOCK`, `ETF`, or `ETC`. Omitting it on create
 stores `STOCK`. On update, omit it to keep the stored type. JSON
