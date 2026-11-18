@@ -403,6 +403,57 @@ class FundAttributesDB(Base):
     )
 
 
+class ScoreWeightsDB(Base):
+    """The current weight set for one instrument type.
+
+    One row per type. ``version`` starts at 2 for the first PUT,
+    because version 1 is the built-in equal set and is not a row.
+    Each later PUT adds 1. The weights are a JSON object whose keys
+    are the component names. This table does not keep older versions
+    and it does not store a computed score.
+
+    The unique key is the instrument type alone. The demo has no
+    users. A later migration can add an owner column and widen that
+    key. There is no owner column in this table.
+    """
+
+    __tablename__ = "score_weights"
+
+    id = Column(Integer, primary_key=True)
+    instrument_type = Column(String(8), nullable=False)
+    version = Column(Integer, nullable=False)
+    # JSON text, for example {"cost": 1, "size": 1, ...}. The
+    # application checks the keys. The column is text so SQLite and
+    # PostgreSQL store the same bytes.
+    weights = Column(Text, nullable=False)
+    created_at = Column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_type",
+            name="uq_score_weights_instrument_type",
+        ),
+        CheckConstraint(
+            "instrument_type IN ('STOCK', 'ETF', 'ETC')",
+            name="ck_score_weights_instrument_type",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_score_weights_version",
+        ),
+    )
+
+
 class PriceBarDB(Base):
     """One stored price bar for an instrument.
 
