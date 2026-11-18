@@ -249,17 +249,50 @@ def get_score_weights(instrument_type: str, db: Session = Depends(get_db)):
     return _weight_body(instrument_type, weights, version, stored)
 
 
+def _declared_length(request):
+    """The Content-Length, or None when the header is absent.
+
+    A value that is not a non-negative integer is the same 413 as a
+    body that is too large. The header text is not copied.
+    """
+    raw = request.headers.get("content-length")
+    if raw is None:
+        return None
+    if not raw.isdigit():
+        raise HTTPException(status_code=413, detail=_TOO_LARGE)
+    return int(raw)
+
+
+async def _read_capped(request):
+    """Read at most 16 KiB plus one byte, then stop."""
+    received = bytearray()
+    limit = _MAX_WEIGHT_BODY
+    async for chunk in request.stream():
+        if not chunk:
+            continue
+        room = limit + 1 - len(received)
+        if room <= 0:
+            raise HTTPException(status_code=413, detail=_TOO_LARGE)
+        received.extend(chunk[:room])
+        if len(received) > limit:
+            raise HTTPException(status_code=413, detail=_TOO_LARGE)
+    return bytes(received)
+
+
 async def _json_payload(request: Request):
     """The JSON object, or a fixed error that does not quote the body.
 
-    More than 16 KiB is 413. Invalid text, a number that is too big
-    to parse, and a value nested deep enough to overflow the parser
-    are 422. ``ValueError`` covers a bad encoding and that oversized
-    integer. ``RecursionError`` is separate: it is not a ``ValueError``.
+    A Content-Length over 16 KiB, or one that is not a size, is 413
+    before any body byte is read. A chunked body with no length is
+    read only until it passes that cap. Invalid text, a number that
+    is too big to parse, and a value nested deep enough to overflow
+    the parser are 422. ``ValueError`` covers a bad encoding and that
+    oversized integer. ``RecursionError`` is not a ``ValueError``.
     """
-    raw = await request.body()
-    if len(raw) > _MAX_WEIGHT_BODY:
+    declared = _declared_length(request)
+    if declared is not None and declared > _MAX_WEIGHT_BODY:
         raise HTTPException(status_code=413, detail=_TOO_LARGE)
+    raw = await _read_capped(request)
     if not raw:
         raise HTTPException(status_code=422, detail=_NOT_OBJECT)
     try:

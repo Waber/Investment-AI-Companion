@@ -963,6 +963,187 @@ async def test_openapi_score_text_has_no_advice_words(client):
     _assert_no_advice(models)
 
 
+_TWO_DECIMALS = re.compile(r"^-?\d+\.\d{2}$")
+
+
+def _assert_score_strings_have_two_decimals(body):
+    """Totals and normalized scores are hundredths, not '12.5' or '0'."""
+    assert _TWO_DECIMALS.fullmatch(body["total"])
+    for part in body["components"]:
+        if part["normalized"] is not None:
+            assert _TWO_DECIMALS.fullmatch(part["normalized"])
+        if part["contribution"] is not None:
+            assert _TWO_DECIMALS.fullmatch(part["contribution"])
+        for item in part["inputs"]:
+            if item["normalized"] is not None:
+                assert _TWO_DECIMALS.fullmatch(item["normalized"])
+
+
+def _ratios(session, ticker, **fields):
+    company = _company(session, ticker, "STOCK")
+    moment = datetime(
+        STATEMENT_FRESH.year,
+        STATEMENT_FRESH.month,
+        STATEMENT_FRESH.day,
+        tzinfo=timezone.utc,
+    )
+    _metric(session, company.id, moment, "annual", **fields)
+    return company.id
+
+
+@pytest.mark.asyncio
+async def test_equal_fifties_print_twelve_fifty(client):
+    """Four components at 50 contribute '12.50' each, not '12.5'."""
+    session = _session(client)
+    try:
+        instrument_id = _ratios(
+            session,
+            "FIFTY",
+            roe=0.10,
+            net_margin=0.10,
+            pe_ratio=20,
+            pb_ratio=3,
+            debt_to_equity=100,
+            current_ratio=1.25,
+            revenue_growth=0.05,
+        )
+    finally:
+        session.close()
+    response = await client.get(f"/api/v1/instruments/{instrument_id}/score")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == "50.00"
+    assert [part["contribution"] for part in body["components"]] == [
+        "12.50",
+        "12.50",
+        "12.50",
+        "12.50",
+    ]
+    _assert_score_strings_have_two_decimals(body)
+
+
+@pytest.mark.asyncio
+async def test_half_cent_contributions_print_zero_as_two_decimals(client):
+    """Unrounded 0.005 cents still print a zero contribution as '0.00'."""
+    session = _session(client)
+    try:
+        instrument_id = _ratios(
+            session,
+            "HALFC",
+            roe=0.00004,
+            net_margin=0.00004,
+            pe_ratio=29.996,
+            pb_ratio=4.9992,
+            debt_to_equity=199.96,
+            current_ratio=0.5003,
+            revenue_growth=-0.10,
+        )
+    finally:
+        session.close()
+    response = await client.get(f"/api/v1/instruments/{instrument_id}/score")
+    body = response.json()
+    assert body["total"] == "0.02"
+    contributions = [part["contribution"] for part in body["components"]]
+    assert "0.00" in contributions
+    assert all(item >= "0.00" for item in contributions)
+    _assert_score_strings_have_two_decimals(body)
+
+
+async def _put_raw(app, headers, receive):
+    """One PUT through ASGI, so the test chooses Content-Length and chunks."""
+    sent = []
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "PUT",
+        "scheme": "http",
+        "path": "/api/v1/score-weights/STOCK",
+        "raw_path": b"/api/v1/score-weights/STOCK",
+        "query_string": b"",
+        "headers": headers,
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 80),
+    }
+    await app(scope, receive, send)
+    start = next(
+        item for item in sent if item["type"] == "http.response.start"
+    )
+    chunks = [
+        item.get("body", b"")
+        for item in sent
+        if item["type"] == "http.response.body"
+    ]
+    return start["status"], b"".join(chunks)
+
+
+@pytest.mark.asyncio
+async def test_oversized_content_length_is_413_before_the_body(client):
+    """A declared length over 16 KiB is 413 even when the bytes are small.
+
+    A Content-Length that is not a non-negative integer uses that same
+    sentence. The bad header text is not copied into the answer.
+    """
+    reads = {"n": 0}
+
+    async def receive():
+        reads["n"] += 1
+        return {
+            "type": "http.request",
+            "body": b'{"weights":{"profitability":1,"valuation":1,'
+            b'"balance_sheet":1,"growth":1}}',
+            "more_body": False,
+        }
+
+    host = (b"host", b"127.0.0.1")
+    kind = (b"content-type", b"application/json")
+    status, payload = await _put_raw(
+        client.app,
+        [host, kind, (b"content-length", b"100000")],
+        receive,
+    )
+    assert status == 413
+    assert json.loads(payload) == {"detail": "Score weights are too large"}
+    assert reads["n"] == 0
+    status, payload = await _put_raw(
+        client.app,
+        [host, kind, (b"content-length", b"nope")],
+        receive,
+    )
+    assert status == 413
+    assert json.loads(payload) == {"detail": "Score weights are too large"}
+    assert b"nope" not in payload
+
+
+@pytest.mark.asyncio
+async def test_streamed_body_stops_at_the_size_cap(client):
+    """A chunked body with no Content-Length is not read past the cap."""
+    delivered = {"n": 0}
+    chunk = b"x" * 1024
+
+    async def receive():
+        if delivered["n"] >= 64 * 1024:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        delivered["n"] += len(chunk)
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    status, payload = await _put_raw(
+        client.app,
+        [
+            (b"host", b"127.0.0.1"),
+            (b"content-type", b"application/json"),
+        ],
+        receive,
+    )
+    assert status == 413
+    assert json.loads(payload) == {"detail": "Score weights are too large"}
+    assert delivered["n"] <= 16 * 1024 + len(chunk)
+
+
 def _quiet(client):
     from httpx import ASGITransport, AsyncClient
 

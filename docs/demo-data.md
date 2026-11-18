@@ -129,6 +129,9 @@ collector: fractions for ROE, net margin, and revenue growth, and
 debt-to-equity as a percent (`45` means 0.45 times equity). The
 collector calls net margin `profit_margin`. The fixture stores that
 number in `net_margin`. `DEMO_PL_EMPTY` still has no metric rows.
+The seeder does not update a row that is already stored, so a demo
+database seeded before these ratios must be reset and seeded again
+or those stocks stay without a score.
 The price `source` on each
 bar stays `[IAC-DEMO-V2]`. That string is the series name. It is not
 the company or attribute `source` column.

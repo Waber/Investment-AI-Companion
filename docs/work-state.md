@@ -56,6 +56,35 @@
   send PR content to a model, so REVIEW.md puts them on his list.
   Agents do not merge.
 
+## Score cent strings and the body cap (Refs #35, Refs #136): 2026-11-18
+
+- Branch `cursor/instrument-score-s1-90ae`, on top of `37a3345`.
+  No rebase and no force-push. Refs #35. Refs #136. Does not
+  finish either issue. The agent does not merge. No live
+  market data.
+- Completed: a contribution of a whole number of cents is a
+  two-decimal string (`12.50`, `0.00`). The weight PUT rejects
+  a Content-Length over 16 KiB, and a length that is not a
+  non-negative integer, with 413 `Score weights are too large`,
+  before reading the body. A chunked body stops at 16 KiB plus
+  one byte. The legacy sample that stores ROE as `15.6` is
+  Refs #136. An already seeded demo database has to be reset
+  and seeded again to pick up the new ratios.
+- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
+  3.45.1, CI command: 2329 passed, 258 deselected, coverage
+  97.32%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  258 passed, 2329 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- Account usage: this session cannot read the meter. No
+  percentage is recorded. No reset was redeemed.
+- Active agents: none. Blockers: none. This note is not
+  approval and not a merge.
+- Next action: GitHub Actions on this head, both jobs. Then
+  Przemek reviews. Do not merge. The run id is not written
+  here, because this file is part of the commit the run tests.
+
 ## Score review fixes (Refs #35): 2026-11-18
 
 - Branch `cursor/instrument-score-s1-90ae`, on top of `20facf5`.
@@ -116,8 +145,8 @@
   - Ratios are fractions (`0.15` is 15 percent).
     Debt-to-equity is a multiple (`1` is one times equity).
     TER is a fraction. The legacy sample that stores ROE as
-    `15.6` would clamp to 100. The score does not recompute a
-    ratio from the statement lines.
+    `15.6` would clamp to 100. Refs #136. The score does not
+    recompute a ratio from the statement lines.
   - Straight scales are in `docs/scoring.md`. AUM is `log10`
     from 10 million (0) to 100 billion (100). P/E and P/B at
     or below 0 are no data. A negative ROE still scores.
