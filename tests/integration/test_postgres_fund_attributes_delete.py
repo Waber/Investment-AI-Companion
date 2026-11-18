@@ -17,10 +17,13 @@ from tests.test_fund_attributes_delete import (
     assert_delete_keeps_the_instrument,
     assert_delete_on_a_stock_keeps_the_stock,
     assert_delete_rejects_id,
+    assert_delete_result_ignores_the_demo_seed_header,
     assert_etc_without_a_row_is_404,
     assert_failed_delete_commit_rolls_back,
     assert_http_delete_constraint_rolls_back,
     assert_http_delete_leaves_the_other_fund,
+    assert_http_operational_error_is_not_the_constraint_400,
+    assert_operational_error_on_delete_propagates,
     assert_repository_delete_happy_path,
     assert_repository_delete_leaves_the_other_row,
     assert_repository_delete_missing,
@@ -44,6 +47,7 @@ def test_repository_delete_on_postgresql(session):
     assert_repository_delete_missing(session)
     assert_repository_delete_leaves_the_other_row(session)
     assert_failed_delete_commit_rolls_back(session, ticker="ROLL")
+    assert_operational_error_on_delete_propagates(session, ticker="OPER")
 
 
 @pytest.mark.asyncio
@@ -57,6 +61,12 @@ async def test_http_delete_on_postgresql(postgres_client, monkeypatch):
     for raw in ("0", "-1", _HUGE_ID):
         await assert_delete_rejects_id(postgres_client, raw)
     await assert_http_delete_constraint_rolls_back(
+        postgres_client, monkeypatch
+    )
+    await assert_http_operational_error_is_not_the_constraint_400(
+        postgres_client, monkeypatch
+    )
+    await assert_delete_result_ignores_the_demo_seed_header(
         postgres_client, monkeypatch
     )
     await assert_delete_does_not_echo_a_value_error(
