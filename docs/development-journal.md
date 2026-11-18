@@ -1,5 +1,57 @@
 # Development Journal
 
+## 2026-11-18 - QA follow-up on the cleanup pull request (Refs #104, Refs #28)
+
+- Scope: QA of pull request #132 at `cd513ec` did not approve.
+  New commits on `cursor/cleanup-104-130-nits-f107`. No rebase,
+  no force-push, no pull-request edit. No Alembic revision.
+  No live market data. The owner is Przemek. Refs #104.
+  Refs #28.
+- Tests first. Production delete code is unchanged.
+  `FundAttributesRepository.delete` still catches only
+  `IntegrityError`.
+- A commit that raises `OperationalError` propagates that
+  error. It is not `FundAttributesDeleteError`. After
+  `rollback`, a fresh session still has the row, same id,
+  issuer `Stay`, and company. The HTTP check uses
+  `TestClient(app, raise_server_exceptions=False)` with the
+  same commit patch. DELETE is 500. The body does not contain
+  `Delete failed due to constraint violation`. The row is
+  still stored. Both run on SQLite and on PostgreSQL.
+- Mutants, each reverted after the test failed:
+  - catching `OperationalError` on the `IntegrityError` path
+    raises `FundAttributesDeleteError` from the repository
+    and returns HTTP 400 from the route;
+  - `except Exception` around `commit` does the same.
+- The demo-seed check now compares three deletes: no header,
+  the real token, and 64 hex characters that are not the
+  token. `DEMO_SEED_ENABLED` is true. Status 204, empty body,
+  the attribute row gone, and the company still there are
+  the same in all three. A route that reads
+  `request.scope["headers"]` and raises failed that test
+  with `RuntimeError`. The header spy from the previous
+  commit stays.
+- An unhandled error on a thesis status change is already
+  the plain 500. `_set_thesis_status` catches
+  `ResearchStorageError` only, the same as note add, so
+  that file was not edited. The unhandled-error test is now
+  parametrized over `note-add` and `thesis-status`. Changing
+  the thesis handler to `except Exception` fails
+  `thesis-status` (the body is the panel, not
+  `Internal Server Error`). `note-add` still passed.
+- Verification: no `.env`. `DATABASE_URL` was not set.
+  SQLite 3.45.1, CI pytest command: 2230 passed, 256
+  deselected, coverage 97.19%. One `StarletteDeprecationWarning`
+  (`UserWarning`, not `DeprecationWarning`) from importing
+  `TestClient`. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2230 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-18, from 15:24.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - Review nits from the panel and the attribute delete (Refs #104, Refs #28)
 
 - Scope: the three test nits left from pull request #104, the two

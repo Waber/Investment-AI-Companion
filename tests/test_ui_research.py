@@ -1501,8 +1501,9 @@ async def test_failed_thesis_close_marks_the_research_panel(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("route", ["note-add", "thesis-status"])
 async def test_unhandled_research_error_has_no_panel_marker(
-    client, monkeypatch
+    client, monkeypatch, route
 ):
     """An exception that is not a storage error has no panel marker.
 
@@ -1510,7 +1511,9 @@ async def test_unhandled_research_error_has_no_panel_marker(
     Error``. ``ui.js`` must not swap that text over ``#research``.
     The test client is told not to re-raise: Starlette sends the
     500 and then raises, and the headers are on the response it
-    already sent.
+    already sent. Note add and a thesis status change both do this.
+    Catching ``Exception`` on either route and returning the marked
+    panel would put the marker on this answer.
     """
     from httpx import ASGITransport, AsyncClient
 
@@ -1519,15 +1522,22 @@ async def test_unhandled_research_error_has_no_panel_marker(
     def boom(*args, **kwargs):
         raise RuntimeError("unhandled research failure")
 
-    monkeypatch.setattr(NoteRepository, "create", boom)
-    path = f"/ui/companies/{company_id}/notes"
+    if route == "note-add":
+        monkeypatch.setattr(NoteRepository, "create", boom)
+        path = f"/ui/companies/{company_id}/notes"
+        data = {"body": "Nowa treść"}
+    else:
+        thesis_id = thesis(client, company_id, "Teza", "2026-10-28T13:05")
+        monkeypatch.setattr(ThesisRepository, "set_status", boom)
+        path = f"/ui/companies/{company_id}/theses/{thesis_id}/close"
+        data = {}
     transport = ASGITransport(app=client.app, raise_app_exceptions=False)
     async with AsyncClient(
         transport=transport, base_url="http://127.0.0.1"
     ) as quiet:
         failed = await quiet.post(
             path,
-            data={"body": "Nowa treść"},
+            data=data,
             headers={"origin": _ORIGIN, **_HTMX},
         )
     assert failed.status_code == 500
