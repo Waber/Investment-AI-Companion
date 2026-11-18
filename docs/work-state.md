@@ -9,17 +9,16 @@
 - Completed: the fund-attribute DELETE `OperationalError`
   response is the plain text `Internal Server Error`. The
   driver text `database is locked` is not in the body. The
-  repository test records `session.rollback()` and the list
-  is empty: `delete` does not roll that error back. The row
-  stays because the commit never removed it. The unhandled
-  panel error is checked with `HX-Request` and without it,
-  for note add and for a thesis status change. Both are the
-  plain 500 and have no `HX-Research-Panel` marker.
-- Decision: do not add a rollback on `OperationalError`.
-  `FundAttributesRepository.delete` still catches only
-  `IntegrityError`. QA and code review can decide whether
-  that method should roll back. This note records the calls
-  the test saw.
+  repository test checks that `OperationalError` propagates,
+  that it is not `FundAttributesDeleteError`, and that a
+  fresh session still has the row. It does not count
+  `session.rollback()` calls. The unhandled panel error is
+  checked with `HX-Request` and without it, for note add and
+  for a thesis status change. Both are the plain 500 and
+  have no `HX-Research-Panel` marker.
+- Decision: CR: no rollback in delete; get_db close handles
+  it. `FundAttributesRepository.delete` still catches only
+  `IntegrityError`. Production code was not edited.
 - Already on master, checked again, no new test:
   `test_delete_result_ignores_the_demo_seed_header` fails
   when DELETE reads `request.scope["headers"]` and raises
@@ -36,15 +35,18 @@
   256 passed, 2232 deselected. black, isort, and flake8
   passed on the Python files this change touches. No live
   market-data calls. Each new assertion was failed by its
-  mutant, then the mutant was reverted.
+  mutant, then the mutant was reverted. The CR follow-up
+  drops the rollback-call assert and re-ran the same
+  commands with the same counts.
 - Account usage: this session cannot read the meter. No
   percentage is recorded. No reset was redeemed.
 - Active agents: none. Blockers: none. This note is not
   approval and not a merge.
 - Next action: GitHub Actions on this head, both jobs. Then
-  Code Reviewer review, QA check, then CR merges after
-  Przemek's OK. The run id is not written here, because this
-  file is part of the commit the run tests.
+  Code Reviewer review, QA check, and CR merges under
+  Przemek's standing merge rule (non-critical change). The
+  run id is not written here, because this file is part of
+  the commit the run tests.
 
 ## QA follow-up on the cleanup pull request: 2026-11-18
 
@@ -72,9 +74,10 @@
 - Active agents: none. Blockers: none. This note is not
   approval and not a merge.
 - Next action: GitHub Actions on this head, both jobs. Then
-  Code Reviewer review, QA check, then CR merges after
-  Przemek's OK. The run id is not written here, because this
-  file is part of the commit the run tests.
+  Code Reviewer review, QA check, and CR merges under
+  Przemek's standing merge rule (non-critical change). The
+  run id is not written here, because this file is part of
+  the commit the run tests.
 
 ## Review nits from #104 and the attribute delete (#28): 2026-11-12
 
