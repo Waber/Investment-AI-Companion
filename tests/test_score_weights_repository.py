@@ -1,12 +1,16 @@
 """The stored version moves in the database, not in a stale object."""
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, create_db_engine
-from app.repositories.score_weights_repository import ScoreWeightsRepository
+from app.repositories.score_weights_repository import (
+    ScoreWeightsRepository,
+    ScoreWeightsSaveError,
+)
 from app.scoring import default_weights
 
 
@@ -103,12 +107,8 @@ def test_a_second_insert_conflict_is_a_fixed_error(monkeypatch):
             )
 
         monkeypatch.setattr(session, "commit", _explode)
-        try:
+        with pytest.raises(ScoreWeightsSaveError) as caught:
             ScoreWeightsRepository(session).save("ETC", default_weights("ETC"))
-        except Exception as error:
-            assert type(error).__name__ == "ScoreWeightsSaveError"
-            assert "driver said" not in str(error)
-        else:
-            raise AssertionError("the second conflict must fail")
+        assert "driver said" not in str(caught.value)
     finally:
         session.close()

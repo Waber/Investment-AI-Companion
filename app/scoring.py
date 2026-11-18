@@ -581,7 +581,9 @@ def _largest_remainder(unrounded):
     given = list(floors)
     for step in range(max(leftover, 0)):
         given[order[step]] += 1
-    return [(Decimal(item) / Decimal(100)) for item in given]
+    # scaleb keeps two decimal places. Dividing by 100 would turn
+    # 1250 cents into Decimal('12.5') and 0 cents into Decimal('0').
+    return [Decimal(item).scaleb(-2) for item in given]
 
 
 def _oldest_used(components):

@@ -125,6 +125,38 @@
   its instructions file), and a check that the head marker survives
   a real submit.
 
+## 2026-11-18 - Score cent strings and the body cap (Refs #35, Refs #136)
+
+- Scope: the follow-up review of pull request #135, from
+  `20facf5` to `37a3345`. New commits on
+  `cursor/instrument-score-s1-90ae`. No rebase and no
+  force-push. Refs #35. Refs #136. Does not finish either
+  issue. The agent does not merge. No live market data.
+- Tests first. Four equal components at 50 printed `12.5`
+  instead of `12.50`. A half-cent case printed `0` instead of
+  `0.00`. A Content-Length of 100000 on a small body was 200.
+  A chunked body with no length was read all the way to 64 KiB
+  before the 413.
+- Contributions now use `scaleb(-2)`, so a whole number of
+  cents keeps two decimal places. The weight body checks
+  Content-Length before any read. A length that is not a
+  non-negative integer is the same 413 sentence. A stream
+  stops once 16 KiB plus one byte has arrived. The legacy
+  sample ROE of `15.6` is Refs #136. `docs/demo-data.md`
+  says an already seeded demo database has to be reset and
+  seeded again, because the seeder does not update rows.
+- Verification: no `.env`. `DATABASE_URL` was not set for the
+  pytest runs. SQLite 3.45.1, CI command: 2329 passed, 258
+  deselected, coverage 97.32%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  258 passed, 2329 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-18, from 17:41 to 17:47.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-18 - Score review fixes (Refs #35)
 
 - Scope: the review of pull request #135 at `20facf5`. New

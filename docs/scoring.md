@@ -52,7 +52,7 @@ year: `0.0022` means 0.22 percent. The collector's `profit_margin`
 is stored on the score as `net_margin`. The legacy sample in
 `app/core/init_db.py` stores ROE as `15.6` with a comment that means
 15.6 percent. This score would treat `15.6` as far above the top of
-the scale and clamp it to 100.
+the scale and clamp it to 100. Refs #136.
 
 Volatility and max drawdown come from `metrics_from_bars` on the
 default price series. That is the same series the instrument detail
