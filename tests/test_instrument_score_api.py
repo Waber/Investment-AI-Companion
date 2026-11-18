@@ -152,7 +152,7 @@ def _hand_stock(session, ticker="SCORE"):
         net_margin=0.2,
         pe_ratio=20,
         pb_ratio=3,
-        debt_to_equity=1,
+        debt_to_equity=100,
         current_ratio=1.25,
         revenue_growth=0.05,
     )
@@ -239,7 +239,7 @@ async def test_latest_null_does_not_hide_an_older_figure(client):
             net_margin=0.2,
             pe_ratio=20,
             pb_ratio=3,
-            debt_to_equity=1,
+            debt_to_equity=100,
             current_ratio=1.25,
             revenue_growth=0.05,
         )
@@ -251,7 +251,7 @@ async def test_latest_null_does_not_hide_an_older_figure(client):
             net_margin=0.2,
             pe_ratio=20,
             pb_ratio=3,
-            debt_to_equity=1,
+            debt_to_equity=100,
             current_ratio=1.25,
             revenue_growth=0.05,
         )
@@ -266,7 +266,7 @@ async def test_latest_null_does_not_hide_an_older_figure(client):
             net_margin=0.2,
             pe_ratio=20,
             pb_ratio=3,
-            debt_to_equity=1,
+            debt_to_equity=100,
             current_ratio=1.25,
             revenue_growth=0.05,
         )
@@ -341,7 +341,7 @@ async def test_missing_growth_is_renormalized(client):
             net_margin=0.2,
             pe_ratio=20,
             pb_ratio=3,
-            debt_to_equity=1,
+            debt_to_equity=100,
             current_ratio=1.25,
         )
         company_id = company.id
@@ -374,7 +374,7 @@ async def test_stale_price_metrics_are_excluded(client):
                 as_of=ON,
             ),
         )
-        end = ON - timedelta(days=30)
+        end = ON - timedelta(days=93)
         bars = []
         day = end - timedelta(days=7 * 59)
         price = Decimal("100")
@@ -801,7 +801,7 @@ async def test_an_older_metric_row_does_not_replace_a_newer_one(client):
             net_margin=0.2,
             pe_ratio=20,
             pb_ratio=3,
-            debt_to_equity=1,
+            debt_to_equity=100,
             current_ratio=1.25,
             revenue_growth=0.05,
         )
@@ -814,7 +814,7 @@ async def test_an_older_metric_row_does_not_replace_a_newer_one(client):
             net_margin=0.2,
             pe_ratio=20,
             pb_ratio=3,
-            debt_to_equity=1,
+            debt_to_equity=100,
             current_ratio=1.25,
             revenue_growth=0.05,
         )
@@ -961,3 +961,170 @@ async def test_openapi_score_text_has_no_advice_words(client):
     assert models
     _assert_no_advice(paths)
     _assert_no_advice(models)
+
+
+def _quiet(client):
+    from httpx import ASGITransport, AsyncClient
+
+    transport = ASGITransport(app=client.app, raise_app_exceptions=False)
+    return AsyncClient(transport=transport, base_url="http://127.0.0.1")
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_bad_bytes_a_huge_integer_and_an_oversize_body(
+    client,
+):
+    """A bad body is 422 or 413. It is not a 500, and it quotes nothing.
+
+    Invalid UTF-8 and an integer of more than 4300 digits both make
+    ``json.loads`` raise ``ValueError`` (``UnicodeDecodeError`` is a
+    ``ValueError``). A body over 16 KiB is 413 before it is parsed.
+    A nested array deep enough to overflow the parser is the same 422.
+    """
+    url = "/api/v1/score-weights/STOCK"
+    huge = (
+        '{"weights":{"profitability":'
+        + ("1" * 5000)
+        + ',"valuation":1,"balance_sheet":1,"growth":1}}'
+    )
+    assert len(huge.encode()) < 16 * 1024
+    deep = "[" * 2000 + "]" * 2000
+    assert len(deep.encode()) < 16 * 1024
+    cases = [
+        (b"\xff", 422, "Score weights must be an object"),
+        (huge.encode(), 422, "Score weights must be an object"),
+        (b"x" * (16 * 1024 + 1), 413, "Score weights are too large"),
+        (deep.encode(), 422, "Score weights must be an object"),
+    ]
+    async with _quiet(client) as quiet:
+        for content, status, detail in cases:
+            response = await quiet.put(
+                url,
+                content=content,
+                headers={"content-type": "application/json"},
+            )
+            assert response.status_code == status
+            assert response.json() == {"detail": detail}
+            text = response.text
+            assert "UnicodeDecode" not in text
+            assert "RecursionError" not in text
+            assert "Exceeds the limit" not in text
+
+
+def test_put_score_weights_is_a_sync_function():
+    """The route runs SQLAlchemy. It must not be an async endpoint."""
+    import inspect
+
+    from app.api.scores import put_score_weights
+
+    assert not inspect.iscoroutinefunction(put_score_weights)
+
+
+# What a score request on 2026-11-18 should report for demo-v2.
+# Prices end on 2026-09-28 (51 days earlier). Statements used here
+# are the 2025 annual ratios. TER is missing only on DEMO_ETF_GPW.
+LIVE_ON = date(2026, 11, 18)
+LIVE_COVERAGE = {
+    "DEMO_PL_TECH": ("scored", "4 of 4"),
+    "DEMO_US_GROWTH": ("scored", "4 of 4"),
+    "DEMO_DE_INDUSTRY": ("scored", "4 of 4"),
+    "DEMO_JP_STABLE": ("scored", "4 of 4"),
+    "DEMO_SG_EARLY": ("scored", "3 of 4"),
+    "DEMO_PL_EMPTY": ("no_score", "0 of 4"),
+    "DEMO_ETF_WORLD": ("scored", "4 of 4"),
+    "DEMO_ETF_GPW": ("scored", "3 of 4"),
+    "DEMO_ETC_GOLD": ("scored", "4 of 4"),
+    "DEMO_ETC_SILVER": ("scored", "4 of 4"),
+}
+
+
+@pytest.mark.asyncio
+async def test_demo_v2_scores_on_a_date_after_the_fixture(client, monkeypatch):
+    """18 November 2026 is not the fixture date of 30 September.
+
+    The clock is not frozen on the fixture as-of date. Stocks carry
+    the collector ratios, and the one-year price figures are still
+    inside their freshness window, so the funds are not reduced to
+    cost and size alone.
+    """
+    monkeypatch.setattr(scores_api, "utc_today", lambda: LIVE_ON)
+    fixture = json.loads(
+        Path("fixtures/demo-v2.json").read_text(encoding="utf-8")
+    )
+    session = _session(client)
+    ids = {}
+    try:
+        for entry in fixture["companies"]:
+            company = CompanyRepository(session).create(
+                CompanyCreate(**entry["company"]),
+                record_source=RECORD_SOURCE_DEMO,
+                is_synthetic=True,
+            )
+            ids[company.ticker] = company.id
+            if entry["attributes"] is not None:
+                attributes = dict(entry["attributes"])
+                attributes.pop("source", None)
+                FundAttributesRepository(session).create(
+                    company.id,
+                    attributes,
+                    record_source=RECORD_SOURCE_DEMO,
+                    is_synthetic=True,
+                )
+            if entry["metrics"]:
+                for row in entry["metrics"]:
+                    moment = datetime.fromisoformat(
+                        row["period_end"].replace("Z", "+00:00")
+                    )
+                    fields = {
+                        key: value
+                        for key, value in row.items()
+                        if key not in ("period_end", "period_type")
+                    }
+                    _metric(
+                        session,
+                        company.id,
+                        moment,
+                        row["period_type"],
+                        **fields,
+                    )
+            if entry["prices"]:
+                PriceBarRepository(session).upsert_many(
+                    company.id,
+                    [PriceBarCreate(**row) for row in entry["prices"]],
+                )
+    finally:
+        session.close()
+    found = {}
+    for ticker, instrument_id in ids.items():
+        response = await client.get(
+            f"/api/v1/instruments/{instrument_id}/score"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        found[ticker] = (body["status"], body["coverage"]["label"])
+        assert body["scored_on"] == LIVE_ON.isoformat()
+    assert found == LIVE_COVERAGE
+
+
+@pytest.mark.asyncio
+async def test_a_deep_stored_weight_row_is_a_fixed_500(client):
+    """``json.loads`` of a 10000-deep array raises ``RecursionError``."""
+    raw = "[" * 10000 + "]" * 10000
+    session = _session(client)
+    try:
+        session.add(
+            ScoreWeightsDB(
+                instrument_type="STOCK",
+                version=2,
+                weights=raw,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+    async with _quiet(client) as quiet:
+        response = await quiet.get("/api/v1/score-weights/STOCK")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Score weights could not be read"}
+    assert "RecursionError" not in response.text
+    assert "Internal Server Error" not in response.text

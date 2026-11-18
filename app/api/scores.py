@@ -40,6 +40,11 @@ _UNKNOWN_TYPE = "Unknown instrument type"
 _NOT_OBJECT = "Score weights must be an object"
 _UNREADABLE = "Score weights could not be read"
 _SAVE_FAILED = "Score weights could not be saved"
+_TOO_LARGE = "Score weights are too large"
+# A few kilobytes. A weight object is a handful of numbers. 16 KiB
+# leaves room for a very long number and still rejects a huge body
+# before it is parsed.
+_MAX_WEIGHT_BODY = 16 * 1024
 _TYPES = frozenset({"STOCK", "ETF", "ETC"})
 _MESSAGES = {
     "not_an_object": _NOT_OBJECT,
@@ -244,23 +249,42 @@ def get_score_weights(instrument_type: str, db: Session = Depends(get_db)):
     return _weight_body(instrument_type, weights, version, stored)
 
 
+async def _json_payload(request: Request):
+    """The JSON object, or a fixed error that does not quote the body.
+
+    More than 16 KiB is 413. Invalid text, a number that is too big
+    to parse, and a value nested deep enough to overflow the parser
+    are 422. ``ValueError`` covers a bad encoding and that oversized
+    integer. ``RecursionError`` is separate: it is not a ``ValueError``.
+    """
+    raw = await request.body()
+    if len(raw) > _MAX_WEIGHT_BODY:
+        raise HTTPException(status_code=413, detail=_TOO_LARGE)
+    if not raw:
+        raise HTTPException(status_code=422, detail=_NOT_OBJECT)
+    try:
+        return json.loads(raw)
+    except (ValueError, RecursionError):
+        raise HTTPException(status_code=422, detail=_NOT_OBJECT) from None
+
+
 @router.put(
     "/score-weights/{instrument_type}",
     response_model=ScoreWeightSet,
 )
-async def put_score_weights(
+def put_score_weights(
     instrument_type: str,
-    request: Request,
+    payload=Depends(_json_payload),
     db: Session = Depends(get_db),
 ):
     """Replace the weight set and increase its version.
 
     The first saved set is version 2. The numbers are stored as sent.
-    Scoring divides the ones it can use by their sum.
+    Scoring divides the ones it can use by their sum. The answer is
+    the row that was saved.
     """
     if instrument_type not in _TYPES:
         raise HTTPException(status_code=422, detail=_UNKNOWN_TYPE)
-    payload = await _payload(request)
     try:
         weights = parse_weights(instrument_type, payload)
     except WeightValidationError as error:
@@ -269,26 +293,16 @@ async def put_score_weights(
             detail=_MESSAGES.get(error.code, _NOT_OBJECT),
         ) from None
     try:
-        ScoreWeightsRepository(db).save(instrument_type, weights)
+        saved = ScoreWeightsRepository(db).save(instrument_type, weights)
     except ScoreWeightsSaveError:
         raise HTTPException(status_code=400, detail=_SAVE_FAILED) from None
-    return _weight_body(
-        instrument_type, weights, _saved_version(db, instrument_type), True
-    )
+    stored = _decode_saved(instrument_type, saved.weights)
+    return _weight_body(instrument_type, stored, saved.version, True)
 
 
-def _saved_version(db, instrument_type):
-    row = ScoreWeightsRepository(db).get(instrument_type)
-    return row.version
-
-
-async def _payload(request):
-    """The JSON object, or a 422 that does not quote the body."""
-    raw = await request.body()
-    if not raw:
-        raise HTTPException(status_code=422, detail=_NOT_OBJECT)
+def _decode_saved(instrument_type, raw):
+    """The weights just written, read back from that row."""
     try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=422, detail=_NOT_OBJECT) from None
-    return payload
+        return parse_weights(instrument_type, {"weights": json.loads(raw)})
+    except (WeightValidationError, TypeError, ValueError, RecursionError):
+        raise HTTPException(status_code=500, detail=_UNREADABLE) from None

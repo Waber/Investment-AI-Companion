@@ -43,7 +43,15 @@
           "net_income": 2100000,
           "total_assets": 24000000,
           "total_liabilities": 7500000,
-          "total_equity": 16500000
+          "total_equity": 16500000,
+          "pe_ratio": 24.5,
+          "pb_ratio": 4.1,
+          "roe": 0.127,
+          "net_margin": 0.14,
+          "current_ratio": 2.1,
+          "debt_to_equity": 45.0,
+          "revenue_growth": 0.2,
+          "debt_to_assets": 0.312
         },
         {
           "period_end": "2026-03-31T00:00:00Z",
@@ -2400,7 +2408,14 @@
           "total_assets": 52000000,
           "total_liabilities": 27000000,
           "total_equity": 25000000,
-          "pe_ratio": null
+          "pe_ratio": null,
+          "pb_ratio": 9.2,
+          "roe": -0.04,
+          "net_margin": -0.021,
+          "current_ratio": 1.8,
+          "debt_to_equity": 108.0,
+          "revenue_growth": 0.469,
+          "debt_to_assets": 0.519
         },
         {
           "period_end": "2026-03-31T00:00:00Z",
@@ -4755,7 +4770,15 @@
           "net_income": 1000000,
           "total_assets": 93000000,
           "total_liabilities": 48000000,
-          "total_equity": 45000000
+          "total_equity": 45000000,
+          "pe_ratio": 15.2,
+          "pb_ratio": 2.0,
+          "roe": 0.022,
+          "net_margin": 0.015,
+          "current_ratio": 1.5,
+          "debt_to_equity": 107.0,
+          "revenue_growth": -0.097,
+          "debt_to_assets": 0.516
         },
         {
           "period_end": "2026-03-31T00:00:00Z",
@@ -7109,7 +7132,15 @@
           "net_income": 85000000,
           "total_assets": 1900000000,
           "total_liabilities": 640000000,
-          "total_equity": 1260000000
+          "total_equity": 1260000000,
+          "pe_ratio": 13.4,
+          "pb_ratio": 1.2,
+          "roe": 0.067,
+          "net_margin": 0.081,
+          "current_ratio": 1.9,
+          "debt_to_equity": 51.0,
+          "revenue_growth": 0.019,
+          "debt_to_assets": 0.337
         },
         {
           "period_end": "2026-03-31T00:00:00Z",
@@ -8319,7 +8350,15 @@
           "net_income": -1800000,
           "total_assets": 4200000,
           "total_liabilities": 2000000,
-          "total_equity": 2200000
+          "total_equity": 2200000,
+          "pe_ratio": null,
+          "pb_ratio": 6.5,
+          "roe": -0.818,
+          "net_margin": -9.0,
+          "current_ratio": 3.2,
+          "debt_to_equity": 91.0,
+          "revenue_growth": null,
+          "debt_to_assets": 0.476
         },
         {
           "period_end": "2026-03-31T00:00:00Z",

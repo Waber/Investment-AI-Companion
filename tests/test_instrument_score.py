@@ -23,9 +23,9 @@ ON = date(2026, 9, 30)
 # Annual and quarterly facts stay usable for about 18 months.
 STATEMENT_FRESH = ON - timedelta(days=548)
 STATEMENT_STALE = ON - timedelta(days=549)
-# Same boundary as the watchlist price marker: 7 days is fresh.
-PRICE_FRESH = ON - timedelta(days=7)
-PRICE_STALE = ON - timedelta(days=8)
+# One-year price figures stay fresh for a quarter: 92 days counts.
+PRICE_FRESH = ON - timedelta(days=92)
+PRICE_STALE = ON - timedelta(days=93)
 # A fee or a fund size is a slow fact: 366 days is still fresh.
 FUND_FRESH = ON - timedelta(days=366)
 FUND_STALE = ON - timedelta(days=367)
@@ -38,7 +38,7 @@ def _stock(**overrides):
         "net_margin": (Decimal("0.20"), "manual", STATEMENT_FRESH),
         "pe_ratio": (Decimal("20"), "manual", STATEMENT_FRESH),
         "pb_ratio": (Decimal("3"), "manual", STATEMENT_FRESH),
-        "debt_to_equity": (Decimal("1"), "manual", STATEMENT_FRESH),
+        "debt_to_equity": (Decimal("100"), "manual", STATEMENT_FRESH),
         "current_ratio": (Decimal("1.25"), "manual", STATEMENT_FRESH),
         "revenue_growth": (Decimal("0.05"), "manual", STATEMENT_FRESH),
     }
@@ -71,7 +71,7 @@ def test_stock_score_matches_the_hand_calculation():
     ROE 0.10 is halfway from 0 to 0.20, so 50. Net margin 0.20 is
     the top of that scale, so 100. Profitability is their mean, 75.
     P/E 20 is halfway from 30 (score 0) to 10 (score 100). P/B 3 is
-    halfway from 5 to 1. Debt-to-equity 1 is halfway from 2 to 0.
+    halfway from 5 to 1. Debt-to-equity 100 is halfway from 200 to 0.
     Current ratio 1.25 is halfway from 0.5 to 2. Revenue growth 0.05
     is halfway from -0.10 to 0.20. Those four components are
     75, 50, 50 and 50. Each weight is 1, so each share is 1/4:
@@ -221,7 +221,7 @@ def test_a_component_whose_inputs_are_all_stale_is_excluded():
 
 
 def test_freshness_boundaries_keep_the_exact_day():
-    """548, 7 and 366 days are fresh. One day older is stale."""
+    """548, 92 and 366 days are fresh. One day older is stale."""
     fresh = score_instrument("STOCK", _stock(), default_weights("STOCK"), ON)
     assert _input(_by_name(fresh)["profitability"], "roe").status == "scored"
 
@@ -232,7 +232,7 @@ def test_freshness_boundaries_keep_the_exact_day():
             net_margin=(Decimal("0.20"), "manual", STATEMENT_STALE),
             pe_ratio=(Decimal("20"), "manual", STATEMENT_STALE),
             pb_ratio=(Decimal("3"), "manual", STATEMENT_STALE),
-            debt_to_equity=(Decimal("1"), "manual", STATEMENT_STALE),
+            debt_to_equity=(Decimal("100"), "manual", STATEMENT_STALE),
             current_ratio=(Decimal("1.25"), "manual", STATEMENT_STALE),
             revenue_growth=(Decimal("0.05"), "manual", STATEMENT_STALE),
         ),
@@ -296,7 +296,7 @@ def test_a_real_zero_is_a_score():
             net_margin=(Decimal("-0.50"), "manual", STATEMENT_FRESH),
             pe_ratio=(Decimal("100"), "manual", STATEMENT_FRESH),
             pb_ratio=(Decimal("10"), "manual", STATEMENT_FRESH),
-            debt_to_equity=(Decimal("5"), "manual", STATEMENT_FRESH),
+            debt_to_equity=(Decimal("200"), "manual", STATEMENT_FRESH),
             current_ratio=(Decimal("0.10"), "manual", STATEMENT_FRESH),
             revenue_growth=(Decimal("-0.50"), "manual", STATEMENT_FRESH),
         ),
@@ -458,7 +458,7 @@ def test_oldest_input_date_ignores_excluded_inputs():
             net_margin=(Decimal("0.20"), "manual", STATEMENT_STALE),
             pe_ratio=(Decimal("20"), "manual", ON),
             pb_ratio=(Decimal("3"), "manual", ON),
-            debt_to_equity=(Decimal("1"), "manual", ON),
+            debt_to_equity=(Decimal("100"), "manual", ON),
             current_ratio=(Decimal("1.25"), "manual", ON),
             revenue_growth=(Decimal("0.05"), "manual", ON),
         ),
@@ -548,10 +548,91 @@ def test_oldest_date_helper_is_empty_when_no_figure_was_used():
     assert _oldest_used((empty,)) is None
 
 
-def test_the_score_clock_is_today_in_utc():
-    from app.api.scores import utc_today
+def test_the_score_clock_uses_one_frozen_instant(monkeypatch):
+    """One patched instant. A second wall-clock read must not matter.
 
-    assert utc_today() == datetime.now(timezone.utc).date()
+    Comparing ``utc_today()`` with a later ``datetime.now`` flips the
+    date when the two calls fall on either side of midnight.
+    """
+    from app.api import scores as scores_api
+
+    frozen = datetime(2026, 11, 18, 23, 59, tzinfo=timezone.utc)
+
+    class _Clock:
+        @staticmethod
+        def now(tz=None):
+            return frozen
+
+    monkeypatch.setattr(scores_api, "datetime", _Clock)
+    assert scores_api.utc_today() == date(2026, 11, 18)
+
+
+def test_collector_debt_to_equity_is_a_percent():
+    """45.0 is Yahoo's percent for 0.45x, not a multiple of 45.
+
+    The scale is 200 (score 0) to 0 (score 100), the same line as
+    2x to 0x. Halfway is 100, which is 1.0x. 45 is
+    ``(45 - 200) / (0 - 200) * 100 = 77.5``.
+    """
+    from app.data_collectors.fake import STOCK_METRICS
+
+    stored = STOCK_METRICS["DEMO_PL_TECH"]["debt_to_equity"]
+    assert stored == 45.0
+    result = score_instrument(
+        "STOCK",
+        _stock(
+            debt_to_equity=(Decimal(str(stored)), "manual", STATEMENT_FRESH)
+        ),
+        default_weights("STOCK"),
+        ON,
+    )
+    debt = _input(_by_name(result)["balance_sheet"], "debt_to_equity")
+    assert debt.status == "scored"
+    assert debt.normalized == Decimal("77.50")
+
+
+def test_contributions_stay_non_negative_when_cents_do_not_divide():
+    """Four tiny scores must not give the last component -0.01.
+
+    Normalized scores 0.02, 0.02, 0.02 and 0.00 with equal weights
+    have unrounded contributions 0.005, 0.005, 0.005 and 0. The total
+    rounds to 0.02. Largest-remainder gives the extra cents to the
+    first ties, and every contribution stays at least zero.
+    """
+    tiny = Decimal("0.009998")
+    calm = Decimal("0.39994")
+    # log10 of this amount is 7.0008, which scores 0.02 on the AUM line.
+    size = Decimal(10) ** Decimal("7.0008")
+    result = score_instrument(
+        "ETF",
+        _fund(
+            ter=(tiny, "demo", FUND_FRESH),
+            aum=(size, "demo", FUND_FRESH),
+            volatility=(calm, "fake", PRICE_FRESH),
+            max_drawdown=(Decimal("-0.50"), "fake", PRICE_FRESH),
+        ),
+        default_weights("ETF"),
+        ON,
+    )
+    parts = _by_name(result)
+    assert parts["cost"].normalized == Decimal("0.02")
+    assert parts["size"].normalized == Decimal("0.02")
+    assert parts["volatility"].normalized == Decimal("0.02")
+    assert parts["max_drawdown"].normalized == Decimal("0.00")
+    published = [
+        part.contribution
+        for part in result.components
+        if part.contribution is not None
+    ]
+    assert all(item >= 0 for item in published)
+    assert sum(published) == result.total
+    assert result.total == Decimal("0.02")
+    assert [part.contribution for part in result.components] == [
+        Decimal("0.01"),
+        Decimal("0.01"),
+        Decimal("0.00"),
+        Decimal("0.00"),
+    ]
 
 
 def test_default_weights_are_one_per_component():
