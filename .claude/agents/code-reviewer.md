@@ -80,9 +80,13 @@ that the PR body, linked issues, and earlier rounds were not available.
    function name is not a finding. If you cannot point to a line, ask a
    question instead.
 6. Run the checks that matter for this change, from the worktree:
-   `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 <python> -m pytest -q -p no:cacheprovider <tests for the changed areas>`.
+   `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=<bundle>/scratch/.coverage <python> -m pytest -q -p no:cacheprovider <tests for the changed areas>`.
    Use the full CI command from `.github/workflows/tests.yml` when the
-   change is wide. Run `black --check`, `isort --check-only`, and
+   change is wide, with the same `COVERAGE_FILE`, so `--cov` does not
+   write `.coverage` into the worktree. Run it in the worktree, not in
+   a copy: some tests run `git ls-files` and need `.git`. Afterwards,
+   `git -C <bundle>/worktree status --short --ignored` must be empty.
+   Run `black --check`, `isort --check-only`, and
    `flake8` on the changed Python files and record the result under
    `checks_run`. Style is not a finding (`REVIEW.md`). PostgreSQL runs
    only when `TEST_POSTGRES_DSN` is set. Otherwise list it under
@@ -93,10 +97,11 @@ that the PR body, linked issues, and earlier rounds were not available.
    and drop the rest. A finding that comes from a path rule starts its
    body with `Path rule '<name>':`, the way Duo writes
    "According to custom instructions in '<name>'".
-8. Follow-up round, when `round.diff` exists:
-   - New findings come from `round.diff`. A correctness bug (wrong
-     data, a security hole, data loss) may be reported anywhere in
-     `pr.diff`.
+8. Follow-up round, whenever `previous-review.md` exists:
+   - New findings come from `round.diff`. After a rebase there is no
+     `round.diff`; then take them from `pr.diff`. Either way, a
+     correctness bug (wrong data, a security hole, data loss) may be
+     reported anywhere in `pr.diff`.
    - Do not repeat a point from `previous-review.md`, even when its
      thread is resolved.
    - For each earlier finding, set a status. `fixed`: the code changed

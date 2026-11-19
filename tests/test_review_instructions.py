@@ -11,6 +11,7 @@ The matching is code, not something the reviewer model guesses, so
 these tests pin the glob rules.
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -156,29 +157,35 @@ def test_a_broken_file_is_refused(tmp_path, body):
 # --- the repository's own file ----------------------------------------
 
 
-def _repository_files():
-    skipped = {".git", ".venv", "__pycache__", ".pytest_cache"}
-    return [
-        path.relative_to(ROOT).as_posix()
-        for path in ROOT.rglob("*")
-        if path.is_file() and not skipped & set(path.relative_to(ROOT).parts)
-    ]
+def _tracked_files():
+    # Tracked files only. An ignored local file (a demo database, a
+    # cache) must not keep a dead filter alive.
+    listed = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout.decode("utf-8")
+    return [path for path in listed.split("\0") if path]
 
 
-def test_every_repository_entry_still_matches_a_file():
+def test_every_repository_filter_still_matches_a_tracked_file():
     # A rename that leaves a glob pointing at nothing would silently
-    # switch that rule off. This is the drift check.
+    # switch that part of a rule off. This is the drift check. Each
+    # plain filter must match on its own; a "!" filter only removes.
     entries = load_instructions(ROOT / DEFAULT_FILE)
-    files = _repository_files()
+    files = _tracked_files()
 
-    unmatched = [
-        entry["name"]
+    dead = [
+        f"{entry['name']}: {pattern}"
         for entry in entries
-        if not matching_instructions([entry], files)
+        for pattern in entry["file_filters"]
+        if not pattern.startswith("!")
+        and not any(glob_matches(pattern, path) for path in files)
     ]
 
     assert entries
-    assert unmatched == []
+    assert dead == []
 
 
 # --- main --------------------------------------------------------------
@@ -201,6 +208,30 @@ def test_main_prints_the_matching_instructions(tmp_path, capsys):
     assert "## UI" in out
     assert "`app/ui/router.py`" in out
     assert "Keep the CSP." in out
+    assert "README.md" not in out
+
+
+def test_main_reads_the_changed_files_from_a_file(tmp_path, capsys):
+    # A PR can name a file "a;$(rm -rf x).py". Read from a file, the
+    # names never pass through a shell command line.
+    rules = tmp_path / "instructions.toml"
+    rules.write_text(
+        "[[instructions]]\n"
+        'name = "UI"\n'
+        'file_filters = ["app/ui/**"]\n'
+        'instructions = "Keep the CSP."\n',
+        encoding="utf-8",
+    )
+    names = tmp_path / "files.txt"
+    names.write_text(
+        "app/ui/a;$(rm -rf x).py\n\nREADME.md\n", encoding="utf-8"
+    )
+
+    code = main(["--file", str(rules), "--paths-from", str(names)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "`app/ui/a;$(rm -rf x).py`" in out
     assert "README.md" not in out
 
 
