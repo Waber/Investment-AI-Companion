@@ -2,16 +2,17 @@
 #
 # The GitLab Duo idea (.gitlab/duo/mr-review-instructions.yaml) in TOML:
 # each entry has a name, file globs, and instructions. The /review-pr
-# skill runs `python -m scripts.review_instructions <changed files>` and
-# hands the matching entries to the reviewer. REVIEW.md stays the main
+# skill takes this file from the base branch, runs
+# `python -m scripts.review_instructions --paths-from <changed files>`,
+# and hands the matching entries to the reviewer. REVIEW.md stays the main
 # checklist; an entry here only adds what matters for that part of the
 # tree. Keep each entry short and checkable. A rule that two PRs needed
 # belongs here, or better, in a test (REVIEW.md "Keep this file useful").
 #
 # Globs: `*` stays inside one directory, `**/` spans directories, and a
 # filter that starts with `!` removes files. tests/test_review_instructions.py
-# fails when an entry no longer matches any file, so a rename cannot
-# switch a rule off silently.
+# fails when a plain filter no longer matches a tracked file, so a rename
+# cannot switch part of a rule off silently.
 #
 # A finding that comes from an entry starts its body with
 # "Path rule '<name>':" so the author can see where it came from.
@@ -88,14 +89,12 @@ instructions = """
 4. Tests use the fake collector or recorded fixtures, never the network.
 """
 
+# Every plain filter must match a tracked file (the drift test). When
+# the instrument score lands (PR #135), add app/scoring.py,
+# app/instrument_score.py, and docs/scoring.md here.
 [[instructions]]
 name = "Scores, signals, and derived figures"
-file_filters = [
-  "app/scoring.py",
-  "app/instrument_score.py",
-  "app/price_metrics.py",
-  "docs/scoring.md",
-]
+file_filters = ["app/price_metrics.py"]
 instructions = """
 1. The number shows its source, its as-of date, and whether it was
    stale, missing, or synthetic. Missing is not zero.

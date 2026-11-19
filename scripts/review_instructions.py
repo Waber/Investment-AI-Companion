@@ -29,6 +29,11 @@ does not understand ``**``, so the pattern is turned into a regular
 expression here.
 
     python -m scripts.review_instructions app/api/scores.py README.md
+    python -m scripts.review_instructions --file rules.toml \\
+        --paths-from files.txt
+
+``--paths-from`` reads one path per line. ``/review-pr`` uses it so a
+file name from a pull request never passes through a shell command.
 """
 
 import argparse
@@ -143,14 +148,28 @@ def main(argv=None):
         description="Print the review instructions for changed files."
     )
     parser.add_argument("--file", default=DEFAULT_FILE)
+    parser.add_argument(
+        "--paths-from",
+        help="a file with one changed path per line, such as the output "
+        "of `gh pr diff <N> --name-only`",
+    )
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(argv)
     try:
         entries = load_instructions(args.file)
+        paths = list(args.paths)
+        if args.paths_from:
+            # A file name in a PR can contain "$(...)" or ";". Read
+            # from a file, it never reaches a shell command line.
+            with open(args.paths_from, encoding="utf-8") as handle:
+                paths += [line for line in handle.read().splitlines() if line]
     except (OSError, ValueError):
-        print(f"review_instructions: cannot use {args.file}", file=sys.stderr)
+        print(
+            "review_instructions: cannot read the rules or the paths",
+            file=sys.stderr,
+        )
         return 1
-    print(render(matching_instructions(entries, args.paths)), end="")
+    print(render(matching_instructions(entries, paths)), end="")
     return 0
 
 
