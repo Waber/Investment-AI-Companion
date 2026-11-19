@@ -154,10 +154,26 @@ def _severity_rank(severity):
 
 
 def _label(finding):
+    """``**F3, Important**: title``.
+
+    The id is shown so a later round's "F3 (round 1): open" points at
+    a comment Przemek can find on the pull request.
+    """
     label = finding["severity"]
     if finding.get("pre_existing"):
         label += " (pre-existing)"
+    if finding.get("id"):
+        label = f"{finding['id']}, {label}"
     return f"**{label}**: {finding['title']}"
+
+
+def _indented(text):
+    """Every non-empty line indented by two spaces.
+
+    CommonMark ends a list item at a line that starts in column 0, so
+    a second paragraph must be indented to stay inside the item.
+    """
+    return "\n".join(f"  {line}" if line else "" for line in text.split("\n"))
 
 
 def _fence(text):
@@ -197,7 +213,7 @@ def _summary_row(finding):
     rows = [f"- {_label(finding)}{where}"]
     for extra in (finding.get("body"), _also_at(finding)):
         if extra:
-            rows.append(f"  {extra}")
+            rows.append(_indented(extra))
     suggestion = finding.get("suggestion")
     if suggestion is not None:
         # Outside the diff GitHub cannot apply a suggestion, so the fix
@@ -222,7 +238,8 @@ def _summary_body(summary, elsewhere, previous, head_sha):
         for item in previous:
             row = f"- {item['id']}: {item['status']}"
             if item.get("note"):
-                row += f". {item['note']}"
+                note = _indented(item["note"]).lstrip()
+                row += f". {note}"
             rows.append(row)
         parts.append("### Earlier findings\n\n" + "\n".join(rows))
     parts.append(f"{MARKER_PREFIX}{head_sha} -->")

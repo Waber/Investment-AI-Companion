@@ -182,7 +182,7 @@ def test_a_finding_on_a_diff_line_becomes_an_inline_comment():
             "line": 11,
             "side": "RIGHT",
             "body": (
-                "**Important**: A retry inserts twice\n\n"
+                "**F1, Important**: A retry inserts twice\n\n"
                 "The second attempt runs the insert again."
             ),
         }
@@ -281,8 +281,48 @@ def test_a_pre_existing_finding_is_marked_in_its_label():
     payload = build_payload(_report(old), DIFF, HEAD)
 
     assert payload["comments"][0]["body"].startswith(
-        "**Important (pre-existing)**: "
+        "**F1, Important (pre-existing)**: "
     )
+
+
+def test_the_finding_id_is_shown_inline_and_in_a_summary_row():
+    # "F3 (round 1): open" in a later round must point at something
+    # Przemek can find on the PR.
+    inline = _finding(id="F3")
+    outside = _finding(id="F4", path=None, line=None, title="No PR test")
+
+    payload = build_payload(_report(inline, outside), DIFF, HEAD)
+
+    assert payload["comments"][0]["body"].startswith("**F3, Important**: ")
+    assert "- **F4, Important**: No PR test" in payload["body"]
+
+
+def test_a_finding_without_an_id_keeps_the_plain_label():
+    unnamed = _finding()
+    del unnamed["id"]
+
+    body = build_payload(_report(unnamed), DIFF, HEAD)["comments"][0]["body"]
+
+    assert body.startswith("**Important**: ")
+
+
+def test_a_two_paragraph_body_stays_inside_its_summary_item():
+    # CommonMark ends a list item at a line that starts in column 0.
+    # Every line of the body is indented, so "Also at:" still belongs
+    # to the item.
+    outside = _finding(
+        path=None,
+        line=None,
+        body="First paragraph.\n\nSecond paragraph.",
+        other_locations=["app/y.py:12"],
+    )
+
+    body = build_payload(_report(outside), DIFF, HEAD)["body"]
+
+    assert (
+        "  First paragraph.\n\n  Second paragraph.\n"
+        "  Also at: `app/y.py:12`"
+    ) in body
 
 
 def test_a_suggestion_becomes_a_github_suggestion_block():
