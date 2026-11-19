@@ -30,7 +30,7 @@
   - `COVERAGE_FILE` keeps `.coverage` out of the worktree.
   Changed file names reach the path-rule script through a file,
   never a command line. A PENDING draft no longer blocks a
-  terminal-only rerun. The three score filters wait for #135.
+  terminal-only rerun. The three score filters are added by #135.
 - Round 2 on #138 (`696a83b`): all seven round-1 findings fixed;
   2 Important and 3 Minor new ones, fixed on this branch: finding ids
   in every posted label, earlier rounds read from the review body
@@ -61,7 +61,8 @@
 - Branch `cursor/instrument-score-s1-90ae`. Pull request #135, Refs
   #35, Refs #136. Does not finish either issue. Rebased onto
   `origin/master` `ac23710` on 2026-11-19 (the journal and this file
-  conflicted, both sides kept) and pushed with `--force-with-lease`.
+  conflicted, both sides kept). The push replaces the old head
+  `d041b1c` with `--force-with-lease`.
   Agents do not merge. No live market data. No `/ui` change. Alembic
   head is `0011`. This replaces the four 2026-11-18 snapshots of this
   branch; their history is in the journal.
@@ -78,30 +79,42 @@
     day counts. AUM is dated by `aum_as_of` only.
   - AUM is scored only in EUR or USD (`unsupported_currency`
     otherwise). A price window longer than 458 days is
-    `insufficient_history`. `period_type` is case-insensitive.
+    `window_too_long`. `period_type` is case-insensitive.
   - A demo instrument keeps `is_synthetic` and the source `demo` on
-    every figure, also after an edit.
+    every figure, also after an edit. A synthetic fund row on a real
+    company marks the score synthetic too.
   - Totals and contributions use exact fractions. The total rounds
     half up. The cents come from a largest-remainder split, never
     negative, tie to the earlier component.
   - Version 1 is the built-in equal set. The first PUT stores
     version 2, each later PUT adds 1, and the answer is the version
     and weights that request wrote.
-- Review 5971406643 (round 1 by the code-reviewer agent on
-  `d041b1c`): 3 Critical, 7 Important, 3 Minor, all fixed on this
-  branch on 2026-11-19, plus two of the three Minor findings that
-  were dropped under the cap (`-0.00`, a Content-Length of thousands
-  of digits). The third, `alembic upgrade 0010:0011 --sql`, is not
-  fixed: revision `0010` and earlier fail offline the same way. The
-  review is still PENDING; it was written on the old head.
-- Open questions for Przemek, from that review: an FX source or a
-  stated conversion for other currencies; a formula version and a
-  computed time on the response (US6.1); keeping old weight
-  versions so a score can be recomputed.
-- Follow-up: the `FundAttributesRepository._check_aum` hole (a
-  partial update can clear `aum_as_of` and keep the amount) needs
-  its own issue.
-- Tests and checks: see the 2026-11-19 journal entry.
+- Round 1 (review 5971406643 by the code-reviewer agent on
+  `d041b1c`, still PENDING, written on the old head): 3 Critical,
+  7 Important, 3 Minor. All fixed on 2026-11-19, the Undo steps
+  through the PR body edit, plus two of the three Minor findings
+  dropped under the cap (`-0.00`, a Content-Length of thousands of
+  digits). The third, `alembic upgrade 0010:0011 --sql`, is not
+  fixed: `0010` and earlier revisions fail offline the same way.
+- Round 2 (a workflow on `20a55ae`: code-reviewer, 34 mutants, five
+  adversarial verifiers): round 1 confirmed fixed. New: 1 Critical
+  (a re-sent weight set was not written, so a concurrent PUT's
+  weights stayed under the new version), 2 Important, and Minor
+  findings. All fixed with tests that fail without them.
+- Open questions for Przemek: an FX source or a stated conversion
+  for other currencies (size is EUR and USD only for now, an
+  agent's call); a formula version and a computed time on the
+  response (US6.1); keeping old weight versions so a score can be
+  recomputed.
+- Follow-up issue, not opened (the auto-mode classifier refused
+  `gh issue create`): a partial fund-attribute update
+  `{"aum_as_of": null}` or `{"aum_currency": null}` keeps the AUM
+  amount. `FundAttributesRepository._check_aum` should reject a
+  currency or a date without `aum` whatever its value. Pre-existing.
+- Tests: the CI command on SQLite 3.54.1 passes except the known
+  local-only failures (two 0006 float tests, the ignored `demo/`
+  folder). Counts and the PostgreSQL run are in the 2026-11-19
+  journal entry and on GitHub Actions for the pushed head.
 - Account usage: this session cannot read the meter.
 - Active agents: none. Blockers: none. This is not approval.
 - Next action: Przemek reviews the fixes (migration `0011` is on his

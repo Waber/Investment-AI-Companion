@@ -157,8 +157,11 @@ When the series has a gap, that first close can be years older, and
 the figure then describes far more than a year. The window from its
 first close (`start` on the input) to its as-of date may be at most
 458 days: one year of 366 days plus the same 92-day slack. A longer
-window, or a figure with no `start`, is status
-`insufficient_history`, label `no data`.
+window is status `window_too_long`, label `no data`. A figure with
+no `start`, or a `start` after its as-of date, is `no_data`. The
+name is not `insufficient_history`: on the price metrics and on
+`/ui` that word means a series that is too short, and here the
+window is too long.
 
 For each stock column, the score keeps the newest row that has a
 finite number in that column. A later quarterly row that leaves ROE
@@ -173,10 +176,10 @@ says why, so a later page can show it:
 
 | Status | Meaning |
 | --- | --- |
-| `no_data` | No value, a value that is not meaningful, or no date |
+| `no_data` | No value, a value that is not meaningful, no date, or no price window start |
 | `stale` | The date is older than the window above |
 | `unsupported_currency` | AUM not in EUR or USD |
-| `insufficient_history` | The price window is longer than 458 days |
+| `window_too_long` | The price window is longer than 458 days |
 
 The checks run in that order, and the first one that fails names the
 status. The component is left out only when none of its figures are
@@ -185,12 +188,14 @@ usable. A component that was left out has status `no_data`, label
 
 ## Demo data
 
-`is_synthetic` on the score is true when the company is synthetic.
-Then every figure that has a source shows the source `demo`, the one
-label `/ui` uses for synthetic data. Editing a demo row sets that
-row's source to `manual`, but the instrument is still a demo, so the
-score keeps saying `demo`. A synthetic fund-attribute row is shown
-as `demo` the same way.
+`is_synthetic` on the score is true when the company is synthetic,
+or when its fund-attribute row is. For a synthetic company every
+figure that has a source shows the source `demo`, the one label
+`/ui` uses for synthetic data. Editing a demo row sets that row's
+source to `manual`, but the instrument is still a demo, so the score
+keeps saying `demo`. A synthetic fund-attribute row on a real
+company shows `demo` on cost and size the same way. Its price
+figures keep the source of their price series.
 
 ## Weights
 

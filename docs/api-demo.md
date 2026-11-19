@@ -108,17 +108,19 @@ The weight set is `GET` and `PUT /api/v1/score-weights/{instrument_type}`
 with `instrument_type` exactly `STOCK`, `ETF`, or `ETC`. The formulas
 are in `docs/scoring.md`. The total is a string with two decimal
 places, or JSON `null` when the status is `no_score`. A null total
-is not the number zero. `is_synthetic` is true for a demo instrument,
-and then every source in the score is `demo`, also after a person
-edited one of its rows. Each input carries `currency` (set for AUM)
-and `start` (the first close of the price window). An input that is
-not used says why in `status`: `no_data`, `stale`,
-`unsupported_currency`, or `insufficient_history`.
+is not the number zero. `is_synthetic` is true when the company or
+its fund-attribute row is demo data, and every figure from a demo row
+then shows the source `demo`, also after a person edited that row.
+Each input carries `currency` (set for AUM) and `start` (the first
+close of the price window). An input that is not used says why in
+`status`: `no_data`, `stale`, `unsupported_currency`, or
+`window_too_long`.
 `weight_set_version` is the set that was used. Version 1 is the built-in equal weights and is not a stored
 row (`stored` is false). The first PUT stores version 2. Each later
 PUT adds 1. PUT returns 200 with the version and the weights that
 request wrote. A whole weight is a JSON integer (`1`, not `1.0`).
-The OpenAPI document describes the PUT body. It does not read `X-IAC-Demo-Seed` and
+The OpenAPI document describes the PUT body, with one equal-weight
+example per type, so Swagger UI's "Try it out" sends a valid body. It does not read `X-IAC-Demo-Seed` and
 it does not check `Origin`. An unknown instrument is 404
 `{"detail": "Instrument not found"}`. An id of `0`, a negative id,
 or an id above 9223372036854775807 is 422, the same body as the
@@ -132,8 +134,8 @@ zeros, or a set that names the wrong components, is 422 with one
 fixed `detail` sentence. The sentence does not repeat the payload.
 A stored weight row that is not valid JSON, including one nested
 so deeply that parsing it overflows, is 500
-`{"detail": "Score weights could not be read"}`. A commit that
-fails the constraint check is 400
+`{"detail": "Score weights could not be read"}`. A save that still
+hits a constraint after one retry is 400
 `{"detail": "Score weights could not be saved"}`. A body larger
 than 16 KiB is 413
 `{"detail": "Score weights are too large"}`, and so is a
