@@ -25,13 +25,21 @@ The report is a JSON object::
       "findings": [
         {"id": "F1", "severity": "Critical", "title": "...",
          "path": "app/x.py", "line": 12, "body": "...",
-         "pre_existing": false, "suggestion": "replacement line"}
+         "pre_existing": false, "suggestion": "replacement line",
+         "other_locations": ["app/y.py:40"]}
+      ],
+      "previous_findings": [
+        {"id": "F2 (round 1)", "status": "fixed", "note": "..."}
       ]
     }
 
 ``severity`` is Critical, Important, or Minor (``REVIEW.md``).
-``path``, ``line``, ``pre_existing``, and ``suggestion`` are optional.
+``path``, ``line``, ``pre_existing``, ``suggestion``, and
+``other_locations`` are optional, and so is ``previous_findings``.
 A ``suggestion`` replaces the commented line when Przemek accepts it.
+On a finding outside the diff it is shown as plain code instead.
+``other_locations`` becomes an "Also at:" line. Earlier findings and
+their status (fixed, answered, open) are listed in the summary.
 
 The summary ends with a hidden marker that names the reviewed head
 commit. The next round reads it to review only what changed since.
@@ -130,11 +138,13 @@ def build_payload(report, diff_text, head_sha):
             )
         else:
             elsewhere.append(finding)
-    return {
-        "commit_id": head_sha,
-        "body": _summary_body(report.get("summary", ""), elsewhere, head_sha),
-        "comments": comments,
-    }
+    body = _summary_body(
+        report.get("summary", ""),
+        elsewhere,
+        report.get("previous_findings", []),
+        head_sha,
+    )
+    return {"commit_id": head_sha, "body": body, "comments": comments}
 
 
 def _severity_rank(severity):
@@ -150,38 +160,71 @@ def _label(finding):
     return f"**{label}**: {finding['title']}"
 
 
+def _fence(text):
+    """A code fence longer than any backtick run inside ``text``."""
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    return "`" * max(3, longest + 1)
+
+
+def _also_at(finding):
+    """``Also at: ...`` for the same bug elsewhere, or an empty string.
+
+    REVIEW.md asks for every location of a class of bug, so the author
+    fixes them all in one round. A later round does not repeat it.
+    """
+    places = finding.get("other_locations") or []
+    if not places:
+        return ""
+    return "Also at: " + ", ".join(f"`{place}`" for place in places)
+
+
 def _comment_body(finding):
-    parts = [_label(finding), finding.get("body", "")]
+    parts = [_label(finding), finding.get("body", ""), _also_at(finding)]
     suggestion = finding.get("suggestion")
     if suggestion is not None:
-        # A fence must be longer than any backtick run inside it.
-        longest = max(
-            (len(run) for run in re.findall(r"`+", suggestion)), default=0
-        )
-        fence = "`" * max(3, longest + 1)
+        fence = _fence(suggestion)
         parts.append(f"{fence}suggestion\n{suggestion}\n{fence}")
     return "\n\n".join(part for part in parts if part)
 
 
-def _summary_body(summary, elsewhere, head_sha):
+def _summary_row(finding):
+    where = ""
+    if finding.get("path"):
+        where = finding["path"]
+        if finding.get("line") is not None:
+            where += f":{finding['line']}"
+        where = f" (`{where}`)"
+    rows = [f"- {_label(finding)}{where}"]
+    for extra in (finding.get("body"), _also_at(finding)):
+        if extra:
+            rows.append(f"  {extra}")
+    suggestion = finding.get("suggestion")
+    if suggestion is not None:
+        # Outside the diff GitHub cannot apply a suggestion, so the fix
+        # is shown as plain code, indented under its list item.
+        fence = _fence(suggestion)
+        code = "\n".join(f"  {line}" for line in suggestion.splitlines())
+        rows.append(f"  {fence}\n{code}\n  {fence}")
+    return rows
+
+
+def _summary_body(summary, elsewhere, previous, head_sha):
     parts = [summary.strip()]
     if elsewhere:
-        rows = []
-        for finding in elsewhere:
-            where = ""
-            if finding.get("path"):
-                where = finding["path"]
-                if finding.get("line") is not None:
-                    where += f":{finding['line']}"
-                where = f" (`{where}`)"
-            rows.append(f"- {_label(finding)}{where}")
-            if finding.get("body"):
-                rows.append(f"  {finding['body']}")
+        rows = [row for finding in elsewhere for row in _summary_row(finding)]
         parts.append(
             "### Findings without an inline comment\n\n"
             "These lines are not part of the diff, or the finding has "
             "no line.\n\n" + "\n".join(rows)
         )
+    if previous:
+        rows = []
+        for item in previous:
+            row = f"- {item['id']}: {item['status']}"
+            if item.get("note"):
+                row += f". {item['note']}"
+            rows.append(row)
+        parts.append("### Earlier findings\n\n" + "\n".join(rows))
     parts.append(f"{MARKER_PREFIX}{head_sha} -->")
     return "\n\n".join(part for part in parts if part)
 
