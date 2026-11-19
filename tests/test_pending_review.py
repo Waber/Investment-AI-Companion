@@ -212,7 +212,53 @@ def test_the_summary_starts_with_the_count_and_ends_with_the_marker():
     payload = build_payload(_report(_finding()), DIFF, HEAD)
 
     assert payload["body"].startswith("1 Critical, 0 Important, 0 Minor")
-    assert payload["body"].rstrip().endswith(f"{MARKER_PREFIX}{HEAD} -->")
+    # A literal, not MARKER_PREFIX: /review-pr finds earlier rounds by
+    # this exact text, so a changed prefix must fail here.
+    assert (
+        payload["body"]
+        .rstrip()
+        .endswith("<!-- code-reviewer head=" + HEAD + " -->")
+    )
+    assert MARKER_PREFIX == "<!-- code-reviewer head="
+
+
+def test_an_inline_comment_lists_the_other_locations():
+    spread = _finding(other_locations=["app/y.py:12", "app/z.py:40"])
+
+    body = build_payload(_report(spread), DIFF, HEAD)["comments"][0]["body"]
+
+    assert "Also at: `app/y.py:12`, `app/z.py:40`" in body
+
+
+def test_a_summary_row_keeps_other_locations_and_the_suggestion():
+    outside = _finding(
+        path="app/limits.py",
+        line=7,
+        other_locations=["app/y.py:12"],
+        suggestion="LIMIT = 50",
+    )
+
+    body = build_payload(_report(outside), DIFF, HEAD)["body"]
+
+    assert "Also at: `app/y.py:12`" in body
+    # Outside the diff a GitHub suggestion cannot apply, so it is
+    # shown as plain code.
+    assert "```\n  LIMIT = 50\n  ```" in body
+    assert "```suggestion" not in body
+
+
+def test_the_summary_lists_the_status_of_earlier_findings():
+    report = _report(_finding())
+    report["previous_findings"] = [
+        {"id": "F2 (round 1)", "status": "fixed", "note": "now Decimal"},
+        {"id": "F3 (round 1)", "status": "open", "note": ""},
+    ]
+
+    body = build_payload(report, DIFF, HEAD)["body"]
+
+    assert "### Earlier findings" in body
+    assert "- F2 (round 1): fixed. now Decimal" in body
+    assert "- F3 (round 1): open" in body
 
 
 def test_comments_are_ordered_critical_then_important_then_minor():
