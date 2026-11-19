@@ -11,10 +11,11 @@
   their tests, and the AGENTS.md, REVIEW.md, and HANDOFF.md notes.
   Details are in the 2026-11-19 journal entry.
 - Checks: the planted-defect acceptance run found all four defects.
-  GitHub Actions run 44485683800 passed both jobs on `735d04f`.
-  The CI command locally: 2283 passed; the 3 failures are local
-  only (two 0006 SQLite 3.54.1 tests and the ignored `demo/` folder
-  in this checkout).
+  GitHub Actions passed both jobs on `735d04f` (run 44485683800) and
+  on `696a83b` (run 44488391248). The CI command locally on the
+  round-2 fixes: 2291 passed, coverage 97.20%; the 3 failures are
+  local only (two 0006 SQLite 3.54.1 tests and the ignored `demo/`
+  folder in this checkout). The two new test files: 62 passed.
 - Round 1 on #138 by the code-reviewer agent: 0 Critical,
   4 Important, 3 Minor, all fixed on this branch:
   - the posted review now keeps `other_locations`, a suggestion
@@ -30,6 +31,14 @@
   Changed file names reach the path-rule script through a file,
   never a command line. A PENDING draft no longer blocks a
   terminal-only rerun. The three score filters wait for #135.
+- Round 2 on #138 (`696a83b`): all seven round-1 findings fixed;
+  2 Important and 3 Minor new ones, fixed on this branch: finding ids
+  in every posted label, earlier rounds read from the review body
+  too, thread state from GraphQL `reviewThreads`, the matcher copied
+  from the base branch and run with `python -I`, multi-paragraph
+  bodies kept inside their list item, these numbers, and Comment as
+  the only choice on one's own PR. Only a posted review counts as a
+  round.
 - PR #135 review (instrument score): 3 Critical, 7 Important,
   3 Minor. Posted as PENDING review 5971406643 on head `d041b1c`,
   with 12 inline comments and the summary. This was the first real
