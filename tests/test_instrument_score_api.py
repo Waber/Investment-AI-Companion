@@ -37,7 +37,7 @@ from app.repositories.fund_attributes_repository import (
     FundAttributesRepository,
 )
 from app.repositories.price_bar_repository import PriceBarRepository
-from app.scoring import Figure, score_instrument
+from app.scoring import Figure, parse_weights, score_instrument
 from tests.test_instrument_score import ON, STATEMENT_FRESH, default_weights
 
 _NOT_FOUND = {"detail": "Instrument not found"}
@@ -1491,6 +1491,51 @@ async def test_editing_a_demo_metric_row_keeps_the_demo_mark(client):
 
 
 @pytest.mark.asyncio
+async def test_a_synthetic_fund_row_on_a_real_company_is_marked_demo(client):
+    """The demo-seed POST can store a synthetic row on a real ETF.
+
+    After an edit that row says ``manual``. Cost and size still show
+    ``demo``, ``is_synthetic`` is true because a used figure is
+    synthetic, and the real price series keeps its own source.
+    """
+    session = _session(client)
+    try:
+        company = _company(session, "MIXEDETF", "ETF")
+        FundAttributesRepository(session).create(
+            company.id,
+            {
+                "ter": 0.0022,
+                "aum": 1_250_000_000,
+                "aum_currency": "EUR",
+                "aum_as_of": ON,
+                "as_of": ON,
+            },
+            record_source=RECORD_SOURCE_DEMO,
+            is_synthetic=True,
+        )
+        days = [ON - timedelta(days=7 * step) for step in range(53, -1, -1)]
+        PriceBarRepository(session).upsert_many(
+            company.id,
+            [_bar(day, 10.0 + (index % 3)) for index, day in enumerate(days)],
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    edited = await client.put(
+        f"/api/v1/instruments/{company_id}/fund-attributes",
+        json={"ter": 0.003},
+    )
+    assert edited.json()["source"] == RECORD_SOURCE_MANUAL
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    assert body["is_synthetic"] is True
+    for name in ("cost", "size"):
+        assert _part(body, name)["source"] == "demo"
+        assert _part(body, name)["inputs"][0]["source"] == "demo"
+    assert _part(body, "volatility")["status"] == "scored"
+    assert _part(body, "volatility")["source"] == "[TEST-SERIES]"
+
+
+@pytest.mark.asyncio
 async def test_a_real_instrument_keeps_its_stored_source(client):
     session = _session(client)
     try:
@@ -1655,7 +1700,7 @@ async def test_a_price_window_anchored_years_back_is_not_scored(client):
     for name in ("volatility", "max_drawdown"):
         figure = _part(body, name)["inputs"][0]
         assert figure["value"] is not None
-        assert figure["status"] == "insufficient_history"
+        assert figure["status"] == "window_too_long"
         assert figure["start"] == "2021-01-04"
         assert figure["as_of"] == ON.isoformat()
     assert body["status"] == "no_score"
@@ -1770,4 +1815,10 @@ async def test_openapi_describes_the_weight_body(client):
         "minimum": 0,
         "maximum": 1000000,
     }
+    # Swagger prefills the first example. Each one must be a body the
+    # route accepts for its type.
+    examples = body["content"]["application/json"]["examples"]
+    assert set(examples) == {"STOCK", "ETF", "ETC"}
+    for instrument_type, example in examples.items():
+        assert parse_weights(instrument_type, example["value"])
     _assert_no_advice(body)

@@ -104,7 +104,10 @@ def test_a_second_insert_conflict_is_a_fixed_error(monkeypatch):
     session = factory()
     try:
 
+        calls = {"n": 0}
+
         def _explode(*_args, **_kwargs):
+            calls["n"] += 1
             raise IntegrityError(
                 "INSERT", {}, Exception("driver said unique violation")
             )
@@ -113,6 +116,8 @@ def test_a_second_insert_conflict_is_a_fixed_error(monkeypatch):
         with pytest.raises(ScoreWeightsSaveError) as caught:
             ScoreWeightsRepository(session).save("ETC", default_weights("ETC"))
         assert "driver said" not in str(caught.value)
+        # One retry, not more: two attempts in all.
+        assert calls["n"] == 2
         # Neither chained nor implicit context: the driver text holds
         # the INSERT and the submitted weights.
         assert caught.value.__cause__ is None
@@ -184,6 +189,48 @@ def test_save_reports_its_own_write_when_another_commits_right_after(
             )
         ).scalar()
         assert stored == 3
+    finally:
+        first.close()
+        second.close()
+
+
+def test_re_sending_the_loaded_weights_still_writes_them(monkeypatch):
+    """A re-save of the current set must not keep someone else's weights.
+
+    This session loads version 2 with equal weights. Another session
+    then stores profitability 9 as version 3. This session saves the
+    equal weights again. They equal what it loaded, so without a forced
+    write SQLAlchemy would update only the version, and version 4
+    would hold the other session's weights.
+    """
+    factory = _factory()
+    first = factory()
+    second = factory()
+    try:
+        repo = ScoreWeightsRepository(first)
+        repo.save("STOCK", default_weights("STOCK"))
+        real_get = ScoreWeightsRepository.get
+        raced = {"done": False}
+
+        def get_then_race(self, instrument_type):
+            row = real_get(self, instrument_type)
+            if self.db is first and not raced["done"]:
+                raced["done"] = True
+                ScoreWeightsRepository(second).save("STOCK", _THREE)
+            return row
+
+        monkeypatch.setattr(ScoreWeightsRepository, "get", get_then_race)
+        saved = repo.save("STOCK", default_weights("STOCK"))
+        monkeypatch.undo()
+        assert raced["done"]
+        assert saved.version == 4
+        assert saved.weights == default_weights("STOCK")
+        second.expire_all()
+        assert ScoreWeightsRepository(second).load("STOCK") == (
+            default_weights("STOCK"),
+            4,
+            True,
+        )
     finally:
         first.close()
         second.close()
