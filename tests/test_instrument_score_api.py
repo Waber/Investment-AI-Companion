@@ -37,7 +37,7 @@ from app.repositories.fund_attributes_repository import (
     FundAttributesRepository,
 )
 from app.repositories.price_bar_repository import PriceBarRepository
-from app.scoring import score_instrument
+from app.scoring import Figure, score_instrument
 from tests.test_instrument_score import ON, STATEMENT_FRESH, default_weights
 
 _NOT_FOUND = {"detail": "Instrument not found"}
@@ -410,10 +410,13 @@ async def test_stale_price_metrics_are_excluded(client):
 
 @pytest.mark.asyncio
 async def test_demo_v2_incomplete_instrument_has_partial_coverage(client):
-    """``DEMO_ETF_GPW`` has no TER. The other three fund parts score.
+    """``DEMO_ETF_GPW`` has no TER, and its AUM is in PLN.
 
-    The prices and the attribute row come from the fixture. The score
-    date is the fixture as-of date, so the series is not stale.
+    Volatility and drawdown score. Size is not scored, because the
+    size line is for EUR and USD amounts only. The prices and the
+    attribute row come from the fixture. The score date is the fixture
+    as-of date, so the series is not stale. Every source is ``demo``,
+    because the instrument is synthetic.
     """
     fixture = json.loads(
         (Path("fixtures/demo-v2.json")).read_text(encoding="utf-8")
@@ -449,22 +452,24 @@ async def test_demo_v2_incomplete_instrument_has_partial_coverage(client):
     body = response.json()
     _assert_no_advice(body)
     assert body["instrument_type"] == "ETF"
+    assert body["is_synthetic"] is True
     assert body["status"] == "scored"
     assert body["coverage"] == {
-        "available": 3,
+        "available": 2,
         "total": 4,
-        "label": "3 of 4",
+        "label": "2 of 4",
     }
     cost = _part(body, "cost")
     assert cost["status"] == "no_data"
     assert cost["label"] == "no data"
     assert cost["inputs"][0]["value"] is None
-    assert _part(body, "size")["status"] == "scored"
-    assert Decimal(_part(body, "size")["inputs"][0]["value"]) == Decimal(
-        "250000000"
-    )
-    assert _part(body, "size")["source"] == "demo"
-    assert _part(body, "volatility")["source"] == "[IAC-DEMO-V2]"
+    size = _part(body, "size")
+    assert size["status"] == "no_data"
+    assert size["inputs"][0]["status"] == "unsupported_currency"
+    assert size["inputs"][0]["currency"] == "PLN"
+    assert size["inputs"][0]["source"] == "demo"
+    assert Decimal(size["inputs"][0]["value"]) == Decimal("250000000")
+    assert _part(body, "volatility")["source"] == "demo"
     derived = derive_price_metrics(
         [
             (date.fromisoformat(row["date"]), row["close"])
@@ -483,20 +488,28 @@ async def test_demo_v2_incomplete_instrument_has_partial_coverage(client):
         str(derived.max_drawdown.value)
     )
     assert volatility["as_of"] == derived.volatility.as_of.isoformat()
+    assert volatility["start"] == derived.volatility.start.isoformat()
     expected = score_instrument(
         "ETF",
         {
             "ter": (None, None, None),
-            "aum": (Decimal("250000000"), "demo", date(2026, 9, 30)),
-            "volatility": (
-                Decimal(str(derived.volatility.value)),
-                "[IAC-DEMO-V2]",
-                derived.volatility.as_of,
+            "aum": Figure(
+                Decimal("250000000"),
+                "demo",
+                date(2026, 9, 30),
+                currency="PLN",
             ),
-            "max_drawdown": (
+            "volatility": Figure(
+                Decimal(str(derived.volatility.value)),
+                "demo",
+                derived.volatility.as_of,
+                start=derived.volatility.start,
+            ),
+            "max_drawdown": Figure(
                 Decimal(str(derived.max_drawdown.value)),
-                "[IAC-DEMO-V2]",
+                "demo",
                 derived.max_drawdown.as_of,
+                start=derived.max_drawdown.start,
             ),
         },
         default_weights("ETF"),
@@ -899,10 +912,11 @@ def test_a_stored_type_outside_the_three_is_422():
 
 
 @pytest.mark.asyncio
-async def test_aum_without_its_own_date_uses_the_snapshot_date(client):
-    """A raw row can store AUM with no ``aum_as_of``.
+async def test_aum_without_its_own_date_is_no_data(client):
+    """A raw row, or ``PUT {"aum_as_of": null}``, can leave AUM undated.
 
-    The snapshot date is the one the score uses.
+    The snapshot date is not borrowed: it says when TER was checked,
+    not when the fund had that size. /ui shows that date as missing.
     """
     session = _session(client)
     try:
@@ -925,8 +939,10 @@ async def test_aum_without_its_own_date_uses_the_snapshot_date(client):
         session.close()
     response = await client.get(f"/api/v1/instruments/{company_id}/score")
     size = _part(response.json(), "size")
-    assert size["status"] == "scored"
-    assert size["as_of"] == ON.isoformat()
+    assert size["status"] == "no_data"
+    assert size["inputs"][0]["status"] == "no_data"
+    assert size["inputs"][0]["as_of"] is None
+    assert _part(response.json(), "cost")["as_of"] == ON.isoformat()
 
 
 @pytest.mark.asyncio
@@ -1049,7 +1065,7 @@ async def test_half_cent_contributions_print_zero_as_two_decimals(client):
     _assert_score_strings_have_two_decimals(body)
 
 
-async def _put_raw(app, headers, receive):
+async def _put_raw(app, headers, receive, path="/api/v1/score-weights/STOCK"):
     """One PUT through ASGI, so the test chooses Content-Length and chunks."""
     sent = []
 
@@ -1062,8 +1078,8 @@ async def _put_raw(app, headers, receive):
         "http_version": "1.1",
         "method": "PUT",
         "scheme": "http",
-        "path": "/api/v1/score-weights/STOCK",
-        "raw_path": b"/api/v1/score-weights/STOCK",
+        "path": path,
+        "raw_path": path.encode("ascii"),
         "query_string": b"",
         "headers": headers,
         "client": ("127.0.0.1", 50000),
@@ -1262,7 +1278,8 @@ def test_put_score_weights_is_a_sync_function():
 
 # What a score request on 2026-11-18 should report for demo-v2.
 # Prices end on 2026-09-28 (51 days earlier). Statements used here
-# are the 2025 annual ratios. TER is missing only on DEMO_ETF_GPW.
+# are the 2025 annual ratios. TER is missing only on DEMO_ETF_GPW,
+# and its AUM is in PLN, which the size line does not score.
 LIVE_ON = date(2026, 11, 18)
 LIVE_COVERAGE = {
     "DEMO_PL_TECH": ("scored", "4 of 4"),
@@ -1272,7 +1289,7 @@ LIVE_COVERAGE = {
     "DEMO_SG_EARLY": ("scored", "3 of 4"),
     "DEMO_PL_EMPTY": ("no_score", "0 of 4"),
     "DEMO_ETF_WORLD": ("scored", "4 of 4"),
-    "DEMO_ETF_GPW": ("scored", "3 of 4"),
+    "DEMO_ETF_GPW": ("scored", "2 of 4"),
     "DEMO_ETC_GOLD": ("scored", "4 of 4"),
     "DEMO_ETC_SILVER": ("scored", "4 of 4"),
 }
@@ -1368,3 +1385,389 @@ async def test_a_deep_stored_weight_row_is_a_fixed_500(client):
     assert response.json() == {"detail": "Score weights could not be read"}
     assert "RecursionError" not in response.text
     assert "Internal Server Error" not in response.text
+
+
+# --- review fixes: demo mark, period type, dates, and the window ------
+
+
+def _bar(day, close):
+    """One weekly bar in the shape of the demo-v2 fixture."""
+    return PriceBarCreate(
+        date=day,
+        open=close,
+        high=close,
+        low=close,
+        close=close,
+        volume=100,
+        currency="EUR",
+        source="[TEST-SERIES]",
+        retrieved_at=datetime(2026, 9, 30, 18, tzinfo=timezone.utc),
+    )
+
+
+def _demo_company(session, ticker, instrument_type):
+    return CompanyRepository(session).create(
+        CompanyCreate(
+            name=ticker,
+            ticker=ticker,
+            instrument_type=instrument_type,
+            currency="EUR",
+        ),
+        record_source=RECORD_SOURCE_DEMO,
+        is_synthetic=True,
+    )
+
+
+def _inputs(body):
+    return [item for part in body["components"] for item in part["inputs"]]
+
+
+@pytest.mark.asyncio
+async def test_editing_a_demo_fund_row_keeps_the_demo_mark(client):
+    """An edit makes the row ``manual``. The instrument is still a demo.
+
+    The untouched synthetic AUM must not turn into a real-looking
+    ``manual`` figure, and neither may the TER that was just typed.
+    """
+    session = _session(client)
+    try:
+        company = _demo_company(session, "DEMOFUND", "ETF")
+        FundAttributesRepository(session).create(
+            company.id,
+            {
+                "ter": 0.0022,
+                "aum": 1_250_000_000,
+                "aum_currency": "EUR",
+                "aum_as_of": ON,
+                "as_of": ON,
+            },
+            record_source=RECORD_SOURCE_DEMO,
+            is_synthetic=True,
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    edited = await client.put(
+        f"/api/v1/instruments/{company_id}/fund-attributes",
+        json={"ter": 0.002},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["source"] == RECORD_SOURCE_MANUAL
+    response = await client.get(f"/api/v1/instruments/{company_id}/score")
+    body = response.json()
+    assert body["is_synthetic"] is True
+    assert _part(body, "cost")["source"] == "demo"
+    assert _part(body, "size")["source"] == "demo"
+    assert {item["source"] for item in _inputs(body)} == {"demo", None}
+    assert _part(body, "cost")["inputs"][0]["value"] == "0.002"
+
+
+@pytest.mark.asyncio
+async def test_editing_a_demo_metric_row_keeps_the_demo_mark(client):
+    """A metric row has no synthetic column. The company's flag counts."""
+    session = _session(client)
+    try:
+        company = _demo_company(session, "DEMOSTOCK", "STOCK")
+        _metric(
+            session,
+            company.id,
+            datetime(2026, 6, 30, tzinfo=timezone.utc),
+            "annual",
+            roe=0.1,
+            net_margin=0.2,
+            source=RECORD_SOURCE_MANUAL,
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    assert body["is_synthetic"] is True
+    profitability = _part(body, "profitability")
+    assert profitability["source"] == "demo"
+    assert [item["source"] for item in profitability["inputs"]] == [
+        "demo",
+        "demo",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_real_instrument_keeps_its_stored_source(client):
+    session = _session(client)
+    try:
+        company_id = _hand_stock(session, "REALSRC").id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    assert body["is_synthetic"] is False
+    assert _part(body, "profitability")["source"] == RECORD_SOURCE_MANUAL
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("annual", ["Annual", " ANNUAL "])
+async def test_an_annual_row_beats_quarterly_whatever_its_case(client, annual):
+    """The forms store ``period_type`` as typed. ``Annual`` is annual.
+
+    The annual row is inserted first, so the id tie-break alone would
+    pick the quarterly row.
+    """
+    session = _session(client)
+    try:
+        company = _company(session, "CASE" + str(len(annual)), "STOCK")
+        moment = datetime(2026, 6, 30, tzinfo=timezone.utc)
+        _metric(session, company.id, moment, annual, roe=0.15)
+        _metric(session, company.id, moment, "quarterly", roe=0.05)
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    roe = _part(body, "profitability")["inputs"][0]
+    assert Decimal(roe["value"]) == Decimal("0.15")
+
+
+@pytest.mark.asyncio
+async def test_the_later_row_wins_when_period_and_type_are_equal(client):
+    """``annual`` and ``Annual`` are two rows to the unique key.
+
+    To the score they are the same period type, so the later row wins.
+    """
+    session = _session(client)
+    try:
+        company = _company(session, "SAMEDAY", "STOCK")
+        moment = datetime(2026, 6, 30, tzinfo=timezone.utc)
+        _metric(session, company.id, moment, "annual", roe=0.05)
+        _metric(session, company.id, moment, "Annual", roe=0.15)
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    roe = _part(body, "profitability")["inputs"][0]
+    assert Decimal(roe["value"]) == Decimal("0.15")
+
+
+@pytest.mark.asyncio
+async def test_an_infinite_ratio_does_not_hide_an_older_finite_one(client):
+    """SQLite stores ``inf``. The loader skips it like a null."""
+    session = _session(client)
+    try:
+        company = _company(session, "INFROE", "STOCK")
+        _metric(
+            session,
+            company.id,
+            datetime(2025, 12, 31, tzinfo=timezone.utc),
+            "annual",
+            roe=0.1,
+        )
+        _metric(
+            session,
+            company.id,
+            datetime(2026, 6, 30, tzinfo=timezone.utc),
+            "annual",
+            roe=float("inf"),
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    roe = _part(body, "profitability")["inputs"][0]
+    assert roe["status"] == "scored"
+    assert Decimal(roe["value"]) == Decimal("0.1")
+    assert roe["as_of"] == "2025-12-31"
+
+
+@pytest.mark.asyncio
+async def test_ter_keeps_the_snapshot_date_when_aum_has_its_own(client):
+    """TER is dated by ``as_of``. Only AUM uses ``aum_as_of``."""
+    session = _session(client)
+    try:
+        company = _company(session, "TERDATE", "ETF")
+        FundAttributesRepository(session).create(
+            company.id,
+            {
+                "ter": 0.002,
+                "aum": 1_000_000_000,
+                "aum_currency": "EUR",
+                "aum_as_of": ON - timedelta(days=400),
+                "as_of": ON,
+            },
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    ter = _part(body, "cost")["inputs"][0]
+    aum = _part(body, "size")["inputs"][0]
+    assert ter["status"] == "scored"
+    assert ter["as_of"] == ON.isoformat()
+    assert aum["status"] == "stale"
+    assert aum["as_of"] == (ON - timedelta(days=400)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_aum_in_another_currency_is_shown_but_not_scored(client):
+    session = _session(client)
+    try:
+        company = _company(session, "JPYFUND", "ETF")
+        FundAttributesRepository(session).create(
+            company.id,
+            {
+                "ter": 0.002,
+                "aum": 160_000_000_000,
+                "aum_currency": "JPY",
+                "aum_as_of": ON,
+                "as_of": ON,
+            },
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    size = _part(body, "size")
+    assert size["status"] == "no_data"
+    assert size["inputs"][0]["status"] == "unsupported_currency"
+    assert size["inputs"][0]["currency"] == "JPY"
+    assert size["inputs"][0]["label"] == "no data"
+    assert _part(body, "cost")["inputs"][0]["currency"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_price_window_anchored_years_back_is_not_scored(client):
+    """One close in 2021, then five weekly closes up to the score date.
+
+    The one-year anchor is the 2021 close, so the window covers more
+    than five years. Volatility and drawdown are not scored, and the
+    window start is in the answer.
+    """
+    session = _session(client)
+    try:
+        company = _company(session, "GAPPY", "ETF")
+        days = [date(2021, 1, 4)] + [
+            ON - timedelta(days=7 * step) for step in range(4, -1, -1)
+        ]
+        closes = [10.0, 11.0, 10.5, 11.2, 10.8, 11.5]
+        PriceBarRepository(session).upsert_many(
+            company.id,
+            [_bar(day, close) for day, close in zip(days, closes)],
+        )
+        company_id = company.id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    for name in ("volatility", "max_drawdown"):
+        figure = _part(body, name)["inputs"][0]
+        assert figure["value"] is not None
+        assert figure["status"] == "insufficient_history"
+        assert figure["start"] == "2021-01-04"
+        assert figure["as_of"] == ON.isoformat()
+    assert body["status"] == "no_score"
+
+
+# --- review fixes: the weight routes ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_whole_weights_are_json_integers(client):
+    """``1`` is sent back as ``1``, not ``1.0``. 1.5 stays 1.5."""
+    default = await client.get("/api/v1/score-weights/STOCK")
+    assert '"profitability":1,' in default.text
+    assert type(default.json()["weights"]["profitability"]) is int
+    saved = await client.put(
+        "/api/v1/score-weights/STOCK",
+        json={"weights": {**_STOCK_WEIGHTS, "valuation": 1.5}},
+    )
+    assert type(saved.json()["weights"]["profitability"]) is int
+    assert saved.json()["weights"]["valuation"] == 1.5
+    session = _session(client)
+    try:
+        company_id = _hand_stock(session, "INTW").id
+    finally:
+        session.close()
+    body = (await client.get(f"/api/v1/instruments/{company_id}/score")).json()
+    assert type(_part(body, "profitability")["weight"]) is int
+    assert _part(body, "valuation")["weight"] == 1.5
+
+
+@pytest.mark.asyncio
+async def test_put_checks_the_type_before_it_reads_the_body(client):
+    """A wrong type is the type error, even with no body or a huge one."""
+    empty = await client.put("/api/v1/score-weights/stock")
+    assert empty.status_code == 422
+    assert empty.json() == {"detail": "Unknown instrument type"}
+    reads = {"n": 0}
+
+    async def receive():
+        reads["n"] += 1
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    status, payload = await _put_raw(
+        client.app,
+        [
+            (b"host", b"127.0.0.1"),
+            (b"content-type", b"application/json"),
+            (b"content-length", b"100000"),
+        ],
+        receive,
+        path="/api/v1/score-weights/BOND",
+    )
+    assert status == 422
+    assert json.loads(payload) == {"detail": "Unknown instrument type"}
+    assert reads["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_content_length_of_thousands_of_digits_is_413(client):
+    """``int`` refuses more than 4300 digits. That must not be a 500."""
+
+    async def receive():
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    status, payload = await _put_raw(
+        client.app,
+        [
+            (b"host", b"127.0.0.1"),
+            (b"content-type", b"application/json"),
+            (b"content-length", b"1" * 5000),
+        ],
+        receive,
+    )
+    assert status == 413
+    assert json.loads(payload) == {"detail": "Score weights are too large"}
+
+
+@pytest.mark.asyncio
+async def test_a_body_that_overflows_the_parser_is_a_fixed_422(client):
+    """16 KiB of ``[`` overflows the JSON parser before it ends.
+
+    That is ``RecursionError``, not ``ValueError``. The precondition
+    checks it on this interpreter.
+    """
+    body = b"[" * (16 * 1024)
+    with pytest.raises(RecursionError):
+        json.loads(body)
+    async with _quiet(client) as quiet:
+        response = await quiet.put(
+            "/api/v1/score-weights/STOCK",
+            content=body,
+            headers={"content-type": "application/json"},
+        )
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Score weights must be an object"}
+
+
+@pytest.mark.asyncio
+async def test_openapi_describes_the_weight_body(client):
+    """The body is read by a capped reader, so FastAPI cannot infer it."""
+    schema = (await client.get("/api/v1/openapi.json")).json()
+    put = schema["paths"]["/api/v1/score-weights/{instrument_type}"]["put"]
+    body = put["requestBody"]
+    assert body["required"] is True
+    document = body["content"]["application/json"]["schema"]
+    assert document["required"] == ["weights"]
+    assert document["additionalProperties"] is False
+    weights = document["properties"]["weights"]
+    assert weights["type"] == "object"
+    assert weights["additionalProperties"] == {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000000,
+    }
+    _assert_no_advice(body)

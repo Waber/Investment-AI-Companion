@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.research import ItemId
 from app.core.database import get_db
-from app.instrument_score import load_score_inputs
+from app.instrument_score import is_synthetic, load_score_inputs
 from app.models.database_models import CompanyDB
 from app.repositories.score_weights_repository import (
     ScoreWeightsReadError,
@@ -45,6 +45,33 @@ _TOO_LARGE = "Score weights are too large"
 # leaves room for a very long number and still rejects a huge body
 # before it is parsed.
 _MAX_WEIGHT_BODY = 16 * 1024
+# The largest 64-bit size has 19 digits. ``int`` refuses a string of
+# more than 4300 digits with ``ValueError``, so a longer header is
+# rejected before ``int`` sees it.
+_MAX_LENGTH_DIGITS = 19
+# The body is read by ``_json_payload``, not by a Pydantic parameter,
+# so FastAPI cannot describe it. This is that description for
+# ``/api/v1/openapi.json`` and Swagger UI.
+_WEIGHT_BODY_SCHEMA = {
+    "type": "object",
+    "required": ["weights"],
+    "additionalProperties": False,
+    "properties": {
+        "weights": {
+            "type": "object",
+            "description": (
+                "Every component of the instrument type, and no other "
+                "name. Each weight is a finite number from 0 to 1000000. "
+                "Not every weight may be 0."
+            ),
+            "additionalProperties": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000,
+            },
+        }
+    },
+}
 _TYPES = frozenset({"STOCK", "ETF", "ETC"})
 _MESSAGES = {
     "not_an_object": _NOT_OBJECT,
@@ -61,7 +88,11 @@ _MESSAGES = {
 
 
 class ScoreInput(BaseModel):
-    """One stored figure that a component uses."""
+    """One stored figure that a component uses.
+
+    ``currency`` is set for AUM. ``start`` is the first close of the
+    window behind volatility and maximum drawdown.
+    """
 
     name: str
     value: Optional[str] = None
@@ -70,6 +101,8 @@ class ScoreInput(BaseModel):
     label: Optional[str] = None
     source: Optional[str] = None
     as_of: Optional[date] = None
+    currency: Optional[str] = None
+    start: Optional[date] = None
 
 
 class ScoreComponent(BaseModel):
@@ -79,7 +112,7 @@ class ScoreComponent(BaseModel):
     status: str
     label: Optional[str] = None
     normalized: Optional[str] = None
-    weight: float
+    weight: int | float
     effective_weight: Optional[str] = None
     contribution: Optional[str] = None
     source: Optional[str] = None
@@ -98,12 +131,14 @@ class ScoreCoverage(BaseModel):
 class InstrumentScore(BaseModel):
     """The score for one instrument on one day.
 
-    ``total`` is null when ``status`` is ``no_score``.
+    ``total`` is null when ``status`` is ``no_score``. ``is_synthetic``
+    is true for demo data, and then every source is ``demo``.
     """
 
     instrument_id: int
     ticker: str
     instrument_type: str
+    is_synthetic: bool
     status: str
     total: Optional[str] = None
     coverage: ScoreCoverage
@@ -119,7 +154,9 @@ class ScoreWeightSet(BaseModel):
     instrument_type: str
     version: int
     stored: bool
-    weights: dict[str, float]
+    # ``int | float`` so a whole weight stays ``1`` in JSON. With
+    # ``float`` alone, Pydantic would print it as ``1.0``.
+    weights: dict[str, int | float]
 
 
 def utc_today():
@@ -133,15 +170,18 @@ def _text(number):
     return format(number, "f")
 
 
+def _plain_number(number):
+    """A whole number as ``int`` and any other as ``float``."""
+    if number == int(number):
+        return int(number)
+    return float(number)
+
+
 def _weight_numbers(instrument_type, weights):
-    numbers = {}
-    for name in component_names(instrument_type):
-        number = weights[name]
-        if number == int(number):
-            numbers[name] = int(number)
-        else:
-            numbers[name] = float(number)
-    return numbers
+    return {
+        name: _plain_number(weights[name])
+        for name in component_names(instrument_type)
+    }
 
 
 def _component_body(component):
@@ -150,7 +190,7 @@ def _component_body(component):
         status=component.status,
         label=component.label,
         normalized=_text(component.normalized),
-        weight=float(component.weight),
+        weight=_plain_number(component.weight),
         effective_weight=_text(component.effective_weight),
         contribution=_text(component.contribution),
         source=component.source,
@@ -164,6 +204,8 @@ def _component_body(component):
                 label=item.label,
                 source=item.source,
                 as_of=item.as_of,
+                currency=item.currency,
+                start=item.start,
             )
             for item in component.inputs
         ],
@@ -175,6 +217,7 @@ def _score_body(company, result, version, on_date):
         instrument_id=company.id,
         ticker=company.ticker,
         instrument_type=company.instrument_type,
+        is_synthetic=is_synthetic(company),
         status=result.status,
         total=_text(result.total),
         coverage=ScoreCoverage(
@@ -252,8 +295,9 @@ def get_score_weights(instrument_type: str, db: Session = Depends(get_db)):
 def _declared_length(request):
     """The Content-Length, or None when the header is absent.
 
-    A value that is not a non-negative integer is the same 413 as a
-    body that is too large. The header text is not copied.
+    A value that is not a non-negative integer, or one longer than 19
+    digits, is the same 413 as a body that is too large. The header
+    text is not copied.
     """
     raw = request.headers.get("content-length")
     if raw is None:
@@ -261,6 +305,8 @@ def _declared_length(request):
     # ``isdigit`` is true for ``²``. ``int`` then raises, and the
     # client sees a 500. A size is ASCII digits only.
     if not raw.isascii() or not raw.isdigit():
+        raise HTTPException(status_code=413, detail=_TOO_LARGE)
+    if len(raw) > _MAX_LENGTH_DIGITS:
         raise HTTPException(status_code=413, detail=_TOO_LARGE)
     return int(raw)
 
@@ -281,16 +327,21 @@ async def _read_capped(request):
     return bytes(received)
 
 
-async def _json_payload(request: Request):
+async def _json_payload(request: Request, instrument_type: str):
     """The JSON object, or a fixed error that does not quote the body.
 
-    A Content-Length over 16 KiB, or one that is not a size, is 413
-    before any body byte is read. A chunked body with no length is
-    read only until it passes that cap. Invalid text, a number that
-    is too big to parse, and a value nested deep enough to overflow
-    the parser are 422. ``ValueError`` covers a bad encoding and that
-    oversized integer. ``RecursionError`` is not a ``ValueError``.
+    The type in the path is checked first: a type other than STOCK,
+    ETF, or ETC is 422 "Unknown instrument type" whatever the body
+    is, and the body is not read. A Content-Length over 16 KiB, or one
+    that is not a size, is 413 before any body byte is read. A chunked
+    body with no length is read only until it passes that cap.
+    Invalid text, a number that is too big to parse, and a value
+    nested deep enough to overflow the parser are 422. ``ValueError``
+    covers a bad encoding and that oversized integer.
+    ``RecursionError`` is not a ``ValueError``.
     """
+    if instrument_type not in _TYPES:
+        raise HTTPException(status_code=422, detail=_UNKNOWN_TYPE)
     declared = _declared_length(request)
     if declared is not None and declared > _MAX_WEIGHT_BODY:
         raise HTTPException(status_code=413, detail=_TOO_LARGE)
@@ -306,6 +357,12 @@ async def _json_payload(request: Request):
 @router.put(
     "/score-weights/{instrument_type}",
     response_model=ScoreWeightSet,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": _WEIGHT_BODY_SCHEMA}},
+        }
+    },
 )
 def put_score_weights(
     instrument_type: str,
@@ -316,10 +373,10 @@ def put_score_weights(
 
     The first saved set is version 2. The numbers are stored as sent.
     Scoring divides the ones it can use by their sum. The answer is
-    the row that was saved.
+    the version and the weights this request wrote, even when another
+    PUT for the same type commits right after it. ``_json_payload``
+    has already checked the type.
     """
-    if instrument_type not in _TYPES:
-        raise HTTPException(status_code=422, detail=_UNKNOWN_TYPE)
     try:
         weights = parse_weights(instrument_type, payload)
     except WeightValidationError as error:
@@ -331,13 +388,4 @@ def put_score_weights(
         saved = ScoreWeightsRepository(db).save(instrument_type, weights)
     except ScoreWeightsSaveError:
         raise HTTPException(status_code=400, detail=_SAVE_FAILED) from None
-    stored = _decode_saved(instrument_type, saved.weights)
-    return _weight_body(instrument_type, stored, saved.version, True)
-
-
-def _decode_saved(instrument_type, raw):
-    """The weights just written, read back from that row."""
-    try:
-        return parse_weights(instrument_type, {"weights": json.loads(raw)})
-    except (WeightValidationError, TypeError, ValueError, RecursionError):
-        raise HTTPException(status_code=500, detail=_UNREADABLE) from None
+    return _weight_body(instrument_type, saved.weights, saved.version, True)
