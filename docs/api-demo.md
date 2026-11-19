@@ -108,15 +108,24 @@ The weight set is `GET` and `PUT /api/v1/score-weights/{instrument_type}`
 with `instrument_type` exactly `STOCK`, `ETF`, or `ETC`. The formulas
 are in `docs/scoring.md`. The total is a string with two decimal
 places, or JSON `null` when the status is `no_score`. A null total
-is not the number zero. `weight_set_version` is the set that was
-used. Version 1 is the built-in equal weights and is not a stored
+is not the number zero. `is_synthetic` is true for a demo instrument,
+and then every source in the score is `demo`, also after a person
+edited one of its rows. Each input carries `currency` (set for AUM)
+and `start` (the first close of the price window). An input that is
+not used says why in `status`: `no_data`, `stale`,
+`unsupported_currency`, or `insufficient_history`.
+`weight_set_version` is the set that was used. Version 1 is the built-in equal weights and is not a stored
 row (`stored` is false). The first PUT stores version 2. Each later
-PUT adds 1. PUT returns 200. It does not read `X-IAC-Demo-Seed` and
+PUT adds 1. PUT returns 200 with the version and the weights that
+request wrote. A whole weight is a JSON integer (`1`, not `1.0`).
+The OpenAPI document describes the PUT body. It does not read `X-IAC-Demo-Seed` and
 it does not check `Origin`. An unknown instrument is 404
 `{"detail": "Instrument not found"}`. An id of `0`, a negative id,
 or an id above 9223372036854775807 is 422, the same body as the
 other instrument routes. Any other type string, including `stock`
-and `BOND`, is 422 `{"detail": "Unknown instrument type"}`. A weight
+and `BOND`, is 422 `{"detail": "Unknown instrument type"}`. On a PUT
+the type is checked first, before the body is read, so a wrong type
+is that 422 even when the body is empty or too large. A weight
 body that is not the object `{"weights": {...}}`, or weights that
 are not finite numbers from 0 to 1000000, or a set that is all
 zeros, or a set that names the wrong components, is 422 with one
@@ -127,7 +136,8 @@ so deeply that parsing it overflows, is 500
 fails the constraint check is 400
 `{"detail": "Score weights could not be saved"}`. A body larger
 than 16 KiB is 413
-`{"detail": "Score weights are too large"}`. Invalid text, a
+`{"detail": "Score weights are too large"}`, and so is a
+Content-Length that is not ASCII digits or is longer than 19 digits. Invalid text, a
 number too big to parse, and a deeply nested value are 422
 `{"detail": "Score weights must be an object"}`. None of those
 sentences repeats the body.
