@@ -3,31 +3,49 @@
 ## Code Reviewer agent draft (#102): 2026-11-19
 
 - Branch `feat/code-reviewer-agent-102`, from `origin/master`
-  `7402df2`. Local commits only: not pushed, no pull request yet.
-  Refs #102. #102 stays open until Przemek accepts the draft.
+  `7402df2`. Pull request #138 is open (Refs #102). Not merged.
+  #102 stays open until Przemek accepts the draft.
 - Completed: `.claude/agents/code-reviewer.md`, the `/review-pr`
   skill, `.agents/review/instructions.toml`,
   `scripts/review_instructions.py`, `scripts/pending_review.py`,
   their tests, and the AGENTS.md, REVIEW.md, and HANDOFF.md notes.
   Details are in the 2026-11-19 journal entry.
 - Checks: the planted-defect acceptance run found all four defects.
-  The PR #135 run worked through the skill steps without `--post`.
-  The CI command on this branch: 2283 passed; the 3 failures are
-  local-only (two 0006 SQLite 3.54.1 tests and the ignored
-  `demo/` folder in this checkout). PostgreSQL was not run.
-- Not done: no real `--post` run yet; no GitHub Actions trigger;
-  no thread replies; no CODEOWNERS entry for `.agents/review/`.
+  GitHub Actions run 44485683800 passed both jobs on `735d04f`.
+  The CI command locally: 2283 passed; the 3 failures are local
+  only (two 0006 SQLite 3.54.1 tests and the ignored `demo/` folder
+  in this checkout).
+- Round 1 on #138 by the code-reviewer agent: 0 Critical,
+  4 Important, 3 Minor, all fixed on this branch:
+  - the posted review now keeps `other_locations`, a suggestion
+    outside the diff, and earlier-finding statuses;
+  - the path rules and REVIEW.md come from a freshly fetched base
+    branch;
+  - the round rules follow `previous-review.md`, so a rebase keeps
+    them;
+  - this file and the journal;
+  - the marker test uses a literal;
+  - the drift test checks each filter against `git ls-files`;
+  - `COVERAGE_FILE` keeps `.coverage` out of the worktree.
+  Changed file names reach the path-rule script through a file,
+  never a command line. A PENDING draft no longer blocks a
+  terminal-only rerun. The three score filters wait for #135.
 - PR #135 review (instrument score): 3 Critical, 7 Important,
-  3 Minor, not posted. The head was `d041b1c`. The report and the
-  pending-review payload live in this session's scratchpad only. A
-  new session reruns `/review-pr 135`, and posts at Przemek's word.
+  3 Minor. Posted as PENDING review 5971406643 on head `d041b1c`,
+  with 12 inline comments and the summary. This was the first real
+  pending-review post. Only Przemek sees it until he submits it.
+  He is the author, so GitHub offers Comment, not Request changes.
+- Not done: the head marker after a real submit is unchecked; no
+  GitHub Actions trigger; no thread replies; no CODEOWNERS entry
+  for `.agents/review/`.
 - PR #131 (fund-attribute forms) conflicts with master and waits
   for the owner's rebase. It was not reviewed.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: Przemek reads the draft. With his OK, push the branch
-  and open a pull request (Refs #102), and post the PR #135 review
-  as a pending review.
+- Next action: Przemek submits or deletes review 5971406643 on #135
+  and reviews #138. `.claude/agents/code-reviewer.md` and the skill
+  send PR content to a model, so REVIEW.md puts them on his list.
+  Agents do not merge.
 
 ## Test debt from the cleanup pull request (#133): 2026-11-18
 
