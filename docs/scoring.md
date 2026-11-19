@@ -33,7 +33,7 @@ its own weight row, so a change for ETFs does not change ETCs.
 | Component | Stored figure | What a high score means |
 | --- | --- | --- |
 | cost | `ter` | The fee is lower |
-| size | `aum` | The fund is larger |
+| size | `aum`, with `aum_currency` | The fund is larger |
 | volatility | price-derived volatility | The path is calmer |
 | max_drawdown | price-derived max drawdown | The worst fall is smaller |
 
@@ -97,6 +97,15 @@ that matters, not a fixed amount of currency. `log10` of the AUM is
 mapped from 7 to 11. 7 is 10 million and scores 0. 11 is 100 billion
 and scores 100. 1 billion is `log10` 9, which is halfway, so 50.
 
+That line is in one currency unit, and the project has no exchange
+rates. AUM is scored only when `aum_currency` is `EUR` or `USD`, and
+the line treats one euro as one dollar. From 2015 to 2025 a euro was
+worth about 0.95 to 1.26 dollars, so that moves size by at most about
+2.5 points. Any other currency, or no currency, is status
+`unsupported_currency`, label `no data`. Without this rule, 1.6e11
+JPY, which is about one billion euros, would score 100 instead of
+about 50. The input still shows the amount and its currency.
+
 Some stored numbers are not scored:
 
 - P/E or P/B at or below 0. A negative multiple is not "cheap".
@@ -106,6 +115,9 @@ Some stored numbers are not scored:
 - AUM at or below 0.
 - Max drawdown above 0. The price metric is 0 or negative.
 - A boolean, a string, `NaN`, or an infinity.
+
+The end that scores 0 prints as `0.00`, also on a line whose high
+end is the smaller number (P/E 30, TER 0.01). It is never `-0.00`.
 
 A negative ROE, margin, or revenue growth is still a number. It
 scores 0 when it is at or below the low end. It is not dropped.
@@ -132,21 +144,53 @@ a trend window. The watchlist's 7-day rule is for the latest price,
 not for this one-year figure. The day that is exactly 92 days back
 is still fresh.
 
-TER uses the attribute row's `as_of`. AUM uses `aum_as_of` when that
-date is stored, and otherwise the row's `as_of`. A stock ratio uses
-`period_end` converted to a UTC date. The price metrics use their
-own as-of date, which is the last usable close.
+TER uses the attribute row's `as_of`. AUM uses `aum_as_of` only. An
+AUM with no `aum_as_of` is no data: the row's `as_of` says when the
+snapshot was checked, not when the fund had that size, and `/ui`
+shows that date as missing too. A stock ratio uses `period_end`
+converted to a UTC date. The price metrics use their own as-of
+date, which is the last usable close.
+
+Volatility and max drawdown are one-year figures. Their window runs
+from the latest close on or before one year back to the as-of date.
+When the series has a gap, that first close can be years older, and
+the figure then describes far more than a year. The window from its
+first close (`start` on the input) to its as-of date may be at most
+458 days: one year of 366 days plus the same 92-day slack. A longer
+window, or a figure with no `start`, is status
+`insufficient_history`, label `no data`.
 
 For each stock column, the score keeps the newest row that has a
 finite number in that column. A later quarterly row that leaves ROE
 empty does not hide an older annual ROE. When two rows end at the
-same instant, the annual row wins over the quarterly row.
+same instant, the annual row wins over the quarterly row. The forms
+store `period_type` as typed, so `Annual` and ` annual ` count as
+annual. When the period and the type are equal, the row stored
+later wins.
 
-A missing figure and a stale figure are both labelled `no data`.
-The machine status is `no_data` or `stale`, so a later page can say
-which one it was. The component is left out only when none of its
-figures are usable. A component that was left out has status
-`no_data`, label `no data`, and no contribution.
+A figure that is not used is labelled `no data`. The machine status
+says why, so a later page can show it:
+
+| Status | Meaning |
+| --- | --- |
+| `no_data` | No value, a value that is not meaningful, or no date |
+| `stale` | The date is older than the window above |
+| `unsupported_currency` | AUM not in EUR or USD |
+| `insufficient_history` | The price window is longer than 458 days |
+
+The checks run in that order, and the first one that fails names the
+status. The component is left out only when none of its figures are
+usable. A component that was left out has status `no_data`, label
+`no data`, and no contribution.
+
+## Demo data
+
+`is_synthetic` on the score is true when the company is synthetic.
+Then every figure that has a source shows the source `demo`, the one
+label `/ui` uses for synthetic data. Editing a demo row sets that
+row's source to `manual`, but the instrument is still a demo, so the
+score keeps saying `demo`. A synthetic fund-attribute row is shown
+as `demo` the same way.
 
 ## Weights
 
@@ -194,8 +238,18 @@ to the largest discarded fractions. A tie goes to the earlier
 component. A contribution is never negative. Adding the published
 contributions gives the published total.
 
+This arithmetic uses exact fractions (Python's `Fraction`), not
+`Decimal` division. `Decimal` keeps 28 digits, so `5/6` was cut
+before it was multiplied, and an exact half-cent total could land
+just below the half. Example: cost 83.09 at weight 5 and volatility
+26.48 at weight 1 are `(83.09 * 5 + 26.48) / 6 = 73.655`, so the
+total is `73.66`, with contributions `69.24` and `4.42`. Weights 1
+and 2 on scores 100 and 50 are two equal contributions of `100/3`.
+The total is `66.67`, and the spare cent goes to the earlier one:
+`33.34` and `33.33`.
+
 `effective_weight` is the renormalized share rounded half up to
-four decimal places. Multiplying that rounded share by the score
+four decimal places. A share of exactly `0.12345` is `0.1235`. Multiplying that rounded share by the score
 can be a hundredth away from the contribution. Add the
 contributions, not the rounded shares.
 
@@ -222,13 +276,16 @@ date.
 
 ## Where this shows up
 
-`GET /api/v1/instruments/{id}/score` computes one score.
+`GET /api/v1/instruments/{id}/score` computes one score. Each input
+also has `currency` (set for AUM) and `start` (the first close of
+the price window).
 `GET` and `PUT /api/v1/score-weights/{instrument_type}` read and
 replace the weight set. The shapes, status codes, and the fixed
 error sentences are in `docs/api-demo.md`.
 
-`DEMO_ETF_GPW` in `fixtures/demo-v2.json` has no TER. Cost is no
-data. The 2025 annual row of each demo stock except `DEMO_PL_EMPTY`
+`DEMO_ETF_GPW` in `fixtures/demo-v2.json` has no TER, so cost is no
+data. Its AUM is 250 million PLN, so size is `unsupported_currency`.
+The other demo funds store AUM in EUR or USD. The 2025 annual row of each demo stock except `DEMO_PL_EMPTY`
 stores the ratios from `STOCK_METRICS`, including debt-to-equity as
 a percent and the collector's profit margin in `net_margin`.
 `DEMO_PL_EMPTY` has no metric rows.
@@ -247,7 +304,7 @@ shows:
 | `DEMO_SG_EARLY` | scored | 3 of 4 |
 | `DEMO_PL_EMPTY` | no_score | 0 of 4 |
 | `DEMO_ETF_WORLD` | scored | 4 of 4 |
-| `DEMO_ETF_GPW` | scored | 3 of 4 |
+| `DEMO_ETF_GPW` | scored | 2 of 4 |
 | `DEMO_ETC_GOLD` | scored | 4 of 4 |
 | `DEMO_ETC_SILVER` | scored | 4 of 4 |
 

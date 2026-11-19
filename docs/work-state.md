@@ -56,166 +56,57 @@
   send PR content to a model, so REVIEW.md puts them on his list.
   Agents do not merge.
 
-## QA pass on the score head (Refs #35, Refs #136): 2026-11-18
+## Backend instrument score (PR #135, Refs #35): 2026-11-19
 
-- Branch `cursor/instrument-score-s1-90ae`. Head under test was
-  `beee628`; this note is the commit on top of it. No rebase
-  and no force-push. Refs #35. Refs #136. Does not finish
-  either issue. The agent does not merge. No live market data.
-- Completed: Content-Length must be ASCII digits. `²` is 413
-  `Score weights are too large` and the body is not read. A
-  body of exactly 16 KiB is accepted. An id that is not a
-  number is 422. The seven mutants in the QA list were each
-  killed by an existing or new test, then reverted.
-- The reseed note matches `python -m scripts.run_demo`: the
-  default deletes `demo/investment_demo.db` and seeds again.
-  `--keep` does not update the old metric rows.
-- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
-  3.45.1, CI command: 2332 passed, 258 deselected, coverage
-  97.32%. One warning, the known `StarletteDeprecationWarning`.
-  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  258 passed, 2332 deselected. Alembic upgrade, downgrade one
-  step, and upgrade again dropped only `score_weights` on
-  both engines. black, isort, and flake8 passed on the Python
-  files this change touches. No live market-data calls.
-- Account usage: this session cannot read the meter. No
-  percentage is recorded. No reset was redeemed.
-- Active agents: none. Blockers: none. This note is not
-  approval and not a merge. Merge still waits for the owner.
-- Next action: GitHub Actions on this head, both jobs. Then
-  the owner. Do not merge. The run id is not written here,
-  because this file is part of the commit the run tests.
-
-## Score cent strings and the body cap (Refs #35, Refs #136): 2026-11-18
-
-- Branch `cursor/instrument-score-s1-90ae`, on top of `37a3345`.
-  No rebase and no force-push. Refs #35. Refs #136. Does not
-  finish either issue. The agent does not merge. No live
-  market data.
-- Completed: a contribution of a whole number of cents is a
-  two-decimal string (`12.50`, `0.00`). The weight PUT rejects
-  a Content-Length over 16 KiB, and a length that is not a
-  non-negative integer, with 413 `Score weights are too large`,
-  before reading the body. A chunked body stops at 16 KiB plus
-  one byte. The legacy sample that stores ROE as `15.6` is
-  Refs #136. An already seeded demo database has to be reset
-  and seeded again to pick up the new ratios.
-- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
-  3.45.1, CI command: 2329 passed, 258 deselected, coverage
-  97.32%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  258 passed, 2329 deselected. black, isort, and flake8 passed
-  on the Python files this change touches. No live market-data
-  calls.
-- Account usage: this session cannot read the meter. No
-  percentage is recorded. No reset was redeemed.
-- Active agents: none. Blockers: none. This note is not
-  approval and not a merge.
-- Next action: GitHub Actions on this head, both jobs. Then
-  Przemek reviews. Do not merge. The run id is not written
-  here, because this file is part of the commit the run tests.
-
-## Score review fixes (Refs #35): 2026-11-18
-
-- Branch `cursor/instrument-score-s1-90ae`, on top of `20facf5`.
-  No rebase and no force-push. Refs #35. Does not finish the
-  issue. The agent does not merge. No live market data.
-- Completed: debt-to-equity is scored as a percent (0 is 100,
-  200 is 0). Price volatility and drawdown stay fresh for 92
-  days. Demo-v2 2025 annual rows store the collector ratios.
-  Contributions use largest-remainder rounding and are never
-  negative. The weight PUT is sync. The body is capped at
-  16 KiB (413). `ValueError` and `RecursionError` on a PUT
-  are 422. A stored row that cannot be parsed is the fixed
-  500. The version update adds 1 in SQL. A unique conflict
-  on the first insert is retried once. `save` returns the
-  committed row, and the route answers from that row.
-- Live coverage on 2026-11-18, with the fixture prices ending
-  2026-09-28: `DEMO_PL_TECH`, `DEMO_US_GROWTH`,
-  `DEMO_DE_INDUSTRY`, `DEMO_JP_STABLE`, `DEMO_ETF_WORLD`,
-  `DEMO_ETC_GOLD`, and `DEMO_ETC_SILVER` are scored, 4 of 4.
-  `DEMO_ETF_GPW` is scored, 3 of 4. `DEMO_SG_EARLY` is scored,
-  3 of 4.   `DEMO_PL_EMPTY` is `no_score`, 0 of 4. 2026-12-30 is the
-  first day those price figures are stale.
-- Tests: no `.env`. `DATABASE_URL` was not set. SQLite
-  3.45.1, CI command: 2325 passed, 258 deselected, coverage
-  97.33%. PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  258 passed, 2325 deselected. Upgrade, downgrade, and
-  upgrade of `0011` ran on both engines. black, isort, and
-  flake8 passed on the Python files this change touches.
-  No live market-data calls.
-- Account usage: this session cannot read the meter. No
-  percentage is recorded. No reset was redeemed.
-- Active agents: none. Blockers: none. This note is not
-  approval and not a merge.
-- Next action: GitHub Actions on this head, both jobs. Then
-  Przemek reviews. Do not merge. The run id is not written
-  here, because this file is part of the commit the run tests.
-
-## Backend instrument score (Refs #35): 2026-11-18
-
-- Branch `cursor/instrument-score-s1-90ae`, from `origin/master`
-  `7402df2`. One pull request to master. Refs #35. Does not
-  finish the issue. The agent does not merge. No live market
-  data. No `/ui` change. Alembic head is `0011`.
-- Completed: a pure score in `app/scoring.py`, a loader in
-  `app/instrument_score.py`, `ScoreWeightsDB`, revision `0011`,
-  and the JSON routes. The score is computed on request. A
-  missing total is `no_score`, not zero. `DEMO_ETF_GPW` is
-  `3 of 4` on the fixture date because TER is null.
-  `DEMO_PL_EMPTY` is `no_score`.
-- Decisions, for review:
-  - Components are the named groups. A stock has profitability
-    (ROE, net margin), valuation (P/E, P/B), balance sheet
-    (debt-to-equity, current ratio), and growth (revenue YoY).
-    An ETF and an ETC share cost (TER), size (AUM), volatility,
-    and max drawdown, with a separate weight row per type.
-    Tracking difference is not included.
-  - Ratios are fractions (`0.15` is 15 percent).
-    Debt-to-equity is a multiple (`1` is one times equity).
-    TER is a fraction. The legacy sample that stores ROE as
-    `15.6` would clamp to 100. Refs #136. The score does not
-    recompute a ratio from the statement lines.
-  - Straight scales are in `docs/scoring.md`. AUM is `log10`
-    from 10 million (0) to 100 billion (100). P/E and P/B at
-    or below 0 are no data. A negative ROE still scores.
-  - Freshness is counted back from UTC today. 548 days for a
-    statement, 366 days for TER and AUM, 7 days for the price
-    metrics. The exact last day counts. A missing date is no
-    data. The newest finite value of each stock column is
-    used. The same instant prefers the annual row.
-  - Equal weights are the number 1. Scoring divides by the
-    sum of the weights that enter the total. A weight of 0
-    shows the component score and leaves it out. All zeros
-    are rejected. Numbers must be finite and from 0 to
-    1000000. The stored numbers are not pre-divided.
-  - Contributions are rounded half up to a hundredth. The
-    total is the unrounded sum, rounded the same way. The
-    last included contribution absorbs the cent so the
-    column adds up. `effective_weight` is four decimal places.
-  - Version 1 is the built-in set and is not a row. The first
-    PUT stores version 2. Every later PUT adds 1. PUT returns
-    200. It does not read `X-IAC-Demo-Seed` and it does not
-    check `Origin`, matching the other JSON updates.
-  - The API label for a missing or stale figure is `no data`.
-    The status is `no_data` or `stale`. No disclaimer was added.
-- Tests: no `.env`. `DATABASE_URL` was not set. SQLite 3.45.1,
-  CI command: 2316 passed, 257 deselected, coverage 97.36%.
-  PostgreSQL 16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  257 passed, 2316 deselected. Upgrade and downgrade of `0011`
-  were run on both engines from a legacy schema. black, isort,
-  and flake8 passed on the Python files this change touches.
-  No live market-data calls.
-- Account usage: this session cannot read the meter. No
-  percentage is recorded. No reset was redeemed.
-- Active agents: none. Blockers: none. This note is not
-  approval and not a merge.
-- Next action: GitHub Actions on this head, both jobs. Then
-  Przemek reviews. Do not merge. The run id is not written
-  here, because this file is part of the commit the run tests.
+- Branch `cursor/instrument-score-s1-90ae`. Pull request #135, Refs
+  #35, Refs #136. Does not finish either issue. Rebased onto
+  `origin/master` `ac23710` on 2026-11-19 (the journal and this file
+  conflicted, both sides kept) and pushed with `--force-with-lease`.
+  Agents do not merge. No live market data. No `/ui` change. Alembic
+  head is `0011`. This replaces the four 2026-11-18 snapshots of this
+  branch; their history is in the journal.
+- What the score does now (details in `docs/scoring.md`):
+  - A stock has profitability (ROE, net margin), valuation (P/E,
+    P/B), balance sheet (debt-to-equity, current ratio), and growth
+    (revenue YoY). An ETF and an ETC share cost (TER), size (AUM),
+    volatility, and max drawdown, with a weight row per type.
+  - Ratios are fractions. Debt-to-equity is a percent, the Yahoo
+    unit (`45` is 0.45 times equity; 0 scores 100, 200 scores 0).
+    TER is a fraction. The legacy ROE `15.6` would clamp (Refs #136).
+  - Freshness from UTC today: 548 days for a statement, 366 days for
+    TER and AUM, 92 days for volatility and drawdown. The exact last
+    day counts. AUM is dated by `aum_as_of` only.
+  - AUM is scored only in EUR or USD (`unsupported_currency`
+    otherwise). A price window longer than 458 days is
+    `insufficient_history`. `period_type` is case-insensitive.
+  - A demo instrument keeps `is_synthetic` and the source `demo` on
+    every figure, also after an edit.
+  - Totals and contributions use exact fractions. The total rounds
+    half up. The cents come from a largest-remainder split, never
+    negative, tie to the earlier component.
+  - Version 1 is the built-in equal set. The first PUT stores
+    version 2, each later PUT adds 1, and the answer is the version
+    and weights that request wrote.
+- Review 5971406643 (round 1 by the code-reviewer agent on
+  `d041b1c`): 3 Critical, 7 Important, 3 Minor, all fixed on this
+  branch on 2026-11-19, plus two of the three Minor findings that
+  were dropped under the cap (`-0.00`, a Content-Length of thousands
+  of digits). The third, `alembic upgrade 0010:0011 --sql`, is not
+  fixed: revision `0010` and earlier fail offline the same way. The
+  review is still PENDING; it was written on the old head.
+- Open questions for Przemek, from that review: an FX source or a
+  stated conversion for other currencies; a formula version and a
+  computed time on the response (US6.1); keeping old weight
+  versions so a score can be recomputed.
+- Follow-up: the `FundAttributesRepository._check_aum` hole (a
+  partial update can clear `aum_as_of` and keep the amount) needs
+  its own issue.
+- Tests and checks: see the 2026-11-19 journal entry.
+- Account usage: this session cannot read the meter.
+- Active agents: none. Blockers: none. This is not approval.
+- Next action: Przemek reviews the fixes (migration `0011` is on his
+  list), deletes or submits the old PENDING review, and decides the
+  open questions. Then merge with "Rebase and merge" is his call.
 
 ## Test debt from the cleanup pull request (#133): 2026-11-18
 
