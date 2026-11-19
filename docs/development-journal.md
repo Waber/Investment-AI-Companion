@@ -95,8 +95,30 @@
   shell command line, and a PENDING draft blocks only `--post`.
   `gh pr view --comments` failed on GitHub's Projects (classic)
   GraphQL deprecation, so the skill reads comments through REST.
-- Time: about 08:00 to 09:35 CET on 2026-11-19, including the
-  PR #135 review and round 1 on #138.
+- Round 2 on #138 (`696a83b`, run 44488391248 green): the seven
+  round-1 findings are fixed. New: 2 Important, 3 Minor, fixed on
+  the branch, tests first:
+  - every posted label carries the finding id, so a later round's
+    "F3 (round 1): open" points at a real comment;
+  - earlier rounds are read from the review body as well as the
+    inline comments, and thread state from GraphQL `reviewThreads`,
+    because REST review comments have no resolved field;
+  - every line of a summary body is indented, so a second paragraph
+    stays inside its list item;
+  - the skill says Comment, because GitHub does not offer Request
+    changes to a PR's author;
+  - these verification numbers.
+  From the questions: the matcher is copied from the base branch too
+  and run as a lone file with `python -I` (a test pins that it needs
+  only the standard library), and only a posted review counts as a
+  round.
+- Verification on the round-2 fixes, same CI command and machine:
+  2291 passed, 3 failed (the same local-only three), 256 deselected,
+  coverage 97.20%. The two new test files: 62 passed. black, isort,
+  and flake8 pass. Mutants for the label id, the indentation, and an
+  application import in the matcher are each killed.
+- Time: about 08:00 to 09:50 CET on 2026-11-19, including the
+  PR #135 review and two rounds on #138.
 - Left over: a GitHub Actions trigger (follow-up issue if wanted),
   answering replies in a thread (Duo's "@GitLabDuo" in a thread), a
   CODEOWNERS entry for `.agents/review/` (Duo recommends protecting
