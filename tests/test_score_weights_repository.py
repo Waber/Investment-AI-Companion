@@ -1,12 +1,15 @@
 """The stored version moves in the database, not in a stale object."""
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, create_db_engine
+from app.models.database_models import ScoreWeightsDB
 from app.repositories.score_weights_repository import (
     ScoreWeightsRepository,
     ScoreWeightsSaveError,
@@ -110,5 +113,77 @@ def test_a_second_insert_conflict_is_a_fixed_error(monkeypatch):
         with pytest.raises(ScoreWeightsSaveError) as caught:
             ScoreWeightsRepository(session).save("ETC", default_weights("ETC"))
         assert "driver said" not in str(caught.value)
+        # Neither chained nor implicit context: the driver text holds
+        # the INSERT and the submitted weights.
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        # The last attempt is rolled back too. Its flushed row is gone.
+        assert session.query(ScoreWeightsDB).count() == 0
     finally:
         session.close()
+
+
+_THREE = {
+    "profitability": Decimal(3),
+    "valuation": Decimal(1),
+    "balance_sheet": Decimal(1),
+    "growth": Decimal(1),
+}
+
+
+def test_a_second_save_replaces_the_stored_weights():
+    factory = _factory()
+    session = factory()
+    try:
+        repo = ScoreWeightsRepository(session)
+        repo.save("STOCK", default_weights("STOCK"))
+        saved = repo.save("STOCK", _THREE)
+        assert saved.version == 3
+        assert saved.weights == _THREE
+        assert repo.load("STOCK") == (_THREE, 3, True)
+    finally:
+        session.close()
+
+
+def test_save_reports_its_own_write_when_another_commits_right_after(
+    monkeypatch,
+):
+    """A second PUT can commit between this commit and a later read.
+
+    The first caller must still answer with version 2 and the weights
+    it sent. Reading the row again after the commit would report the
+    second caller's version 3 and its weights.
+    """
+    factory = _factory()
+    first = factory()
+    second = factory()
+    try:
+
+        def _commit_then_race():
+            Session.commit(first)
+            second.execute(
+                text(
+                    "UPDATE score_weights SET version = version + 1, "
+                    "weights = :weights WHERE instrument_type = 'STOCK'"
+                ),
+                {
+                    "weights": '{"profitability": 9, "valuation": 1, '
+                    '"balance_sheet": 1, "growth": 1}'
+                },
+            )
+            second.commit()
+
+        monkeypatch.setattr(first, "commit", _commit_then_race)
+        saved = ScoreWeightsRepository(first).save("STOCK", _THREE)
+        assert saved.version == 2
+        assert saved.weights == _THREE
+        stored = second.execute(
+            text(
+                "SELECT version FROM score_weights "
+                "WHERE instrument_type = 'STOCK'"
+            )
+        ).scalar()
+        assert stored == 3
+    finally:
+        first.close()
+        second.close()

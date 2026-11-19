@@ -11,6 +11,7 @@ from decimal import Decimal
 import pytest
 
 from app.scoring import (
+    Figure,
     WeightValidationError,
     component_names,
     default_weights,
@@ -46,12 +47,25 @@ def _stock(**overrides):
     return inputs
 
 
+def _aum(value, as_of, currency="EUR"):
+    """AUM with its currency. Size is scored for EUR and USD only."""
+    return Figure(value, "demo", as_of, currency=currency)
+
+
+def _price(value, as_of, days=364):
+    """A price figure whose window starts ``days`` before its as-of date.
+
+    364 days is a weekly series anchored one year back.
+    """
+    return Figure(value, "fake", as_of, start=as_of - timedelta(days=days))
+
+
 def _fund(**overrides):
     inputs = {
         "ter": (Decimal("0"), "demo", FUND_FRESH),
-        "aum": (Decimal("1000000000"), "demo", FUND_FRESH),
-        "volatility": (Decimal("0.25"), "fake", PRICE_FRESH),
-        "max_drawdown": (Decimal("-0.25"), "fake", PRICE_FRESH),
+        "aum": _aum(Decimal("1000000000"), FUND_FRESH),
+        "volatility": _price(Decimal("0.25"), PRICE_FRESH),
+        "max_drawdown": _price(Decimal("-0.25"), PRICE_FRESH),
     }
     inputs.update(overrides)
     return inputs
@@ -245,9 +259,9 @@ def test_freshness_boundaries_keep_the_exact_day():
         "ETF",
         _fund(
             ter=(Decimal("0"), "demo", FUND_FRESH),
-            aum=(Decimal("1000000000"), "demo", FUND_STALE),
-            volatility=(Decimal("0.25"), "fake", PRICE_FRESH),
-            max_drawdown=(Decimal("-0.25"), "fake", PRICE_STALE),
+            aum=_aum(Decimal("1000000000"), FUND_STALE),
+            volatility=_price(Decimal("0.25"), PRICE_FRESH),
+            max_drawdown=_price(Decimal("-0.25"), PRICE_STALE),
         ),
         default_weights("ETF"),
         ON,
@@ -266,7 +280,7 @@ def test_a_future_as_of_date_is_fresh_and_a_missing_date_is_not():
         "ETF",
         _fund(
             ter=(Decimal("0"), "demo", future),
-            aum=(Decimal("1000000000"), "demo", None),
+            aum=Figure(Decimal("1000000000"), "demo", None, currency="EUR"),
         ),
         default_weights("ETF"),
         ON,
@@ -607,9 +621,9 @@ def test_contributions_stay_non_negative_when_cents_do_not_divide():
         "ETF",
         _fund(
             ter=(tiny, "demo", FUND_FRESH),
-            aum=(size, "demo", FUND_FRESH),
-            volatility=(calm, "fake", PRICE_FRESH),
-            max_drawdown=(Decimal("-0.50"), "fake", PRICE_FRESH),
+            aum=_aum(size, FUND_FRESH),
+            volatility=_price(calm, PRICE_FRESH),
+            max_drawdown=_price(Decimal("-0.50"), PRICE_FRESH),
         ),
         default_weights("ETF"),
         ON,
@@ -814,3 +828,271 @@ def test_score_strings_do_not_use_advice_words():
     folded = text.casefold()
     for word in ("buy", "sell", "hold", "recommendation", "kupuj"):
         assert word not in folded
+
+
+# --- rounding rules (docs/scoring.md "Rounding") ---------------------
+
+
+def test_an_input_score_on_a_half_cent_rounds_half_up():
+    """ROE 0.10025 is 50.125 on the 0 to 0.20 line, so 50.13.
+
+    Half-to-even would give 50.12.
+    """
+    result = score_instrument(
+        "STOCK",
+        _stock(
+            roe=(Decimal("0.10025"), "manual", STATEMENT_FRESH),
+            net_margin=(None, None, None),
+        ),
+        default_weights("STOCK"),
+        ON,
+    )
+    profitability = _by_name(result)["profitability"]
+    assert _input(profitability, "roe").normalized == Decimal("50.13")
+    assert profitability.normalized == Decimal("50.13")
+
+
+def test_a_weighted_half_cent_total_rounds_half_up():
+    """(83.09 * 5 + 26.48 * 1) / 6 is exactly 73.655, so 73.66.
+
+    TER 0.001691 scores 83.09 and volatility 0.32056 scores 26.48.
+    Size and drawdown have no figure. The exact contributions are
+    69.2416... and 4.4133..., so the spare cent goes to volatility.
+    """
+    weights = parse_weights(
+        "ETF",
+        {
+            "weights": {
+                "cost": 5,
+                "size": 1,
+                "volatility": 1,
+                "max_drawdown": 1,
+            }
+        },
+    )
+    result = score_instrument(
+        "ETF",
+        _fund(
+            ter=(Decimal("0.001691"), "demo", FUND_FRESH),
+            aum=(None, None, None),
+            volatility=_price(Decimal("0.32056"), PRICE_FRESH),
+            max_drawdown=(None, None, None),
+        ),
+        weights,
+        ON,
+    )
+    parts = _by_name(result)
+    assert parts["cost"].normalized == Decimal("83.09")
+    assert parts["volatility"].normalized == Decimal("26.48")
+    assert result.total == Decimal("73.66")
+    assert parts["cost"].contribution == Decimal("69.24")
+    assert parts["volatility"].contribution == Decimal("4.42")
+
+
+def test_a_tied_cent_goes_to_the_earlier_component():
+    """Weights 1 and 2 on scores 100 and 50 give 100/3 twice.
+
+    The total is 66.666..., so 66.67. The two exact contributions
+    are equal, and the spare cent goes to the earlier component.
+    """
+    weights = parse_weights(
+        "STOCK",
+        {
+            "weights": {
+                "profitability": 1,
+                "valuation": 2,
+                "balance_sheet": 1,
+                "growth": 1,
+            }
+        },
+    )
+    result = score_instrument(
+        "STOCK",
+        _stock(
+            roe=(Decimal("0.20"), "manual", STATEMENT_FRESH),
+            debt_to_equity=(None, None, None),
+            current_ratio=(None, None, None),
+            revenue_growth=(None, None, None),
+        ),
+        weights,
+        ON,
+    )
+    parts = _by_name(result)
+    assert parts["profitability"].normalized == Decimal("100.00")
+    assert parts["valuation"].normalized == Decimal("50.00")
+    assert result.total == Decimal("66.67")
+    assert parts["profitability"].contribution == Decimal("33.34")
+    assert parts["valuation"].contribution == Decimal("33.33")
+
+
+def test_effective_weight_rounds_half_up_at_four_places():
+    """0.12345 of the weight is shown as 0.1235, not 0.1234."""
+    weights = parse_weights(
+        "STOCK",
+        {
+            "weights": {
+                "profitability": 0.12345,
+                "valuation": 0.87655,
+                "balance_sheet": 0,
+                "growth": 0,
+            }
+        },
+    )
+    result = score_instrument("STOCK", _stock(), weights, ON)
+    parts = _by_name(result)
+    assert parts["profitability"].effective_weight == Decimal("0.1235")
+    assert parts["valuation"].effective_weight == Decimal("0.8766")
+
+
+def test_the_zero_end_of_a_reversed_scale_is_zero_not_minus_zero():
+    """P/E 30 and TER 0.01 sit on the end that scores 0.
+
+    On a line whose high end is the smaller number, that end used to
+    print as -0.00.
+    """
+    stock = score_instrument(
+        "STOCK",
+        _stock(pe_ratio=(Decimal("30"), "manual", STATEMENT_FRESH)),
+        default_weights("STOCK"),
+        ON,
+    )
+    pe = _input(_by_name(stock)["valuation"], "pe_ratio")
+    assert format(pe.normalized, "f") == "0.00"
+    fund = score_instrument(
+        "ETF",
+        _fund(ter=(Decimal("0.01"), "demo", FUND_FRESH)),
+        default_weights("ETF"),
+        ON,
+    )
+    assert format(_by_name(fund)["cost"].normalized, "f") == "0.00"
+
+
+# --- dates on a component and on the total ---------------------------
+
+
+def test_a_component_date_is_its_oldest_used_input():
+    result = score_instrument(
+        "STOCK",
+        _stock(
+            roe=(Decimal("0.10"), "manual", STATEMENT_FRESH),
+            net_margin=(Decimal("0.20"), "manual", ON),
+        ),
+        default_weights("STOCK"),
+        ON,
+    )
+    assert _by_name(result)["profitability"].as_of == STATEMENT_FRESH
+
+
+def test_an_unused_component_does_not_set_the_oldest_date():
+    """Growth has weight 0. Its older date is shown but not counted."""
+    weights = parse_weights(
+        "STOCK",
+        {
+            "weights": {
+                "profitability": 1,
+                "valuation": 1,
+                "balance_sheet": 1,
+                "growth": 0,
+            }
+        },
+    )
+    result = score_instrument(
+        "STOCK",
+        _stock(
+            roe=(Decimal("0.10"), "manual", ON),
+            net_margin=(Decimal("0.20"), "manual", ON),
+            pe_ratio=(Decimal("20"), "manual", ON),
+            pb_ratio=(Decimal("3"), "manual", ON),
+            debt_to_equity=(Decimal("100"), "manual", ON),
+            current_ratio=(Decimal("1.25"), "manual", ON),
+            revenue_growth=(Decimal("0.05"), "manual", STATEMENT_FRESH),
+        ),
+        weights,
+        ON,
+    )
+    growth = _by_name(result)["growth"]
+    assert growth.status == "unused"
+    assert growth.as_of == STATEMENT_FRESH
+    assert result.oldest_input_date == ON
+
+
+# --- fund size needs a currency the scale describes ------------------
+
+
+def test_size_is_scored_for_euro_and_dollar_amounts_only():
+    """1e9 EUR and 1e9 USD both score 50.
+
+    1.6e11 JPY is about one billion euros, yet the log line would
+    score it 100. Without an exchange rate it is not scored. A
+    missing currency is not scored either.
+    """
+    weights = default_weights("ETF")
+    for currency in ("EUR", "USD"):
+        result = score_instrument(
+            "ETF",
+            _fund(aum=_aum(Decimal("1000000000"), FUND_FRESH, currency)),
+            weights,
+            ON,
+        )
+        aum = _input(_by_name(result)["size"], "aum")
+        assert aum.status == "scored"
+        assert aum.normalized == Decimal("50.00")
+        assert aum.currency == currency
+    for currency in ("JPY", None, "eur"):
+        result = score_instrument(
+            "ETF",
+            _fund(aum=_aum(Decimal("160000000000"), FUND_FRESH, currency)),
+            weights,
+            ON,
+        )
+        size = _by_name(result)["size"]
+        aum = _input(size, "aum")
+        assert aum.status == "unsupported_currency"
+        assert aum.label == "no data"
+        assert aum.normalized is None
+        assert aum.value == Decimal("160000000000")
+        assert aum.currency == currency
+        assert size.status == "no_data"
+        assert result.coverage_label == "3 of 4"
+
+
+# --- a one-year price figure needs a window of about one year --------
+
+
+def test_a_price_window_up_to_458_days_scores_and_a_longer_one_does_not():
+    """One year plus the 92-day slack is 458 days. 459 is too long.
+
+    A series with a gap anchors the one-year window on an older close.
+    Volatility and drawdown from 2021 to 2026 are not a one-year
+    figure, so they are not scored. A figure with no window start is
+    not scored either.
+    """
+    result = score_instrument(
+        "ETF",
+        _fund(
+            volatility=_price(Decimal("0.25"), ON, days=458),
+            max_drawdown=_price(Decimal("-0.25"), ON, days=459),
+        ),
+        default_weights("ETF"),
+        ON,
+    )
+    parts = _by_name(result)
+    volatility = _input(parts["volatility"], "volatility")
+    drawdown = _input(parts["max_drawdown"], "max_drawdown")
+    assert volatility.status == "scored"
+    assert volatility.start == ON - timedelta(days=458)
+    assert drawdown.status == "insufficient_history"
+    assert drawdown.label == "no data"
+    assert drawdown.normalized is None
+    assert drawdown.start == ON - timedelta(days=459)
+    assert parts["max_drawdown"].status == "no_data"
+    no_start = score_instrument(
+        "ETF",
+        _fund(volatility=(Decimal("0.25"), "fake", ON)),
+        default_weights("ETF"),
+        ON,
+    )
+    assert (
+        _input(_by_name(no_start)["volatility"], "volatility").status
+        == "insufficient_history"
+    )

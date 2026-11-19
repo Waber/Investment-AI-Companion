@@ -16,7 +16,9 @@ The scales and the day counts are the rules in ``docs/scoring.md``.
 import math
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal
+from fractions import Fraction
+from typing import NamedTuple
 
 # A statement can be a year old and still be the latest filing.
 STATEMENT_FRESH_DAYS = 548
@@ -25,11 +27,23 @@ STATEMENT_FRESH_DAYS = 548
 # length the watchlist uses for a trend window. The 7-day watchlist
 # rule is for the latest price, not for this one-year figure.
 PRICE_FRESH_DAYS = 92
+# The window behind volatility and drawdown starts at the latest close
+# on or before one year back. With a gap in the series that close can
+# be years older, and the figure then describes far more than a year.
+# One year (366 days, for a leap year) plus the same 92-day slack is
+# the longest window that still counts as a one-year figure.
+PRICE_WINDOW_MAX_DAYS = 366 + PRICE_FRESH_DAYS
 # TER and fund size are slow facts. One year, including a leap day.
 FUND_FRESH_DAYS = 366
+# The size line runs from 10 million to 100 billion in one currency
+# unit. There is no exchange-rate data, so AUM is scored only in the
+# euro and the US dollar, and the line treats one euro as one dollar.
+# From 2015 to 2025 a euro was worth about 0.95 to 1.26 dollars, so
+# that moves size by at most about 2.5 points. Any other currency, or
+# no currency, is not scored: 1.6e11 JPY would otherwise score 100.
+SIZE_CURRENCIES = ("EUR", "USD")
 
 _CENT = Decimal("0.01")
-_TEN_THOUSANDTH = Decimal("0.0001")
 _HUNDRED = Decimal(100)
 _WEIGHT_MAX = Decimal("1000000")
 
@@ -52,6 +66,21 @@ _COMPONENTS = {
 }
 
 
+class Figure(NamedTuple):
+    """One stored figure handed to ``score_instrument``.
+
+    ``currency`` is the currency of an amount of money (AUM).
+    ``start`` is the first close of a price window. A plain
+    ``(value, source, as_of)`` tuple is a figure with neither.
+    """
+
+    value: object
+    source: str | None
+    as_of: date | None
+    currency: str | None = None
+    start: date | None = None
+
+
 class WeightValidationError(Exception):
     """The weight payload cannot be stored.
 
@@ -72,6 +101,9 @@ class _InputSpec:
     100. A value past either end stays at 0 or 100. ``kind`` is
     ``linear`` or ``log10``. ``rule`` names the values that are not
     meaningful and must be shown as no data instead of a score.
+    ``currencies``, when set, are the only currencies this amount is
+    scored in. ``window_days``, when set, is the longest price window
+    (first close to as-of date) this figure may describe.
     """
 
     name: str
@@ -80,6 +112,8 @@ class _InputSpec:
     high: Decimal
     kind: str
     rule: str
+    currencies: tuple = ()
+    window_days: int | None = None
 
 
 @dataclass(frozen=True)
@@ -187,7 +221,13 @@ def _specs():
         (
             # log10(1e7) is 7 and scores 0. log10(1e11) is 11 and scores 100.
             _InputSpec(
-                "aum", fund, Decimal(7), Decimal(11), "log10", "positive"
+                "aum",
+                fund,
+                Decimal(7),
+                Decimal(11),
+                "log10",
+                "positive",
+                currencies=SIZE_CURRENCIES,
             ),
         ),
     )
@@ -201,6 +241,7 @@ def _specs():
                 Decimal("0.10"),
                 "linear",
                 "non_negative",
+                window_days=PRICE_WINDOW_MAX_DAYS,
             ),
         ),
     )
@@ -214,6 +255,7 @@ def _specs():
                 Decimal(0),
                 "linear",
                 "drawdown",
+                window_days=PRICE_WINDOW_MAX_DAYS,
             ),
         ),
     )
@@ -229,7 +271,13 @@ _SPEC_BY_TYPE = _specs()
 
 @dataclass(frozen=True)
 class InputScore:
-    """One raw figure after the scale is applied, or the reason it was not."""
+    """One raw figure after the scale is applied, or the reason it was not.
+
+    ``status`` is ``scored``, or the reason the figure was not used:
+    ``no_data``, ``stale``, ``unsupported_currency``, or
+    ``insufficient_history``. ``currency`` and ``start`` repeat what
+    the caller passed, so the reason can be read off the input.
+    """
 
     name: str
     value: Decimal | None
@@ -238,6 +286,8 @@ class InputScore:
     label: str | None
     source: str | None
     as_of: date | None
+    currency: str | None = None
+    start: date | None = None
 
 
 @dataclass(frozen=True)
@@ -343,8 +393,9 @@ def parse_weights(instrument_type, payload):
 def score_instrument(instrument_type, inputs, weights, on_date):
     """Score one instrument.
 
-    ``inputs`` maps a figure name to ``(value, source, as_of)``.
-    A name that is missing is treated as no data. ``weights`` maps
+    ``inputs`` maps a figure name to a ``Figure``, or to a plain
+    ``(value, source, as_of)`` tuple. A name that is missing is
+    treated as no data. ``weights`` maps
     every component name to a ``Decimal``. ``on_date`` is the day
     the freshness windows are counted back from.
     """
@@ -435,9 +486,12 @@ def _scale(spec, number):
     measured = number.log10() if spec.kind == "log10" else number
     span = spec.high - spec.low
     raw = (measured - spec.low) / span * _HUNDRED
-    if raw < 0:
+    # ``<=`` and ``>=``, not ``<`` and ``>``: on a line whose high end
+    # is the smaller number, the zero end is ``0 / -span``, which is
+    # Decimal ``-0`` and would print as ``-0.00``.
+    if raw <= 0:
         return Decimal(0)
-    if raw > 100:
+    if raw >= 100:
         return Decimal(100)
     return raw
 
@@ -446,43 +500,57 @@ def _cents(number):
     return number.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
-def _share(number):
-    return number.quantize(_TEN_THOUSANDTH, rounding=ROUND_HALF_UP)
+def _half_up(fraction, places):
+    """A non-negative ``Fraction`` rounded half up, as a ``Decimal``.
+
+    ``Fraction`` is exact, so a value that is exactly half way, such
+    as 73.655, is seen as half way and goes up. ``scaleb`` keeps the
+    trailing zeros: 1250 units at two places is ``12.50``.
+    """
+    scale = 10**places
+    units = math.floor(fraction * scale + Fraction(1, 2))
+    return Decimal(units).scaleb(-places)
+
+
+def _unused_reason(spec, figure, number, on_date):
+    """Why this figure is not scored, or None when it is.
+
+    The checks run in this order, and the first one that fails names
+    the status: the value, its date, its currency, its price window.
+    """
+    if number is None or not _meaningful(spec.rule, number):
+        return "no_data"
+    if not isinstance(figure.as_of, date):
+        return "no_data"
+    if (on_date - figure.as_of).days > spec.fresh_days:
+        return "stale"
+    if spec.currencies and figure.currency not in spec.currencies:
+        return "unsupported_currency"
+    if spec.window_days is not None:
+        start = figure.start
+        if not isinstance(start, date):
+            return "insufficient_history"
+        length = (figure.as_of - start).days
+        if length < 0 or length > spec.window_days:
+            return "insufficient_history"
+    return None
 
 
 def _evaluate_input(spec, raw, on_date):
-    value, source, as_of = raw if raw is not None else (None, None, None)
-    number = _as_decimal(value)
-    kept = number
-    if number is None or not _meaningful(spec.rule, number):
-        return InputScore(
-            name=spec.name,
-            value=kept,
-            normalized=None,
-            status="no_data",
-            label="no data",
-            source=source,
-            as_of=as_of,
-        )
-    if not isinstance(as_of, date) or (on_date - as_of).days > spec.fresh_days:
-        status = "stale" if isinstance(as_of, date) else "no_data"
-        return InputScore(
-            name=spec.name,
-            value=kept,
-            normalized=None,
-            status=status,
-            label="no data",
-            source=source,
-            as_of=as_of if isinstance(as_of, date) else None,
-        )
+    figure = Figure(*raw) if raw is not None else Figure(None, None, None)
+    number = _as_decimal(figure.value)
+    as_of = figure.as_of if isinstance(figure.as_of, date) else None
+    reason = _unused_reason(spec, figure, number, on_date)
     return InputScore(
         name=spec.name,
-        value=kept,
-        normalized=_cents(_scale(spec, number)),
-        status="scored",
-        label=None,
-        source=source,
+        value=number,
+        normalized=None if reason else _cents(_scale(spec, number)),
+        status=reason or "scored",
+        label="no data" if reason else None,
+        source=figure.source,
         as_of=as_of,
+        currency=figure.currency,
+        start=figure.start,
     )
 
 
@@ -531,15 +599,20 @@ def _with_contributions(components, used):
     Each contribution is the share times the component score. The
     published cents are the largest-remainder split of that sum, so
     they add up to the rounded total and none of them is negative.
+
+    The arithmetic is ``Fraction``, which is exact. ``Decimal`` keeps
+    28 digits, so ``5 / 6`` was cut before it was multiplied, and an
+    exact half-cent total such as 73.655 could land just below the
+    half and round down. Two equal contributions could also differ in
+    the 28th digit and break the "earlier component" tie rule.
     """
-    weight_sum = sum(component.weight for component in used)
-    unrounded = []
-    shares = []
-    for component in used:
-        share = component.weight / weight_sum
-        shares.append(share)
-        unrounded.append(share * component.normalized)
-    rounded = _largest_remainder(unrounded)
+    weight_sum = sum(Fraction(component.weight) for component in used)
+    shares = [Fraction(component.weight) / weight_sum for component in used]
+    exact = [
+        share * Fraction(component.normalized)
+        for share, component in zip(shares, used)
+    ]
+    rounded = _largest_remainder(exact)
     by_name = {}
     for component, share, contribution in zip(used, shares, rounded):
         by_name[component.name] = ComponentScore(
@@ -548,7 +621,7 @@ def _with_contributions(components, used):
             label=component.label,
             normalized=component.normalized,
             weight=component.weight,
-            effective_weight=_share(share),
+            effective_weight=_half_up(share, 4),
             contribution=contribution,
             source=component.source,
             as_of=component.as_of,
@@ -559,21 +632,20 @@ def _with_contributions(components, used):
     )
 
 
-def _largest_remainder(unrounded):
+def _largest_remainder(exact):
     """Split the rounded total into contributions that are never negative.
 
-    Each unrounded contribution is cut down to a whole cent. The cents
-    that are left, so the pieces add up to the rounded total, go to the
-    largest discarded fractions. A tie goes to the earlier component.
-    Giving the whole difference to the last component can make that
-    contribution negative.
+    ``exact`` holds the contributions as ``Fraction``. The total is
+    their sum, rounded half up to a cent. Each contribution is cut
+    down to a whole cent. The cents that are left, so the pieces add
+    up to the rounded total, go to the largest discarded fractions. A
+    tie goes to the earlier component. Giving the whole difference to
+    the last component can make that contribution negative.
     """
-    target = _cents(sum(unrounded, Decimal(0)))
-    cents = [number * 100 for number in unrounded]
-    floors = [
-        int(item.to_integral_value(rounding=ROUND_FLOOR)) for item in cents
-    ]
-    leftover = int(target * 100) - sum(floors)
+    target = math.floor(sum(exact, Fraction(0)) * 100 + Fraction(1, 2))
+    cents = [number * 100 for number in exact]
+    floors = [math.floor(item) for item in cents]
+    leftover = target - sum(floors)
     order = sorted(
         range(len(floors)),
         key=lambda index: (-(cents[index] - floors[index]), index),

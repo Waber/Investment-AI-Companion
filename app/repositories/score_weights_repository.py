@@ -6,6 +6,7 @@ version. A computed score is not stored here.
 """
 
 import json
+from dataclasses import dataclass
 
 from sqlalchemy.exc import IntegrityError
 
@@ -24,8 +25,10 @@ _UNREADABLE = "Score weights could not be read"
 class ScoreWeightsSaveError(RuntimeError):
     """The commit failed and the session was rolled back.
 
-    The message is fixed. It does not include driver text. Raised
-    after the ``except`` so the driver error is not chained on.
+    The message is fixed. It does not include driver text. It is
+    raised after the retry loop, outside the ``except`` block, so
+    neither ``__cause__`` nor ``__context__`` holds the driver error,
+    whose text can include the INSERT and the submitted weights.
     """
 
     def __init__(self):
@@ -40,6 +43,18 @@ class ScoreWeightsReadError(RuntimeError):
 
     def __init__(self):
         super().__init__(_UNREADABLE)
+
+
+@dataclass(frozen=True)
+class SavedWeights:
+    """What one ``save`` wrote: its version and its weights.
+
+    Read inside the write's own transaction, before the commit, so a
+    second save that commits right after cannot change it.
+    """
+
+    version: int
+    weights: dict
 
 
 class ScoreWeightsRepository:
@@ -74,23 +89,23 @@ class ScoreWeightsRepository:
 
         ``weights`` is the dict ``parse_weights`` already checked.
         The JSON keeps the component order and the numbers that were
-        sent. It does not divide them by their sum. The returned row
-        is the one that was committed, including its version.
+        sent. It does not divide them by their sum. The answer is a
+        ``SavedWeights`` with the version and the weights this call
+        wrote and committed.
 
         Two callers can both see an empty table. The second insert
         hits the unique type. That attempt is rolled back and tried
         once more, which then updates the row the first caller stored.
-        A second conflict is ``ScoreWeightsSaveError``. The message
-        does not include driver text.
+        A second conflict is ``ScoreWeightsSaveError``, and the session
+        is rolled back. The message does not include driver text.
         """
         encoded = _encode(instrument_type, weights)
-        for attempt in (1, 2):
+        for _attempt in (1, 2):
             try:
                 return self._write(instrument_type, encoded)
             except IntegrityError:
                 self.db.rollback()
-                if attempt == 2:
-                    raise ScoreWeightsSaveError() from None
+        raise ScoreWeightsSaveError()
 
     def _write(self, instrument_type, encoded):
         row = self.get(instrument_type)
@@ -107,9 +122,19 @@ class ScoreWeightsRepository:
             # that landed after that load.
             row.version = ScoreWeightsDB.version + 1
             row.weights = encoded
-        self.db.commit()
+        # Flush, then read the version back inside this transaction.
+        # A refresh after the commit would start a new transaction,
+        # and a second PUT could commit in between: this caller would
+        # then report that caller's version and weights as its own.
+        # The row stays locked for writes until this commit.
+        self.db.flush()
         self.db.refresh(row)
-        return row
+        saved = SavedWeights(
+            version=row.version,
+            weights=_decode(instrument_type, row.weights),
+        )
+        self.db.commit()
+        return saved
 
 
 def _decode(instrument_type, raw):
