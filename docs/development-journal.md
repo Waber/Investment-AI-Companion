@@ -1,5 +1,84 @@
 # Development Journal
 
+## 2026-11-19 - Instrument score review fixes, rounds 1 and 2 (Refs #35)
+
+- Scope: fix the code-reviewer findings on PR #135. Przemek merged
+  #138 and asked for the #135 review to be fixed. Branch
+  `cursor/instrument-score-s1-90ae`, rebased onto `origin/master`
+  `ac23710` (only this journal and `docs/work-state.md` conflicted;
+  both sides kept, nothing else moved). Refs #35, Refs #136. No live
+  market data. No `/ui` change. Migration `0011` did not change.
+- Round 1 (review 5971406643 on `d041b1c`, still PENDING): 3 Critical,
+  7 Important, 3 Minor. All fixed:
+  - the demo mark: `is_synthetic` on the score and the source `demo`
+    on every figure of a synthetic company or a synthetic fund row,
+    also after an edit set the row to `manual`;
+  - `docs/work-state.md`: four snapshots of this branch, the oldest
+    with three rules the code no longer follows, are one section;
+  - `ScoreWeightsSaveError` is raised outside the `except`, so it has
+    no `__context__` with the driver text;
+  - AUM is scored only in EUR or USD (`unsupported_currency`
+    otherwise), and the input shows the currency;
+  - totals and contributions use exact `Fraction` arithmetic, so an
+    exact half-cent total rounds up and an equal tie gives the cent
+    to the earlier component;
+  - AUM is dated by `aum_as_of` only; a price window longer than 458
+    days is `window_too_long`, and the input shows its `start`;
+  - `save()` reads its version and weights before the commit;
+  - PUT has an OpenAPI `requestBody` with one example per type,
+    checks the type before it reads the body, and returns whole
+    weights as JSON integers;
+  - `period_type` is compared after `strip` and `casefold`;
+  - tests for every mutant the review listed as surviving;
+  - the PR body has an Undo section.
+  Two of the three Minor findings dropped under the cap are fixed
+  too: `-0.00` at the zero end of a reversed scale, and a
+  Content-Length of thousands of digits (now 413, not 500). The
+  third, `alembic upgrade 0010:0011 --sql`, is not: `0010` and the
+  earlier revisions fail in offline mode the same way.
+- Round 2 (a workflow on `20a55ae`: the code-reviewer agent, a
+  34-mutant run, and five adversarial verifiers): all round-1
+  findings confirmed fixed except the PR body, which was not edited
+  yet. New:
+  - Critical: a PUT that re-sent the weights it had loaded wrote only
+    the version. SQLAlchemy skips an unchanged column, so after a
+    concurrent PUT the new version kept the other caller's weights,
+    and the answer reported them. This was in the PR from the start.
+    Fix: `flag_modified(row, "weights")`. A thread probe with 1200
+    saves per mode found 42 (repository) and 517 (route) answers
+    with someone else's weights before the fix, and 0 after.
+  - Important: no test told half up from half to even on the total
+    (73.655 rounds the same both ways); a synthetic fund row on a
+    real company had no test.
+  - Minor: `insufficient_history` meant "too short" elsewhere and
+    "too long" here (now `window_too_long`); the Swagger example was
+    rejected; four survivors (start after as-of, the order of the
+    date and currency checks, three attempts, the fund row flag);
+    wording in the save error, the API docs, and this file.
+  All fixed, each with a test that fails without it.
+- Decision (agent's call, for Przemek to confirm): size is scored in
+  EUR and USD only, with one euro treated as one dollar (about 2.5
+  points at most from 2015 to 2025 rates). Other currencies wait for
+  an FX source. `docs/scoring.md` says so.
+- Open for Przemek: the FX question, a formula version and computed
+  time on the response (US6.1), and keeping old weight versions.
+- Not done: the follow-up issue for the `_check_aum` hole (a partial
+  update `{"aum_as_of": null}` or `{"aum_currency": null}` keeps the
+  amount; verified on the repository). The auto-mode classifier
+  refused `gh issue create`, so Przemek opens it.
+- Verification: CI command on SQLite 3.54.1, no `DATABASE_URL`:
+  2421 passed, 3 failed, 258 deselected, coverage 97.40%. The 3
+  failures are local only: the two 0006 float tests
+  (SQLite 3.54.1) and the ignored `demo/` folder in this checkout.
+  The three score suites: 127 passed; `app/scoring.py`,
+  `app/instrument_score.py`, and the repository at 100% line and
+  branch coverage. black, isort, and flake8
+  passed on the changed Python files. PostgreSQL was not run
+  locally; GitHub Actions runs it on the pushed head.
+- AI model: Claude Opus 5.5 (Claude Code), with subagents for the
+  review round. Account usage could not be read in this session.
+- Time: about 16:38 to 17:30 CET on 2026-11-19.
+
 ## 2026-11-19 - Code Reviewer agent draft, the GitLab Duo way (Refs #102)
 
 - Scope: a reusable review agent for every pull request, modeled on
