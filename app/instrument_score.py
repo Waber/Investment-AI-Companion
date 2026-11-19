@@ -9,10 +9,12 @@ its rows. The edit sets that row's source to ``manual``, so for a
 synthetic company, and for a synthetic fund-attribute row, every
 figure is reported with the source ``demo``. That is the one label
 ``/ui`` shows for synthetic data. A metric row has no synthetic
-column of its own, so the company's flag decides.
+column of its own, so the company's flag decides. The score as a
+whole is synthetic when the company or its fund-attribute row is.
 """
 
 import math
+from dataclasses import dataclass
 
 from app.core.utc_datetime import as_utc
 from app.models.database_models import RECORD_SOURCE_DEMO, FinancialMetricsDB
@@ -43,21 +45,35 @@ def _shown_source(source, synthetic):
     return source
 
 
-def load_score_inputs(db, company):
-    """``{figure: Figure}`` for this instrument's type.
+@dataclass(frozen=True)
+class ScoreInputs:
+    """The figures for one score, and whether any of them is synthetic."""
 
-    A stock reads the newest stored metric that actually has each
-    ratio. An ETF or an ETC reads TER, AUM with its currency, and the
-    price-derived volatility and maximum drawdown with the start of
-    their window. A missing row is a missing figure, not a zero.
+    figures: dict
+    is_synthetic: bool
+
+
+def load_score_inputs(db, company):
+    """The ``ScoreInputs`` for this instrument's type.
+
+    ``figures`` is ``{figure name: Figure}``. A stock reads the newest
+    stored metric that actually has each ratio. An ETF or an ETC reads
+    TER, AUM with its currency, and the price-derived volatility and
+    maximum drawdown with the start of their window. A missing row is
+    a missing figure, not a zero. ``is_synthetic`` is true when the
+    company or its fund-attribute row is synthetic.
     """
     names = figure_names(company.instrument_type)
     synthetic = is_synthetic(company)
     if company.instrument_type == "STOCK":
         found = _stock_figures(db, company.id, synthetic)
     else:
-        found = _fund_figures(db, company.id, synthetic)
-    return {name: found.get(name, Figure(None, None, None)) for name in names}
+        found, fund_row_synthetic = _fund_figures(db, company.id, synthetic)
+        synthetic = synthetic or fund_row_synthetic
+    figures = {
+        name: found.get(name, Figure(None, None, None)) for name in names
+    }
+    return ScoreInputs(figures=figures, is_synthetic=synthetic)
 
 
 def _period_rank(period_type):
@@ -88,11 +104,12 @@ def _stock_figures(db, company_id, synthetic):
 
 
 def _fund_figures(db, company_id, synthetic):
+    """``(figures, row_is_synthetic)`` for an ETF or an ETC."""
     row = FundAttributesRepository(db).get_by_company(company_id)
     figures = {}
+    row_synthetic = row is not None and row.is_synthetic is True
     if row is not None:
-        demo = synthetic or row.is_synthetic is True
-        source = _shown_source(row.source, demo)
+        source = _shown_source(row.source, synthetic or row_synthetic)
         figures["ter"] = Figure(row.ter, source, row.as_of)
         # AUM is dated by its own date only. The snapshot ``as_of``
         # says when the row was checked, not when the fund had this
@@ -104,7 +121,7 @@ def _fund_figures(db, company_id, synthetic):
     derived = metrics_from_bars(bars)
     figures["volatility"] = _derived(derived.volatility, synthetic)
     figures["max_drawdown"] = _derived(derived.max_drawdown, synthetic)
-    return figures
+    return figures, row_synthetic
 
 
 def _derived(metric, synthetic):

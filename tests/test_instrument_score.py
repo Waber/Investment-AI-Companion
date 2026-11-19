@@ -1081,18 +1081,60 @@ def test_a_price_window_up_to_458_days_scores_and_a_longer_one_does_not():
     drawdown = _input(parts["max_drawdown"], "max_drawdown")
     assert volatility.status == "scored"
     assert volatility.start == ON - timedelta(days=458)
-    assert drawdown.status == "insufficient_history"
+    assert drawdown.status == "window_too_long"
     assert drawdown.label == "no data"
     assert drawdown.normalized is None
     assert drawdown.start == ON - timedelta(days=459)
     assert parts["max_drawdown"].status == "no_data"
-    no_start = score_instrument(
+    # No start, or a start after the as-of date, is not a window.
+    broken = score_instrument(
         "ETF",
-        _fund(volatility=(Decimal("0.25"), "fake", ON)),
+        _fund(
+            volatility=(Decimal("0.25"), "fake", ON),
+            max_drawdown=Figure(
+                Decimal("-0.25"), "fake", ON, start=ON + timedelta(days=1)
+            ),
+        ),
         default_weights("ETF"),
         ON,
     )
-    assert (
-        _input(_by_name(no_start)["volatility"], "volatility").status
-        == "insufficient_history"
+    parts = _by_name(broken)
+    assert _input(parts["volatility"], "volatility").status == "no_data"
+    assert _input(parts["max_drawdown"], "max_drawdown").status == "no_data"
+
+
+def test_a_stale_figure_is_stale_before_its_currency_is_checked():
+    """The first failing check names the status: date, then currency."""
+    result = score_instrument(
+        "ETF",
+        _fund(aum=_aum(Decimal("1000000000"), FUND_STALE, "JPY")),
+        default_weights("ETF"),
+        ON,
     )
+    assert _input(_by_name(result)["size"], "aum").status == "stale"
+
+
+def test_an_even_half_cent_total_rounds_up_not_to_even():
+    """(50.00 + 50.05) / 2 is exactly 50.025, so 50.03, not 50.02.
+
+    TER 0.005 scores 50.00 and volatility 0.24985 scores 50.05. The
+    73.655 case cannot tell half up from half to even; this one can.
+    The spare cent goes to volatility, whose exact part is 25.025.
+    """
+    result = score_instrument(
+        "ETF",
+        _fund(
+            ter=(Decimal("0.005"), "demo", FUND_FRESH),
+            aum=(None, None, None),
+            volatility=_price(Decimal("0.24985"), PRICE_FRESH),
+            max_drawdown=(None, None, None),
+        ),
+        default_weights("ETF"),
+        ON,
+    )
+    parts = _by_name(result)
+    assert parts["cost"].normalized == Decimal("50.00")
+    assert parts["volatility"].normalized == Decimal("50.05")
+    assert result.total == Decimal("50.03")
+    assert parts["cost"].contribution == Decimal("25.00")
+    assert parts["volatility"].contribution == Decimal("25.03")

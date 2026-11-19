@@ -275,8 +275,8 @@ class InputScore:
 
     ``status`` is ``scored``, or the reason the figure was not used:
     ``no_data``, ``stale``, ``unsupported_currency``, or
-    ``insufficient_history``. ``currency`` and ``start`` repeat what
-    the caller passed, so the reason can be read off the input.
+    ``window_too_long``. ``currency`` and ``start`` repeat what the
+    caller passed, so the reason can be read off the input.
     """
 
     name: str
@@ -527,12 +527,15 @@ def _unused_reason(spec, figure, number, on_date):
     if spec.currencies and figure.currency not in spec.currencies:
         return "unsupported_currency"
     if spec.window_days is not None:
+        # No start, or a start after the as-of date, is not a window.
         start = figure.start
-        if not isinstance(start, date):
-            return "insufficient_history"
-        length = (figure.as_of - start).days
-        if length < 0 or length > spec.window_days:
-            return "insufficient_history"
+        if not isinstance(start, date) or start > figure.as_of:
+            return "no_data"
+        # Not "insufficient_history": in app/price_metrics.py and on
+        # /ui that word means a series that is too short. Here the
+        # window is too long, because a gap anchored it on an old close.
+        if (figure.as_of - start).days > spec.window_days:
+            return "window_too_long"
     return None
 
 

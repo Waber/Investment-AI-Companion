@@ -9,6 +9,7 @@ import json
 from dataclasses import dataclass
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.database_models import ScoreWeightsDB
 from app.scoring import (
@@ -23,7 +24,7 @@ _UNREADABLE = "Score weights could not be read"
 
 
 class ScoreWeightsSaveError(RuntimeError):
-    """The commit failed and the session was rolled back.
+    """The write hit a constraint twice and the session was rolled back.
 
     The message is fixed. It does not include driver text. It is
     raised after the retry loop, outside the ``except`` block, so
@@ -122,6 +123,11 @@ class ScoreWeightsRepository:
             # that landed after that load.
             row.version = ScoreWeightsDB.version + 1
             row.weights = encoded
+            # Write the column even when the text equals what this
+            # session loaded. SQLAlchemy skips an unchanged value, and
+            # another PUT may have stored other weights since that load.
+            # Without this, the new version would keep its weights.
+            flag_modified(row, "weights")
         # Flush, then read the version back inside this transaction.
         # A refresh after the commit would start a new transaction,
         # and a second PUT could commit in between: this caller would

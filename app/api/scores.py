@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.research import ItemId
 from app.core.database import get_db
-from app.instrument_score import is_synthetic, load_score_inputs
+from app.instrument_score import load_score_inputs
 from app.models.database_models import CompanyDB
 from app.repositories.score_weights_repository import (
     ScoreWeightsReadError,
@@ -29,6 +29,7 @@ from app.repositories.score_weights_repository import (
 from app.scoring import (
     WeightValidationError,
     component_names,
+    default_weights,
     parse_weights,
     score_instrument,
 )
@@ -71,6 +72,20 @@ _WEIGHT_BODY_SCHEMA = {
             },
         }
     },
+}
+# One valid body per type: the built-in equal weights. Swagger UI
+# prefills the first one, so "Try it out" sends a body that works.
+_WEIGHT_BODY_EXAMPLES = {
+    instrument_type: {
+        "summary": f"Equal weights for {instrument_type}",
+        "value": {
+            "weights": {
+                name: int(number)
+                for name, number in default_weights(instrument_type).items()
+            }
+        },
+    }
+    for instrument_type in ("STOCK", "ETF", "ETC")
 }
 _TYPES = frozenset({"STOCK", "ETF", "ETC"})
 _MESSAGES = {
@@ -132,7 +147,8 @@ class InstrumentScore(BaseModel):
     """The score for one instrument on one day.
 
     ``total`` is null when ``status`` is ``no_score``. ``is_synthetic``
-    is true for demo data, and then every source is ``demo``.
+    is true when the company or its fund-attribute row is demo data.
+    Every figure from a demo row then shows the source ``demo``.
     """
 
     instrument_id: int
@@ -212,12 +228,12 @@ def _component_body(component):
     )
 
 
-def _score_body(company, result, version, on_date):
+def _score_body(company, result, synthetic, version, on_date):
     return InstrumentScore(
         instrument_id=company.id,
         ticker=company.ticker,
         instrument_type=company.instrument_type,
-        is_synthetic=is_synthetic(company),
+        is_synthetic=synthetic,
         status=result.status,
         total=_text(result.total),
         coverage=ScoreCoverage(
@@ -263,13 +279,14 @@ def get_instrument_score(instrument_id: ItemId, db: Session = Depends(get_db)):
         )
     except ScoreWeightsReadError:
         raise HTTPException(status_code=500, detail=_UNREADABLE) from None
+    loaded = load_score_inputs(db, company)
     result = score_instrument(
         company.instrument_type,
-        load_score_inputs(db, company),
+        loaded.figures,
         weights,
         on_date,
     )
-    return _score_body(company, result, version, on_date)
+    return _score_body(company, result, loaded.is_synthetic, version, on_date)
 
 
 @router.get(
@@ -360,7 +377,12 @@ async def _json_payload(request: Request, instrument_type: str):
     openapi_extra={
         "requestBody": {
             "required": True,
-            "content": {"application/json": {"schema": _WEIGHT_BODY_SCHEMA}},
+            "content": {
+                "application/json": {
+                    "schema": _WEIGHT_BODY_SCHEMA,
+                    "examples": _WEIGHT_BODY_EXAMPLES,
+                }
+            },
         }
     },
 )
