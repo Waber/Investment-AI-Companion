@@ -12,6 +12,7 @@ these tests pin the glob rules.
 """
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -233,6 +234,42 @@ def test_main_reads_the_changed_files_from_a_file(tmp_path, capsys):
     assert code == 0
     assert "`app/ui/a;$(rm -rf x).py`" in out
     assert "README.md" not in out
+
+
+def test_the_matcher_runs_as_a_lone_file_in_isolated_mode(tmp_path):
+    # /review-pr copies this script from the base branch and runs it
+    # with `python -I`, away from the repository. It must keep to the
+    # standard library and must not import application code.
+    script = tmp_path / "review_instructions.py"
+    script.write_bytes((ROOT / "scripts/review_instructions.py").read_bytes())
+    rules = tmp_path / "instructions.toml"
+    rules.write_text(
+        "[[instructions]]\n"
+        'name = "UI"\n'
+        'file_filters = ["app/ui/**"]\n'
+        'instructions = "Keep the CSP."\n',
+        encoding="utf-8",
+    )
+    names = tmp_path / "files.txt"
+    names.write_text("app/ui/router.py\n", encoding="utf-8")
+
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            str(script),
+            "--file",
+            str(rules),
+            "--paths-from",
+            str(names),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert "## UI" in done.stdout
 
 
 def test_main_says_so_when_nothing_matches(tmp_path, capsys):
