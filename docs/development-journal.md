@@ -5,7 +5,8 @@
 - Scope: a reusable review agent for every pull request, modeled on
   GitLab Duo Code Review. Branch `feat/code-reviewer-agent-102`, from
   `origin/master` `7402df2`. Refs #102. No application code, no
-  Alembic revision, no live market data. Not pushed, not merged.
+  Alembic revision, no live market data. Pull request #138, not
+  merged.
 - Decision (Przemek, option B): the review runs on demand in Claude
   Code, and `--post` leaves a PENDING GitHub review that only Przemek
   sees until he submits it. GitHub Actions automation stays out of
@@ -34,8 +35,8 @@
     `.agents/review/instructions.toml`: ten path rules (migrations,
     models, API, /ui, collectors, scores, tests, CI, docs,
     fixtures) and a glob matcher. TOML because Python 3.12 reads it
-    without a new dependency. A test fails when a rule matches no
-    file.
+    without a new dependency. A test fails when a plain filter
+    matches no tracked file.
   - AGENTS.md "Code Reviewer Agent", one line in REVIEW.md, and the
     #102 entry in docs/HANDOFF.md.
 - Tests first. Both modules started from a failing import. A first
@@ -59,7 +60,8 @@
   found the top two Critical and two Important ones, and two new
   Minor ones. It missed the refresh race, the OpenAPI body, and the
   test gaps. The merged review is 3 Critical, 7 Important, 3 Minor.
-  It was not posted.
+  After Przemek's OK it was posted as PENDING review 5971406643 on
+  `d041b1c`: 12 inline comments and the summary, no `event`.
 - Verification on this branch, CI command, local SQLite 3.54.1, no
   `.env`: 2283 passed, 3 failed, 256 deselected, coverage 97.17%.
   Two failures are the known 0006 float tests. The third,
@@ -71,12 +73,35 @@
 - AI model: Claude Opus 5.5 (`claude-opus-5-5`) in Claude Code,
   xhigh effort. The PR #135 workflow ran 28 subagents. Account
   usage was not available in this session.
-- Time: about 08:00 to 09:00 CET on 2026-11-19, including the
-  PR #135 review.
+- Pushed and opened #138 after Przemek's OK. GitHub Actions run
+  44485683800 passed both jobs on `735d04f`.
+- Round 1 on #138, by the code-reviewer agent itself: 0 Critical,
+  4 Important, 3 Minor. All fixed on the branch, tests first where
+  code changed:
+  - `pending_review` now prints "Also at:" for `other_locations`,
+    keeps a suggestion outside the diff as plain code, and lists
+    the earlier-finding statuses;
+  - the skill fetches the base branch and copies `REVIEW.md` and
+    `instructions.toml` from it, so a PR or the checkout's branch
+    cannot change its own rules;
+  - the agent's round rules follow `previous-review.md`, so a
+    rebased round still does not repeat itself;
+  - this entry and work-state now say what was pushed and posted;
+  - the marker test is a literal;
+  - the drift test checks each filter against `git ls-files`. The
+    three score filters were removed until #135 lands;
+  - `COVERAGE_FILE` keeps `.coverage` out of the worktree.
+  From the questions: `--paths-from` keeps PR file names off the
+  shell command line, and a PENDING draft blocks only `--post`.
+  `gh pr view --comments` failed on GitHub's Projects (classic)
+  GraphQL deprecation, so the skill reads comments through REST.
+- Time: about 08:00 to 09:35 CET on 2026-11-19, including the
+  PR #135 review and round 1 on #138.
 - Left over: a GitHub Actions trigger (follow-up issue if wanted),
   answering replies in a thread (Duo's "@GitLabDuo" in a thread), a
   CODEOWNERS entry for `.agents/review/` (Duo recommends protecting
-  its instructions file), and the first real `--post` run.
+  its instructions file), and a check that the head marker survives
+  a real submit.
 
 ## 2026-11-18 - Test debt from the cleanup pull request (Refs #133)
 
