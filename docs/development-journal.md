@@ -1,5 +1,83 @@
 # Development Journal
 
+## 2026-11-19 - Code Reviewer agent draft, the GitLab Duo way (Refs #102)
+
+- Scope: a reusable review agent for every pull request, modeled on
+  GitLab Duo Code Review. Branch `feat/code-reviewer-agent-102`, from
+  `origin/master` `7402df2`. Refs #102. No application code, no
+  Alembic revision, no live market data. Not pushed, not merged.
+- Decision (Przemek, option B): the review runs on demand in Claude
+  Code, and `--post` leaves a PENDING GitHub review that only Przemek
+  sees until he submits it. GitHub Actions automation stays out of
+  scope, as #102 says (API key and cost decision).
+- Duo mapping, from the Duo docs and GitLab's code: assign
+  `@GitLabDuo` is `/review-pr <N>`; Duo's draft notes plus a summary
+  note are a pending review; `.gitlab/duo/mr-review-instructions.yaml`
+  is `.agents/review/instructions.toml` with the same three fields; a
+  comment from a path rule starts with `Path rule '<name>':`; a
+  follow-up round reads the last reviewed head from a hidden marker
+  and does not repeat earlier points.
+- Added:
+  - `.claude/agents/code-reviewer.md`: read-only subagent, opus at
+    xhigh effort. It follows `REVIEW.md` from the base branch and the
+    path rules, proves each finding, and returns JSON plus a summary.
+  - `.claude/skills/review-pr/SKILL.md`: gathers the PR, linked
+    issues, comments, and earlier rounds into a bundle, checks out
+    the head in a separate worktree, delegates, checks the evidence
+    of every Critical and Important finding, and posts only with
+    `--post`.
+  - `scripts/pending_review.py`: report plus diff to the request
+    body. No `event`, so the review stays PENDING. A finding on a
+    line outside the diff goes into the summary, because GitHub
+    refuses the whole request for one such comment.
+  - `scripts/review_instructions.py` and
+    `.agents/review/instructions.toml`: ten path rules (migrations,
+    models, API, /ui, collectors, scores, tests, CI, docs,
+    fixtures) and a glob matcher. TOML because Python 3.12 reads it
+    without a new dependency. A test fails when a rule matches no
+    file.
+  - AGENTS.md "Code Reviewer Agent", one line in REVIEW.md, and the
+    #102 entry in docs/HANDOFF.md.
+- Tests first. Both modules started from a failing import. A first
+  mutation run left four parser mutants alive: within a hunk the
+  commentable lines are always the header range, so only a line
+  that looks like a file header (`+++ b/...`), a hunk with no count,
+  or a short hunk tell a broken parser apart. Tests for those were
+  added, and the dead `/dev/null` branch was removed. 12 of 12
+  parser and payload mutants and 9 of 9 matcher mutants are killed.
+- Acceptance (#102): a local throwaway branch
+  `scratch/planted-defects-102` with a `float` price change, an
+  inline `style`, `|safe` on the company name, and a new 30-day rule
+  with no test. The reviewer reported all four (3 Critical,
+  1 Important) plus a Minor for the missing test command. Its JSON
+  built a payload with four inline comments and one summary item.
+  The branch is local only.
+- Run on PR #135 through the skill steps, without `--post`: 2
+  Critical, 2 Important, 3 Minor. A separate multi-agent workflow
+  (6 reviewers, one verifier per finding, mutation and migration
+  checks) confirmed all 16 of its findings. The single reviewer
+  found the top two Critical and two Important ones, and two new
+  Minor ones. It missed the refresh race, the OpenAPI body, and the
+  test gaps. The merged review is 3 Critical, 7 Important, 3 Minor.
+  It was not posted.
+- Verification on this branch, CI command, local SQLite 3.54.1, no
+  `.env`: 2283 passed, 3 failed, 256 deselected, coverage 97.17%.
+  Two failures are the known 0006 float tests. The third,
+  `test_child_process_does_not_inherit_dotenv_database`, fails only
+  because this checkout has an ignored `demo/investment_demo.db`; it
+  passes in a copy without `demo/` (96 passed with the new tests).
+  black, isort, and flake8 passed on the new Python files.
+  PostgreSQL was not run.
+- AI model: Claude Opus 5.5 (`claude-opus-5-5`) in Claude Code,
+  xhigh effort. The PR #135 workflow ran 28 subagents. Account
+  usage was not available in this session.
+- Time: about 08:00 to 09:00 CET on 2026-11-19, including the
+  PR #135 review.
+- Left over: a GitHub Actions trigger (follow-up issue if wanted),
+  answering replies in a thread (Duo's "@GitLabDuo" in a thread), a
+  CODEOWNERS entry for `.agents/review/` (Duo recommends protecting
+  its instructions file), and the first real `--post` run.
+
 ## 2026-11-18 - Test debt from the cleanup pull request (Refs #133)
 
 - Scope: the test debt left from the cleanup pull request.

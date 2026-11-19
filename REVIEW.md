@@ -140,3 +140,5 @@ the checks would miss.
   and add that check here or as a test.
 - Keep this file short. If a section grows past a screen, move the
   detail to the doc it belongs to and link to it.
+- A rule that matters for one part of the tree only goes in
+  `.agents/review/instructions.toml`, with file globs, not here.

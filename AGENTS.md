@@ -61,6 +61,16 @@ The Cloudflare `security-audit` skill in this repository is guidance unless the 
 - On Windows, a real symlink still needs symlink support enabled and the right to create one: Developer Mode on a recent Windows 10, or `SeCreateSymbolicLinkPrivilege`. `core.symlinks=true` without that right does not create the link. See https://gitforwindows.org/symbolic-links.
 - Where the checkout is a plain text file, there is no `SKILL.md` inside a directory at `.claude/skills/security-audit`, so Claude Code does not discover the skill there. Agents that read `.agents/skills/security-audit/` still do. Keep the one symlink. A second copy of the files can diverge from the installed copy. Do not treat `computedHash` as a check that either copy matches the hash.
 
+## Code Reviewer Agent
+
+The `code-reviewer` agent (`.claude/agents/code-reviewer.md`) is the Code Reviewer role from issue #102. It follows `REVIEW.md` and the path rules in `.agents/review/instructions.toml`, the way GitLab Duo follows `.gitlab/duo/mr-review-instructions.yaml`.
+
+- When: on every pull request before asking Przemek to merge it, and again after new pushes. A later round reviews only what changed since the last reviewed head and does not repeat earlier findings.
+- How: `/review-pr <N>` in Claude Code. It returns the review in the terminal. `/review-pr <N> --post` also creates a PENDING GitHub review: inline comments plus the summary, visible only to Przemek until he submits it.
+- The agent is read-only and never posts. Only the skill posts, and only with `--post`. Nothing approves, submits a review, resolves a thread, or merges. These are instructions, not an enforced sandbox.
+- Other agents (Cursor, Codex, Grok) can follow the same files: `REVIEW.md`, `.agents/review/instructions.toml`, and the output format in `.claude/agents/code-reviewer.md`.
+- A new `.claude/agents/` directory is picked up after Claude Code restarts. Changes to an existing file apply to the next delegation.
+
 ## Investment Domain Rules
 
 - Show source, data freshness, assumptions, risks, and uncertainty for market data, scores, AI analysis, and signals.

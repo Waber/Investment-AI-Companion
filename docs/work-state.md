@@ -1,5 +1,34 @@
 # Current Work State
 
+## Code Reviewer agent draft (#102): 2026-11-19
+
+- Branch `feat/code-reviewer-agent-102`, from `origin/master`
+  `7402df2`. Local commits only: not pushed, no pull request yet.
+  Refs #102. #102 stays open until Przemek accepts the draft.
+- Completed: `.claude/agents/code-reviewer.md`, the `/review-pr`
+  skill, `.agents/review/instructions.toml`,
+  `scripts/review_instructions.py`, `scripts/pending_review.py`,
+  their tests, and the AGENTS.md, REVIEW.md, and HANDOFF.md notes.
+  Details are in the 2026-11-19 journal entry.
+- Checks: the planted-defect acceptance run found all four defects.
+  The PR #135 run worked through the skill steps without `--post`.
+  The CI command on this branch: 2283 passed; the 3 failures are
+  local-only (two 0006 SQLite 3.54.1 tests and the ignored
+  `demo/` folder in this checkout). PostgreSQL was not run.
+- Not done: no real `--post` run yet; no GitHub Actions trigger;
+  no thread replies; no CODEOWNERS entry for `.agents/review/`.
+- PR #135 review (instrument score): 3 Critical, 7 Important,
+  3 Minor, not posted. The head was `d041b1c`. The report and the
+  pending-review payload live in this session's scratchpad only. A
+  new session reruns `/review-pr 135`, and posts at Przemek's word.
+- PR #131 (fund-attribute forms) conflicts with master and waits
+  for the owner's rebase. It was not reviewed.
+- Active agents: none. Blockers: none. Account usage was not
+  available in this session.
+- Next action: Przemek reads the draft. With his OK, push the branch
+  and open a pull request (Refs #102), and post the PR #135 review
+  as a pending review.
+
 ## Test debt from the cleanup pull request (#133): 2026-11-18
 
 - Branch `cursor/test-debt-133-8a99`, from `origin/master`
