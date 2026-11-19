@@ -1,0 +1,164 @@
+# Path-scoped review instructions for the code-reviewer agent.
+#
+# The GitLab Duo idea (.gitlab/duo/mr-review-instructions.yaml) in TOML:
+# each entry has a name, file globs, and instructions. The /review-pr
+# skill runs `python -m scripts.review_instructions <changed files>` and
+# hands the matching entries to the reviewer. REVIEW.md stays the main
+# checklist; an entry here only adds what matters for that part of the
+# tree. Keep each entry short and checkable. A rule that two PRs needed
+# belongs here, or better, in a test (REVIEW.md "Keep this file useful").
+#
+# Globs: `*` stays inside one directory, `**/` spans directories, and a
+# filter that starts with `!` removes files. tests/test_review_instructions.py
+# fails when an entry no longer matches any file, so a rename cannot
+# switch a rule off silently.
+#
+# A finding that comes from an entry starts its body with
+# "Path rule '<name>':" so the author can see where it came from.
+
+[[instructions]]
+name = "Alembic migrations"
+file_filters = ["alembic/versions/*.py"]
+instructions = """
+1. Always needs Przemek's review. Say so in the summary.
+2. There is exactly one head. `down_revision` names the previous file.
+3. Upgrade works on a database that already has rows, not only on an
+   empty one. Downgrade removes only what this upgrade added.
+4. A database built by `create_all` (init_db) must not break: compare
+   how this revision handles an existing table with the earlier ones.
+5. SQLite needs batch mode for ALTER. The same revision must give the
+   same schema on PostgreSQL. The model and the migration match, so the
+   autogenerate tests stay empty.
+6. The revision does not import application or script code.
+"""
+
+[[instructions]]
+name = "Models and repositories"
+file_filters = ["app/models/**/*.py", "app/repositories/**/*.py"]
+instructions = """
+1. A price or a money amount is Decimal end to end, never float. A
+   ratio stored as Float is fine, but say so if it is summed as money.
+2. Timestamps are aware UTC (`UTCDateTime`, `app/core/utc_datetime.py`).
+3. Every commit path has a rollback on failure. A retry cannot store a
+   row twice or leave a pending object in the session.
+4. Behaviour is the same on SQLite and PostgreSQL: ordering, collation,
+   case, float-to-text, and concurrent writes.
+5. `source` and `is_synthetic` cannot be set by a public body.
+"""
+
+[[instructions]]
+name = "JSON API routes"
+file_filters = ["app/api/**/*.py", "main.py"]
+instructions = """
+1. Every status code and message in docs/api-demo.md and the PR body is
+   what the code returns. Each one has a test.
+2. An error body never repeats the request payload or driver text.
+3. Input bounds are enforced: ids within 64-bit range, lengths, body
+   size, numbers that are finite.
+4. 404 for a missing row, 422 for a bad request, 500 only for broken
+   stored data. A stored-data problem must not look like a client error.
+5. Data shown to a client carries its source and freshness, and demo
+   or synthetic rows are marked.
+"""
+
+[[instructions]]
+name = "/ui routes, templates, and static files"
+file_filters = ["app/ui/**", "static/**", "!static/vendor/**"]
+instructions = """
+1. CSP: no inline `style` attribute, `<style>`, inline script, or event
+   handler attribute. Check templates and the JavaScript that builds HTML.
+2. No `|safe` or `Markup` on user text. Autoescape stays on.
+3. Every state-changing route calls `require_same_origin`
+   (`app/ui/origin.py`). A redirect target goes through `safe_next`.
+4. Every new catalog key exists in both PL and EN (`app/ui/catalog.py`).
+5. Every HTMX action also works as a plain form post. A create form does
+   not carry `data-plain-fallback`, because the fallback posts again.
+6. Every control has a label, and focus lands somewhere sensible after
+   the action.
+"""
+
+[[instructions]]
+name = "Data collectors"
+file_filters = ["app/data_collectors/**/*.py"]
+instructions = """
+1. `guard.py` and `call_budget.py` always need Przemek's review.
+2. A provider failure must not look like "no data".
+3. The stored unit is documented and matches what readers expect (for
+   example debt-to-equity as a percent, other ratios as fractions).
+4. Tests use the fake collector or recorded fixtures, never the network.
+"""
+
+[[instructions]]
+name = "Scores, signals, and derived figures"
+file_filters = [
+  "app/scoring.py",
+  "app/instrument_score.py",
+  "app/price_metrics.py",
+  "docs/scoring.md",
+]
+instructions = """
+1. The number shows its source, its as-of date, and whether it was
+   stale, missing, or synthetic. Missing is not zero.
+2. The scale ends and windows in docs/scoring.md are the ones in code.
+   Check the direction (which end scores 100) and the exact boundary day.
+3. Decimal arithmetic, explicit rounding, and a rounding rule that the
+   docs describe. Totals add up after rounding.
+4. No "not investment advice" copy (AGENTS.md, decided 2026-10-10).
+5. Nothing sends Przemek's real holdings to a model.
+"""
+
+[[instructions]]
+name = "Tests"
+file_filters = ["tests/**/*.py", "conftest.py"]
+instructions = """
+1. A behaviour change has a test that fails without it. Name the change
+   that would make it fail.
+2. Expected values are literals, not computed from the constant or the
+   helper under test (a wrong constant must fail the test).
+3. No live market-data provider and no network (`tests/network_guard.py`).
+4. No date time bomb: a test that depends on today freezes the date.
+5. PostgreSQL-only tests carry the `integration` marker.
+"""
+
+[[instructions]]
+name = "CI, configuration, and dependencies"
+file_filters = [
+  ".github/**",
+  "app/core/config.py",
+  ".gitleaks.toml",
+  "requirements*.txt",
+  "requirements*.lock",
+  "pyproject.toml",
+]
+instructions = """
+1. Always needs Przemek's review. Say so in the summary.
+2. Every `uses:` action is pinned to a full commit SHA. Permissions stay
+   read-only unless the job needs more, and the PR says why.
+3. No secret, `.env`, or personal setting is committed.
+4. A lock-file change matches a requirements change. Do not review the
+   lock rows one by one.
+"""
+
+[[instructions]]
+name = "Docs, journal, and work state"
+file_filters = ["docs/**/*.md", "README.md", "AGENTS.md", "REVIEW.md"]
+instructions = """
+1. Every claim matches the code: status codes, examples, defaults,
+   commands. Run an example when it is cheap.
+2. docs/development-journal.md: review only the new entry. It records
+   scope, decisions, verification commands and results, the AI model,
+   and time tracking.
+3. docs/work-state.md is current and does not contradict itself.
+4. Refs #N for an issue the PR does not finish. Closes #N only when it
+   does.
+"""
+
+[[instructions]]
+name = "Fixtures"
+file_filters = ["fixtures/*.json"]
+instructions = """
+1. Check the shape, not every row.
+2. Demo rows keep their demo source marker, and values agree with each
+   other where the fixture states both (for example a ratio and the
+   totals it comes from).
+"""
