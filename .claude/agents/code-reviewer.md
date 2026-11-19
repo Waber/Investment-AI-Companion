@@ -160,7 +160,8 @@ Part 1 is one JSON object in a `json` code fence:
 - `summary` follows `REVIEW.md` "Summary". The first line is the count,
   for example `1 Critical, 0 Important, 2 Minor`. Then the verdict.
   Then `Strengths`: one to three real ones, or none. Then each finding
-  in one line with `path:line`, most severe first. The inline comment
+  in one line with its id and `path:line`, most severe first. The ids
+  are what the next round's statuses refer to. The inline comment
   carries the detail. Then `Questions`, `Declined to judge`, and
   `Not checked`. When there is nothing to fix, write `Nothing to fix.`
   Name every path in the diff that `REVIEW.md` says always needs
