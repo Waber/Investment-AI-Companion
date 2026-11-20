@@ -1,9 +1,9 @@
 # Current Work State
 
-## Code Reviewer agent draft (#102): 2026-11-19
+## Code Reviewer agent draft (#102): 2026-11-19, merged
 
-- Branch `feat/code-reviewer-agent-102`, from `origin/master`
-  `7402df2`. Pull request #138 is open (Refs #102). Not merged.
+- Pull request #138 (branch `feat/code-reviewer-agent-102`) was
+  merged by Przemek on 2026-11-19 (`ac23710` on master). Refs #102.
   #102 stays open until Przemek accepts the draft.
 - Completed: `.claude/agents/code-reviewer.md`, the `/review-pr`
   skill, `.agents/review/instructions.toml`,
@@ -42,30 +42,29 @@
 - PR #135 review (instrument score): 3 Critical, 7 Important,
   3 Minor. Posted as PENDING review 5971406643 on head `d041b1c`,
   with 12 inline comments and the summary. This was the first real
-  pending-review post. Only Przemek sees it until he submits it.
-  He is the author, so GitHub offers Comment, not Request changes.
-- Not done: the head marker after a real submit is unchecked; no
-  GitHub Actions trigger; no thread replies; no CODEOWNERS entry
-  for `.agents/review/`.
+  pending-review post. All findings were fixed on the branch, and
+  Przemek had the draft deleted on 2026-11-20 without submitting it,
+  because its comments were on the pre-fix head.
+- Not done: the head marker after a real submit is still unchecked
+  (the #135 draft was deleted, not submitted); no GitHub Actions
+  trigger; no thread replies; no CODEOWNERS entry for
+  `.agents/review/`.
 - PR #131 (fund-attribute forms) conflicts with master and waits
   for the owner's rebase. It was not reviewed.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
-- Next action: Przemek submits or deletes review 5971406643 on #135
-  and reviews #138. `.claude/agents/code-reviewer.md` and the skill
-  send PR content to a model, so REVIEW.md puts them on his list.
-  Agents do not merge.
+- Next action: run `/review-pr <N>` on the next pull request, and
+  check once that the head marker survives a real submit. Agents do
+  not merge.
 
-## Backend instrument score (PR #135, Refs #35): 2026-11-19
+## Backend instrument score (PR #135, Refs #35): merged 2026-11-20
 
-- Branch `cursor/instrument-score-s1-90ae`. Pull request #135, Refs
-  #35, Refs #136. Does not finish either issue. Rebased onto
-  `origin/master` `ac23710` on 2026-11-19 (the journal and this file
-  conflicted, both sides kept). The push replaces the old head
-  `d041b1c` with `--force-with-lease`.
-  Agents do not merge. No live market data. No `/ui` change. Alembic
-  head is `0011`. This replaces the four 2026-11-18 snapshots of this
-  branch; their history is in the journal.
+- Pull request #135 (branch `cursor/instrument-score-s1-90ae`) was
+  merged on 2026-11-20 with "Rebase and merge", at Przemek's request,
+  pinned to the tested head `3f3a402`. The merge put master at
+  `4ea0514`, the same tree. GitHub Actions passed both jobs on that
+  head (run 44564202972). Refs #35, Refs #136: both stay open. No `/ui` change
+  yet. Alembic head is `0011`.
 - What the score does now (details in `docs/scoring.md`):
   - A stock has profitability (ROE, net margin), valuation (P/E,
     P/B), balance sheet (debt-to-equity, current ratio), and growth
@@ -90,7 +89,7 @@
     version 2, each later PUT adds 1, and the answer is the version
     and weights that request wrote.
 - Round 1 (review 5971406643 by the code-reviewer agent on
-  `d041b1c`, still PENDING, written on the old head): 3 Critical,
+  `d041b1c`, deleted unsubmitted on 2026-11-20): 3 Critical,
   7 Important, 3 Minor. All fixed on 2026-11-19, the Undo steps
   through the PR body edit, plus two of the three Minor findings
   dropped under the cap (`-0.00`, a Content-Length of thousands of
@@ -106,20 +105,26 @@
   agent's call); a formula version and a computed time on the
   response (US6.1); keeping old weight versions so a score can be
   recomputed.
-- Follow-up issue, not opened (the auto-mode classifier refused
-  `gh issue create`): a partial fund-attribute update
+- Follow-up: issue #139. A partial fund-attribute update
   `{"aum_as_of": null}` or `{"aum_currency": null}` keeps the AUM
-  amount. `FundAttributesRepository._check_aum` should reject a
-  currency or a date without `aum` whatever its value. Pre-existing.
+  amount (`FundAttributesRepository._check_aum`, pre-existing).
+- Databases: this machine has no `.env` and no PostgreSQL on
+  `localhost:5432`, so only the demo file exists. The old
+  `demo/investment_demo.db` (built by `create_all` on 2026-10-28,
+  without `fund_attributes` or `score_weights`) was rebuilt with the
+  `run_demo` reset and the demo-v2 seed; its one watchlist row
+  (`DEMO_PL_TECH`) was put back. A copy of the old file is
+  `demo/investment_demo.db.bak-2026-11-20`. Revision `0011` was
+  checked on a database built by `ac23710` and stamped `0010`:
+  upgrade, downgrade one step, and upgrade again. Any other
+  Alembic-managed database needs `alembic upgrade head`.
 - Tests: the CI command on SQLite 3.54.1 passes except the known
   local-only failures (two 0006 float tests, the ignored `demo/`
-  folder). Counts and the PostgreSQL run are in the 2026-11-19
-  journal entry and on GitHub Actions for the pushed head.
+  folder). Counts are in the 2026-11-19 journal entry.
 - Account usage: this session cannot read the meter.
 - Active agents: none. Blockers: none. This is not approval.
-- Next action: Przemek reviews the fixes (migration `0011` is on his
-  list), deletes or submits the old PENDING review, and decides the
-  open questions. Then merge with "Rebase and merge" is his call.
+- Next action: Przemek decides the open questions above. The score
+  page in `/ui` and #139 are the next pieces of work.
 
 ## Test debt from the cleanup pull request (#133): 2026-11-18
 
