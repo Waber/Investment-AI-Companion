@@ -2,9 +2,9 @@
 
 This guide lets a coding agent outside Grok Bot (Claude Code, Codex,
 Cursor IDE) pull `master` and continue the work. State is as of
-2026-10-30: #108 is merged, #106 is merged, and #33 is pull
-request #104 on `feat/notes-theses-33`. If `master` has moved,
-trust `docs/work-state.md` and GitHub over this file.
+2026-11-20: `master` has the backend instrument score (#135) and the
+code-reviewer agent (#138). If `master` has moved, trust
+`docs/work-state.md` and GitHub over this file.
 
 ## 1. Start here
 
@@ -60,7 +60,7 @@ PostgreSQL; it does not run the style checks.
   data providers; use deterministic fakes.
 - Never commit secrets, `.env`, or local configuration.
 
-## 2. Current state (2026-10-30)
+## 2. Current state (2026-11-20)
 
 Merged since the first version of this guide (`a21d912`): #83 (price
 bars, demo-v2 fixture), #87 (unique ticker index, shared company names,
@@ -72,16 +72,26 @@ free-text validator `app.validation.text.clean_text`, Refs #86), #101
 (the `/ui/watchlist` page and the heart toggle, closes #96, merged
 2026-10-28), #108 (watchlist batch reads, merged). #106 (the `/ui`
 company name on `clean_text`, Refs #86) is merged.
-`alembic/versions` on master runs `0001` to `0007` in one chain
-(`0007_companies_ticker_upper.py` is the head). Run `alembic heads` to
-check; a new revision revises the current head.
 
-#33 (notes and theses) is pull request #104, branch
-`feat/notes-theses-33`, in review, not merged. It adds the JSON API
-under `/api/v1/instruments/{instrument_id}/notes` and `/theses`, the
-sticky-note panel on `/ui/instruments/{id}`, and revision `0008`
-(`theses.closed_at`), which becomes the head when it merges. The
-branch's state and its next step are in `docs/work-state.md`.
+Merged after 2026-10-30: #107 (price-bar follow-ups), #104 (notes and
+theses on the instrument page and their JSON API, Refs #33, revision
+`0008`), #125 (the security-audit skill), #124 (`REVIEW.md`), #126
+(the owner's name), #127 (company and metric provenance, revision
+`0009`), #128 (ETF and ETC attributes and price-derived metrics,
+revision `0010`), #130 (delete fund attributes), #132 and #134
+(review nits and tests), #138 (the code-reviewer agent and
+`/review-pr`, Refs #102), and #135 (the backend instrument score and
+weight sets, revision `0011`, Refs #35).
+
+`alembic/versions` on master runs `0001` to `0011` in one chain
+(`0011_score_weights.py` is the head). Run `alembic heads` to check; a
+new revision revises the current head. The chain upgrades an existing
+database: `0001` expects `companies` to exist. A new database is built
+by `create_all` and then `alembic stamp head` (`app/core/init_db.py`).
+Issue #8 is the open baseline revision.
+
+#33 (notes and theses): the backend (#91) and the UI and JSON API
+(#104, merged 2026-11-07) are on `master`. The issue is still open.
 
 Known local issues: with SQLite 3.54 two `0006` float boundary tests in
 `tests/test_price_bar_migration.py` fail locally on `master`. That
@@ -94,13 +104,14 @@ fail; a clean checkout does not have it. CI is green.
 
 Each item: own branch, PR, tests, work-state + journal updated.
 
-a. **#33 notes and theses UI and HTTP API**: pull request #104,
-   in review on `feat/notes-theses-33`. Not merged.
+a. **#33 notes and theses UI and HTTP API**: merged in #104 on
+   2026-11-07. The issue is still open.
 b. **#102 Code Reviewer agent** (priority high): a reusable review
-   agent for every pull request. Draft on
-   `feat/code-reviewer-agent-102`: `.claude/agents/code-reviewer.md`,
-   the `/review-pr` skill (pending GitHub review with `--post`), and
-   path rules in `.agents/review/instructions.toml`. Run `/review-pr <N>`
+   agent for every pull request. Merged in #138:
+   `.claude/agents/code-reviewer.md`, the `/review-pr` skill (pending
+   GitHub review with `--post`), and path rules in
+   `.agents/review/instructions.toml`. #102 stays open until Przemek
+   accepts the draft. Run `/review-pr <N>`
    on every PR before asking Przemek to merge it. GitHub Actions
    automation stays out of scope (API key and cost decision).
 c. **#86 remainder**: pull request #106 moves
@@ -109,7 +120,10 @@ d. **#95** price-bar repository follow-ups (skipped bars, batch
    duplicates, currency length).
 e. **#34 remainder**: `source=manual` column and a synthetic marker
    that survives a description edit.
-f. Then, in order: #28, #30 and #31 (need #28), #35, #36, #37 (needs
+f. Then, in order: #28 and #139 (a fund-attribute update can keep an
+   AUM without its date or currency, found in the #135 review), #30
+   and #31 (need #28), #35 (the backend score and weight sets are
+   merged in #135; the `/ui` part remains), #36, #37 (needs
    #36; ignore the disclaimer wording in the issue, see below), #8
    remaining baseline, #38, #39, #40.
 
