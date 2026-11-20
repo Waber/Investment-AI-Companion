@@ -60,7 +60,8 @@
 ## Backend instrument score (PR #135, Refs #35): merged 2026-11-20
 
 - Pull request #135 (branch `cursor/instrument-score-s1-90ae`) was
-  merged on 2026-11-20 with "Rebase and merge", at Przemek's request,
+  merged on 2026-11-20 with "Rebase and merge". The agent ran the
+  merge on Przemek's explicit instruction (AGENTS.md allows that),
   pinned to the tested head `3f3a402`. The merge put master at
   `4ea0514`, the same tree. GitHub Actions passed both jobs on that
   head (run 44564202972). Refs #35, Refs #136: both stay open. No `/ui` change

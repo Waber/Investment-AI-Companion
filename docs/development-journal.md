@@ -4,41 +4,72 @@
 
 - Scope: at Przemek's request, delete the unsubmitted review
   5971406643 on #135, open the follow-up issue, merge #135, and run
-  the migration. Docs only on this branch,
-  `docs/record-pr-135-merge`, from `origin/master` `4ea0514`.
+  the migration. The records are on `docs/record-pr-135-merge`, from
+  `origin/master` `4ea0514`, pull request #140.
 - Done:
-  - Review 5971406643 (PENDING, on the pre-fix head `d041b1c`) was
-    deleted with the GitHub API. #135 then had no review.
+  - Review 5971406643 (PENDING, on the pre-fix head `d041b1c`):
+    `gh api -X DELETE repos/Waber/Investment-AI-Companion/pulls/135/reviews/5971406643`.
+    #135 then had no review.
   - Issue #139: a partial fund-attribute update can clear
     `aum_as_of` or `aum_currency` and keep the AUM amount.
-  - #135 merged with "Rebase and merge", pinned with
-    `--match-head-commit` to `3f3a402`. Master `4ea0514` has the
-    same tree (`git diff 3f3a402 4ea0514` is empty).
-  - Migration: no `.env` and no PostgreSQL on `localhost:5432` on
-    this machine, so the default database does not exist. The only
-    database is the demo file, built by `create_all` on 2026-10-28
-    and not managed by Alembic. It was copied to
-    `demo/investment_demo.db.bak-2026-11-20`, then rebuilt with
-    `scripts.run_demo`'s `seed_demo_database(plan, reset=True)`
-    without starting the server. Its one watchlist row
-    (`DEMO_PL_TECH`, added 2026-10-28) was inserted again.
-- Verification:
+  - The agent ran the merge on Przemek's explicit instruction:
+    `gh pr merge 135 --rebase --match-head-commit 3f3a40272604014b1e1d390c58b04e599036d75c`.
+    Master `4ea0514` has the same tree (`git diff 3f3a402 4ea0514`
+    is empty).
+- Decision (agent's call, for Przemek to confirm): "run the
+  migration" had no Alembic-managed database to run on. This machine
+  has no `.env` and nothing on `localhost:5432`, so the default
+  PostgreSQL database does not exist. The only database is
+  `demo/investment_demo.db`, built by `create_all` on 2026-10-28,
+  without `alembic_version`, `fund_attributes`, or `score_weights`.
+  `alembic upgrade head` cannot run on it. So the demo file was
+  copied and rebuilt the way `python -m scripts.run_demo` does by
+  default, and its one hand-added row was put back. Revision `0011`
+  was checked on a separate scratch database.
+- Commands, from the repository root:
+  - Demo rebuild, after `cp -p demo/investment_demo.db
+    demo/investment_demo.db.bak-2026-11-20`:
+    `env -u DATABASE_URL -u SECRET_KEY .venv/bin/python -c "from pathlib import Path; from scripts.run_demo import build_demo_plan, configure_demo_process, seed_demo_database; plan = build_demo_plan(Path.cwd()); configure_demo_process(plan); print(seed_demo_database(plan, reset=True))"`.
+    It seeds without starting the server. The watchlist row went back
+    with `sqlite3`: `INSERT INTO watchlist_items (company_id,
+    added_at, label)` with the id of `DEMO_PL_TECH`,
+    `2026-10-28 11:00:30.094048`, and NULL.
+  - Score check: the same plan, then `demo_asgi_app(plan)` behind
+    `httpx.ASGITransport` with base URL `http://127.0.0.1`.
+    `GET /api/v1/instruments/{id}/score` for each of the 10 company
+    ids, `GET /api/v1/score-weights/STOCK`, and `GET /ui`.
+  - `0011` check, in a scratch directory `$T`:
+    `git worktree add --detach $T/old ac23710`; export
+    `DATABASE_URL=sqlite:///$T/migrate.db` and a random `SECRET_KEY`;
+    in `$T/old`, `Base.metadata.create_all` with that URL and
+    `alembic stamp head` (that is `0010` there); back in the
+    repository, `alembic upgrade head`, `alembic downgrade -1`, and
+    `alembic upgrade head`. Then `git worktree remove --force $T/old`.
+- Results:
   - The rebuilt demo has `fund_attributes` (4 rows) and
     `score_weights` (empty), 10 synthetic companies, 20 metric rows,
-    and 1777 prices.
-  - Through `demo_asgi_app`, every demo score is 200, and the
-    coverage on 2026-11-20 matches the table in `docs/scoring.md`
-    (`DEMO_ETF_GPW` 2 of 4, `DEMO_SG_EARLY` 3 of 4, `DEMO_PL_EMPTY`
-    `no_score`). Every source is `demo` and `is_synthetic` is true.
-    `GET /ui` is 200.
-  - Revision `0011` on a scratch SQLite database built by `ac23710`
-    and stamped `0010`: upgrade to `0011` creates `score_weights`,
-    downgrade one step drops it, and upgrade works again. An empty
-    database fails at `0001`, which expects `companies` from
-    `create_all`; that is the existing design (`app/core/init_db.py`).
-- AI model: Claude Opus 5.5 (Claude Code). Account usage could not
-  be read in this session.
-- Time: about 14:25 to 14:45 CET on 2026-11-20.
+    and 1777 prices. The watchlist row for `DEMO_PL_TECH` is back.
+  - Every demo score is 200, and the coverage on 2026-11-20 matches
+    the table in `docs/scoring.md` (`DEMO_ETF_GPW` 2 of 4,
+    `DEMO_SG_EARLY` 3 of 4, `DEMO_PL_EMPTY` `no_score`). Every source
+    is `demo` and `is_synthetic` is true. `GET /ui` is 200.
+  - `0011`: `alembic_version` went `0010` to `0011` with
+    `score_weights` created, back to `0010` with it dropped, and to
+    `0011` again. On an empty database `alembic upgrade head` fails
+    at `0001`, which expects `companies` from `create_all`. That is
+    the existing design (`app/core/init_db.py`, issue #8).
+- Review of #140 (code-reviewer, round 1, terminal only): 0 Critical,
+  0 Important, 3 Minor: this entry had no commands or decision line;
+  `docs/HANDOFF.md` was still dated 2026-10-30 with #104 unmerged
+  and head `0007` (pre-existing); and it listed #139 under #35. All
+  three are fixed in this pull request. `REVIEW.md` and the
+  "Agents never merge" line in `docs/HANDOFF.md` were left as they
+  are: changing the merge rule is Przemek's decision.
+- AI model: Claude Opus 5.5 (Claude Code), with the code-reviewer
+  subagent. Account usage could not be read in this session.
+- Time: 2026-11-20, about 14:25 to 14:36 CET for the merge, the
+  demo database, and this pull request; about 14:40 to 15:25 CET for
+  its review and these fixes.
 
 ## 2026-11-19 - Instrument score review fixes, rounds 1 and 2 (Refs #35)
 
