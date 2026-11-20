@@ -97,10 +97,11 @@ Each item: own branch, PR, tests, work-state + journal updated.
 a. **#33 notes and theses UI and HTTP API**: pull request #104,
    in review on `feat/notes-theses-33`. Not merged.
 b. **#102 Code Reviewer agent** (priority high): a reusable review
-   agent for every pull request. Draft on
-   `feat/code-reviewer-agent-102`: `.claude/agents/code-reviewer.md`,
-   the `/review-pr` skill (pending GitHub review with `--post`), and
-   path rules in `.agents/review/instructions.toml`. Run `/review-pr <N>`
+   agent for every pull request. Merged in #138:
+   `.claude/agents/code-reviewer.md`, the `/review-pr` skill (pending
+   GitHub review with `--post`), and path rules in
+   `.agents/review/instructions.toml`. #102 stays open until Przemek
+   accepts the draft. Run `/review-pr <N>`
    on every PR before asking Przemek to merge it. GitHub Actions
    automation stays out of scope (API key and cost decision).
 c. **#86 remainder**: pull request #106 moves
@@ -109,7 +110,9 @@ d. **#95** price-bar repository follow-ups (skipped bars, batch
    duplicates, currency length).
 e. **#34 remainder**: `source=manual` column and a synthetic marker
    that survives a description edit.
-f. Then, in order: #28, #30 and #31 (need #28), #35, #36, #37 (needs
+f. Then, in order: #28, #30 and #31 (need #28), #35 (the backend
+   score and weight sets are merged in #135; the `/ui` part and #139
+   remain), #36, #37 (needs
    #36; ignore the disclaimer wording in the issue, see below), #8
    remaining baseline, #38, #39, #40.
 
