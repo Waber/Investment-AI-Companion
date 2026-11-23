@@ -234,6 +234,42 @@ async def test_attributes_on_a_stock_are_rejected(client):
     assert missing.status_code == 404
 
 
+_AUM_TRIO = ("aum", "aum_currency", "aum_as_of")
+_STORED_AUM = {
+    "aum": 1250000000,
+    "aum_currency": "EUR",
+    "aum_as_of": "2026-06-30",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body, status, trio",
+    [
+        ({"aum_as_of": None}, 400, _STORED_AUM),
+        ({"aum_currency": None}, 400, _STORED_AUM),
+        ({"aum": None}, 200, dict.fromkeys(_AUM_TRIO)),
+    ],
+)
+async def test_put_changes_aum_its_currency_and_its_date_together(
+    client, body, status, trio
+):
+    created = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Fund", "ticker": "FUND", "instrument_type": "ETF"},
+    )
+    url = f"/api/v1/instruments/{created.json()['id']}/fund-attributes"
+    assert (await client.post(url, json=_payload())).status_code == 201
+    response = await client.put(url, json=body)
+    assert response.status_code == status
+    if status == 400:
+        assert response.json() == {
+            "detail": "aum currency and aum_as_of require aum"
+        }
+    stored = (await client.get(url)).json()
+    assert {name: stored[name] for name in _AUM_TRIO} == trio
+
+
 @pytest.mark.asyncio
 async def test_detail_includes_attributes_and_hand_calculated_metrics(client):
     """110 / 100 - 1 = 0.10 and 110 / 50 - 1 = 1.20.
