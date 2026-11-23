@@ -89,7 +89,13 @@ copy is valid.
 Fund attributes for one instrument are
 `/api/v1/instruments/{id}/fund-attributes`, with no trailing slash.
 `GET` returns the row, or JSON `null` when the instrument exists and
-has no row. `POST` creates it (201). `PUT` edits it. `DELETE` removes
+has no row. `POST` creates it (201). `PUT` edits only the fields it
+sends. `aum`, `aum_currency`, and `aum_as_of` change together. A new
+amount needs the currency and the date in the same request, and
+`{"aum": null}` clears all three. A `PUT` that sends `aum_currency`
+or `aum_as_of` without `aum`, even as `null`, is 400
+`{"detail": "aum currency and aum_as_of require aum"}` and changes
+nothing. `DELETE` removes
 that row only and returns 204 with an empty body. The instrument, its
 prices, notes, and theses stay. `GET /api/v1/instruments/{id}` then
 has `fund_attributes` set to `null`. A second `DELETE`, or a `DELETE`

@@ -265,21 +265,22 @@ def _check_aum(data, partial=False):
     On a partial update, a request that does not mention any of the
     three leaves the stored trio alone. Sending an amount requires
     the currency and the date in the same request. Sending a currency
-    or a date without an amount is rejected. Clearing the amount
-    clears the other two.
+    or a date without an amount is rejected, even as null: the key
+    counts, not its value. Clearing the amount clears the other two.
     """
-    mentioned = [
-        name for name in ("aum", "aum_currency", "aum_as_of") if name in data
-    ]
-    if partial and not mentioned:
+    if partial and "aum" not in data:
+        if "aum_currency" in data or "aum_as_of" in data:
+            raise ValueError(_AUM_EXTRA)
         return
     amount = data.get("aum")
     if amount is None:
-        if data.get("aum_currency") is not None or data.get("aum_as_of"):
+        if (
+            data.get("aum_currency") is not None
+            or data.get("aum_as_of") is not None
+        ):
             raise ValueError(_AUM_EXTRA)
-        if not partial:
-            data["aum_currency"] = None
-            data["aum_as_of"] = None
+        data["aum_currency"] = None
+        data["aum_as_of"] = None
         return
     if data.get("aum_currency") is None or data.get("aum_as_of") is None:
         raise ValueError(_AUM_NEEDS)
