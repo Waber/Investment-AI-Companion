@@ -112,7 +112,8 @@ class FundAttributesRepository:
         """Change the fields that were sent.
 
         ``aum`` set to None also clears ``aum_currency`` and
-        ``aum_as_of`` (``_check_aum``). Returns None when this company
+        ``aum_as_of`` (``_check_aum``). ``as_of`` cannot be set to
+        None, the same rule as ``create``. Returns None when this company
         has no attribute row. The company must still be an ETF or an
         ETC. ``source`` becomes
         ``manual``. ``is_synthetic`` is left as stored. A ``source``
@@ -126,6 +127,8 @@ class FundAttributesRepository:
         data = _fields(attributes)
         data.pop("source", None)
         data.pop("is_synthetic", None)
+        if "as_of" in data and data["as_of"] is None:
+            raise ValueError("as_of is required")
         _check_numbers(data)
         _check_aum(data, partial=True)
         for field, value in data.items():
