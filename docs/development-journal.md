@@ -1,5 +1,44 @@
 # Development Journal
 
+## 2026-11-23 - Fund-attribute AUM trio on PUT (Closes #139)
+
+- Scope: at Przemek's request, delete the merged `#140` branch and
+  fix #139. Branch `fix/fund-attributes-aum-partial-139`, from
+  `origin/master` `8d8c4ca`, pull request #141.
+- Before this: Przemek merged #140 on 2026-11-23 (`8d8c4ca`). Its
+  tree equals the reviewed head `c889ebf` (`git rev-parse` of both
+  trees: `45577254`). The branch was deleted locally and on GitHub
+  (`git branch -d`, `git push origin --delete`). Missed step: the
+  code-reviewer did not run again on `c889ebf` after that push, as
+  AGENTS.md asks. The push held only the three Minor docs fixes.
+- Root cause: `_check_aum` judged a partial update by the values it
+  sent, and it skipped the clearing step on updates. Reproduced on
+  master through the app (in-process ASGI, in-memory SQLite, a fund
+  row with AUM 1250000000 EUR as of 2026-06-30):
+  `{"aum_as_of": null}` and `{"aum_currency": null}` returned 200
+  and kept the amount; `{"aum": null}` returned 200 and kept `EUR`
+  and `2026-06-30`. The third case was not in #139.
+- Fix: the keys decide. A currency or a date without `aum` is 400
+  `aum currency and aum_as_of require aum`, and a null amount clears
+  the other two on create and on update. The test commit comes
+  first and fails 3 of 3 on master.
+- Checked for the same mistake elsewhere: the company, metrics, note,
+  and thesis updates have no fields that must change together.
+- Not done: stored rows with a broken trio are not repaired.
+- Verification, from the repository root:
+  - `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_fund_attributes_api.py -k together`:
+    3 failed on `2f85bae`, 3 passed on the fix.
+  - The CI command (`-W error::DeprecationWarning`, coverage at
+    least 80): 2425 passed and 2 failed on local SQLite 3.54.1, coverage
+    97.40%. The two failures are the 0006 float tests from #122,
+    which fail on master the same way.
+  - `black --check`, `isort --check-only`, and `flake8` on the two
+    changed Python files: passed.
+- AI model: Claude Opus 5.5 (Claude Code). A read-only subagent
+  assessed what the first release still needs; that answer went to
+  Przemek in the chat, not into this repository.
+- Time: about 17:55 to 18:07 CET.
+
 ## 2026-11-20 - Merge of #135, issue #139, and the demo database (Refs #35)
 
 - Scope: at Przemek's request, delete the unsubmitted review

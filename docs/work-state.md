@@ -1,5 +1,25 @@
 # Current Work State
 
+## Fund-attribute AUM trio on PUT (#139): 2026-11-23, in review
+
+- Branch `fix/fund-attributes-aum-partial-139`, from `origin/master`
+  `8d8c4ca`, pull request #141. Closes #139.
+- Done: `FundAttributesRepository._check_aum` decides by the keys a
+  PUT sends. `aum_currency` or `aum_as_of` without `aum` is 400,
+  also as `null`. `{"aum": null}` clears all three on an update too;
+  before, it kept the currency and the date, which #139 did not
+  list. `docs/api-demo.md` states the rule.
+- Not done: rows already stored with a broken trio are not repaired.
+  The score treats them as no data or `unsupported_currency`.
+- Tests: the CI command gave 2425 passed and 2 failed (the local-only
+  0006 float tests, #122), coverage 97.40%. Lint passed.
+- Not run: PostgreSQL locally (GitHub Actions runs it).
+- PR #140 was merged by Przemek on 2026-11-23 (`8d8c4ca`, the same
+  tree as `c889ebf`), and its branch was deleted at his request.
+- Active agents: none. Blockers: none. This is not approval.
+- Next action: the code-reviewer round on #141, then Przemek
+  reviews and merges.
+
 ## Code Reviewer agent draft (#102): 2026-11-19, merged
 
 - Pull request #138 (branch `feat/code-reviewer-agent-102`) was
@@ -108,7 +128,8 @@
   recomputed.
 - Follow-up: issue #139. A partial fund-attribute update
   `{"aum_as_of": null}` or `{"aum_currency": null}` keeps the AUM
-  amount (`FundAttributesRepository._check_aum`, pre-existing).
+  amount (`FundAttributesRepository._check_aum`, pre-existing). The
+  fix is pull request #141.
 - Databases: this machine has no `.env` and no PostgreSQL on
   `localhost:5432`, so only the demo file exists. The old
   `demo/investment_demo.db` (built by `create_all` on 2026-10-28,
@@ -125,7 +146,8 @@
 - Account usage: this session cannot read the meter.
 - Active agents: none. Blockers: none. This is not approval.
 - Next action: Przemek decides the open questions above. The score
-  page in `/ui` and #139 are the next pieces of work.
+  page in `/ui` is the next piece of work (#139 is in pull request
+  #141).
 
 ## Test debt from the cleanup pull request (#133): 2026-11-18
 
