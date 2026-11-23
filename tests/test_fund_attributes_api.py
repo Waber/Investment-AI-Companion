@@ -271,6 +271,20 @@ async def test_put_changes_aum_its_currency_and_its_date_together(
 
 
 @pytest.mark.asyncio
+async def test_put_cannot_clear_the_snapshot_date(client):
+    created = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Fund", "ticker": "FUND", "instrument_type": "ETF"},
+    )
+    url = f"/api/v1/instruments/{created.json()['id']}/fund-attributes"
+    assert (await client.post(url, json=_payload())).status_code == 201
+    response = await client.put(url, json={"as_of": None})
+    assert response.status_code == 400
+    assert response.json() == {"detail": "as_of is required"}
+    assert (await client.get(url)).json()["as_of"] == "2026-09-30"
+
+
+@pytest.mark.asyncio
 async def test_detail_includes_attributes_and_hand_calculated_metrics(client):
     """110 / 100 - 1 = 0.10 and 110 / 50 - 1 = 1.20.
 
