@@ -151,7 +151,11 @@ class FundAttributesCreate(FundAttributesWrite):
 
 
 class FundAttributesUpdate(FundAttributesWrite):
-    """Fields to change. Omitted fields stay as stored."""
+    """Fields to change. Omitted fields stay as stored, except one.
+
+    ``aum`` set to null also clears ``aum_currency`` and
+    ``aum_as_of``. Sending either of those without ``aum`` is 400.
+    """
 
 
 class FundAttributes(BaseModel):

@@ -17,8 +17,12 @@
 - PR #140 was merged by Przemek on 2026-11-23 (`8d8c4ca`, the same
   tree as `c889ebf`), and its branch was deleted at his request.
 - Active agents: none. Blockers: none. This is not approval.
-- Next action: the code-reviewer round on #141, then Przemek
-  reviews and merges.
+- Review round 1 (code-reviewer, terminal only): 1 Critical, the
+  PUT docstrings said omitted fields stay as stored. Fixed. Open for
+  Przemek: whether AUM, stored as `Float`, counts as a money amount
+  under the `Decimal` path rule (pre-existing).
+- Next action: review round 2 on the fix, then Przemek reviews and
+  merges.
 
 ## Code Reviewer agent draft (#102): 2026-11-19, merged
 

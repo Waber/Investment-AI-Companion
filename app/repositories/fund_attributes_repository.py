@@ -111,8 +111,10 @@ class FundAttributesRepository:
     def update(self, company_id, attributes):
         """Change the fields that were sent.
 
-        Returns None when this company has no attribute row. The
-        company must still be an ETF or an ETC. ``source`` becomes
+        ``aum`` set to None also clears ``aum_currency`` and
+        ``aum_as_of`` (``_check_aum``). Returns None when this company
+        has no attribute row. The company must still be an ETF or an
+        ETC. ``source`` becomes
         ``manual``. ``is_synthetic`` is left as stored. A ``source``
         key in ``attributes`` is ignored.
         """

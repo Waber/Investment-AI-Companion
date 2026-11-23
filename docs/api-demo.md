@@ -89,8 +89,9 @@ copy is valid.
 Fund attributes for one instrument are
 `/api/v1/instruments/{id}/fund-attributes`, with no trailing slash.
 `GET` returns the row, or JSON `null` when the instrument exists and
-has no row. `POST` creates it (201). `PUT` edits only the fields it
-sends. `aum`, `aum_currency`, and `aum_as_of` change together. A new
+has no row. `POST` creates it (201). `PUT` edits the fields it sends
+and keeps the others, with one exception. `aum`, `aum_currency`, and
+`aum_as_of` change together. A new
 amount needs the currency and the date in the same request, and
 `{"aum": null}` clears all three. A `PUT` that sends `aum_currency`
 or `aum_as_of` without `aum`, even as `null`, is 400
