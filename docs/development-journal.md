@@ -25,6 +25,16 @@
 - Checked for the same mistake elsewhere: the company, metrics, note,
   and thesis updates have no fields that must change together.
 - Not done: stored rows with a broken trio are not repaired.
+- Review round 1 (code-reviewer, terminal only, on `cf31648`):
+  1 Critical. The `FundAttributesUpdate` docstring, which FastAPI
+  shows as the PUT body description in `/docs`, and the
+  `update` docstring said omitted fields stay as stored;
+  `{"aum": null}` now clears two of them. Fixed in both docstrings
+  and in `docs/api-demo.md`. Question answered: `update` has one
+  caller, the PUT route (the seed calls only `create`), so the
+  route test covers it and no separate repository test was added.
+  Declined to judge, for Przemek: AUM is stored as `Float`; whether
+  a fund size is a money amount under the `Decimal` path rule.
 - Verification, from the repository root:
   - `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_fund_attributes_api.py -k together`:
     3 failed on `2f85bae`, 3 passed on the fix.
