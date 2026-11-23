@@ -8,10 +8,12 @@
   PUT sends. `aum_currency` or `aum_as_of` without `aum` is 400,
   also as `null`. `{"aum": null}` clears all three on an update too;
   before, it kept the currency and the date, which #139 did not
-  list. `docs/api-demo.md` states the rule.
+  list. `{"as_of": null}` is 400 too, the rule `create` already had
+  (found in review round 2). `docs/api-demo.md` and the PUT
+  docstrings state both rules.
 - Not done: rows already stored with a broken trio are not repaired.
   The score treats them as no data or `unsupported_currency`.
-- Tests: the CI command gave 2425 passed and 2 failed (the local-only
+- Tests: the CI command gave 2426 passed and 2 failed (the local-only
   0006 float tests, #122), coverage 97.40%. Lint passed.
 - Not run: PostgreSQL locally (GitHub Actions runs it).
 - PR #140 was merged by Przemek on 2026-11-23 (`8d8c4ca`, the same
@@ -21,8 +23,10 @@
   PUT docstrings said omitted fields stay as stored. Fixed. Open for
   Przemek: whether AUM, stored as `Float`, counts as a money amount
   under the `Decimal` path rule (pre-existing).
-- Next action: review round 2 on the fix, then Przemek reviews and
-  merges.
+- Review round 2: 0 Critical, 0 Important, 3 Minor, all fixed, plus
+  the `as_of` case it asked about.
+- Next action: review round 3 on those fixes, then Przemek reviews
+  and merges.
 
 ## Code Reviewer agent draft (#102): 2026-11-19, merged
 

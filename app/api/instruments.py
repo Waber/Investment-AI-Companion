@@ -194,7 +194,9 @@ def update_fund_attributes(
     """Edit the row. The demo-seed header is not read.
 
     The stored source becomes ``manual``. ``is_synthetic`` stays as
-    it was.
+    it was. ``aum``, ``aum_currency``, and ``aum_as_of`` change
+    together: ``aum`` set to null clears all three, and a currency or
+    a date without ``aum`` is 400. ``as_of`` set to null is 400.
     """
     repo = FundAttributesRepository(db)
     try:

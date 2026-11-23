@@ -23,7 +23,12 @@
   the other two on create and on update. The test commit comes
   first and fails 3 of 3 on master.
 - Checked for the same mistake elsewhere: the company, metrics, note,
-  and thesis updates have no fields that must change together.
+  and thesis updates have no fields that must change together. That
+  check missed one in this same `update`, found in review round 2:
+  `create` requires `as_of`, but `{"as_of": null}` returned 200 and
+  stored a null snapshot date (then TER is `no_data` in the score).
+  Now it is 400 `as_of is required`. Its test commit `1b6edfa` comes
+  before the fix and failed with 200.
 - Not done: stored rows with a broken trio are not repaired.
 - Review round 1 (code-reviewer, terminal only, on `cf31648`):
   1 Critical. The `FundAttributesUpdate` docstring, which FastAPI
@@ -35,11 +40,16 @@
   route test covers it and no separate repository test was added.
   Declined to judge, for Przemek: AUM is stored as `Float`; whether
   a fund size is a money amount under the `Decimal` path rule.
+- Review round 2 (terminal only, on `81c066d`): 0 Critical,
+  0 Important, 3 Minor ("except one" read as one field; the PUT
+  route docstring, which `/docs` shows first, did not state the
+  rule; the time and head of the checks below). All three fixed,
+  together with the `as_of` question above.
 - Verification, from the repository root:
   - `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_fund_attributes_api.py -k together`:
     3 failed on `2f85bae`, 3 passed on the fix.
   - The CI command (`-W error::DeprecationWarning`, coverage at
-    least 80): 2425 passed and 2 failed on local SQLite 3.54.1, coverage
+    least 80), on the head after the `as_of` fix: 2426 passed and 2 failed on local SQLite 3.54.1, coverage
     97.40%. The two failures are the 0006 float tests from #122,
     which fail on master the same way.
   - `black --check`, `isort --check-only`, and `flake8` on the two
@@ -47,7 +57,7 @@
 - AI model: Claude Opus 5.5 (Claude Code). A read-only subagent
   assessed what the first release still needs; that answer went to
   Przemek in the chat, not into this repository.
-- Time: about 17:55 to 18:07 CET.
+- Time: about 17:55 to 18:24 CET.
 
 ## 2026-11-20 - Merge of #135, issue #139, and the demo database (Refs #35)
 
