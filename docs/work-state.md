@@ -20,13 +20,19 @@
   tree as `c889ebf`), and its branch was deleted at his request.
 - Active agents: none. Blockers: none. This is not approval.
 - Review round 1 (code-reviewer, terminal only): 1 Critical, the
-  PUT docstrings said omitted fields stay as stored. Fixed. Open for
-  Przemek: whether AUM, stored as `Float`, counts as a money amount
-  under the `Decimal` path rule (pre-existing).
+  PUT docstrings said omitted fields stay as stored. Fixed.
 - Review round 2: 0 Critical, 0 Important, 3 Minor, all fixed, plus
   the `as_of` case it asked about.
-- Next action: review round 3 on those fixes, then Przemek reviews
-  and merges.
+- Review round 3 (terminal only, on `01c7117`, 2026-11-25):
+  0 Critical, 0 Important, 2 Minor (the `as_of` sentence in
+  `docs/api-demo.md` read as if a POST gives 400, but it gives 422;
+  this file still listed the AUM question as open), plus "two" for
+  four changed Python files in the journal. All fixed.
+- Decided by Przemek on 2026-11-25: AUM is a money amount, so the
+  `Decimal` rule applies. The `Float` column is pre-existing and is
+  not changed here; issue #142 tracks it.
+- Next action: Przemek reviews and merges #141. Then #142 (AUM as
+  `Decimal`) or the score page in `/ui`.
 
 ## Code Reviewer agent draft (#102): 2026-11-19, merged
 

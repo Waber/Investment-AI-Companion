@@ -96,8 +96,9 @@ amount needs the currency and the date in the same request, and
 `{"aum": null}` clears all three. A `PUT` that sends `aum_currency`
 or `aum_as_of` without `aum`, even as `null`, is 400
 `{"detail": "aum currency and aum_as_of require aum"}` and changes
-nothing. `as_of` is required on create and cannot be cleared:
-`{"as_of": null}` is 400 `{"detail": "as_of is required"}`. `DELETE` removes
+nothing. `as_of` is required on create. A `PUT` cannot clear it:
+`{"as_of": null}` is 400 `{"detail": "as_of is required"}` and changes
+nothing. `DELETE` removes
 that row only and returns 204 with an empty body. The instrument, its
 prices, notes, and theses stay. `GET /api/v1/instruments/{id}` then
 has `fund_attributes` set to `null`. A second `DELETE`, or a `DELETE`
