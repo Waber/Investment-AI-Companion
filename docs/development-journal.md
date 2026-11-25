@@ -45,6 +45,18 @@
   route docstring, which `/docs` shows first, did not state the
   rule; the time and head of the checks below). All three fixed,
   together with the `as_of` question above.
+- Review round 3 (terminal only, on `01c7117`, 2026-11-25):
+  0 Critical, 0 Important, 2 Minor. F5: `docs/api-demo.md` read as
+  if POST `{"as_of": null}` is 400; Pydantic rejects it first with
+  422, so the sentence now speaks of `PUT` only. F6: the work state
+  still listed the AUM question as open. Also "two" changed Python
+  files below, where there are four. All fixed in docs only, no
+  code change. The reviewer's CI run on `01c7117` matched the
+  counts below.
+- Decision: Przemek decided on 2026-11-25 that AUM is a money
+  amount, so the `Decimal` path rule applies. The `Float` column is
+  pre-existing and needs a migration, so it is issue #142, not part
+  of this pull request.
 - Verification, from the repository root:
   - `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_fund_attributes_api.py -k together`:
     3 failed on `2f85bae`, 3 passed on the fix.
@@ -52,12 +64,13 @@
     least 80), on the head after the `as_of` fix: 2426 passed and 2 failed on local SQLite 3.54.1, coverage
     97.40%. The two failures are the 0006 float tests from #122,
     which fail on master the same way.
-  - `black --check`, `isort --check-only`, and `flake8` on the two
+  - `black --check`, `isort --check-only`, and `flake8` on the four
     changed Python files: passed.
 - AI model: Claude Opus 5.5 (Claude Code). A read-only subagent
   assessed what the first release still needs; that answer went to
   Przemek in the chat, not into this repository.
-- Time: about 17:55 to 18:24 CET.
+- Time: about 17:55 to 18:24 CET on 2026-11-23; round 3 and its
+  docs fixes on 2026-11-25, about 17:30 to 17:55 CET.
 
 ## 2026-11-20 - Merge of #135, issue #139, and the demo database (Refs #35)
 
