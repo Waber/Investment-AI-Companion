@@ -27,9 +27,9 @@ The backend, as the tree is laid out:
 - The FastAPI routes in `app/api`, and the API routers wired in
   `main.py`.
 - Domain modules under `app/`: `scoring.py`, `instrument_score.py`,
-  `price_metrics.py`, `app/data_collectors`, `app/core`, and
-  `app/validation`. There is no `app/services` package. Those modules
-  are the service layer.
+  `price_metrics.py`, `app/demo_seed_auth.py`, `app/data_collectors`,
+  `app/core`, and `app/validation`. There is no `app/services`
+  package. Those modules are the service layer.
 - Alembic: `alembic/env.py` and `alembic/versions`.
 - `scripts/`, `setup_database.py`, and the JSON fixtures in
   `fixtures/` (`demo-v1.json`, `demo-v2.json`).
@@ -90,8 +90,10 @@ those unless the task names the file and says the change is shared.
    rewrite `master`, and do not rewrite a shared branch, unless
    Przemek has approved that rewrite.
 4. Commit subjects and the pull request body use `Refs #N` only.
-   Never use a closing keyword: closes, fixes, or resolves, in any
-   capitalization.
+   Next to an issue number, never write close, closes, closed, fix,
+   fixes, fixed, resolve, resolves, or resolved, in any
+   capitalization. A negation still counts: "does not close #N" is
+   parsed as closing. The only form is `Refs #N`.
 5. Each new head SHA goes to the Code Reviewer first
    (`.claude/agents/code-reviewer.md`). The Code Reviewer then hands
    that head to QA. Security reviews security-relevant changes in
