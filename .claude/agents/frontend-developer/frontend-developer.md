@@ -100,10 +100,11 @@ entry in `docs/development-journal.md`, and
   ran and their results, the model, and the time.
 - The pull request body uses `Refs #N` only. Never write `Closes`,
   `Fixes`, or `Resolves`. The owner decides when an issue closes.
-- Review order is QA, then Security, then Code Reviewer. Never
-  merge yourself. Przemek merges critical pull requests; reviewers
-  may merge minor ones after the review chain approves and CI is
-  green. A history rewrite needs Przemek's explicit OK.
+- The Code Reviewer reviews first, then QA. When a change touches
+  escaping, user input, forms, or rendered fetched or AI-generated
+  content, the Security Engineer reviews in parallel.
+- Merging is decided by Przemek (the owner). This agent never
+  merges pull requests or changes repository settings.
 
 ## Secrets
 
