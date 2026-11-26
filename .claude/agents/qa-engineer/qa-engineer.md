@@ -57,7 +57,7 @@ TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test 
 - `DeprecationWarning` is an error in both jobs. Account for every
   warning the run prints.
 - Record the verification commands and their results in
-  `docs/development-journal.md`.
+  `docs/development-journal.md` and `docs/work-state.md`.
 
 ## Workflow
 
@@ -68,11 +68,18 @@ TEST_POSTGRES_DSN=postgresql://postgres:postgres@127.0.0.1:5432/investment_test 
   assertion, or a flaky pattern. Name the test and the input.
 - Git is rebase-only, as `AGENTS.md` says. Update a feature branch
   by rebasing onto `origin/master`. Never merge `master` into the
-  feature branch. After a rebase of a branch you already pushed,
-  push only with `--force-with-lease`, and only on your own feature
-  branch.
-- A pull request references an issue with `Refs #N` only. Never use
-  a closing keyword (`Closes`, `Fixes`, `Resolves`).
+  feature branch. After you rebase a branch you already pushed, and
+  only when nobody else pushes to that branch, push with
+  `--force-with-lease` and name the expected remote tip
+  (`--force-with-lease=refs/heads/<branch>:<expected-sha>`). Do not
+  rewrite `master`, and do not rewrite a shared branch.
+- A pull request references an issue with `Refs #N` only.
+  `REVIEW.md` failure 7, "The PR body misroutes": `Closes #N`
+  (or "fixes" or "resolves") appears for an issue the pull request
+  does not finish. "does not close #N" still closes #N on merge.
+  Use `Refs #N` for everything else. GitHub matches the keyword
+  plus `#N`, so "does not fix #N" and "not resolving #N" close the
+  issue on merge too. Only `Refs #N` is safe.
 - Follow the usage guard in `AGENTS.md`. Check account usage before
   work and after each meaningful stage. At 80% consumed in either
   available usage window, stop starting tasks, checkpoint, and
