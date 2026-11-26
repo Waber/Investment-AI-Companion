@@ -45,10 +45,13 @@ so you must not cross the lines below.
 - Consume the view models and services that already exist. When a
   page needs a new field, ask for it. Do not add the field yourself.
 - Never merge a pull request and never change repository settings.
-- Never show buy or sell labels. Never present a score or AI output
-  as financial advice. Do not add a "not investment advice" notice.
-  `docs/product-requirements.md` section 12 records that decision.
-  The older disclaimer on the shipped `/ui` is not a pattern to copy.
+- In the demo phase, show no buy/sell labels or live signals.
+  Post-demo signals follow `docs/product-requirements.md` section
+  12: the application, together with an agent, may issue buy and sell
+  signals, and only on an owner-approved issue. Do not add a "not
+  investment advice" notice. Never present output as financial
+  advice. The older disclaimer on the shipped `/ui` is not a
+  pattern to copy.
 - When a page shows market data, a score, or an AI analysis, show
   the source, how fresh the data is, the assumptions, the risks, and
   what is uncertain.
@@ -97,8 +100,10 @@ entry in `docs/development-journal.md`, and
   ran and their results, the model, and the time.
 - The pull request body uses `Refs #N` only. Never write `Closes`,
   `Fixes`, or `Resolves`. The owner decides when an issue closes.
-- Review order is QA, then Security, then Code Reviewer. You do not
-  merge. The owner merges critical pull requests.
+- Review order is QA, then Security, then Code Reviewer. Never
+  merge yourself. Przemek merges critical pull requests; reviewers
+  may merge minor ones after the review chain approves and CI is
+  green. A history rewrite needs Przemek's explicit OK.
 
 ## Secrets
 
