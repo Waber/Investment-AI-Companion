@@ -1,9 +1,43 @@
 # Current Work State
 
-## Fund-attribute AUM trio on PUT (#139): 2026-11-23, in review
+## Real Yahoo calls failed on a positional timeout: 2026-11-26, in review
 
+- Branch `fix/yahoo-positional-timeout`, from `origin/master`
+  `8d8c4ca`. Refs #54. Przemek's goal (2026-11-26): use the app
+  himself on real data as soon as possible. UI work waits for a
+  dedicated UI agent; backend work goes first.
+- Found by a manual probe with `DATA_COLLECTOR=yahoo` against real
+  Yahoo (AAPL, PKN.WA, VWCE.DE): every `fetch-company` was 502.
+  `_with_capped_timeout` added `timeout=` as a keyword, but yfinance
+  1.7 `YfData.cache_get` passes it by position, so `Ticker.info`
+  raised `TypeError: got multiple values for argument 'timeout'`.
+  The offline tests only called the wrapped methods with a keyword.
+- Done: the wrapper binds the call with `inspect.signature` and
+  replaces the timeout wherever it was passed. A new test fails on
+  master with the same `TypeError`. After the fix the probe stored
+  the three instruments and about 250 daily bars each.
+- Gaps the probe showed (not fixed here, the next backend work):
+  - `POST /data-collection/fetch-financial-metrics` is still a
+    placeholder, so a real stock's score is `0 of 4`.
+  - A fetched ETF (VWCE.DE) is stored as `STOCK`, and Yahoo fund
+    attributes (TER, AUM) are not collected.
+  - The price refresh fetches one year, so `return_3y` is always
+    `insufficient_history`; AAPL's `return_1y` was too.
+- Tests: the CI command gave 2422 passed and 3 failed, coverage
+  97.38%. The failures are local only and fail on master too: the
+  two 0006 float tests (#122) and
+  `test_run_demo::test_child_process_does_not_inherit_dotenv_database`
+  (the ignored `demo/` folder in this checkout). Lint passed.
+- Active agents: none. Blockers: none. This is not approval.
+- Next action: Przemek reviews the pull request. Then the real
+  financial metrics from Yahoo.
+
+## Fund-attribute AUM trio on PUT (#139): 2026-11-23, merged
+
+- Pull request #141 was merged by Przemek on 2026-11-27 with
+  "Rebase and merge" (`e4a06fb` on master). Closes #139.
 - Branch `fix/fund-attributes-aum-partial-139`, from `origin/master`
-  `8d8c4ca`, pull request #141. Closes #139.
+  `8d8c4ca`.
 - Done: `FundAttributesRepository._check_aum` decides by the keys a
   PUT sends. `aum_currency` or `aum_as_of` without `aum` is 400,
   also as `null`. `{"aum": null}` clears all three on an update too;
@@ -31,8 +65,7 @@
 - Decided by Przemek on 2026-11-25: AUM is a money amount, so the
   `Decimal` rule applies. The `Float` column is pre-existing and is
   not changed here; issue #142 tracks it.
-- Next action: Przemek reviews and merges #141. Then #142 (AUM as
-  `Decimal`) or the score page in `/ui`.
+- Next: #142 (AUM as `Decimal`).
 
 ## Code Reviewer agent draft (#102): 2026-11-19, merged
 

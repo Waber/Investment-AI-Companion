@@ -1,5 +1,50 @@
 # Development Journal
 
+## 2026-11-26 - Real Yahoo calls failed on a positional timeout (Refs #54)
+
+- Scope: Przemek wants to use the app himself on real data as soon
+  as possible, backend first (UI waits for a dedicated UI agent).
+  Before choosing the next slice, a manual probe ran the API with
+  `DATA_COLLECTOR=yahoo` against real Yahoo on a throwaway SQLite
+  file outside the repository: AAPL, PKN.WA, VWCE.DE.
+- Root cause: every `fetch-company` answered 502. The traceback
+  showed `TypeError: YfData.get() got multiple values for argument
+  'timeout'`. `_with_capped_timeout` (the per-request HTTP timeout
+  cap) set `kwargs["timeout"]`, but yfinance 1.7
+  `YfData.cache_get` calls `self.get(url, params, timeout)` by
+  position. `yf.Ticker("AAPL").info` without the wrapper worked. The
+  offline tests called the wrapped methods only with `timeout=`, so
+  they could not see it. Every real company lookup failed this way.
+- Fix: when the wrapped method names a `timeout` parameter, the
+  wrapper binds the call with `inspect.signature(...).bind_partial`
+  and replaces the bound timeout, so it is sent once. A method that
+  takes the timeout only through `**kwargs` (`requests.Session.get`)
+  keeps the keyword path.
+- Test first: `test_a_positional_timeout_is_capped_and_not_sent_twice`
+  failed on master with the production `TypeError`, and passes with
+  the fix.
+- Probe after the fix: all three instruments created, 251, 251, and
+  253 daily bars stored. It also showed what still blocks real use:
+  - `fetch-financial-metrics` is a placeholder, so each real stock
+    scores `0 of 4` components;
+  - VWCE.DE is stored as `STOCK` and gets no fund attributes;
+  - the one-year price refresh leaves `return_3y` without history,
+    and AAPL's `return_1y` too.
+- Verification, from the repository root:
+  - `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_yahoo_finance_collector.py -k positional`:
+    1 failed before the fix, 1 passed after.
+  - The CI command (`-W error::DeprecationWarning`, coverage at
+    least 80): 2422 passed and 3 failed on local SQLite 3.54.1,
+    coverage 97.38%. The failures fail on master the same way: the
+    two 0006 float tests (#122) and the `run_demo` `.env` test (the
+    ignored `demo/` folder in this checkout).
+  - `black --check`, `isort --check-only`, and `flake8` on the two
+    changed Python files: passed.
+  - The probe needs the network, so it is not an automated test. It
+    is not in the repository.
+- AI model: Claude Opus 5.5 (Claude Code).
+- Time: about 18:40 to 19:00 CET.
+
 ## 2026-11-23 - Fund-attribute AUM trio on PUT (Closes #139)
 
 - Scope: at Przemek's request, delete the merged `#140` branch and
