@@ -648,6 +648,53 @@ def test_session_calls_use_the_capped_timeout():
     assert 30 not in seen
 
 
+def test_a_positional_timeout_is_capped_and_not_sent_twice():
+    """A timeout passed by position is capped, and not sent twice.
+
+    yfinance 1.7 ``YfData.cache_get`` calls
+    ``self.get(url, params, timeout)``, so the timeout arrives as the
+    third positional argument. The wrapper
+    used to add ``timeout=`` as a keyword on top of it, so every real
+    ``Ticker.info`` call failed with ``TypeError: got multiple values
+    for argument 'timeout'`` and fetch-company answered 502. The other
+    arguments must reach the original unchanged. No socket is opened.
+    """
+    from app.data_collectors.call_budget import pop_budget, push_budget
+    from app.data_collectors.yahoo_finance import _install_http_cap
+
+    seen = []
+
+    class _Data:
+        def get(self, url, params=None, timeout=30):
+            seen.append(("get", url, params, timeout))
+            return {}
+
+        def post(self, url, body=None, params=None, timeout=30, data=None):
+            seen.append(("post", url, params, timeout))
+            return {}
+
+    class _Stock:
+        def __init__(self):
+            self._data = _Data()
+
+    stock = _Stock()
+    _install_http_cap(stock)
+    token = push_budget(time.monotonic() + 4, time.monotonic)
+    try:
+        stock._data.get("https://example.test/quote", {"q": "1"}, 30)
+        stock._data.get("https://example.test/quote", {"q": "2"})
+        stock._data.post("https://example.test/quote", None, {"q": "3"}, 30)
+    finally:
+        pop_budget(token)
+
+    assert [entry[:3] for entry in seen] == [
+        ("get", "https://example.test/quote", {"q": "1"}),
+        ("get", "https://example.test/quote", {"q": "2"}),
+        ("post", "https://example.test/quote", {"q": "3"}),
+    ]
+    assert all(0 < entry[3] <= 4 for entry in seen)
+
+
 def test_a_replaced_session_is_capped_on_the_next_install():
     """The cap marker lives on the session, not only on ``YfData``.
 
