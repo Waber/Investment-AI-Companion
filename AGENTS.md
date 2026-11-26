@@ -34,7 +34,10 @@ Use rebase so history stays a straight line. Linear history is easier to read, b
 
 ## Session Continuity And Checkpoints
 
-- Check account usage before work and after each meaningful stage. At 80% consumed
+- The account-usage rule in this bullet applies only to the Grok bot. Przemek
+  decided on 2026-11-26 that other agents (Claude, Codex, Cursor) do not stop
+  at a usage threshold.
+  Grok: check account usage before work and after each meaningful stage. At 80% consumed
   (or a different threshold explicitly set by the user for the current session)
   in either available usage window, stop starting tasks, checkpoint current work,
   and notify the user before continuing. Begin wrapping up earlier when needed
@@ -55,7 +58,7 @@ Use rebase so history stays a straight line. Linear history is easier to read, b
 The Cloudflare `security-audit` skill in this repository is guidance unless the owner asks for a full audit. The rules in this section are instructions to the agent. They are not an enforced sandbox. They do not prevent an injected action, and they do not constrain the agent's other tools. The files under `.agents/skills/security-audit/` are the installed upstream copy. Do not edit those files, and do not replace the Claude Code link with a second copy. Leave the files and `skills-lock.json` unchanged. `computedHash` was not recomputed, so this file does not claim that the hash matches the tree.
 
 - A security question, a focused review, or a check of one finding stays in guidance mode. Do not start the multi-agent six-phase audit, create an audit output directory, or write audit report artifacts unless the owner explicitly asks for a full security audit or a pen-test of this repository or of a named path.
-- Before that full audit, check account usage in every window this session can actually read. If usage is at or above 80%, or at or above a lower threshold the owner set for the session, do not start. Checkpoint and wait. If the usage meter is not available, say so. Do not invent a percentage, a balance, or a reset time, and do not start the full audit on a guessed figure.
+- Grok bot only (the usage rule above applies only to Grok): before that full audit, check account usage in every window this session can actually read. If usage is at or above 80%, or at or above a lower threshold the owner set for the session, do not start. Checkpoint and wait. If the usage meter is not available, say so. Do not invent a percentage, a balance, or a reset time, and do not start the full audit on a guessed figure.
 - `.claude/skills/security-audit` is a Git symlink (index mode `120000`). The stored link text is `../../.agents/skills/security-audit` (35 bytes, no trailing newline). When the checkout can create symlinks, that path is a directory link, and Claude Code can read `SKILL.md` through it.
 - When `core.symlinks` is false, Git checks that symlink out as a plain text file containing the link text (`git help config`). `git clone` and `git init` probe whether this process can create a symlink and set `core.symlinks` from that probe.
 - On Windows, a real symlink still needs symlink support enabled and the right to create one: Developer Mode on a recent Windows 10, or `SeCreateSymbolicLinkPrivilege`. `core.symlinks=true` without that right does not create the link. See https://gitforwindows.org/symbolic-links.
