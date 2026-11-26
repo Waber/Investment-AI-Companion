@@ -41,9 +41,9 @@ is inconvenient.
 
 - The backlog lives in GitHub issues. A demo issue carries the single
   `demo` label.
-- Pull request flow is QA, then Security, then Code Reviewer, then
-  merge. Security reviews a change that touches write paths, adds an
-  API, or includes a migration.
+- Pull request handoff follows `AGENTS.md`, section "Code Reviewer
+  Agent". Read that section and apply it. Do not replace it with a
+  different review order.
 - A critical pull request (a migration, or an API contract) needs
   Przemek's explicit OK before merge.
 - The repository is rebase-only. There are no merge commits.
