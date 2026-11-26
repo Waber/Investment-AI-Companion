@@ -695,6 +695,91 @@ def test_a_positional_timeout_is_capped_and_not_sent_twice():
     assert all(0 < entry[3] <= 4 for entry in seen)
 
 
+def test_the_real_yfinance_cache_get_chain_is_capped():
+    """Run yfinance's own ``get``, ``post``, and ``cache_get`` code.
+
+    The fix reads the signature through ``functools.wraps`` on
+    yfinance's ``log_indent_decorator``. The fake below borrows the
+    real functions from ``YfData``, so a yfinance release that changes
+    that detail fails here. Only ``_make_request``, the step that would
+    open a socket, is replaced. The URL is unique to this test because
+    ``cache_get`` is an ``lru_cache``.
+    """
+    from yfinance.data import YfData
+
+    from app.data_collectors.call_budget import pop_budget, push_budget
+    from app.data_collectors.yahoo_finance import _install_http_cap
+
+    seen = []
+
+    class _Response:
+        url = "https://example.test/real-chain"
+
+    class _Session:
+        def get(self, url=None, **kwargs):
+            return _Response()
+
+        def post(self, url=None, **kwargs):
+            return _Response()
+
+    class _Data:
+        get = YfData.get
+        post = YfData.post
+        cache_get = YfData.cache_get
+
+        def __init__(self):
+            self._session = _Session()
+
+        def _make_request(self, url, request_method, **kwargs):
+            seen.append(kwargs["timeout"])
+            return _Response()
+
+        def _is_this_consent_url(self, url):
+            return False
+
+    class _Stock:
+        def __init__(self):
+            self._data = _Data()
+
+    stock = _Stock()
+    _install_http_cap(stock)
+    token = push_budget(time.monotonic() + 4, time.monotonic)
+    try:
+        stock._data.cache_get(
+            "https://example.test/real-chain", {"q": "1"}, 30
+        )
+        stock._data.post("https://example.test/real-chain", None, None, 30)
+    finally:
+        pop_budget(token)
+
+    assert len(seen) == 2
+    assert all(0 < timeout <= 4 for timeout in seen)
+
+
+def test_an_unreadable_signature_falls_back_to_the_keyword(monkeypatch):
+    """When ``inspect.signature`` fails, a keyword timeout is still capped."""
+    from app.data_collectors.call_budget import pop_budget, push_budget
+
+    seen = []
+
+    def original(url, **kwargs):
+        seen.append(kwargs["timeout"])
+
+    def unreadable(_obj):
+        raise ValueError("no signature")
+
+    monkeypatch.setattr(yahoo_finance.inspect, "signature", unreadable)
+    wrapped = yahoo_finance._with_capped_timeout(original)
+    token = push_budget(time.monotonic() + 4, time.monotonic)
+    try:
+        wrapped("https://example.test/quote", timeout=30)
+    finally:
+        pop_budget(token)
+
+    assert len(seen) == 1
+    assert 0 < seen[0] <= 4
+
+
 def test_a_replaced_session_is_capped_on_the_next_install():
     """The cap marker lives on the session, not only on ``YfData``.
 

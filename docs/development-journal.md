@@ -23,6 +23,19 @@
 - Test first: `test_a_positional_timeout_is_capped_and_not_sent_twice`
   failed on master with the production `TypeError`, and passes with
   the fix.
+- Review round 1 (code-reviewer, terminal only, on `f13bb2c`):
+  0 Critical, 0 Important, 2 Minor, both fixed. F1: the fake `get`
+  was a plain method, so nothing covered the yfinance detail the fix
+  relies on (`functools.wraps` in `log_indent_decorator`, which lets
+  `inspect.signature` see `timeout`). The new test
+  `test_the_real_yfinance_cache_get_chain_is_capped` borrows the real
+  `YfData.get`, `post`, and `cache_get` and replaces only
+  `_make_request`. It fails on the master collector with the
+  production `TypeError`. A second test covers the fallback when the
+  signature cannot be read. F2: the first docstring line now says the
+  timeout argument is capped, not only the keyword. The reviewer's
+  CI run in a clean checkout: 2423 passed, 2 failed (#122), so the
+  `run_demo` failure below is specific to this checkout.
 - Probe after the fix: all three instruments created, 251, 251, and
   253 daily bars stored. It also showed what still blocks real use:
   - `fetch-financial-metrics` is a placeholder, so each real stock

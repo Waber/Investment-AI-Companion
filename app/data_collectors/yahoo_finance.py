@@ -174,7 +174,7 @@ def _raise_if_deadline_hid_the_result(result: Any) -> Any:
 
 
 def _with_capped_timeout(original: Any) -> Any:
-    """Return ``original`` with its ``timeout`` keyword replaced.
+    """Return ``original`` with its ``timeout`` argument capped.
 
     yfinance 1.7 passes ``timeout=30`` into ``YfData.get`` and also
     straight into ``session.get`` from ``_get_cookie_and_crumb``. Both
