@@ -28,8 +28,13 @@
   two 0006 float tests (#122) and
   `test_run_demo::test_child_process_does_not_inherit_dotenv_database`
   (the ignored `demo/` folder in this checkout). Lint passed.
+- Pull request #144. Review round 1 (code-reviewer, terminal only):
+  0 Critical, 0 Important, 2 Minor, both fixed (a test on the real
+  yfinance `cache_get` chain, a docstring line).
+- Pull request #145 (separate): the AGENTS.md usage threshold
+  applies to the Grok bot only, Przemek's decision of 2026-11-26.
 - Active agents: none. Blockers: none. This is not approval.
-- Next action: Przemek reviews the pull request. Then the real
+- Next action: Przemek reviews #144 and #145. Then the real
   financial metrics from Yahoo.
 
 ## Fund-attribute AUM trio on PUT (#139): 2026-11-23, merged
