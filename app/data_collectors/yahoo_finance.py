@@ -5,6 +5,7 @@ This module provides functionality to fetch stock market data from
 Yahoo Finance using the yfinance library.
 """
 
+import inspect
 import logging
 import math
 import numbers
@@ -179,9 +180,30 @@ def _with_capped_timeout(original: Any) -> Any:
     straight into ``session.get`` from ``_get_cookie_and_crumb``. Both
     have to go through this wrapper. A missing timeout is capped too:
     the requests default of ``None`` would wait with no limit.
+
+    ``YfData.cache_get`` calls ``self.get(url, params, timeout)``, so
+    the timeout can also arrive as a positional argument. When the
+    original names a ``timeout`` parameter, ``inspect.signature`` binds
+    the call first. That finds the timeout wherever it was passed and
+    replaces it in place, so it is never sent twice. A method without
+    a named ``timeout`` (``requests.Session.get(url, **kwargs)``) only
+    takes it as a keyword, which the fallback handles.
     """
+    try:
+        signature: Optional[inspect.Signature] = inspect.signature(original)
+    except (TypeError, ValueError):
+        signature = None
+    if signature is not None and "timeout" not in signature.parameters:
+        signature = None
 
     def wrapped(*args: Any, **kwargs: Any) -> Any:
+        if signature is not None:
+            bound = signature.bind_partial(*args, **kwargs)
+            supplied = bound.arguments.get(
+                "timeout", YFINANCE_HTTP_TIMEOUT_SECONDS
+            )
+            bound.arguments["timeout"] = _capped_timeout(supplied)
+            return original(*bound.args, **bound.kwargs)
         supplied = kwargs.get("timeout", YFINANCE_HTTP_TIMEOUT_SECONDS)
         kwargs["timeout"] = _capped_timeout(supplied)
         return original(*args, **kwargs)
