@@ -1091,3 +1091,110 @@ async def test_delete_value_error_is_400_and_does_not_echo_the_text(
     assert _sentence("pl", "error.fund_delete") in response.text
     assert secret not in response.text
     assert _facts(client, company_id)["issuer"] == "Stay"
+
+
+@pytest.mark.asyncio
+async def test_a_blank_as_of_on_edit_is_422_and_keeps_the_stored_date(client):
+    # The repository refuses to clear as_of, so the form must say the
+    # field is required instead of a uniqueness error.
+    company_id = await _company(
+        client, ticker="ASOFED", instrument_type="ETF", name="As of edit"
+    )
+    created = await _post(client, _new(company_id), _form())
+    assert created.status_code == 303, created.text
+
+    response = await _post(client, _edit(company_id), _form(as_of=""))
+
+    assert response.status_code == 422, response.text
+    assert _sentence("pl", "error.required") in response.text
+    assert 'id="field-as_of-error"' in response.text
+    assert _sentence("pl", "error.constraint") not in response.text
+    assert _facts(client, company_id)["as_of"].isoformat() == "2026-09-30"
+
+
+def test_a_ter_out_of_range_or_with_underscores_is_not_a_fraction():
+    for text in (
+        "1e1000002",
+        "-1e1000002",
+        "100.00000000000000001",
+        "0_07",
+        "5_0",
+    ):
+        with pytest.raises(ValueError):
+            ter_percent_to_fraction(text)
+    assert str(ter_percent_to_fraction("-0")) == "0"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "ter,key",
+    [
+        ("1e1000002", "error.ter_percent"),
+        ("100.00000000000000001", "error.ter_percent"),
+        ("-1e1000002", "error.number"),
+        ("0_07", "error.number"),
+    ],
+)
+async def test_a_ter_the_hint_does_not_describe_is_422(client, ter, key):
+    company_id = await _company(
+        client,
+        ticker="TERX" + str(len(ter)),
+        instrument_type="ETF",
+        name="Odd TER",
+    )
+    response = await _post(client, _new(company_id), _form(ter=ter))
+    assert response.status_code == 422, response.text
+    assert _sentence("pl", key) in response.text
+    assert 'id="field-ter-error"' in response.text
+    assert _row(client, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_an_issuer_edit_keeps_an_aum_with_more_than_12_digits(client):
+    company_id = await _company(
+        client, ticker="BIGAUM", instrument_type="ETF", name="Big AUM"
+    )
+    created = await _post(
+        client, _new(company_id), _form(aum="1234567890123.45")
+    )
+    assert created.status_code == 303, created.text
+    edit = await client.get(_edit(company_id))
+    assert 'value="1234567890123.45"' in edit.text
+
+    changed = await _post(
+        client,
+        _edit(company_id),
+        _form(issuer="Issuer Two", aum="1234567890123.45"),
+    )
+
+    assert changed.status_code == 303, changed.text
+    assert _facts(client, company_id)["aum"] == 1234567890123.45
+
+
+@pytest.mark.asyncio
+async def test_a_comma_aum_is_stored_like_a_comma_ter(client):
+    company_id = await _company(
+        client, ticker="AUMCOMMA", instrument_type="ETF", name="Comma AUM"
+    )
+    created = await _post(client, _new(company_id), _form(aum="1234,5"))
+    assert created.status_code == 303, created.text
+    assert _facts(client, company_id)["aum"] == 1234.5
+    edit = await client.get(_edit(company_id))
+    assert 'value="1234.5"' in edit.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("aum", ["1,2,3", "1,234.5"])
+async def test_more_than_one_aum_separator_is_422(client, aum):
+    company_id = await _company(
+        client,
+        ticker="AUMSEP" + str(len(aum)),
+        instrument_type="ETF",
+        name="Bad AUM separator",
+    )
+    response = await _post(client, _new(company_id), _form(aum=aum))
+    assert response.status_code == 422, response.text
+    assert _sentence("pl", "error.number") in response.text
+    assert 'id="field-aum-error"' in response.text
+    assert aum in response.text
+    assert _row(client, company_id) is None

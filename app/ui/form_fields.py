@@ -124,6 +124,10 @@ _AUM_EXTRA = "aum currency and aum_as_of require aum"
 _FUND_EXISTS = "Fund attributes for this instrument already exist"
 
 
+class TerPercentOutOfRange(ValueError):
+    """A TER percent above 100. The form shows the percent sentence."""
+
+
 def field_label_key(field):
     """Catalog key for one form field's label.
 
@@ -185,6 +189,36 @@ def _input_number(value):
     if isinstance(value, int):
         return str(value)
     return _text(value)
+
+
+def _input_amount(value):
+    """A money amount for an input, as the shortest exact text.
+
+    ``_input_number`` keeps 12 significant digits. Saving the edit
+    form posts the field back, so a longer amount would be rewritten.
+    ``str`` on a float is the shortest text that reads back to the
+    same float.
+    """
+    if isinstance(value, float) and math.isfinite(value):
+        text = format(Decimal(str(value)), "f")
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
+    return _input_number(value)
+
+
+def _decimal_comma(text):
+    """Return ``text`` with its one decimal comma turned into a period.
+
+    ``1,5`` is ``1.5``. A second comma, or a comma mixed with a
+    period (``1,234.5``), raises ``ValueError``: the form cannot tell
+    a thousands separator from a decimal mark there.
+    """
+    if "," not in text:
+        return text
+    if text.count(",") != 1 or "." in text:
+        raise ValueError("more than one decimal separator")
+    return text.replace(",", ".", 1)
 
 
 def _input_datetime(value):
@@ -508,9 +542,12 @@ def ter_percent_to_fraction(value):
     ``None`` and a blank string are a missing fee. A value that is
     not a finite decimal raises ``ValueError``. One comma is the
     decimal mark, so ``1,5`` is 1.5 percent. A second comma, or a
-    comma mixed with a period (``1,5.2``), is not a number. This
-    function does not check the 0..100 bound. The write model
-    rejects a fraction above 1, and that is a percent above 100.
+    comma mixed with a period (``1,5.2``), is not a number.
+
+    A percent above 100 raises ``TerPercentOutOfRange``. The check
+    is on the ``Decimal``: the write model only sees the float, and
+    ``100.00000000000000001`` rounds to exactly 100 there. A negative
+    percent is left to the write model.
     """
     if value is None:
         return None
@@ -519,18 +556,26 @@ def ter_percent_to_fraction(value):
     text = value.strip()
     if text == "":
         return None
-    if "," in text:
-        # One comma is a decimal mark. Two separators are not.
-        if text.count(",") != 1 or "." in text:
-            raise ValueError("ter percent is not a number")
-        text = text.replace(",", ".", 1)
+    # Decimal() accepts PEP 515 underscores, so "0_07" would be 7%.
+    if "_" in text:
+        raise ValueError("ter percent is not a number")
     try:
-        number = Decimal(text)
+        number = Decimal(_decimal_comma(text))
     except InvalidOperation as exc:
         raise ValueError("ter percent is not a number") from exc
     if not number.is_finite():
         raise ValueError("ter percent is not a number")
-    return number / _HUNDRED
+    if number > _HUNDRED:
+        raise TerPercentOutOfRange("ter percent is above 100")
+    if number.is_zero():
+        # Decimal("-0") / 100 keeps the sign, and the edit field
+        # would then show "-0".
+        return Decimal(0)
+    try:
+        return number / _HUNDRED
+    except ArithmeticError as exc:
+        # A huge negative exponent such as -1e1000002 overflows.
+        raise ValueError("ter percent is not a number") from exc
 
 
 def ter_fraction_to_percent(value):
@@ -613,7 +658,7 @@ def fund_values(row):
         "domicile": _text(row.domicile),
         "replication_method": _text(row.replication_method),
         "distribution_policy": _text(row.distribution_policy),
-        "aum": _input_number(row.aum),
+        "aum": _input_amount(row.aum),
         "aum_currency": _text(row.aum_currency),
         "aum_as_of": _input_date(row.aum_as_of),
         "as_of": _input_date(row.as_of),
@@ -642,13 +687,15 @@ def fund_payload(values, *, update):
     """Map posted strings onto a fund create or update model.
 
     TER is converted from a percent to a fraction before the model
-    sees it. A percent that is not a decimal is left as text so the
-    model reports a number error. Text fields are not stripped here:
+    sees it. A percent the form cannot read, or one above 100, is
+    sent as None and ``validate_fund`` reports it. Passing the text
+    on would not work: Pydantic reads "0_07" as the float 7.0. AUM
+    takes one decimal comma, like TER. Text fields are not stripped here:
     ``clean_text`` on the model rejects a newline, and stripping
     first would hide one that sits at the end.
 
-    A blank ``as_of`` is omitted on create, so the model says the
-    field is required. On update a blank clears the stored date.
+    A blank ``as_of`` is left out, on create and on update.
+    ``validate_fund`` reports it as required.
     ``source`` and ``is_synthetic`` are not copied, even when the
     posted dict has them.
     """
@@ -662,15 +709,21 @@ def fund_payload(values, *, update):
         try:
             payload["ter"] = ter_percent_to_fraction(ter_raw)
         except ValueError:
-            payload["ter"] = ter_raw.strip()
+            payload["ter"] = None
     aum_raw = _raw_field(values, "aum").strip()
-    payload["aum"] = None if aum_raw == "" else aum_raw
+    if aum_raw == "":
+        payload["aum"] = None
+    else:
+        try:
+            payload["aum"] = _decimal_comma(aum_raw)
+        except ValueError:
+            payload["aum"] = aum_raw
     currency = _raw_field(values, "aum_currency").strip()
     payload["aum_currency"] = None if currency == "" else currency
     for field in ("aum_as_of", "as_of"):
         raw = _raw_field(values, field).strip()
         if raw == "":
-            if field == "as_of" and not update:
+            if field == "as_of":
                 continue
             payload[field] = None
         else:
@@ -746,12 +799,38 @@ def fund_validation_errors(exc):
             continue
         if field not in found:
             found[field] = key
+    return _in_form_order(found), form_key
+
+
+def _in_form_order(errors):
+    """``errors`` with the form's fields first, in form order."""
+    rest = dict(errors)
     ordered = {}
     for name in FUND_FIELDS:
-        if name in found:
-            ordered[name] = found.pop(name)
-    ordered.update(found)
-    return ordered, form_key
+        if name in rest:
+            ordered[name] = rest.pop(name)
+    ordered.update(rest)
+    return ordered
+
+
+def _fund_form_errors(values, payload):
+    """Field errors the write model cannot see in ``payload``.
+
+    ``FundAttributesUpdate`` treats a missing ``as_of`` as unchanged,
+    but the repository refuses to clear it, so a blank is reported
+    here on update too. A TER the form could not convert was sent to
+    the model as None, see ``fund_payload``.
+    """
+    errors = {}
+    if "as_of" not in payload:
+        errors["as_of"] = "error.required"
+    try:
+        ter_percent_to_fraction(_raw_field(values, "ter"))
+    except TerPercentOutOfRange:
+        errors["ter"] = "error.ter_percent"
+    except ValueError:
+        errors["ter"] = "error.number"
+    return errors
 
 
 def validate_fund(values, *, update):
@@ -763,12 +842,17 @@ def validate_fund(values, *, update):
     a blank optional fact clears the stored value.
     """
     model_type = FundAttributesUpdate if update else FundAttributesCreate
+    payload = fund_payload(values, update=update)
     try:
-        model = model_type.model_validate(fund_payload(values, update=update))
+        model = model_type.model_validate(payload)
+        errors, form_key = {}, None
     except ValidationError as exc:
+        model = None
         errors, form_key = fund_validation_errors(exc)
-        return None, errors, form_key
-    return model, {}, None
+    extra = _fund_form_errors(values, payload)
+    if extra:
+        return None, _in_form_order({**errors, **extra}), form_key
+    return model, errors, form_key
 
 
 def fund_repository_error(exc):

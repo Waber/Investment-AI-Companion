@@ -1252,23 +1252,7 @@ def delete_fund_attributes_ui(
         deleted = FundAttributesRepository(db).delete(company.id)
     except CompanyNotFoundError:
         return not_found(request)
-    except FundAttributesDeleteError:
-        db.rollback()
-        return _fund_delete_page(
-            request,
-            company,
-            status_code=400,
-            warning_key="error.fund_delete",
-        )
-    except IntegrityError:
-        db.rollback()
-        return _fund_delete_page(
-            request,
-            company,
-            status_code=400,
-            warning_key="error.fund_delete",
-        )
-    except ValueError:
+    except (FundAttributesDeleteError, IntegrityError, ValueError):
         db.rollback()
         return _fund_delete_page(
             request,
