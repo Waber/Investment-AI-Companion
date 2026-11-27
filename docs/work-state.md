@@ -1,5 +1,34 @@
 # Current Work State
 
+## Real stock metrics from Yahoo, TTM snapshot: 2026-11-27, in review
+
+- Branch `feat/yahoo-ttm-metrics`, from `origin/master` `8d8c4ca`.
+  Refs #54, Refs #35. Design
+  `docs/superpowers/specs/2026-11-27-yahoo-ttm-metrics-design.md`,
+  plan `docs/superpowers/plans/2026-11-27-yahoo-ttm-metrics.md`.
+  Approach A, chosen by Przemek; built subagent-driven, his choice.
+- Done: `POST /api/v1/data-collection/fetch-financial-metrics` is no
+  longer a placeholder. It stores Yahoo `info` ratios as one row with
+  `period_type="ttm"`, dated by `mostRecentQuarter`, source
+  `yahoo_finance` (or `fake`). A refresh in the same quarter replaces
+  the values; a row from another source (for example `manual`, any
+  case of `ttm`) gives 409 and stays. 404 for an unknown company or
+  no data, 400 for a fund, 502 for a provider error.
+- Live probe (2026-11-27, needs #144's fix, so run on a temporary
+  copy with it): AAPL, PKN.WA, CDR.WA all scored `4 of 4`.
+- Tests: the full suite with `-W error::DeprecationWarning` gave
+  2452 passed and 3 failed, the known local ones (two 0006 float
+  tests, #122, and the `run_demo` `.env` test).
+- Not done, follow-ups: the `FinancialMetrics` response has no
+  `source` field (the score shows each figure's source); a second
+  concurrent fetch of a new quarter answers 502; a future
+  `mostRecentQuarter` is accepted; history from the statements
+  (approach B); ETF typing and fund attributes from Yahoo.
+- Active agents: none. Blockers: needs #144 merged for real use.
+  This is not approval.
+- Next action: Przemek reviews this pull request, #144, and
+  #145. Then ETF typing and fund attributes from Yahoo.
+
 ## Real Yahoo calls failed on a positional timeout: 2026-11-26, in review
 
 - Branch `fix/yahoo-positional-timeout`, from `origin/master`
@@ -486,7 +515,8 @@
   false. `companies.source` and `financial_metrics.source` are
   `String(64)`, NOT NULL, server default `manual`. No CHECK.
   Allowed values `manual`, `demo`, and `fixture` are checked by
-  `require_record_source` next to the models. Backfill marks a
+  `require_record_source` next to the models (the TTM metrics branch
+  added `yahoo_finance` and `fake` on 2026-11-27). Backfill marks a
   description that starts with `[IAC-DEMO-` as synthetic `demo`.
   Other companies stay false and `manual`. A metric is `demo`
   only when its company is synthetic. Upgrade and downgrade were
