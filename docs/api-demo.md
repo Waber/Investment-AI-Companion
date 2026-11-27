@@ -400,9 +400,26 @@ the offline synthetic collector instead (see [Demo data](demo-data.md)).
 It is **UNVERIFIED and was not run** for this demo; do not include it in smoke
 tests. It is not covered by the synthetic-record cleanup above.
 
-`POST /api/v1/data-collection/fetch-financial-metrics` accepts the same body but
-is only a placeholder: HTTP 200 reports that it is not implemented, not that real
-financial data was fetched. Neither collection route uses a trailing slash.
+`POST /api/v1/data-collection/fetch-financial-metrics` takes the same body
+(`{"ticker":"AAPL"}`) and stores the latest Yahoo ratios of an existing stock as
+one TTM row. It also calls Yahoo (with `DATA_COLLECTOR=yahoo`), so it is
+**UNVERIFIED and was not run** for this demo. Neither collection route uses a
+trailing slash.
+
+- HTTP 200: the stored row as a financial-metrics object. `period_type` is
+  `ttm`, `period_end` is the provider's most recent quarter at 00:00 UTC, and
+  `net_margin` holds Yahoo's profit margin. The row is stored with source
+  `yahoo_finance` (or `fake`); the response object does not show the source. Fetching again in the same quarter replaces that row's values; a new
+  quarter adds a second row.
+- HTTP 404: the company is not in the database ("Fetch the company first."), or
+  the provider returned no data, no quarter date, or none of the seven score
+  figures. Nothing is stored.
+- HTTP 400: the instrument is not a `STOCK` (detail: `Financial metrics are
+  collected for stocks only`).
+- HTTP 409: a row from another source (for example `manual`) already exists for
+  that company, `ttm` and `period_end`. It is left unchanged.
+- HTTP 502: `{"detail":"Data provider error"}` for a provider failure or any
+  unexpected error. The provider's own text is never returned.
 
 ## Stop And Restart The Isolated Runtime
 

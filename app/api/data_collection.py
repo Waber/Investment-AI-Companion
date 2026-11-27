@@ -19,6 +19,13 @@ from pydantic import (
 )
 from sqlalchemy.orm import Session
 
+from app.api.financial_metrics import db_to_metrics_model
+from app.collected_metrics import (
+    SCORE_FIGURES,
+    TTM_PERIOD,
+    columns_from_key_metrics,
+    ttm_period_end,
+)
 from app.core.config import settings
 from app.core.database import get_db
 from app.data_collectors.base import InstrumentLookup, ProviderError
@@ -31,7 +38,12 @@ from app.models.company import (
     TICKER_PATTERN,
     normalize_ticker,
 )
+from app.models.financial_metrics import FinancialMetrics
 from app.repositories.company_repository import CompanyRepository
+from app.repositories.financial_metrics_repository import (
+    CollectedRowConflict,
+    FinancialMetricsRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -329,25 +341,83 @@ def fetch_company_data(
         ) from None
 
 
-@router.post("/fetch-financial-metrics")
+@router.post("/fetch-financial-metrics", response_model=FinancialMetrics)
 def fetch_financial_metrics(
-    request: FetchCompanyRequest, db: Session = Depends(get_db)
+    request: FetchCompanyRequest,
+    db: Session = Depends(get_db),
+    collector: InstrumentLookup = Depends(get_collector),
 ):
     """
-    Fetch financial metrics from Yahoo Finance for a company.
+    Store the latest Yahoo ratios of a stock as one TTM row.
 
-    Note: This endpoint is a placeholder for future implementation.
-    Financial metrics integration will require careful mapping of Yahoo Finance
-    data to our database schema.
+    The company must already exist (see ``fetch-company``) and must be
+    a ``STOCK``. The row has ``period_type="ttm"`` and is dated by the
+    provider's most recent quarter. Fetching again in the same quarter
+    replaces the row's values; a new quarter adds a second row.
 
-    Args:
-        request: FetchCompanyRequest with ticker symbol
-        db: Database session
-
-    Returns:
-        Dictionary with financial metrics
+    Errors: 404 (company missing, or the provider has no usable data),
+    400 (not a stock), 409 (a row from another source already holds
+    this period), 502 (provider failure; fixed text, no provider text).
     """
-    return {
-        "message": "This endpoint is not yet implemented",
-        "ticker": request.ticker,
-    }
+    ticker = request.ticker
+    try:
+        company = CompanyRepository(db).get_by_ticker(ticker)
+        if company is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"Company with ticker {ticker} not found. "
+                    "Fetch the company first."
+                ),
+            )
+        if company.instrument_type != "STOCK":
+            raise HTTPException(
+                status_code=400,
+                detail="Financial metrics are collected for stocks only",
+            )
+
+        result = collector.fetch_key_metrics(ticker)
+        no_data = HTTPException(
+            status_code=404,
+            detail=(
+                f"No financial metrics for ticker {ticker} "
+                "at the data provider"
+            ),
+        )
+        if result is None or result.provenance.as_of is None:
+            raise no_data
+        columns = columns_from_key_metrics(result.value)
+        if all(columns[name] is None for name in SCORE_FIGURES):
+            raise no_data
+
+        try:
+            row, _created = FinancialMetricsRepository(db).upsert_collected(
+                company.id,
+                ttm_period_end(result.provenance.as_of),
+                TTM_PERIOD,
+                columns,
+                record_source=result.provenance.source,
+            )
+        except CollectedRowConflict as exc:
+            # The message names the other source (for example
+            # "manual"), not provider text, so it is safe to return.
+            raise HTTPException(status_code=409, detail=str(exc))
+        return db_to_metrics_model(row)
+
+    except HTTPException:
+        raise
+    except ProviderError:
+        logger.error("Data provider error for ticker %r", ticker)
+        raise HTTPException(status_code=502, detail="Data provider error")
+    except Exception as exc:
+        # Includes the ValueError for a source outside RECORD_SOURCES.
+        # Only the class name is logged: the text may hold provider
+        # data.
+        logger.error(
+            "Unexpected %s fetching financial metrics for ticker %r",
+            type(exc).__name__,
+            ticker,
+        )
+        raise HTTPException(
+            status_code=502, detail="Data provider error"
+        ) from None
