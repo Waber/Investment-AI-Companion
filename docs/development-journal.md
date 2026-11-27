@@ -1,5 +1,29 @@
 # Development Journal
 
+## 2026-11-27 - Team agents index in AGENTS.md (Refs #143)
+
+- Scope: the `Team agents` section in `AGENTS.md`. It indexes
+  the Claude Code subagent definitions for issue #143 and
+  states the review order. The definitions themselves are pull
+  requests #146 (project-manager), #147 (frontend-developer),
+  #148 (developer), #149 (qa-engineer), and #150
+  (security-engineer). The Researcher is skipped for now and
+  is not defined. The code-reviewer file stays at
+  `.claude/agents/code-reviewer.md`; the folder move is a
+  separate pull request.
+- Decision: the Code Reviewer reviews first, then the QA
+  Engineer. The Security Engineer reviews in parallel with QA
+  when the change is security-relevant (write paths, APIs, DB
+  migrations, auth, escaping, user input, forms, or rendering
+  of fetched or AI-generated content). A merge into master
+  needs Przemek's explicit OK. Reviewers and agents do not
+  merge.
+- Verification: documentation only. Pytest was not run. No
+  live market-data calls. GitHub Actions runs on the pull
+  request head.
+- AI model: Grok 4.7 (Cursor).
+- Time: about 16:58 to 17:10 CET on 2026-11-27.
+
 ## 2026-11-27 - Rebase of #131 and its review round 1 (Refs #34, Refs #28)
 
 - Scope: at Przemek's request, rebase pull request #131 (the `/ui`

@@ -1,5 +1,29 @@
 # Current Work State
 
+## Team agents index (#143): 2026-11-27, in review
+
+- Branch `cursor/team-agents-index-2f38`. Documentation only.
+  Refs #143. The issue stays open. The agent does not merge.
+- Completed: the `Team agents` section in `AGENTS.md`. It
+  indexes the definitions in #146 (project-manager), #147
+  (frontend-developer), #148 (developer), #149 (qa-engineer),
+  and #150 (security-engineer). The code-reviewer definition
+  is already on master at `.claude/agents/code-reviewer.md`;
+  the folder move is still pending in its own pull request.
+  The Researcher is skipped for now and is not defined. The
+  review order is Code Reviewer first, then QA Engineer, with
+  the Security Engineer in parallel with QA on a
+  security-relevant change. A merge into master needs
+  Przemek's explicit OK.
+- Not in this branch: the agent files (#146 to #150) and the
+  code-reviewer folder move.
+- Tests: documentation only. Pytest was not run. No live
+  market-data calls. GitHub Actions runs on this head.
+- Active agents: none on this branch. Blockers: none. This
+  note is not approval.
+- Next action: Przemek's merge decision. Do not merge until
+  he approves.
+
 ## Fund attribute forms (#28, #34): 2026-11-27, in review
 
 - Branch `cursor/ui-fund-attributes-forms-98e5`, pull request #131.

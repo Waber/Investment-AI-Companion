@@ -74,6 +74,45 @@ The `code-reviewer` agent (`.claude/agents/code-reviewer.md`) is the Code Review
 - Other agents (Cursor, Codex, Grok) can follow the same files: `REVIEW.md`, `.agents/review/instructions.toml`, and the output format in `.claude/agents/code-reviewer.md`.
 - A new `.claude/agents/` directory is picked up after Claude Code restarts. Changes to an existing file apply to the next delegation.
 
+## Team agents
+
+Issue #143 adds one Claude Code subagent per team role. Each
+definition lives at `.claude/agents/<name>/<name>.md`. This
+section is the index. The per-agent files point here for the
+review order.
+
+| Agent | Path | Role | Pull request |
+| --- | --- | --- | --- |
+| project-manager | `.claude/agents/project-manager/project-manager.md` | Coordinates the backlog and status. Does not write or review code. | #146 |
+| frontend-developer | `.claude/agents/frontend-developer/frontend-developer.md` | Implements the server-rendered `/ui` pages. | #147 |
+| developer | `.claude/agents/developer/developer.md` | Owns the backend: models, repositories, APIs, Alembic, and tests. | #148 |
+| qa-engineer | `.claude/agents/qa-engineer/qa-engineer.md` | Verifies a change with tests, including the PostgreSQL suite. | #149 |
+| security-engineer | `.claude/agents/security-engineer/security-engineer.md` | Read-only security review of one change or plan. | #150 |
+| code-reviewer | `.claude/agents/code-reviewer/code-reviewer.md` | Read-only review of a pull request against `REVIEW.md`. | Existing definition. Folder move pending. |
+| researcher | Not defined. | Skipped for now. Not defined. | Skipped for now. |
+
+The code-reviewer definition is already on master, at
+`.claude/agents/code-reviewer.md`. The how-to for that agent
+stays in the section above. Moving the file to
+`.claude/agents/code-reviewer/code-reviewer.md` is pending in
+its own pull request. The Researcher is skipped for now and
+has no definition.
+
+Review order, for every pull request:
+
+1. The Code Reviewer reviews first.
+2. The QA Engineer reviews next.
+3. The Security Engineer reviews in parallel with the QA
+   Engineer when the change is security-relevant.
+
+A change is security-relevant when it touches write paths,
+APIs, DB migrations, auth, escaping, user input, forms, or the
+rendering of fetched or AI-generated content.
+
+A merge into `master` needs Przemek's explicit OK. An
+approving review is not that OK. Reviewers and other agents
+do not merge.
+
 ## Investment Domain Rules
 
 - Show source, data freshness, assumptions, risks, and uncertainty for market data, scores, AI analysis, and signals.
