@@ -13,12 +13,14 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 import yfinance as yf
 
 from app.data_collectors.base import (
+    FUND_ATTRIBUTE_FIELDS,
     PriceBar,
     Provenance,
     ProviderError,
@@ -32,6 +34,7 @@ from app.data_collectors.call_budget import (
     remaining,
 )
 from app.models.company import normalize_ticker
+from app.models.fund_attributes import TER_MAX
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +276,39 @@ def _deadline_scope():
 # management, not a balance-sheet total.
 FUND_QUOTE_TYPES = ("ETF", "MUTUALFUND")
 
+# Yahoo labels an ETC "EQUITY", like a share, and no other field tells
+# them apart. An ETC therefore arrives as STOCK and is set by hand.
+_INSTRUMENT_TYPES = {"EQUITY": "STOCK", "ETF": "ETF"}
+
+
+def _instrument_type(info: Dict[str, Any]) -> Optional[str]:
+    quote_type = info.get("quoteType")
+    if not isinstance(quote_type, str):
+        return None
+    return _INSTRUMENT_TYPES.get(quote_type)
+
+
+def _bounded(value: Any, upper: float) -> Optional[Decimal]:
+    """A finite real number from 0 to ``upper``, else None."""
+    if not _is_real_number(value):
+        return None
+    number = Decimal(str(value))
+    if not number.is_finite() or number < 0 or number > Decimal(upper):
+        return None
+    return number
+
+
+def _ter_fraction(info: Dict[str, Any]) -> Optional[float]:
+    """``netExpenseRatio`` is a percent (0.0945 is 0.0945%).
+
+    The app stores a fraction, so the value is divided by 100 in
+    ``Decimal``. Plain float division would store 0.0009450000000000001.
+    """
+    percent = _bounded(info.get("netExpenseRatio"), TER_MAX * 100)
+    if percent is None:
+        return None
+    return float(percent / 100)
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -458,6 +494,7 @@ class YahooFinanceCollector:
                     "employees": info.get("fullTimeEmployees"),
                     "founded": info.get("founded"),
                     "logo_url": info.get("logo_url"),
+                    "instrument_type": _instrument_type(info),
                 }
                 logger.info("Successfully fetched company info for %r", symbol)
 
@@ -732,6 +769,55 @@ class YahooFinanceCollector:
             self._provenance(
                 as_of=_quarter_date(info.get("mostRecentQuarter"))
             ),
+        )
+
+    def fetch_fund_attributes(
+        self, ticker: str
+    ) -> Optional[Sourced[Dict[str, Any]]]:
+        """ETF facts from ``info``, or None when Yahoo does not say ETF.
+
+        Yahoo gives TER (``netExpenseRatio``) and the issuer
+        (``fundFamily``). It has no field for the underlying, domicile,
+        replication, or distribution policy, so those are None.
+
+        AUM stays None. Yahoo's ``totalAssets`` has no date, and the
+        score treats an undated AUM as no data (Przemek's decision on
+        the #160 review, 2026-11-27). Yahoo does not date the other
+        values either, so ``provenance.as_of`` is None.
+
+        Raises:
+            ProviderError: when yfinance fails.
+        """
+        symbol = _accepted_symbol(ticker)
+        with _deadline_scope():
+            return self._load_fund_attributes(symbol)
+
+    def _load_fund_attributes(self, symbol: str):
+        try:
+            logger.info("Fetching fund attributes for %r", symbol)
+            info = _open_ticker(symbol).info
+            is_etf = not _has_no_data(info) and info.get("quoteType") == "ETF"
+            if is_etf:
+                issuer = info.get("fundFamily")
+                attributes = {
+                    "fund_type": "ETF",
+                    "ter": _ter_fraction(info),
+                    "issuer": issuer if isinstance(issuer, str) else None,
+                }
+        except Exception as e:
+            logger.error(
+                "Error fetching fund attributes for %r: %s",
+                symbol,
+                type(e).__name__,
+            )
+            raise ProviderError("Yahoo Finance fund attributes failed") from e
+        if not is_etf:
+            logger.warning("No fund attributes found for %r", symbol)
+            _raise_if_deadline_hid_the_result(None)
+            return None
+        return Sourced(
+            {field: attributes.get(field) for field in FUND_ATTRIBUTE_FIELDS},
+            self._provenance(),
         )
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:

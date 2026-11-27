@@ -1,5 +1,87 @@
 # Development Journal
 
+## 2026-11-27 - Yahoo instrument type and fund attributes (Refs #153)
+
+- Scope: an ETF fetched from Yahoo is stored as `ETF` with its fund
+  attributes, so it gets the fund score. Issue #153. Design
+  `docs/superpowers/specs/2026-11-27-yahoo-fund-type-design.md`.
+- Probe first (manual, real Yahoo, not a test): `quoteType` is `ETF`
+  for VWCE.DE, IWDA.AS, EUNL.DE, SPY, and ETFBW20TR.WA, and `EQUITY`
+  for the ETCs 4GLD.DE, PHAU.L, and SGLN.L, with no field that tells
+  an ETC from a share. `netExpenseRatio` is a percent. Yahoo has no
+  distribution policy, domicile, replication, or underlying.
+- Decisions (Claude's calls, in the design): an ETC is set by hand and
+  a refresh never changes a stored `ETF` or `ETC`; a refresh may turn
+  a stored `STOCK` into a fund type (superseded in review round 1: a
+  refresh never changes the type); AUM is stored only with
+  `financialCurrency` (superseded in review round 1: Yahoo gives no
+  AUM); the retrieval date is `as_of`; provider
+  facts pass through `FundAttributesCreate` like a person's input; a
+  fund-fact failure after the company is saved answers 200 with
+  `fund_attributes: "unavailable"` (review round 1 added
+  `provider_error` for a provider failure).
+- Not done: refusing a fund in `fetch-financial-metrics` from the
+  provider's own `quoteType` (a new instrument takes its type from
+  Yahoo; an instrument stored as `STOCK` before is fixed on the form);
+  other quote types still become `STOCK`.
+- Verification:
+  - Each behavior had a failing test first (Yahoo mapping, fake type,
+    repository upsert, API).
+  - Five mutants (ETC demoted on refresh, manual row overwritten, TER
+    left as a percent, AUM kept without a currency, empty snapshot
+    stored) were each killed, then reverted.
+  - Full suite with `-W error::DeprecationWarning` and coverage: see
+    the work state for the counts. black, isort, flake8 clean on the
+    changed files.
+  - Live: `fetch-company` with `DATA_COLLECTOR=yahoo` on a temporary
+    SQLite database for VWCE.DE, SPY, IWDA.AS, ETFBW20TR.WA, 4GLD.DE,
+    and AAPL (results in the work state). SPY's fund score: 95.28.
+- Review of `5f54049`, in the order of the AGENTS.md "Team agents"
+  section: QA and Security in parallel (general agents reading the new
+  role files, since Claude Code loads new agents only after a restart).
+  Security: approve with nits; a `GBp` AUM would show the fund 100
+  times too small (fixed), the docstring (fixed), the owner-chosen
+  `STOCK` (accepted), the non-atomic check (#161). QA: request
+  changes, test gaps only; all seven gaps got tests, and every
+  surviving mutant QA named, plus a missing-rollback mutant, is now
+  killed. After the fixes: 2608 passed and the 3 known local failures.
+- Code review round 1 on `676c354` (code-reviewer, terminal only):
+  2 Critical, 3 Minor. F1: the instrument page showed "no data" as the
+  source of a `yahoo_finance` row, because the view treated every
+  non-synthetic row as manual; it now shows the stored source and
+  hides only `manual`. F2: the AUM was dated by the fetch day, against
+  the rule that an undated AUM is no data; Przemek chose not to store
+  Yahoo's AUM at all, so `provenance.as_of` is None too and the `GBp`
+  check is gone. F3: `provider_error` is its own status, and a row
+  from another source answers `kept` without a provider call. F4: the
+  two Yahoo calls per ETF are documented. F5: the PR body now has the
+  command, current counts, and an undo note. Each fix had a failing
+  test; four mutants of the new rules were killed (one survivor got a
+  test for the fake collector refreshing its own row).
+- The reviewer asked whether #54 should change, since it said
+  `quoteType` never sets the type. The requirements doc (US4.1,
+  section 7) and #26 said the same, and the first cut broke that rule:
+  it typed on create and turned a stored `STOCK` into `ETF` on refresh.
+  Przemek decided: the provider type is the starting value on create
+  only, and a refresh never changes the type. The refresh change is
+  removed, the requirements doc updated, and #26 and #54 have a
+  comment.
+- Live re-check: SPY scored 90.55 from cost alone, page source
+  `yahoo_finance`. Full suite: 2607 passed, the 3 known local failures.
+- QA re-check of `13d3c32`: approve; two tests added in `aacec20`
+  (a demo or fixture row is kept without a provider call; another
+  collector's row is kept through the conflict branch).
+- Code review round 2 on `aacec20`: 1 Critical, 2 Minor. F6: the early
+  read added for F3 left the row in the session, so `upsert_collected`
+  saw the old `source` and a manual save made during the Yahoo call
+  was overwritten under the `manual` label. `upsert_collected` now
+  reloads the row with `populate_existing()`; a test that saves a
+  manual TER from a second session inside the provider call failed
+  first. F7: these notes and the work state. F8: the `kept` docstring.
+  Full suite after the fix: 2611 passed, the 3 known local failures.
+- AI model: Claude Opus 5.5; QA, Security, and code review on Opus 5.5.
+- Time: about 17:05 to 18:50 CET on 2026-11-27.
+
 ## 2026-11-27 - Team agent subagents: review and index (Refs #143)
 
 - Scope: Przemek asked to check that pull requests #146 to #150 make

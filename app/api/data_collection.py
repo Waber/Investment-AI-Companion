@@ -7,7 +7,7 @@ financial data providers like Yahoo Finance.
 
 import logging
 import threading
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import (
@@ -28,6 +28,7 @@ from app.collected_metrics import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.data_collectors.base import FundAttributes as FundFactsSource
 from app.data_collectors.base import InstrumentLookup, ProviderError
 from app.data_collectors.fake import FakeCollector
 from app.data_collectors.guard import GuardPolicy, guard_collector
@@ -38,11 +39,16 @@ from app.models.company import (
     TICKER_PATTERN,
     normalize_ticker,
 )
+from app.models.database_models import RECORD_SOURCE_FAKE, RECORD_SOURCE_YAHOO
 from app.models.financial_metrics import FinancialMetrics
+from app.models.fund_attributes import FundAttributesCreate
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.financial_metrics_repository import (
     CollectedRowConflict,
     FinancialMetricsRepository,
+)
+from app.repositories.fund_attributes_repository import (
+    FundAttributesRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,12 +178,111 @@ def _provider_description(company_info: dict) -> object:
     return description[:DESCRIPTION_MAX_LENGTH]
 
 
+INSTRUMENT_TYPES = ("STOCK", "ETF", "ETC")
+FUND_TYPES = ("ETF", "ETC")
+FundFactsStatus = Literal[
+    "created", "updated", "kept", "unavailable", "provider_error"
+]
+# Sources a collector writes. A row from any other source belongs to a
+# person or the seeder and is never refreshed.
+_COLLECTOR_SOURCES = frozenset({RECORD_SOURCE_YAHOO, RECORD_SOURCE_FAKE})
+
+
 class FetchCompanyResponse(BaseModel):
-    """Response model for company data fetch."""
+    """Response model for company data fetch.
+
+    ``fund_attributes`` is null for a stock. For an ETF or an ETC it
+    says what happened to the collector's fund-attribute row:
+    ``created``, ``updated``, ``kept`` (another source's row stays; for
+    a manual, demo, or fixture row the provider is not asked),
+    ``unavailable``
+    (the provider has no usable facts; enter them by hand), or
+    ``provider_error`` (the provider failed; try again later). The
+    company is saved in every case.
+    """
 
     success: bool
     message: str
     company_id: Optional[int] = None
+    instrument_type: Optional[str] = None
+    fund_attributes: Optional[FundFactsStatus] = None
+
+
+def _type_on_create(company_info: dict) -> str:
+    """The provider's type, or STOCK when it names none the app has.
+
+    The type is app-owned (docs/product-requirements.md). The provider
+    only gives the starting value of a new instrument. A refresh never
+    changes it, because Yahoo labels an ETC as EQUITY.
+    """
+    provider_type = company_info.get("instrument_type")
+    return provider_type if provider_type in INSTRUMENT_TYPES else "STOCK"
+
+
+def _collect_fund_facts(db, collector, company, ticker) -> FundFactsStatus:
+    """Store the provider's fund facts for a saved ETF or ETC.
+
+    The company is already committed, so nothing here fails the
+    request. Provider facts pass through ``FundAttributesCreate``, the
+    same checks a person's input gets. Only the error class is logged:
+    a validation message would repeat provider text.
+    """
+    repository = FundAttributesRepository(db)
+    stored = repository.get_by_company(company.id)
+    if stored is not None and stored.source not in _COLLECTOR_SOURCES:
+        return "kept"
+    if not isinstance(collector, FundFactsSource):
+        return "unavailable"
+    try:
+        result = collector.fetch_fund_attributes(ticker)
+        if result is None:
+            return "unavailable"
+        facts = {
+            name: value
+            for name, value in result.value.items()
+            if name != "fund_type"
+        }
+        if all(value is None for value in facts.values()):
+            return "unavailable"
+        provenance = result.provenance
+        attributes = FundAttributesCreate(
+            **facts,
+            as_of=provenance.as_of or provenance.retrieved_at.date(),
+        )
+        _row, created = repository.upsert_collected(
+            company.id,
+            attributes,
+            record_source=provenance.source,
+            is_synthetic=provenance.synthetic,
+        )
+    except CollectedRowConflict:
+        return "kept"
+    except ProviderError:
+        # The collector already logged the cause.
+        logger.error("Data provider error for ticker %r", ticker)
+        return "provider_error"
+    except Exception as exc:
+        db.rollback()
+        logger.error(
+            "Fund attributes for ticker %r not stored: %s",
+            ticker,
+            type(exc).__name__,
+        )
+        return "unavailable"
+    return "created" if created else "updated"
+
+
+def _saved(db, collector, company, ticker, message) -> FetchCompanyResponse:
+    fund_facts = None
+    if company.instrument_type in FUND_TYPES:
+        fund_facts = _collect_fund_facts(db, collector, company, ticker)
+    return FetchCompanyResponse(
+        success=True,
+        message=message,
+        company_id=company.id,
+        instrument_type=company.instrument_type,
+        fund_attributes=fund_facts,
+    )
 
 
 @router.post("/fetch-company", response_model=FetchCompanyResponse)
@@ -270,10 +375,12 @@ def fetch_company_data(
             logger.info(
                 "Successfully updated company: %r", updated_company.name
             )
-            return FetchCompanyResponse(
-                success=True,
-                message=f"Company {updated_company.name} updated successfully",
-                company_id=updated_company.id,
+            return _saved(
+                db,
+                collector,
+                updated_company,
+                ticker,
+                f"Company {updated_company.name} updated successfully",
             )
 
         else:
@@ -291,16 +398,19 @@ def fetch_company_data(
                 country=company_info.get("country"),
                 exchange=company_info.get("exchange"),
                 currency=company_info.get("currency", "USD"),
+                instrument_type=_type_on_create(company_info),
             )
 
             # Create company
             new_company = company_repo.create(company_create)
 
             logger.info("Successfully created company: %r", new_company.name)
-            return FetchCompanyResponse(
-                success=True,
-                message=f"Company {new_company.name} created successfully",
-                company_id=new_company.id,
+            return _saved(
+                db,
+                collector,
+                new_company,
+                ticker,
+                f"Company {new_company.name} created successfully",
             )
 
     except HTTPException:

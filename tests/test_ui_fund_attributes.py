@@ -80,3 +80,39 @@ async def test_etf_detail_shows_a_missing_ter_and_the_one_year_return(client):
     source = html.split('data-field="fund-source">', 1)[1].split("</dd>", 1)[0]
     assert "manual" not in source
     assert "brak danych" in source
+
+
+@pytest.mark.parametrize(
+    ("source", "synthetic", "shown"),
+    [("yahoo_finance", False, "yahoo_finance"), ("fake", True, "demo")],
+)
+@pytest.mark.asyncio
+async def test_a_collector_fund_row_shows_its_source(
+    client, source, synthetic, shown
+):
+    from app.models.fund_attributes import FundAttributesCreate
+    from app.repositories.fund_attributes_repository import (
+        FundAttributesRepository,
+    )
+
+    created = await client.post(
+        "/api/v1/companies/",
+        json={"name": "SPDR", "ticker": "SPY", "instrument_type": "ETF"},
+    )
+    company_id = created.json()["id"]
+    session = client.app.state.testing_session_local()
+    try:
+        FundAttributesRepository(session).upsert_collected(
+            company_id,
+            FundAttributesCreate(ter=0.000945, as_of="2026-11-27"),
+            record_source=source,
+            is_synthetic=synthetic,
+        )
+    finally:
+        session.close()
+
+    html = (await client.get(f"/ui/instruments/{company_id}")).text
+
+    cell = html.split('data-field="fund-source">', 1)[1].split("</dd>", 1)[0]
+    assert shown in cell
+    assert "brak danych" not in cell

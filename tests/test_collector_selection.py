@@ -62,7 +62,7 @@ def test_get_collector_returns_one_guarded_yahoo(monkeypatch):
     assert isinstance(first.inner, YahooFinanceCollector)
     assert get_collector() is first
     assert isinstance(first, InstrumentLookup)
-    assert not isinstance(first, FundAttributes)
+    assert isinstance(first, FundAttributes)
 
 
 def test_reset_collector_builds_a_new_guarded_yahoo(monkeypatch):

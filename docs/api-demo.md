@@ -400,6 +400,34 @@ the offline synthetic collector instead (see [Demo data](demo-data.md)).
 It is **UNVERIFIED and was not run** for this demo; do not include it in smoke
 tests. It is not covered by the synthetic-record cleanup above.
 
+fetch-company also sets the instrument type and, for a fund, its attributes
+(issue #153):
+
+- A new instrument takes the provider's type. Yahoo `quoteType` `EQUITY` is
+  `STOCK` and `ETF` is `ETF`. Any other quote type is stored as `STOCK`, as
+  before. Yahoo labels an ETC `EQUITY`, so an ETC arrives as `STOCK`; set
+  `ETC` on the edit form.
+- A refresh never changes the stored type: after create the type is the
+  app's, edited on the form. An instrument stored as `STOCK` before this
+  change (for example VWCE.DE) is set to `ETF` there once.
+- For an `ETF` or `ETC`, the route fetches fund attributes and stores them
+  with source `yahoo_finance` (or `fake`, marked synthetic). From Yahoo: TER
+  from `netExpenseRatio` (a percent, stored as a fraction) and the issuer
+  from `fundFamily`. Yahoo's `totalAssets` has no date, and the score treats
+  an undated AUM as no data, so Yahoo gives no AUM; enter it by hand. Yahoo
+  has no underlying, domicile, replication, or distribution policy either.
+  The row's `as_of` is the retrieval date: it says when the row was checked.
+  A refresh rewrites every fact of the collector's row. A `manual`, `demo`,
+  or `fixture` row is never overwritten, and the provider is not asked.
+- The response adds `instrument_type` and `fund_attributes`: `created`,
+  `updated`, `kept` (another source's row stays), `unavailable` (the
+  provider has no usable facts), `provider_error` (the provider failed; try
+  again later), or null for a stock. The company is saved in every case.
+- An ETF or ETC costs two guarded Yahoo calls (company info, then fund
+  attributes). Each takes a rate-limit token and has its own
+  `COLLECTOR_TOTAL_DEADLINE_SECONDS`, so one request can wait up to twice
+  that time.
+
 `POST /api/v1/data-collection/fetch-financial-metrics` takes the same body
 (`{"ticker":"AAPL"}`) and stores the latest Yahoo ratios of an existing stock as
 one TTM row. It also calls Yahoo (with `DATA_COLLECTOR=yahoo`), so it is

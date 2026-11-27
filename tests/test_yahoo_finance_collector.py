@@ -13,6 +13,7 @@ import pytest
 from app.data_collectors import yahoo_finance
 from app.data_collectors.base import (
     COMPANY_INFO_FIELDS,
+    FUND_ATTRIBUTE_FIELDS,
     KEY_METRIC_FIELDS,
     Fundamentals,
     FundAttributes,
@@ -106,7 +107,7 @@ def test_collector_implements_the_capabilities_yahoo_can_serve(collector):
     assert isinstance(collector, InstrumentLookup)
     assert isinstance(collector, PriceHistory)
     assert isinstance(collector, Fundamentals)
-    assert not isinstance(collector, FundAttributes)
+    assert isinstance(collector, FundAttributes)
 
 
 def test_default_clock_is_timezone_aware_utc(install_ticker):
@@ -178,6 +179,26 @@ def test_company_info_carries_provenance_and_the_shared_keys(
     assert result.provenance.as_of is None
     assert result.provenance.retrieved_at == NOW
     assert result.provenance.synthetic is False
+
+
+@pytest.mark.parametrize(
+    ("quote_type", "expected"),
+    [
+        ("EQUITY", "STOCK"),
+        ("ETF", "ETF"),
+        ("MUTUALFUND", None),
+        ("INDEX", None),
+        (None, None),
+    ],
+)
+def test_company_info_maps_quote_type_to_instrument_type(
+    install_ticker, collector, quote_type, expected
+):
+    install_ticker(info={"longName": "Some Name", "quoteType": quote_type})
+
+    info = collector.fetch_company_info("SOME").value
+
+    assert info["instrument_type"] == expected
 
 
 def test_company_info_raises_provider_error_and_logs(
@@ -912,3 +933,120 @@ def test_an_unreadable_most_recent_quarter_leaves_as_of_empty(
         }
     )
     assert collector.fetch_key_metrics("AAPL").provenance.as_of is None
+
+
+SPY_INFO = {
+    "quoteType": "ETF",
+    "longName": "SPDR S&P 500 ETF Trust",
+    "fundFamily": "State Street Investment Management",
+    "netExpenseRatio": 0.0945,
+    "totalAssets": 796865200128,
+    "financialCurrency": "USD",
+    "currency": "USD",
+}
+
+
+def test_fund_attributes_map_an_etf(install_ticker, collector):
+    install_ticker(info=SPY_INFO)
+
+    result = collector.fetch_fund_attributes("spy")
+
+    assert tuple(result.value) == FUND_ATTRIBUTE_FIELDS
+    assert result.value == {
+        "fund_type": "ETF",
+        # netExpenseRatio is a percent; the app stores a fraction.
+        "ter": 0.000945,
+        # totalAssets has no date, and an undated AUM is no data.
+        "aum": None,
+        "aum_currency": None,
+        "aum_as_of": None,
+        "issuer": "State Street Investment Management",
+        "underlying": None,
+        "domicile": None,
+        "replication_method": None,
+        "distribution_policy": None,
+    }
+    assert result.provenance.source == "yahoo_finance"
+    # Yahoo does not date these values.
+    assert result.provenance.as_of is None
+    assert result.provenance.retrieved_at == NOW
+    assert result.provenance.synthetic is False
+
+
+@pytest.mark.parametrize("bad", [float("nan"), "0.2", True])
+def test_fund_attributes_treat_an_unusable_ter_as_missing(
+    install_ticker, collector, bad
+):
+    install_ticker(info={**SPY_INFO, "netExpenseRatio": bad})
+
+    assert collector.fetch_fund_attributes("SPY").value["ter"] is None
+
+
+@pytest.mark.parametrize("quote_type", ["EQUITY", "MUTUALFUND", None])
+def test_fund_attributes_are_none_unless_yahoo_says_etf(
+    install_ticker, collector, quote_type
+):
+    install_ticker(info={**SPY_INFO, "quoteType": quote_type})
+
+    assert collector.fetch_fund_attributes("SPY") is None
+
+
+def test_fund_attributes_raise_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_fund_attributes("SPY"))
+
+
+@pytest.mark.parametrize(
+    ("percent", "fraction"),
+    [(1.5, 0.015), (100, 1.0), (100.01, None), (-0.1, None), (0, 0.0)],
+)
+def test_fund_attributes_keep_a_ter_up_to_one_hundred_percent(
+    install_ticker, collector, percent, fraction
+):
+    # Leveraged and thematic ETFs charge more than 1%.
+    install_ticker(info={**SPY_INFO, "netExpenseRatio": percent})
+
+    assert collector.fetch_fund_attributes("SPY").value["ter"] == fraction
+
+
+@pytest.mark.parametrize("family", [123, {}, ["Vanguard"]])
+def test_fund_attributes_ignore_an_issuer_that_is_not_text(
+    install_ticker, collector, family
+):
+    install_ticker(info={**SPY_INFO, "fundFamily": family})
+
+    value = collector.fetch_fund_attributes("SPY").value
+
+    assert value["issuer"] is None
+    assert value["ter"] == 0.000945
+
+
+def test_spent_deadline_empty_fund_result_is_not_cached(monkeypatch):
+    """A swallowed timeout on the fund call must not be cached as no data."""
+    clock = FakeClock()
+    built = []
+
+    class Spending:
+        def __init__(self, symbol):
+            built.append(symbol)
+            self.symbol = symbol
+
+        @property
+        def info(self):
+            clock.advance(100)
+            return {}
+
+    monkeypatch.setattr(yahoo_finance.yf, "Ticker", Spending)
+    guarded = guard_collector(
+        YahooFinanceCollector(),
+        GuardPolicy(max_retries=0, total_deadline=15),
+        clock=clock,
+        sleep=clock.sleep,
+        rand=lambda: 0.0,
+    )
+
+    with pytest.raises(TransientProviderError, match="deadline"):
+        guarded.fetch_fund_attributes("SPY")
+    with pytest.raises(TransientProviderError, match="deadline"):
+        guarded.fetch_fund_attributes("SPY")
+
+    assert built == ["SPY", "SPY"]

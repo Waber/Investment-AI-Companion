@@ -1,40 +1,59 @@
 # Current Work State
 
-## Team agent subagents (#143): 2026-11-27, in review
+## Yahoo instrument type and fund attributes (#153): 2026-11-27, in review
 
-- Branch `docs/143-agents-index`, from `origin/master` `c94c54e`.
-  Refs #143. Docs only: `AGENTS.md` gets a "Team agents" section
-  (table of agents and the single review order) and the new
-  `code-reviewer` path. `.claude/agents/code-reviewer.md` moved to
-  `.claude/agents/code-reviewer/code-reviewer.md` with `git mv`; no
-  code or test refers to that path, and `/review-pr` calls the agent
-  by name.
-- Agent pull requests, written by the Grok Bot team on Cursor:
-  #146 project-manager, #147 frontend-developer, #148 developer,
-  #149 qa-engineer, #150 security-engineer. Claude added one commit
-  to #146 to #149 (no force-push): the review order now points to
-  the "Team agents" section, because #147 and #148 said Code
-  Reviewer before QA while #149 said QA first; #148 and #149 dropped
-  the 80% usage stop, which applies to the Grok bot only; #146 and
-  #147 follow `AGENTS.md` on `--force-with-lease`. #150 unchanged.
-- Order source: the journal shows the Grok Bot team ran QA and
-  Security first, then Code Reviewer (2026-10-08 "QA approved
-  `5aa1ccf` and sent it to Code Reviewer"; "Security and QA approved
-  at `f1072cc`").
-- Checked against the Claude Code docs: recursive discovery of
-  `.claude/agents/`, `effort` and `model: inherit` are valid fields,
-  subagents load `AGENTS.md`.
-- Not done: the `researcher` agent has no pull request. Its Grok
-  prompt is not in the repository, so it is left to the Researcher
-  bot (or Przemek pastes the prompt).
-- Merge order: #146 to #150 in any order, then this branch. Before
-  that, the pointer in the agents names a section only this branch
-  adds.
-- Tests: docs only; the suite was not run.
+- Branch `feat/153-yahoo-fund-type`, pull request #160, from
+  `origin/master` `51eb7c4`. Refs #153, Refs #54, Refs #28. Design
+  `docs/superpowers/specs/2026-11-27-yahoo-fund-type-design.md`. No
+  Alembic revision.
+- Completed: the company dict has `instrument_type` (Yahoo `EQUITY`
+  is `STOCK`, `ETF` is `ETF`; the fake names `STOCK`, `ETF`, `ETC`).
+  `fetch-company` creates with that type (None stays `STOCK`); a
+  refresh never changes the stored type (Przemek's decision on review
+  round 1; the requirements doc, US4.1 and section 7, now says so).
+  Yahoo fund attributes: TER (`netExpenseRatio / 100`)
+  and issuer (`fundFamily`); no AUM (undated, Przemek's decision on
+  review F2). `upsert_collected` never overwrites another source; a
+  manual, demo, or fixture row answers `kept` without a provider call,
+  and the other collector's row answers `kept` after it. The
+  response adds `instrument_type` and `fund_attributes` (`created`,
+  `updated`, `kept`, `unavailable`, `provider_error`). The instrument
+  page shows `yahoo_finance` as a collector row's source.
+- Reviews: QA and Security on `5f54049` (fixed in `676c354`; QA
+  re-check approved). Code review round 1 on `676c354`, terminal only:
+  2 Critical (the page showed "no data" as the source of a Yahoo row;
+  the AUM was dated by the fetch day), 3 Minor (one status for three
+  cases, two Yahoo calls per ETF, stale PR body). All fixed in the
+  next commit; F2 by Przemek's choice not to store Yahoo AUM.
+- Live check after the fixes (real Yahoo, temporary database): SPY
+  `ETF`, TER 0.0945%, no AUM, fund score 90.55 from cost alone, page
+  source `yahoo_finance`; VWCE.DE `ETF`, issuer only, no score.
+- Known gaps: an ETC is set by hand; VWCE.DE, stored as `STOCK`
+  before this change, is set to `ETF` once on the form (owner action);
+  AUM and, for VWCE.DE, TER need a manual entry (kept on refresh); fund prices for volatility and
+  drawdown are #154; the non-atomic source check is #161.
+- Code review round 2 on `aacec20`: F6 Critical (a manual save during
+  the provider call was overwritten, from the early read) fixed with
+  `populate_existing()` and a test; F7 and F8 docs.
+- Tests on the head after the round-2 fixes: full suite with
+  `-W error::DeprecationWarning` and coverage: 2611 passed, 3 failed (the known local ones: two 0006 float tests,
+  #122, and the `run_demo` `.env` test, which passes in a clean
+  checkout); coverage 97%. black, isort, flake8 clean.
+- Undo: reverting the code leaves the data. Instruments created as
+  `ETF` stay `ETF`, and `yahoo_finance` fund rows stay; change the type
+  on the edit form and delete the fund row there.
 - Active agents: none. Blockers: none.
-- Next action: Przemek's merge decision. After that, issue #153
-  (ETF typing and fund attributes from Yahoo), then #154 (three
-  years of prices).
+- Code review round 3 on `ce2a504` (QA approved first): 0 findings,
+  verdict ready. Three stale doc sentences it listed are fixed in the
+  next commit (docs only, not re-reviewed).
+- Next action: Przemek's merge decision ("Rebase and merge"). Then
+  #154.
+
+## Team agent subagents (#143): 2026-11-27, merged
+
+- #146 to #150 and #157 were merged by Przemek on 2026-11-27. The
+  `researcher` agent is still missing: its Grok prompt is not in the
+  repository.
 
 ## Fund attribute forms (#28, #34): 2026-11-27, merged
 

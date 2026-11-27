@@ -98,7 +98,7 @@ The tool supports research and decision hygiene. **In the demo phase** it does n
   - [ ] Each stored value records its source, the "as of" date and the time it was retrieved.
   - [ ] Synthetic records are visibly marked and never mixed silently with real data.
   - [ ] A provider error, rate limit or missing data is shown to the user and never stored as zero.
-  - [ ] The instrument type (STOCK/ETF/ETC) comes from the app's own data keyed by ISIN, not from Yahoo's `quoteType` (Yahoo reports ETCs as `EQUITY`).
+  - [ ] The instrument type (STOCK/ETF/ETC) is the app's own, editable data. Yahoo's `quoteType` (`EQUITY` as `STOCK`, `ETF` as `ETF`) is only the starting value when fetch-company creates an instrument; a refresh never changes the stored type, because Yahoo reports ETCs as `EQUITY`. A mapping keyed by ISIN is still open. (Przemek, 2026-11-27, #153.)
 - **US4.2** Demo mode and tests use only the offline fake collector.
 
 ### US5. Notes and investment theses
@@ -171,7 +171,7 @@ Decision based on `docs/research/market-data-sources.md` (tested on 2026-10-08).
 
 - **Primary [Decided]: yfinance**, upgraded from the pinned `0.2.33` to **`>=1.7`** (old versions break when Yahoo changes cookies/crumbs). Tested coverage: GPW stocks (`.WA`, back to 2000), GPW Beta ETFs, EU and US stocks, Xetra/LSE ETCs; shallow GPW fundamentals (about 4–5 years annual, about 6 quarters).
   - **Local cache and throttling:** every response is stored locally; refresh only on explicit request; throttle and batch calls; handle `YFRateLimitError` / "Too Many Requests" visibly.
-  - **Own instrument type:** Yahoo types ETCs as `EQUITY`, so the app keeps its own STOCK/ETF/ETC type keyed by ISIN (manual mapping, editable in the UI).
+  - **Own instrument type:** Yahoo types ETCs as `EQUITY`, so the app keeps its own STOCK/ETF/ETC type, editable in the UI. Yahoo's `quoteType` sets only the starting value on create (#153); a mapping keyed by ISIN is still open.
   - **Terms:** yfinance is unofficial; Yahoo's API is "intended for personal use only". Use is limited to Przemek's personal, local research; no redistribution or publishing of the data.
 - **Paid fallback [Decided: documented, not implemented now]: EODHD.** EOD All-World $19.99/month covers WAR (GPW) prices; the Fundamentals plan ($59.99/month) only if deeper GPW statements are needed. Its terms explicitly allow private storage and analysis. Test exact tickers on the free key (20 calls/day) before paying.
 - **Not used:** Stooq (captcha + JS gate since 2026; `pandas-datareader` can be dropped), Twelve Data (GPW only on the Ultra plan), Alpha Vantage / Marketstack (tiny free tiers, GPW unverified), FMP (restrictive download clause), Massive/Polygon (US only).
