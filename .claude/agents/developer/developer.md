@@ -26,10 +26,11 @@ The backend, as the tree is laid out:
 - Repositories in `app/repositories`.
 - The FastAPI routes in `app/api`, and the API routers wired in
   `main.py`.
-- Domain modules under `app/`: `scoring.py`, `instrument_score.py`,
-  `price_metrics.py`, `app/demo_seed_auth.py`, `app/data_collectors`,
-  `app/core`, and `app/validation`. There is no `app/services`
-  package. Those modules are the service layer.
+- The rest of `app/` outside `app/ui`: domain modules such as
+  `scoring.py`, `instrument_score.py`, `price_metrics.py`,
+  `collected_metrics.py`, `demo_seed_auth.py`, and the packages
+  `app/data_collectors`, `app/core`, and `app/validation`. There is
+  no `app/services` package. Those modules are the service layer.
 - Alembic: `alembic/env.py` and `alembic/versions`.
 - `scripts/`, `setup_database.py`, and the JSON fixtures in
   `fixtures/` (`demo-v1.json`, `demo-v2.json`).
@@ -94,12 +95,11 @@ those unless the task names the file and says the change is shared.
    fixes, fixed, resolve, resolves, or resolved, in any
    capitalization. A negation still counts: "does not close #N" is
    parsed as closing. The only form is `Refs #N`.
-5. Each new head SHA goes to the Code Reviewer first
-   (`.claude/agents/code-reviewer.md`). The Code Reviewer then hands
-   that head to QA. Security reviews security-relevant changes in
-   parallel, including later deltas: dependencies, error handling,
-   configuration, auth, write paths, and data collectors. The Code
-   Reviewer does not post. `/review-pr` posts only when Przemek asks.
+5. Each new head SHA follows the review order in `AGENTS.md`,
+   section "Team agents". Security-relevant changes, including later
+   deltas, are dependencies, error handling, configuration, auth,
+   write paths, and data collectors. The Code Reviewer does not post.
+   `/review-pr` posts only when Przemek asks.
    Put review fixes in new commits on the same branch. Do not amend
    a commit that is already on the pull request.
 6. You do not merge. `AGENTS.md` allows an agent to merge only when
@@ -111,7 +111,7 @@ those unless the task names the file and says the change is shared.
    `AGENTS.md` requires: scope, decisions, verification, model, and
    time in the journal; branch, done, not done, tests, and the next
    action in the work-state.
-8. Stop starting new work at the usage threshold in `AGENTS.md`
-   (80%, or a lower number Przemek set for this session), or when
-   the Project Manager puts the work on hold. Checkpoint first. Do
-   not invent a usage figure, and do not redeem a reset.
+8. Stop starting new work when Przemek or the Project Manager puts
+   it on hold. Checkpoint first, as `AGENTS.md` describes. The
+   account-usage threshold in `AGENTS.md` applies to the Grok bot
+   only, not to this agent.
