@@ -38,9 +38,27 @@
     3 failed, the known local ones (two 0006 float tests, #122, and
     the `run_demo` `.env` test).
   - black, isort, and flake8 on the changed Python files: passed.
-- AI model: Claude Opus 5.5 (Claude Code); the review on the
+- Review round 2 (code-reviewer, terminal only, on `0a05c84`):
+  0 Critical, 0 Important, 3 Minor; all seven round-1 findings fixed.
+  Fixed, with tests that failed first:
+  - F8: AUM had the gaps F6 closed for TER. `0_07` was stored as 7
+    and `-0` as -0. AUM now goes through `aum_text`, which refuses
+    `_` and turns zero into `0`.
+  - The reviewer asked whether `250,000` should still be read as 250
+    (one comma is a decimal mark since Przemek's answer). It is now
+    refused as ambiguous: a comma after one to three digits and
+    before exactly three. `1234,567` is still a decimal. Losing three
+    zeros silently costs more than asking the user to retype.
+  - F9: the time below was wrong.
+  - F10: `fund_payload` lost its unused `update` argument and returns
+    its own field errors, so the TER is parsed once.
+- Issue #152 records the 12-digit rounding in the metrics edit form,
+  the pre-existing twin of F3.
+- AI model: Claude Opus 5.5 (Claude Code); the reviews on the
   `code-reviewer` agent.
-- Time: about 10:30 to 11:30 CET on 2026-11-27.
+- Full suite after round 2: 2531 passed and the same 3 local
+  failures.
+- Time: about 13:25 to 15:10 CET on 2026-11-27.
 
 ## 2026-11-27 - Real stock metrics from Yahoo, TTM snapshot (Refs #54, Refs #35)
 
