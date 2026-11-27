@@ -149,8 +149,8 @@ async def test_same_quarter_refreshes_the_one_row(client):
 
 @pytest.mark.asyncio
 async def test_an_unchanged_refresh_still_moves_updated_at(client):
-    # docs/api-demo.md says P/E and P/B are tied to the fetch time, so
-    # updated_at must move even when every value is the same.
+    # updated_at is the stored refresh time, so it must move even when
+    # every value is the same.
     company_id = await make_company(client)
     use(client)
     await client.post(URL, json={"ticker": "AAPL"})

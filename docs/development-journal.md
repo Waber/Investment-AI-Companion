@@ -10,8 +10,8 @@
   execution.
 - Decisions: Yahoo units stay (fractions, debt-to-equity in percent,
   the units `docs/scoring.md` uses). The row is dated by
-  `mostRecentQuarter`; P/E and P/B use the price at fetch time, which
-  `docs/api-demo.md` now says. A fund gets 400 because the fund score
+  `mostRecentQuarter`; P/E, P/B, and EV/EBITDA use the price when the
+  collector retrieved the snapshot, which `docs/api-demo.md` now says. A fund gets 400 because the fund score
   does not read these rows. A row from another source is never
   overwritten (409), compared case-insensitively on `ttm`. New record
   sources: `yahoo_finance` and `fake`. Pydantic validates the request
@@ -29,9 +29,14 @@
   - Each behavior change had a failing test first (recorded in the
     task reports).
   - Full suite with `-W error::DeprecationWarning`, after the
-    pull-request review fixes below: 2459 passed and 3 failed, the
+    pull-request review fixes below: 2460 passed and 3 failed, the
     known local ones (two 0006 float tests, #122, and the `run_demo`
     `.env` test, which passes in a clean checkout).
+  - black and isort clean; flake8 clean on the changed files.
+  - Live probe against real Yahoo on a temporary copy with #144's
+    fix (this branch alone still has the timeout bug): AAPL 54.68,
+    PKN.WA 77.62, CDR.WA 46.82, all `4 of 4`; rows dated 2026-09-26
+    and 2026-09-30, source `yahoo_finance`.
 - Pull request #151, review round 1 (code-reviewer, terminal only, on
   `0ef88d7`): 1 Critical, docs that did not match the code. The API
   guide tied P/E and P/B to `updated_at`, but a repeat fetch within
@@ -46,17 +51,17 @@
   the 404 and 400 details and the `updated_at` move were not asserted.
   The two code fixes have tests that failed first (502 and no
   conflict for `ttm `).
-  - black and isort clean; flake8 clean on the changed files.
-  - Live probe against real Yahoo on a temporary copy with #144's
-    fix (this branch alone still has the timeout bug): AAPL 54.68,
-    PKN.WA 77.62, CDR.WA 46.82, all `4 of 4`; rows dated 2026-09-26
-    and 2026-09-30, source `yahoo_finance`.
+- Review round 2 (terminal only, on `f91f263`): 0 Critical,
+  0 Important, 2 Minor, both fixed: this journal bullet sat inside the
+  Verification list, and the 409 detail named the first foreign row of
+  an unordered query (the lookup now orders by id).
 - Follow-ups: a `source` field on the `FinancialMetrics` response; a
   concurrent duplicate fetch answers 502; a future quarter date is
   accepted; statements history; ETF typing and fund attributes.
 - AI model: Claude Opus 5.5 controller; implementers and task
   reviewers on Sonnet, the Task 3 and whole-branch reviews on Opus.
-- Time: about 07:50 to 08:50 CET on 2026-11-27.
+- Time: about 07:50 to 08:50 CET on 2026-11-27; the pull-request
+  review fixes about 09:50 to 10:25 CET.
 
 ## 2026-11-26 - Real Yahoo calls failed on a positional timeout (Refs #54)
 

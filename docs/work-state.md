@@ -18,7 +18,7 @@
 - Live probe (2026-11-27, needs #144's fix, so run on a temporary
   copy with it): AAPL, PKN.WA, CDR.WA all scored `4 of 4`.
 - Tests: the full suite with `-W error::DeprecationWarning` on the
-  round-1 fixes gave 2459 passed and 3 failed, the known local ones
+  round-2 fixes gave 2460 passed and 3 failed, the known local ones
   (two 0006 float tests, #122, and the `run_demo` `.env` test, which
   passes in a clean checkout).
 - Review round 1 on #151 (code-reviewer, terminal only, on
@@ -28,6 +28,9 @@
   the whole fetch; `.first()` without ORDER BY when two rows match;
   untested error details and `updated_at`). All fixed, with tests
   that fail without the code fixes. Four questions went to Przemek.
+- Review round 2 (terminal only, on `f91f263`): 0 Critical,
+  0 Important, 2 Minor (journal layout; the 409 detail from an
+  unordered query). Both fixed; the lookup orders by id.
 - Not done, follow-ups: the `FinancialMetrics` response has no
   `source` field (the score shows each figure's source); a second
   concurrent fetch of a new quarter answers 502; a future
