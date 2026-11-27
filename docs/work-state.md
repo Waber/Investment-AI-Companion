@@ -3,7 +3,7 @@
 ## Real stock metrics from Yahoo, TTM snapshot: 2026-11-27, in review
 
 - Branch `feat/yahoo-ttm-metrics`, pull request #151, rebased on
-  `origin/master` `e4a06fb` (first cut from `8d8c4ca`).
+  `origin/master` `37675ef` (first cut from `8d8c4ca`).
   Refs #54, Refs #35. Design
   `docs/superpowers/specs/2026-11-27-yahoo-ttm-metrics-design.md`,
   plan `docs/superpowers/plans/2026-11-27-yahoo-ttm-metrics.md`.
@@ -36,13 +36,17 @@
   concurrent fetch of a new quarter answers 502; a future
   `mostRecentQuarter` is accepted; history from the statements
   (approach B); ETF typing and fund attributes from Yahoo.
-- Active agents: none. Blockers: needs #144 merged for real use.
-  This is not approval.
-- Next action: Przemek reviews this pull request, #144, and
-  #145. Then ETF typing and fund attributes from Yahoo.
+- Active agents: none. Blockers: none (#144 is merged, so real
+  fetches work on this branch). This is not approval.
+- Next action: Przemek reviews and merges this pull request. Then
+  ETF typing and fund attributes from Yahoo.
 
-## Real Yahoo calls failed on a positional timeout: 2026-11-26, in review
+## Real Yahoo calls failed on a positional timeout: 2026-11-26, merged
 
+- Pull requests #144 (this fix) and #145 (the AGENTS.md usage
+  threshold for the Grok bot only) were merged by Przemek on
+  2026-11-27 with "Rebase and merge" (`37675ef` is the master head
+  after both).
 - Branch `fix/yahoo-positional-timeout`, from `origin/master`
   `8d8c4ca`. Refs #54. Przemek's goal (2026-11-26): use the app
   himself on real data as soon as possible. UI work waits for a
