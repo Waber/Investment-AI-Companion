@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.collected_metrics import TTM_PERIOD
+from app.collected_metrics import COLLECTED_METRIC_COLUMNS, TTM_PERIOD
 from app.core.database import Base, create_db_engine
 from app.models.company import CompanyCreate
 from app.models.database_models import (
@@ -107,6 +107,39 @@ def test_a_manual_row_on_the_same_key_is_not_overwritten(session, company):
     session.refresh(manual)
     assert manual.pe_ratio == 11.0
     assert manual.source == RECORD_SOURCE_MANUAL
+
+
+@pytest.mark.parametrize("typed", ["TTM", " ttm "])
+def test_a_manual_row_typed_with_other_case_or_spaces_conflicts(
+    session, company, typed
+):
+    # The forms store period_type as typed, so a manual "TTM" is the
+    # same period as the collector's "ttm".
+    repo = FinancialMetricsRepository(session)
+    repo.create(
+        FinancialMetricsCreate(
+            company_id=company.id,
+            period_end=PERIOD_END,
+            period_type=typed,
+            pe_ratio=11.0,
+        ),
+        record_source=RECORD_SOURCE_MANUAL,
+    )
+    with pytest.raises(CollectedRowConflict):
+        repo.upsert_collected(
+            company.id,
+            PERIOD_END,
+            TTM_PERIOD,
+            {"pe_ratio": 99.0},
+            record_source="yahoo_finance",
+        )
+    assert session.query(FinancialMetricsDB).count() == 1
+
+
+def test_collected_columns_exist_on_the_table():
+    assert set(COLLECTED_METRIC_COLUMNS) <= set(
+        FinancialMetricsDB.__table__.columns.keys()
+    )
 
 
 def test_an_unknown_source_is_rejected(session, company):

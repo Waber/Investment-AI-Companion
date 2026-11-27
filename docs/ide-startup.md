@@ -186,8 +186,9 @@ The fixture adds six synthetic companies and 20 financial records. Repeated
 application does not overwrite existing values. Run one seeder at a time;
 multi-request writes are not atomic. See [demo data](demo-data.md) for details
 and [API requests](api-demo.md) for curl examples, substituting port 8082.
-Avoid external collection endpoints during synthetic testing; financial-metrics
-ingestion is still a placeholder.
+Avoid external collection endpoints during synthetic testing.
+`fetch-financial-metrics` calls the configured collector (Yahoo when
+`DATA_COLLECTOR=yahoo`) and stores what it returns.
 
 ## Troubleshooting And Verification Limits
 

@@ -105,7 +105,19 @@ async def test_full_snapshot_is_stored_and_scores_four_of_four(client):
     body = response.json()
     assert body["period_type"] == "ttm"
     assert body["period_end"].startswith(f"{recent.isoformat()}T00:00:00")
-    assert body["net_margin"] == FULL["profit_margin"]
+    # Every stored column as a literal, so a column typo cannot hide.
+    assert body["roe"] == 0.10
+    assert body["roa"] == 0.05
+    assert body["gross_margin"] == 0.40
+    assert body["net_margin"] == 0.20
+    assert body["current_ratio"] == 1.25
+    assert body["quick_ratio"] == 1.0
+    assert body["debt_to_equity"] == 100.0
+    assert body["debt_to_assets"] is None
+    assert body["revenue_growth"] == 0.05
+    assert body["pe_ratio"] == 20.0
+    assert body["pb_ratio"] == 3.0
+    assert body["ev_ebitda"] == 12.0
     assert stored_sources(client, company_id) == ["yahoo_finance"]
     score = await client.get(f"/api/v1/instruments/{company_id}/score")
     assert score.status_code == 200

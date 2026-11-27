@@ -32,9 +32,9 @@ from app.models.research import (
 from app.models.watchlist import WATCHLIST_LABEL_MAX_LENGTH
 
 # Where a company or a metric row came from. The database column is a
-# plain string with no CHECK, so adding a later collector value (for
-# example yahoo) does not need a migration. The application is the
-# check. UI and API writes use manual. The demo seeder uses demo.
+# plain string with no CHECK, so adding a later collector value (such
+# as yahoo_finance or fake) does not need a migration. The application
+# is the check. UI and API writes use manual. The demo seeder uses demo.
 # A test or fixture loader that is not the demo seeder uses fixture.
 RECORD_SOURCE_MANUAL = "manual"
 RECORD_SOURCE_DEMO = "demo"
