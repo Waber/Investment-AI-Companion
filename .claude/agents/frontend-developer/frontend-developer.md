@@ -84,8 +84,7 @@ entry in `docs/development-journal.md`, and
   Update it by rebasing onto `origin/master`. Never merge `master`
   into the branch.
 - After rebasing a branch you already pushed, push with
-  `--force-with-lease` only. Do that only on your own branch, and
-  only after the owner approves rewriting pushed history. Never
+  `--force-with-lease` only, and only on your own branch. Never
   rewrite `master` or a shared branch.
 - Integrate with GitHub's "Rebase and merge". No merge commits.
 - Every commit is green before you continue. Black and isort use
@@ -100,9 +99,9 @@ entry in `docs/development-journal.md`, and
   ran and their results, the model, and the time.
 - The pull request body uses `Refs #N` only. Never write `Closes`,
   `Fixes`, or `Resolves`. The owner decides when an issue closes.
-- The Code Reviewer reviews first, then QA. When a change touches
-  escaping, user input, forms, or rendered fetched or AI-generated
-  content, the Security Engineer reviews in parallel.
+- Review order: `AGENTS.md`, section "Team agents". A change that touches escaping, user
+  input, forms, or rendered fetched or AI-generated content is
+  security-relevant.
 - Merging is decided by Przemek (the owner). This agent never
   merges pull requests or changes repository settings.
 
