@@ -148,6 +148,21 @@ async def test_same_quarter_refreshes_the_one_row(client):
 
 
 @pytest.mark.asyncio
+async def test_an_unchanged_refresh_still_moves_updated_at(client):
+    # docs/api-demo.md says P/E and P/B are tied to the fetch time, so
+    # updated_at must move even when every value is the same.
+    company_id = await make_company(client)
+    use(client)
+    await client.post(URL, json={"ticker": "AAPL"})
+    first = (await rows(client, company_id))[0]["updated_at"]
+
+    await client.post(URL, json={"ticker": "AAPL"})
+
+    second = (await rows(client, company_id))[0]["updated_at"]
+    assert datetime.fromisoformat(second) > datetime.fromisoformat(first)
+
+
+@pytest.mark.asyncio
 async def test_new_quarter_adds_a_second_row(client):
     company_id = await make_company(client)
     use(client)
@@ -189,6 +204,7 @@ async def test_unknown_company_is_404(client):
     use(client)
     response = await client.post(URL, json={"ticker": "NOPE"})
     assert response.status_code == 404
+    assert "Fetch the company first." in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -197,6 +213,9 @@ async def test_etf_is_400(client):
     use(client)
     response = await client.post(URL, json={"ticker": "VWCE"})
     assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Financial metrics are collected for stocks only"
+    )
 
 
 @pytest.mark.asyncio
@@ -220,9 +239,18 @@ async def test_no_usable_data_is_404_and_stores_nothing(client, kwargs):
 
 
 @pytest.mark.asyncio
-async def test_nan_and_bool_are_stored_as_none(client):
+async def test_nan_bool_and_huge_int_are_stored_as_none(client):
     company_id = await make_company(client)
-    use(client, values={**FULL, "pe_ratio": float("nan"), "roe": True})
+    # 10**400 is too big for a float; it must not fail the whole fetch.
+    use(
+        client,
+        values={
+            **FULL,
+            "pe_ratio": float("nan"),
+            "roe": True,
+            "ev_ebitda": 10**400,
+        },
+    )
 
     response = await client.post(URL, json={"ticker": "AAPL"})
 
@@ -230,6 +258,8 @@ async def test_nan_and_bool_are_stored_as_none(client):
     stored = (await rows(client, company_id))[0]
     assert stored["pe_ratio"] is None
     assert stored["roe"] is None
+    assert stored["ev_ebitda"] is None
+    assert stored["roa"] == 0.05
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,8 @@
 
 ## Real stock metrics from Yahoo, TTM snapshot: 2026-11-27, in review
 
-- Branch `feat/yahoo-ttm-metrics`, from `origin/master` `8d8c4ca`.
+- Branch `feat/yahoo-ttm-metrics`, pull request #151, rebased on
+  `origin/master` `e4a06fb` (first cut from `8d8c4ca`).
   Refs #54, Refs #35. Design
   `docs/superpowers/specs/2026-11-27-yahoo-ttm-metrics-design.md`,
   plan `docs/superpowers/plans/2026-11-27-yahoo-ttm-metrics.md`.
@@ -16,9 +17,17 @@
   no data, 400 for a fund, 502 for a provider error.
 - Live probe (2026-11-27, needs #144's fix, so run on a temporary
   copy with it): AAPL, PKN.WA, CDR.WA all scored `4 of 4`.
-- Tests: the full suite with `-W error::DeprecationWarning` gave
-  2452 passed and 3 failed, the known local ones (two 0006 float
-  tests, #122, and the `run_demo` `.env` test).
+- Tests: the full suite with `-W error::DeprecationWarning` on the
+  round-1 fixes gave 2459 passed and 3 failed, the known local ones
+  (two 0006 float tests, #122, and the `run_demo` `.env` test, which
+  passes in a clean checkout).
+- Review round 1 on #151 (code-reviewer, terminal only, on
+  `0ef88d7`): 1 Critical (the API guide said P/E and P/B follow
+  `updated_at` and left out EV/EBITDA and the cache; "one TTM row per
+  company"; base commit and test count), 3 Minor (a huge int failed
+  the whole fetch; `.first()` without ORDER BY when two rows match;
+  untested error details and `updated_at`). All fixed, with tests
+  that fail without the code fixes. Four questions went to Przemek.
 - Not done, follow-ups: the `FinancialMetrics` response has no
   `source` field (the score shows each figure's source); a second
   concurrent fetch of a new quarter answers 502; a future

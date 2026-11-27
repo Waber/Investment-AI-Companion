@@ -144,7 +144,14 @@ class FinancialMetricsRepository:
         # casefolds it, so a manual "TTM" or " ttm " is the same period
         # as the collector's "ttm" and must raise a conflict instead of
         # slipping past an exact-match lookup.
-        row = (
+        #
+        # The manual create checks uniqueness with the exact text, so
+        # more than one row can match ("ttm" from the collector and a
+        # later manual "ttm "). All of them are loaded: a SQL query
+        # without ORDER BY returns rows in no promised order, and the
+        # answer must be the same on SQLite and PostgreSQL. Any match
+        # from another source is a conflict.
+        matches = (
             self.db.query(FinancialMetricsDB)
             .filter(
                 FinancialMetricsDB.company_id == company_id,
@@ -152,9 +159,14 @@ class FinancialMetricsRepository:
                 func.lower(func.trim(FinancialMetricsDB.period_type))
                 == period_type.strip().lower(),
             )
-            .first()
+            .all()
         )
-        created = row is None
+        foreign = [match for match in matches if match.source != source]
+        if foreign:
+            raise CollectedRowConflict(
+                f"A {foreign[0].source} row already exists for this period"
+            )
+        created = not matches
         if created:
             row = FinancialMetricsDB(
                 company_id=company_id,
@@ -163,11 +175,8 @@ class FinancialMetricsRepository:
                 source=source,
             )
             self.db.add(row)
-        elif row.source != source:
-            raise CollectedRowConflict(
-                f"A {row.source} row already exists for this period"
-            )
         else:
+            row = matches[0]
             row.updated_at = datetime.now(timezone.utc)
 
         # setattr(obj, name, value) is Python's dynamic field write,

@@ -1,7 +1,7 @@
 """Names shared by the collected-metrics code.
 
 A collector (for example Yahoo Finance) fills one "TTM" row per
-company in ``financial_metrics``. These constants say which period
+company and quarter in ``financial_metrics``. These constants say which period
 type that row uses and which columns a collector is allowed to set.
 """
 
@@ -54,7 +54,12 @@ def _finite_number(value: object) -> Optional[float]:
     """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    number = float(value)
+    try:
+        # float() of an int too big for a float (10**400) raises
+        # OverflowError. One unusable ratio must not fail the snapshot.
+        number = float(value)
+    except OverflowError:
+        return None
     return number if math.isfinite(number) else None
 
 
