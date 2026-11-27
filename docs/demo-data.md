@@ -86,7 +86,8 @@ returned 200. `demo/` is gitignored.
 
 `DATA_COLLECTOR=fake` makes `POST /api/v1/data-collection/fetch-company`
 and `POST /api/v1/data-collection/fetch-financial-metrics` use the
-offline `FakeCollector` instead of Yahoo Finance. It serves the stock profiles from this fixture plus the funds `DEMO_ETF_WORLD` and
+offline `FakeCollector` instead of Yahoo Finance. It serves the stock
+profiles from this fixture plus the funds `DEMO_ETF_WORLD` and
 `DEMO_ETC_GOLD`, all with the `[IAC-DEMO-V1]` marker. An unknown ticker
 returns 404. `DEMO_PL_EMPTY` has a profile, so fetch-company creates it
 (200); only its key metrics and price history are "no data" (`None`).
