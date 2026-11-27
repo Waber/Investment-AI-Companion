@@ -90,7 +90,7 @@ def test_repository_create_rejects_a_non_boolean_synthetic_flag(session):
 
 
 def test_repository_create_rejects_an_unknown_record_source(session):
-    with pytest.raises(ValueError, match="manual, demo, or fixture"):
+    with pytest.raises(ValueError, match="yahoo_finance, or fake"):
         CompanyRepository(session).create(
             CompanyCreate(name="Demo", ticker="DEMO"),
             record_source="yahoo",

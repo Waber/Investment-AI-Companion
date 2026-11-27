@@ -39,11 +39,13 @@ _INVALID_SOURCES = [
 ]
 
 
-def test_record_source_constants_are_the_three_allowed_values():
+def test_record_source_constants_are_the_allowed_values():
     assert RECORD_SOURCE_MANUAL == "manual"
     assert RECORD_SOURCE_DEMO == "demo"
     assert RECORD_SOURCE_FIXTURE == "fixture"
-    assert RECORD_SOURCES == frozenset({"manual", "demo", "fixture"})
+    assert RECORD_SOURCES == frozenset(
+        {"manual", "demo", "fixture", "yahoo_finance", "fake"}
+    )
 
 
 @pytest.mark.parametrize("value", ["manual", "demo", "fixture"])
@@ -58,7 +60,7 @@ def test_require_record_source_rejects_missing_and_unknown_values(value):
     The message names the three allowed values. ``demo-v1`` is not a
     source: the owner label is the single word ``demo``.
     """
-    with pytest.raises(ValueError, match="manual, demo, or fixture"):
+    with pytest.raises(ValueError, match="yahoo_finance, or fake"):
         require_record_source(value)
 
 
@@ -97,7 +99,7 @@ def test_explicit_none_source_is_rejected_on_assignment(session):
 
     No row is added, so the session has nothing to flush.
     """
-    with pytest.raises(ValueError, match="manual, demo, or fixture"):
+    with pytest.raises(ValueError, match="yahoo_finance, or fake"):
         CompanyDB(name="Acme", ticker="ACME", source=None)
     assert session.query(CompanyDB).count() == 0
 
@@ -107,7 +109,7 @@ def test_company_and_metric_models_reject_the_same_sources(session, value):
     company = CompanyDB(name="Acme", ticker="ACME", source="manual")
     session.add(company)
     session.flush()
-    with pytest.raises(ValueError, match="manual, demo, or fixture"):
+    with pytest.raises(ValueError, match="yahoo_finance, or fake"):
         company.source = value
     metric = FinancialMetricsDB(
         company_id=company.id,
@@ -117,7 +119,7 @@ def test_company_and_metric_models_reject_the_same_sources(session, value):
     )
     session.add(metric)
     session.flush()
-    with pytest.raises(ValueError, match="manual, demo, or fixture"):
+    with pytest.raises(ValueError, match="yahoo_finance, or fake"):
         metric.source = value
 
 

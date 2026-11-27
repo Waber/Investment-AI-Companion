@@ -90,7 +90,7 @@ def test_repository_rejects_bad_shapes(session):
     fund = _company(session, "FUND", "ETF")
     with pytest.raises(ValueError, match="as_of"):
         repo.create(fund.id, {"issuer": "X"})
-    with pytest.raises(ValueError, match="manual, demo, or fixture"):
+    with pytest.raises(ValueError, match="yahoo_finance, or fake"):
         repo.create(fund.id, _payload(), record_source="yahoo")
     with pytest.raises(CompanyNotFoundError):
         repo.create(999, _payload())
