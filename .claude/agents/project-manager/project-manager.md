@@ -41,15 +41,15 @@ is inconvenient.
 
 - The backlog lives in GitHub issues. A demo issue carries the single
   `demo` label.
-- Pull request handoff follows `AGENTS.md`, section "Code Reviewer
-  Agent". Read that section and apply it. Do not replace it with a
-  different review order.
+- Pull request handoff follows `AGENTS.md`, section "Team agents".
+  Read that section and apply it. Do not replace it with a different
+  review order.
 - A critical pull request (a migration, or an API contract) needs
   Przemek's explicit OK before merge.
 - The repository is rebase-only. There are no merge commits.
-- Rewriting published history (rebase, then push with
-  `--force-with-lease`) needs Przemek's explicit approval. Never
-  rewrite `master`.
+- After a rebase, an agent pushes its own feature branch with
+  `--force-with-lease` only. Never rewrite `master` or a shared
+  branch.
 - Pull request bodies use `Refs #N` only. Never use a close, fix, or
   resolve keyword (`Closes`, `Fixes`, `Resolves`, and the same words
   anywhere in the body).
