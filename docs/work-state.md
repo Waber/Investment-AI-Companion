@@ -11,7 +11,7 @@
   `fetch-company` creates with that type (None stays `STOCK`); a
   refresh never changes the stored type (Przemek's decision on review
   round 1; the requirements doc, US4.1 and section 7, now says so).
-  VWCE.DE, stored as `STOCK`, is set to `ETF` once on the form. Yahoo fund attributes: TER (`netExpenseRatio / 100`)
+  Yahoo fund attributes: TER (`netExpenseRatio / 100`)
   and issuer (`fundFamily`); no AUM (undated, Przemek's decision on
   review F2). `upsert_collected` never overwrites another source; a
   row from another source answers `kept` without a provider call. The
@@ -27,19 +27,23 @@
 - Live check after the fixes (real Yahoo, temporary database): SPY
   `ETF`, TER 0.0945%, no AUM, fund score 90.55 from cost alone, page
   source `yahoo_finance`; VWCE.DE `ETF`, issuer only, no score.
-- Known gaps: an ETC is set by hand; AUM and, for VWCE.DE, TER need a
-  manual entry (kept on refresh); fund prices for volatility and
+- Known gaps: an ETC is set by hand; VWCE.DE, stored as `STOCK`
+  before this change, is set to `ETF` once on the form (owner action);
+  AUM and, for VWCE.DE, TER need a manual entry (kept on refresh); fund prices for volatility and
   drawdown are #154; the non-atomic source check is #161.
-- Tests: full suite with `-W error::DeprecationWarning` and coverage:
-  2607 passed, 3 failed (the known local ones: two 0006 float tests,
+- Code review round 2 on `aacec20`: F6 Critical (a manual save during
+  the provider call was overwritten, from the early read) fixed with
+  `populate_existing()` and a test; F7 and F8 docs.
+- Tests on the head after the round-2 fixes: full suite with
+  `-W error::DeprecationWarning` and coverage: 2611 passed, 3 failed (the known local ones: two 0006 float tests,
   #122, and the `run_demo` `.env` test, which passes in a clean
   checkout); coverage 97%. black, isort, flake8 clean.
 - Undo: reverting the code leaves the data. Instruments created as
   `ETF` stay `ETF`, and `yahoo_finance` fund rows stay; change the type
   on the edit form and delete the fund row there.
 - Active agents: none. Blockers: none.
-- Next action: code review round 2 on the new head, then Przemek's
-  merge decision. Then #154.
+- Next action: QA and code review round 3 on the new head, then
+  Przemek's merge decision. Then #154.
 
 ## Team agent subagents (#143): 2026-11-27, merged
 

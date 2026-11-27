@@ -464,3 +464,42 @@ async def test_another_collectors_row_is_kept(client):
 
     assert payload["fund_attributes"] == "kept"
     assert await _attributes(client, company_id) == before
+
+
+class SaveDuringCall(StubCollector):
+    """The owner saves the fund form while the provider call runs."""
+
+    def __init__(self, session_factory, company_id):
+        super().__init__(facts={**ETF_FACTS, "ter": 0.0009})
+        self.session_factory = session_factory
+        self.company_id = company_id
+
+    def fetch_fund_attributes(self, ticker):
+        from app.models.fund_attributes import FundAttributesUpdate
+        from app.repositories.fund_attributes_repository import (
+            FundAttributesRepository,
+        )
+
+        other = self.session_factory()
+        try:
+            FundAttributesRepository(other).update(
+                self.company_id, FundAttributesUpdate(ter=0.0036)
+            )
+        finally:
+            other.close()
+        return super().fetch_fund_attributes(ticker)
+
+
+@pytest.mark.asyncio
+async def test_a_manual_save_during_the_provider_call_is_kept(client):
+    _use(client, StubCollector())
+    company_id = (await _fetch(client))["company_id"]
+    factory = client.app.state.testing_session_local
+    _use(client, SaveDuringCall(factory, company_id))
+
+    payload = await _fetch(client)
+
+    stored = await _attributes(client, company_id)
+    assert payload["fund_attributes"] == "kept"
+    assert stored["ter"] == 0.0036
+    assert stored["source"] == "manual"

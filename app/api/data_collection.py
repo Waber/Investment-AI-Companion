@@ -193,8 +193,9 @@ class FetchCompanyResponse(BaseModel):
 
     ``fund_attributes`` is null for a stock. For an ETF or an ETC it
     says what happened to the collector's fund-attribute row:
-    ``created``, ``updated``, ``kept`` (a manual, demo, or fixture row
-    is there and stays; the provider is not asked), ``unavailable``
+    ``created``, ``updated``, ``kept`` (another source's row stays; for
+    a manual, demo, or fixture row the provider is not asked),
+    ``unavailable``
     (the provider has no usable facts; enter them by hand), or
     ``provider_error`` (the provider failed; try again later). The
     company is saved in every case.

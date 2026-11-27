@@ -135,7 +135,16 @@ class FundAttributesRepository:
             raise ValueError("as_of is required")
         _check_numbers(data)
         _check_aum(data)
-        row = self.get_by_company(company_id)
+        # populate_existing reloads the row from the database. The
+        # caller may have loaded it before a slow provider call, and the
+        # session would otherwise hand back that old copy, so a manual
+        # save made during the call would pass the source check.
+        row = (
+            self.db.query(FundAttributesDB)
+            .filter(FundAttributesDB.company_id == company_id)
+            .populate_existing()
+            .first()
+        )
         if row is not None and row.source != source:
             raise CollectedRowConflict(
                 f"A {row.source} row already exists for this instrument"

@@ -12,17 +12,17 @@
   distribution policy, domicile, replication, or underlying.
 - Decisions (Claude's calls, in the design): an ETC is set by hand and
   a refresh never changes a stored `ETF` or `ETC`; a refresh may turn
-  a stored `STOCK` into a fund type (fixes VWCE.DE stored as `STOCK`);
-  AUM is stored only with `financialCurrency`, because the score reads
-  AUM in EUR or USD and VWCE.DE's listing currency (EUR) is not the
-  fund's reporting currency; the retrieval date is `as_of`; provider
+  a stored `STOCK` into a fund type (superseded in review round 1: a
+  refresh never changes the type); AUM is stored only with
+  `financialCurrency` (superseded in review round 1: Yahoo gives no
+  AUM); the retrieval date is `as_of`; provider
   facts pass through `FundAttributesCreate` like a person's input; a
   fund-fact failure after the company is saved answers 200 with
   `fund_attributes: "unavailable"`.
 - Not done: refusing a fund in `fetch-financial-metrics` from the
-  provider's own `quoteType` (the stored type now comes from Yahoo and
-  a refresh fixes a mistyped ETF); other quote types still become
-  `STOCK`.
+  provider's own `quoteType` (a new instrument takes its type from
+  Yahoo; an instrument stored as `STOCK` before is fixed on the form);
+  other quote types still become `STOCK`.
 - Verification:
   - Each behavior had a failing test first (Yahoo mapping, fake type,
     repository upsert, API).
@@ -67,6 +67,17 @@
   comment.
 - Live re-check: SPY scored 90.55 from cost alone, page source
   `yahoo_finance`. Full suite: 2607 passed, the 3 known local failures.
+- QA re-check of `13d3c32`: approve; two tests added in `aacec20`
+  (a demo or fixture row is kept without a provider call; another
+  collector's row is kept through the conflict branch).
+- Code review round 2 on `aacec20`: 1 Critical, 2 Minor. F6: the early
+  read added for F3 left the row in the session, so `upsert_collected`
+  saw the old `source` and a manual save made during the Yahoo call
+  was overwritten under the `manual` label. `upsert_collected` now
+  reloads the row with `populate_existing()`; a test that saves a
+  manual TER from a second session inside the provider call failed
+  first. F7: these notes and the work state. F8: the `kept` docstring.
+  Full suite after the fix: 2611 passed, the 3 known local failures.
 - AI model: Claude Opus 5.5; QA, Security, and code review on Opus 5.5.
 - Time: about 17:05 to 18:50 CET on 2026-11-27.
 
