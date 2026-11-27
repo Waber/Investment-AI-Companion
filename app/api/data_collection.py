@@ -208,22 +208,14 @@ class FetchCompanyResponse(BaseModel):
 
 
 def _type_on_create(company_info: dict) -> str:
-    """The provider's type, or STOCK when it names none the app has."""
-    provider_type = company_info.get("instrument_type")
-    return provider_type if provider_type in INSTRUMENT_TYPES else "STOCK"
+    """The provider's type, or STOCK when it names none the app has.
 
-
-def _type_change(stored_type: str, company_info: dict) -> dict:
-    """The type a refresh writes, as ``CompanyUpdate`` keyword arguments.
-
-    A refresh only turns a STOCK into a fund type. It never changes an
-    ETF or an ETC: Yahoo labels an ETC as EQUITY, so the owner sets ETC
-    by hand, and a refresh must keep that.
+    The type is app-owned (docs/product-requirements.md). The provider
+    only gives the starting value of a new instrument. A refresh never
+    changes it, because Yahoo labels an ETC as EQUITY.
     """
     provider_type = company_info.get("instrument_type")
-    if stored_type == "STOCK" and provider_type in FUND_TYPES:
-        return {"instrument_type": provider_type}
-    return {}
+    return provider_type if provider_type in INSTRUMENT_TYPES else "STOCK"
 
 
 def _collect_fund_facts(db, collector, company, ticker) -> FundFactsStatus:
@@ -366,7 +358,6 @@ def fetch_company_data(
                 country=company_info.get("country"),
                 exchange=company_info.get("exchange"),
                 currency=company_info.get("currency", "USD"),
-                **_type_change(existing_company.instrument_type, company_info),
             )
 
             # Update company

@@ -173,18 +173,40 @@ async def test_an_unknown_provider_type_is_stored_as_stock(client):
 
 
 @pytest.mark.asyncio
-async def test_a_refresh_turns_a_stored_stock_into_an_etf(client):
-    # VWCE.DE was stored as STOCK before the type came from Yahoo.
+async def test_a_refresh_never_changes_a_stored_stock(client):
+    # The type is app-owned after create (docs/product-requirements.md):
+    # Yahoo's quoteType is only the starting value. VWCE.DE, stored as
+    # STOCK before this change, is set to ETF once on the edit form.
     _use(client, StubCollector(instrument_type="STOCK"))
     company_id = (await _fetch(client))["company_id"]
-    _use(client, StubCollector(instrument_type="ETF"))
+    later = StubCollector(instrument_type="ETF")
+    _use(client, later)
 
     payload = await _fetch(client)
 
     assert payload["company_id"] == company_id
+    assert payload["instrument_type"] == "STOCK"
+    assert payload["fund_attributes"] is None
+    assert later.fund_calls == 0
+    assert (await _instrument(client, company_id))[
+        "instrument_type"
+    ] == "STOCK"
+
+
+@pytest.mark.asyncio
+async def test_a_stock_set_to_etf_by_hand_gets_fund_facts(client):
+    _use(client, StubCollector(instrument_type="STOCK"))
+    company_id = (await _fetch(client))["company_id"]
+    edited = await client.put(
+        f"/api/v1/companies/{company_id}", json={"instrument_type": "ETF"}
+    )
+    assert edited.status_code == 200
+    _use(client, StubCollector(instrument_type="ETF"))
+
+    payload = await _fetch(client)
+
     assert payload["instrument_type"] == "ETF"
     assert payload["fund_attributes"] == "created"
-    assert (await _instrument(client, company_id))["instrument_type"] == "ETF"
 
 
 @pytest.mark.parametrize("provider_type", ["STOCK", "ETF", None])

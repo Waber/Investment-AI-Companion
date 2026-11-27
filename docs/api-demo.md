@@ -407,8 +407,9 @@ fetch-company also sets the instrument type and, for a fund, its attributes
   `STOCK` and `ETF` is `ETF`. Any other quote type is stored as `STOCK`, as
   before. Yahoo labels an ETC `EQUITY`, so an ETC arrives as `STOCK`; set
   `ETC` on the edit form.
-- A refresh changes a stored `STOCK` to `ETF` or `ETC` when the provider says
-  so. It never changes a stored `ETF` or `ETC`.
+- A refresh never changes the stored type: after create the type is the
+  app's, edited on the form. An instrument stored as `STOCK` before this
+  change (for example VWCE.DE) is set to `ETF` there once.
 - For an `ETF` or `ETC`, the route fetches fund attributes and stores them
   with source `yahoo_finance` (or `fake`, marked synthetic). From Yahoo: TER
   from `netExpenseRatio` (a percent, stored as a fraction) and the issuer

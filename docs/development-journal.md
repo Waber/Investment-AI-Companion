@@ -57,10 +57,18 @@
   command, current counts, and an undo note. Each fix had a failing
   test; four mutants of the new rules were killed (one survivor got a
   test for the fake collector refreshing its own row).
+- The reviewer asked whether #54 should change, since it said
+  `quoteType` never sets the type. The requirements doc (US4.1,
+  section 7) and #26 said the same, and the first cut broke that rule:
+  it typed on create and turned a stored `STOCK` into `ETF` on refresh.
+  Przemek decided: the provider type is the starting value on create
+  only, and a refresh never changes the type. The refresh change is
+  removed, the requirements doc updated, and #26 and #54 have a
+  comment.
 - Live re-check: SPY scored 90.55 from cost alone, page source
   `yahoo_finance`. Full suite: 2606 passed, the 3 known local failures.
 - AI model: Claude Opus 5.5; QA, Security, and code review on Opus 5.5.
-- Time: about 17:05 to 18:35 CET on 2026-11-27.
+- Time: about 17:05 to 18:50 CET on 2026-11-27.
 
 ## 2026-11-27 - Team agent subagents: review and index (Refs #143)
 

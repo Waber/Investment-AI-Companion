@@ -9,8 +9,9 @@
 - Completed: the company dict has `instrument_type` (Yahoo `EQUITY`
   is `STOCK`, `ETF` is `ETF`; the fake names `STOCK`, `ETF`, `ETC`).
   `fetch-company` creates with that type (None stays `STOCK`); a
-  refresh turns a stored `STOCK` into a fund type and never changes an
-  `ETF` or `ETC`. Yahoo fund attributes: TER (`netExpenseRatio / 100`)
+  refresh never changes the stored type (Przemek's decision on review
+  round 1; the requirements doc, US4.1 and section 7, now says so).
+  VWCE.DE, stored as `STOCK`, is set to `ETF` once on the form. Yahoo fund attributes: TER (`netExpenseRatio / 100`)
   and issuer (`fundFamily`); no AUM (undated, Przemek's decision on
   review F2). `upsert_collected` never overwrites another source; a
   row from another source answers `kept` without a provider call. The
@@ -30,12 +31,12 @@
   manual entry (kept on refresh); fund prices for volatility and
   drawdown are #154; the non-atomic source check is #161.
 - Tests: full suite with `-W error::DeprecationWarning` and coverage:
-  2606 passed, 3 failed (the known local ones: two 0006 float tests,
+  2607 passed, 3 failed (the known local ones: two 0006 float tests,
   #122, and the `run_demo` `.env` test, which passes in a clean
   checkout); coverage 97%. black, isort, flake8 clean.
-- Undo: reverting the code leaves the data. Instruments a refresh
-  turned into `ETF` stay `ETF`, and `yahoo_finance` fund rows stay;
-  change the type on the edit form and delete the fund row there.
+- Undo: reverting the code leaves the data. Instruments created as
+  `ETF` stay `ETF`, and `yahoo_finance` fund rows stay; change the type
+  on the edit form and delete the fund row there.
 - Active agents: none. Blockers: none.
 - Next action: code review round 2 on the new head, then Przemek's
   merge decision. Then #154.

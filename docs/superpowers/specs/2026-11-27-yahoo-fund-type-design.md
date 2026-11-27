@@ -29,9 +29,12 @@ score from fetched data.
    `STOCK`, `ETF` is `ETF`, anything else is `None`. The fake returns
    `STOCK` for stocks and `ETF` or `ETC` for its funds.
 2. Create uses that type. `None` stays `STOCK`, as today.
-3. A refresh may change a stored `STOCK` to `ETF` or `ETC` when the
-   provider says so. It never changes a stored `ETF` or `ETC`. An ETC
-   is set by hand on the edit form, and a refresh keeps it.
+3. A refresh never changes the stored type. The type is app-owned
+   (docs/product-requirements.md, US4.1): the provider gives only the
+   starting value of a new instrument. An ETC, and VWCE.DE stored as
+   `STOCK` before this change, are set by hand on the edit form.
+   (Przemek's decision on code review round 1, 2026-11-27. The first
+   cut also turned a stored `STOCK` into `ETF` on refresh.)
 4. `YahooFinanceCollector.fetch_fund_attributes` returns `None` unless
    `quoteType` is `ETF`. TER is `netExpenseRatio / 100` (a fraction,
    as stored). AUM is `totalAssets` only when `financialCurrency` is
@@ -68,9 +71,8 @@ score from fetched data.
   row from another source answers `kept` without asking the provider.
 - Code review round 1 (F1): the instrument page shows a collector
   row's source (`yahoo_finance`) instead of "no data".
-- A refresh turns any stored `STOCK` into a fund type, including a
-  `STOCK` the owner chose. The app cannot tell the two apart, and an
-  ETF stored as a stock is the common case.
+- Code review round 1 (question on #54): the provider type is used on
+  create only; see decision 3.
 - The source check and the write in `upsert_collected` are not atomic.
   That matters only with concurrent writers (server phase), tracked
   in #161.
