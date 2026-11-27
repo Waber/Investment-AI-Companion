@@ -303,6 +303,24 @@ def _is_real_number(value: Any) -> bool:
     return isinstance(value, numbers.Real) and not isinstance(value, bool)
 
 
+def _quarter_date(value: Any) -> Optional[date]:
+    """Turn Yahoo's ``mostRecentQuarter`` into a UTC calendar date.
+
+    Yahoo sends the end of the latest reported quarter as Unix seconds
+    (seconds since 1970-01-01 UTC). Only a real, positive, finite number
+    converts. Text, ``bool``, zero, negatives, NaN and infinity give
+    ``None`` so a bad value never invents a date. Python raises
+    ``OverflowError``, ``OSError`` or ``ValueError`` for timestamps that
+    are too large for a date, and those also give ``None``.
+    """
+    if not _is_real_number(value) or not math.isfinite(value) or value <= 0:
+        return None
+    try:
+        return datetime.fromtimestamp(value, timezone.utc).date()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
 def _debt_to_assets(info: Dict[str, Any]) -> Optional[float]:
     """Return total debt divided by total assets from ``info`` alone.
 
@@ -704,7 +722,12 @@ class YahooFinanceCollector:
             return None
         # Outside the try: a bad clock is a programming error (ValueError),
         # not a provider failure.
-        return Sourced(metrics, self._provenance())
+        return Sourced(
+            metrics,
+            self._provenance(
+                as_of=_quarter_date(info.get("mostRecentQuarter"))
+            ),
+        )
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:
         """
