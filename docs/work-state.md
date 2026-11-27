@@ -14,7 +14,8 @@
   Yahoo fund attributes: TER (`netExpenseRatio / 100`)
   and issuer (`fundFamily`); no AUM (undated, Przemek's decision on
   review F2). `upsert_collected` never overwrites another source; a
-  row from another source answers `kept` without a provider call. The
+  manual, demo, or fixture row answers `kept` without a provider call,
+  and the other collector's row answers `kept` after it. The
   response adds `instrument_type` and `fund_attributes` (`created`,
   `updated`, `kept`, `unavailable`, `provider_error`). The instrument
   page shows `yahoo_finance` as a collector row's source.
@@ -42,8 +43,11 @@
   `ETF` stay `ETF`, and `yahoo_finance` fund rows stay; change the type
   on the edit form and delete the fund row there.
 - Active agents: none. Blockers: none.
-- Next action: QA and code review round 3 on the new head, then
-  Przemek's merge decision. Then #154.
+- Code review round 3 on `ce2a504` (QA approved first): 0 findings,
+  verdict ready. Three stale doc sentences it listed are fixed in the
+  next commit (docs only, not re-reviewed).
+- Next action: Przemek's merge decision ("Rebase and merge"). Then
+  #154.
 
 ## Team agent subagents (#143): 2026-11-27, merged
 

@@ -18,7 +18,8 @@
   AUM); the retrieval date is `as_of`; provider
   facts pass through `FundAttributesCreate` like a person's input; a
   fund-fact failure after the company is saved answers 200 with
-  `fund_attributes: "unavailable"`.
+  `fund_attributes: "unavailable"` (review round 1 added
+  `provider_error` for a provider failure).
 - Not done: refusing a fund in `fetch-financial-metrics` from the
   provider's own `quoteType` (a new instrument takes its type from
   Yahoo; an instrument stored as `STOCK` before is fixed on the form);

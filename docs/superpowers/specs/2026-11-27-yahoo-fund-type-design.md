@@ -69,7 +69,9 @@ score from fetched data.
   `as_of` falls back to the retrieval date, which says when the row
   was checked.
 - Code review round 1 (F3): `provider_error` is its own status, and a
-  row from another source answers `kept` without asking the provider.
+  manual, demo, or fixture row answers `kept` without asking the
+  provider. The other collector's row is kept through the conflict
+  check after the call.
 - Code review round 1 (F1): the instrument page shows a collector
   row's source (`yahoo_finance`) instead of "no data".
 - Code review round 1 (question on #54): the provider type is used on
