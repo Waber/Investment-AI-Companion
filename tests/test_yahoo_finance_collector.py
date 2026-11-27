@@ -870,3 +870,34 @@ def test_spent_deadline_empty_result_is_not_cached(monkeypatch):
     kept = guarded.fetch_company_info("REAL")
     assert kept.value["name"] == "Acme"
     assert built[-1] == "REAL"
+
+
+def test_key_metrics_are_dated_by_the_most_recent_quarter(
+    install_ticker, collector
+):
+    # 1790726400 is 2026-09-30 00:00 UTC.
+    install_ticker(
+        info={
+            "longName": "Apple",
+            "trailingPE": 20.0,
+            "mostRecentQuarter": 1790726400,
+        }
+    )
+    result = collector.fetch_key_metrics("AAPL")
+    assert result.provenance.as_of == date(2026, 9, 30)
+
+
+@pytest.mark.parametrize(
+    "raw", [None, "1790726400", 0, -5, True, float("nan"), 10**20]
+)
+def test_an_unreadable_most_recent_quarter_leaves_as_of_empty(
+    install_ticker, collector, raw
+):
+    install_ticker(
+        info={
+            "longName": "Apple",
+            "trailingPE": 20.0,
+            "mostRecentQuarter": raw,
+        }
+    )
+    assert collector.fetch_key_metrics("AAPL").provenance.as_of is None
