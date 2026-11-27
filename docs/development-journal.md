@@ -1,189 +1,46 @@
 # Development Journal
 
-## 2026-11-18 - UI delete form for fund attributes (Refs #34, Refs #28)
+## 2026-11-27 - Rebase of #131 and its review round 1 (Refs #34, Refs #28)
 
-- Scope: one normal commit on `f5e0964`. No rebase and no
-  force-push. The branch stays based on `1db5931`. Master
-  has since moved to `7402df2` (#134, tests and docs). That
-  second rebase waits for the owner. Branch
-  `cursor/ui-fund-attributes-forms-98e5`. Pull request #131.
-  Refs #34 and Refs #28. Both issues stay open.
-- `GET /ui/companies/{id}/fund-attributes/delete` reuses
-  `confirm_delete.html`. GET does not delete. `POST` calls
-  `FundAttributesRepository.delete` directly. The demo-seed
-  header is not read. Success is 303 to the instrument page,
-  or to `safe_next` when `next` was posted. `//evil`,
-  `https://evil`, and `javascript:` become `/ui`.
-- A stock, a bad id, an unknown id, and an ETF or ETC with
-  no row are the HTML 404. A stock that still has a leftover
-  row is 404 and the row stays. `FundAttributesDeleteError`,
-  `IntegrityError`, and `ValueError` render the confirmation
-  page again with 400. The session is rolled back. The page
-  uses the catalog sentence and does not show driver text.
-- The detail page shows "Usuń atrybuty" / "Delete attributes"
-  only when an ETF or ETC has a row. A stock and an empty
-  fund do not.
-- The happy path removes the attribute row and keeps the
-  company, its price bar, its note, and its thesis.
-- Verification: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, the CI pytest command: 2282
-  passed, 256 deselected, coverage 96.93%. PostgreSQL
-  16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  256 passed, 2282 deselected. black, isort, and flake8
-  passed on the Python files this change touches. No live
-  market-data calls. The HTML was checked through the test
-  client. A desktop browser was not driven. One
-  `StarletteDeprecationWarning` on the PostgreSQL job comes
-  from importing Starlette's `TestClient`. It is not a
-  `DeprecationWarning`, so `-W error::DeprecationWarning`
-  still exits 0.
-- AI model: Grok 4.7. This session did not read the usage
-  meter.
-- Time tracking (UTC): 2026-11-18, from 16:36.
-- Next: GitHub Actions on this commit. Do not rebase onto
-  `7402df2` until the owner agrees. Do not merge.
-
-## 2026-11-12 - Small TER percents stay visible (Refs #34, Refs #28)
-
-- Scope: the detail page only. One commit on top of the review
-  follow-up. No rebase, no force-push, and master was not
-  merged in. Branch `cursor/ui-fund-attributes-forms-98e5`.
-  Pull request #131. Refs #34 and Refs #28.
-- `format_number` rounds to four decimal places, so a TER of
-  0.00001 percent was shown as 0%. The detail page now formats
-  the stored fraction with `Decimal` (`fraction * 100`) and
-  keeps the significant digits. 0.00001 percent, 0.07 percent,
-  and 0 are covered in Polish and English. Zero stays 0. A
-  missing TER is still "brak danych" / "no data".
-- The UI delete form is not in this commit.
-  `FundAttributesRepository.delete` is not on this branch
-  (base `1dab8fc`). It landed on master in pull request #130
-  at `883718e`. The method was not copied here. The delete
-  form needs the owner's approved rebase first.
-- Verification: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, the CI pytest command: 2247
-  passed, 254 deselected, coverage 96.97%. PostgreSQL
-  16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  254 passed, 2247 deselected. black, isort, and flake8
-  passed on the Python files this change touches. No live
-  market-data calls. The HTML was checked through the test
-  client. A desktop browser was not driven.
-- AI model: Grok 4.7. This session did not read the usage
-  meter.
-- Time tracking (UTC): 2026-11-12, from 17:47.
-- Next: rebase onto master `883718e` only after the owner
-  approves it, then the UI delete form can call the
-  repository delete. Do not merge.
-
-## 2026-11-12 - Fund form review follow-up (Refs #34, Refs #28)
-
-- Scope: one commit on `ac5ef91`. No rebase, no force-push,
-  and master was not merged into the branch. Branch
-  `cursor/ui-fund-attributes-forms-98e5`. Pull request #131.
-  Refs #34 and Refs #28. Both issues stay open.
-- A single comma in a TER percent is a decimal mark. `0,07`
-  is 0.07 percent and stores the fraction `0.0007`. `1,5`
-  stores `0.015`. `1,2,3` and a mix such as `1,5.2` are 422
-  `error.number`. The typed text stays, and no row is
-  created. The edit field still shows a period.
-- `ter=100.0001` is 422. The page says "TER musi być
-  procentem od 0 do 100." No row is created.
-- `GET /ui/companies/{id}/fund-attributes/new` when a row
-  already exists is 303 to the edit form. A safe `next`
-  query is kept. `//evil` becomes `next=/ui`. `POST /new`
-  when a row exists stays 400.
-- The detail page has no `fund-attributes/delete` link.
-  The JSON DELETE exists on master in #130. This slice has
-  no UI delete form yet. `FundAttributesRepository.delete`
-  is not in this checkout, and the method was not copied
-  onto this branch.
-- The AUM cap sentence contains the letters `ter` inside
-  `greater`. The form matches `ter` and `aum` as whole
-  words, so that error stays on the AUM field.
-- Verification: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, the CI pytest command: 2243
-  passed, 254 deselected, coverage 97.06%. PostgreSQL
-  16.15, `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  254 passed, 2243 deselected. black, isort, and flake8
-  passed on the Python files this change touches. No live
-  market-data calls. The HTML was checked through the test
-  client. A desktop browser was not driven.
-- AI model: Grok 4.7. This session did not read the usage
-  meter.
-- Time tracking (UTC): 2026-11-12, from 17:47.
-- Next: show a very small TER on the detail page without
-  rounding it to zero. A UI delete form needs a rebase onto
-  master `883718e` before it can call the repository
-  delete. That rebase waits for the owner's approval.
-
-## 2026-11-12 - ETF and ETC attribute forms (Refs #34, Refs #28)
-
-- Scope: the `/ui` create and edit forms for fund attributes.
-  Branch `cursor/ui-fund-attributes-forms-98e5`, from
-  `origin/master` `1dab8fc` (pull request #128). One pull
-  request to master. Refs #34 and Refs #28. Both issues stay
-  open. No merge. No Alembic revision. `0009` and `0010` were
-  not edited. Models, the schema, collectors, scoring, AI
-  adapters, and the Yahoo collector were not edited.
-  This slice did not add a JSON route. Pull request #130,
-  merged on master, adds `FundAttributesRepository.delete`
-  and the JSON DELETE. This checkout does not have that
-  method, and this slice has no UI delete form yet.
-- Routes: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
-  and `.../edit`. There is no delete form. Invalid input is
-  422 and the form is rendered again with the field error.
-  A repository `ValueError` is 400. A bad id, an unknown id,
-  a stock, and an edit when the instrument has no row are the
-  HTML 404. `require_same_origin` is the CSRF check. There is
-  no token. A successful save redirects through `safe_next`.
-- The handlers validate with `FundAttributesCreate` and
-  `FundAttributesUpdate` and write through
-  `FundAttributesRepository`. They do not call the JSON API.
-  The demo-seed header is not read. Create stores
-  `source=manual` and `is_synthetic` false. Update stores
-  `source=manual` and leaves `is_synthetic`. A posted `source`
-  or `is_synthetic` is ignored. `as_of` is required on create.
-  The edit page shows `updated_at`.
-- TER is entered as a percent from 0 to 100. The hint says
-  `0.07` means 0.07 percent. The form converts that to the
-  stored fraction `0.0007` with `Decimal`, so `0.07 / 100`
-  does not become the float `0.0007000000000000001`. The edit
-  field converts the stored fraction back to the percent,
-  using `str` of the float so the shortest round-trip comes
-  back as `0.07`. Empty TER stays null. `0` and `100` percent
-  are the fractions `0` and `1`. The write model and the
-  `Float` column still store a float. That is the existing
-  column. This slice does not add a numeric column.
-- The detail page shows "Dodaj atrybuty" when an ETF or ETC
-  has no row, and "Edytuj atrybuty" when it has one. A stock
-  has neither link. Polish is the default. English uses the
-  paired catalog strings.
-- Leftover, behaviour unchanged: changing an ETF or ETC to
-  STOCK while a row exists does not delete the row. The
-  detail page still shows the issuer. The form routes answer
-  404, and the page has no add or edit link. A test locks
-  that. A later change can decide what to do with the row.
-- The JSON DELETE exists on master in #130. This slice has
-  no UI delete form yet. Opening the create form when a row
-  already exists shows an empty form; saving it is 400
-  because the row exists. The follow-up on this branch
-  changes that GET to a redirect.
-  Yahoo still does not implement `FundAttributes`.
-- Verification: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, the CI pytest command: 2234 passed,
-  254 deselected, coverage 96.67%. PostgreSQL 16.15,
-  `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  254 passed, 2234 deselected. black, isort, and flake8 passed
-  on the Python files this change touches. No live market-data
-  calls. The HTML was checked through the test client. A
-  desktop browser was not driven.
-- AI model: Grok 4.7. This session did not read the usage meter.
-- Time tracking (UTC): 2026-11-12, from 15:21.
-- Next: GitHub Actions on this head. Do not merge.
+- Scope: at Przemek's request, rebase pull request #131 (the `/ui`
+  fund-attribute forms, written by a Cursor agent) onto master after
+  #144, #145, and #151, run `/review-pr 131`, and fix every finding.
+- Rebase: onto `9e114a6`. Only this journal and `docs/work-state.md`
+  conflicted; both sides were kept. An earlier rebase resolution had
+  dropped the AI model, time, and next lines of the "Delete fund
+  attributes" entry (#130), because the new entry ends with the same
+  lines; they are restored. The four #131 entries now sit at their
+  dates instead of the top.
+- Review round 1 (code-reviewer, terminal only, on `4cabd87`):
+  2 Critical, 3 Important, 2 Minor. Fixed, each code fix with a test
+  that failed first:
+  - F1: a blank `as_of` on edit was a 400 "not unique" page, because
+    the repository refuses to clear `as_of` since #139. It is now 422
+    "required" on the field, and the stored date stays.
+  - F2 and F6: the TER bound is checked on the `Decimal` before the
+    division. `1e1000002` was a 500 and is 422;
+    `100.00000000000000001` was stored as 100% and is 422; `0_07`
+    (Pydantic reads it as 7) is a number error; `-0` is stored as 0.
+  - F3: the edit form printed AUM with 12 significant digits, so
+    saving it rewrote a larger amount (1234567890123.45 became
+    1234567890120.0). It now prints the shortest exact text.
+  - F4 and F5: the work state and the PR body described the branch
+    before the rebase; the lost journal lines above.
+  - F7: one `except` for the three delete failures.
+- Owner answers: AUM accepts one decimal comma like TER (done here,
+  with tests); #142 covers the `/ui` form path too; a company's price
+  source is never `manual`, it always comes from the network, so the
+  missing "manual" source label on the fund block was not added.
+- Verification:
+  - `tests/test_ui_fund_forms.py`: the new tests failed before the
+    fixes (500, 400, rounded AUM, rejected comma) and pass after.
+  - Full suite with `-W error::DeprecationWarning`: 2525 passed and
+    3 failed, the known local ones (two 0006 float tests, #122, and
+    the `run_demo` `.env` test).
+  - black, isort, and flake8 on the changed Python files: passed.
+- AI model: Claude Opus 5.5 (Claude Code); the review on the
+  `code-reviewer` agent.
+- Time: about 10:30 to 11:30 CET on 2026-11-27.
 
 ## 2026-11-27 - Real stock metrics from Yahoo, TTM snapshot (Refs #54, Refs #35)
 
@@ -653,6 +510,50 @@
   its instructions file), and a check that the head marker survives
   a real submit.
 
+## 2026-11-18 - UI delete form for fund attributes (Refs #34, Refs #28)
+
+- Scope: one normal commit on `f5e0964`. No rebase and no
+  force-push. The branch stays based on `1db5931`. Master
+  has since moved to `7402df2` (#134, tests and docs). That
+  second rebase waits for the owner. Branch
+  `cursor/ui-fund-attributes-forms-98e5`. Pull request #131.
+  Refs #34 and Refs #28. Both issues stay open.
+- `GET /ui/companies/{id}/fund-attributes/delete` reuses
+  `confirm_delete.html`. GET does not delete. `POST` calls
+  `FundAttributesRepository.delete` directly. The demo-seed
+  header is not read. Success is 303 to the instrument page,
+  or to `safe_next` when `next` was posted. `//evil`,
+  `https://evil`, and `javascript:` become `/ui`.
+- A stock, a bad id, an unknown id, and an ETF or ETC with
+  no row are the HTML 404. A stock that still has a leftover
+  row is 404 and the row stays. `FundAttributesDeleteError`,
+  `IntegrityError`, and `ValueError` render the confirmation
+  page again with 400. The session is rolled back. The page
+  uses the catalog sentence and does not show driver text.
+- The detail page shows "Usuń atrybuty" / "Delete attributes"
+  only when an ETF or ETC has a row. A stock and an empty
+  fund do not.
+- The happy path removes the attribute row and keeps the
+  company, its price bar, its note, and its thesis.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2282
+  passed, 256 deselected, coverage 96.93%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  256 passed, 2282 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. The HTML was checked through the test
+  client. A desktop browser was not driven. One
+  `StarletteDeprecationWarning` on the PostgreSQL job comes
+  from importing Starlette's `TestClient`. It is not a
+  `DeprecationWarning`, so `-W error::DeprecationWarning`
+  still exits 0.
+- AI model: Grok 4.7. This session did not read the usage
+  meter.
+- Time tracking (UTC): 2026-11-18, from 16:36.
+- Next: GitHub Actions on this commit. Do not rebase onto
+  `7402df2` until the owner agrees. Do not merge.
+
 ## 2026-11-18 - QA pass on the score head (Refs #35, Refs #136)
 
 - Scope: the QA checklist on pull request #135 at `beee628`.
@@ -936,6 +837,147 @@
 - Time tracking (UTC): 2026-11-18, from 15:24.
 - Next: GitHub Actions on this head. Do not merge.
 
+## 2026-11-12 - Small TER percents stay visible (Refs #34, Refs #28)
+
+- Scope: the detail page only. One commit on top of the review
+  follow-up. No rebase, no force-push, and master was not
+  merged in. Branch `cursor/ui-fund-attributes-forms-98e5`.
+  Pull request #131. Refs #34 and Refs #28.
+- `format_number` rounds to four decimal places, so a TER of
+  0.00001 percent was shown as 0%. The detail page now formats
+  the stored fraction with `Decimal` (`fraction * 100`) and
+  keeps the significant digits. 0.00001 percent, 0.07 percent,
+  and 0 are covered in Polish and English. Zero stays 0. A
+  missing TER is still "brak danych" / "no data".
+- The UI delete form is not in this commit.
+  `FundAttributesRepository.delete` is not on this branch
+  (base `1dab8fc`). It landed on master in pull request #130
+  at `883718e`. The method was not copied here. The delete
+  form needs the owner's approved rebase first.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2247
+  passed, 254 deselected, coverage 96.97%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2247 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. The HTML was checked through the test
+  client. A desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage
+  meter.
+- Time tracking (UTC): 2026-11-12, from 17:47.
+- Next: rebase onto master `883718e` only after the owner
+  approves it, then the UI delete form can call the
+  repository delete. Do not merge.
+
+## 2026-11-12 - Fund form review follow-up (Refs #34, Refs #28)
+
+- Scope: one commit on `ac5ef91`. No rebase, no force-push,
+  and master was not merged into the branch. Branch
+  `cursor/ui-fund-attributes-forms-98e5`. Pull request #131.
+  Refs #34 and Refs #28. Both issues stay open.
+- A single comma in a TER percent is a decimal mark. `0,07`
+  is 0.07 percent and stores the fraction `0.0007`. `1,5`
+  stores `0.015`. `1,2,3` and a mix such as `1,5.2` are 422
+  `error.number`. The typed text stays, and no row is
+  created. The edit field still shows a period.
+- `ter=100.0001` is 422. The page says "TER musi być
+  procentem od 0 do 100." No row is created.
+- `GET /ui/companies/{id}/fund-attributes/new` when a row
+  already exists is 303 to the edit form. A safe `next`
+  query is kept. `//evil` becomes `next=/ui`. `POST /new`
+  when a row exists stays 400.
+- The detail page has no `fund-attributes/delete` link.
+  The JSON DELETE exists on master in #130. This slice has
+  no UI delete form yet. `FundAttributesRepository.delete`
+  is not in this checkout, and the method was not copied
+  onto this branch.
+- The AUM cap sentence contains the letters `ter` inside
+  `greater`. The form matches `ter` and `aum` as whole
+  words, so that error stays on the AUM field.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2243
+  passed, 254 deselected, coverage 97.06%. PostgreSQL
+  16.15, `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2243 deselected. black, isort, and flake8
+  passed on the Python files this change touches. No live
+  market-data calls. The HTML was checked through the test
+  client. A desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage
+  meter.
+- Time tracking (UTC): 2026-11-12, from 17:47.
+- Next: show a very small TER on the detail page without
+  rounding it to zero. A UI delete form needs a rebase onto
+  master `883718e` before it can call the repository
+  delete. That rebase waits for the owner's approval.
+
+## 2026-11-12 - ETF and ETC attribute forms (Refs #34, Refs #28)
+
+- Scope: the `/ui` create and edit forms for fund attributes.
+  Branch `cursor/ui-fund-attributes-forms-98e5`, from
+  `origin/master` `1dab8fc` (pull request #128). One pull
+  request to master. Refs #34 and Refs #28. Both issues stay
+  open. No merge. No Alembic revision. `0009` and `0010` were
+  not edited. Models, the schema, collectors, scoring, AI
+  adapters, and the Yahoo collector were not edited.
+  This slice did not add a JSON route. Pull request #130,
+  merged on master, adds `FundAttributesRepository.delete`
+  and the JSON DELETE. This checkout does not have that
+  method, and this slice has no UI delete form yet.
+- Routes: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
+  and `.../edit`. There is no delete form. Invalid input is
+  422 and the form is rendered again with the field error.
+  A repository `ValueError` is 400. A bad id, an unknown id,
+  a stock, and an edit when the instrument has no row are the
+  HTML 404. `require_same_origin` is the CSRF check. There is
+  no token. A successful save redirects through `safe_next`.
+- The handlers validate with `FundAttributesCreate` and
+  `FundAttributesUpdate` and write through
+  `FundAttributesRepository`. They do not call the JSON API.
+  The demo-seed header is not read. Create stores
+  `source=manual` and `is_synthetic` false. Update stores
+  `source=manual` and leaves `is_synthetic`. A posted `source`
+  or `is_synthetic` is ignored. `as_of` is required on create.
+  The edit page shows `updated_at`.
+- TER is entered as a percent from 0 to 100. The hint says
+  `0.07` means 0.07 percent. The form converts that to the
+  stored fraction `0.0007` with `Decimal`, so `0.07 / 100`
+  does not become the float `0.0007000000000000001`. The edit
+  field converts the stored fraction back to the percent,
+  using `str` of the float so the shortest round-trip comes
+  back as `0.07`. Empty TER stays null. `0` and `100` percent
+  are the fractions `0` and `1`. The write model and the
+  `Float` column still store a float. That is the existing
+  column. This slice does not add a numeric column.
+- The detail page shows "Dodaj atrybuty" when an ETF or ETC
+  has no row, and "Edytuj atrybuty" when it has one. A stock
+  has neither link. Polish is the default. English uses the
+  paired catalog strings.
+- Leftover, behaviour unchanged: changing an ETF or ETC to
+  STOCK while a row exists does not delete the row. The
+  detail page still shows the issuer. The form routes answer
+  404, and the page has no add or edit link. A test locks
+  that. A later change can decide what to do with the row.
+- The JSON DELETE exists on master in #130. This slice has
+  no UI delete form yet. Opening the create form when a row
+  already exists shows an empty form; saving it is 400
+  because the row exists. The follow-up on this branch
+  changes that GET to a redirect.
+  Yahoo still does not implement `FundAttributes`.
+- Verification: no `.env`. `DATABASE_URL` was not a personal
+  database. SQLite 3.45.1, the CI pytest command: 2234 passed,
+  254 deselected, coverage 96.67%. PostgreSQL 16.15,
+  `REQUIRE_POSTGRES=1`, DSN
+  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
+  254 passed, 2234 deselected. black, isort, and flake8 passed
+  on the Python files this change touches. No live market-data
+  calls. The HTML was checked through the test client. A
+  desktop browser was not driven.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 15:21.
+- Next: GitHub Actions on this head. Do not merge.
+
 ## 2026-11-12 - Review nits from the panel and the attribute delete (Refs #104, Refs #28)
 
 - Scope: the three test nits left from pull request #104, the two
@@ -1113,6 +1155,9 @@
   256 passed, 2216 deselected. black, isort, and flake8 passed
   on the Python files this change touches. No live market-data
   calls.
+- AI model: Grok 4.7. This session did not read the usage meter.
+- Time tracking (UTC): 2026-11-12, from 15:21.
+- Next: GitHub Actions on this head. Do not merge.
 
 ## 2026-11-12 - Pin the TER and AUM cap literals (Refs #28)
 
