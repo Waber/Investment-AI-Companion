@@ -34,25 +34,29 @@
     rebase; three lines of the #130 journal entry were lost in a
     rebase resolution and are restored;
   - three identical `except` blocks in the delete handler.
+- Review round 2 (terminal only, on `0a05c84`): 0 Critical,
+  0 Important, 3 Minor, all fixed: AUM refuses `_` and stores `-0`
+  as 0; the journal time; an unused argument. AUM also refuses an
+  ambiguous comma such as `250,000` (Claude's call on the reviewer's
+  question; Przemek can revert it).
 - Przemek's answers (2026-11-27): AUM accepts a decimal comma like
   TER (done here); #142 (AUM as `Decimal`) covers the `/ui` form
   path too; the source of a company's price is never `manual`, it is
   always fetched from the network. The fund block on the detail page
   still shows no source for a manual row; not changed here.
-- Known gap: the metrics edit form shows monetary fields with the
-  same 12-digit rounding the AUM field had (pre-existing).
+- Known gap: the metrics edit form shows numbers with the same
+  12-digit rounding the AUM field had (pre-existing, issue #152).
 - Leftover: an ETF or ETC changed to STOCK keeps its row; the form
   routes answer 404 then. `GET /new` with a row redirects to edit;
   `POST /new` with a row is 400. Yahoo still does not collect fund
   attributes.
 - Tests: the full suite with `-W error::DeprecationWarning` gave
-  2525 passed and 3 failed, the known local ones (two 0006 float
+  2531 passed (after round 2) and 3 failed, the known local ones (two 0006 float
   tests, #122, and the `run_demo` `.env` test). black, isort, and
   flake8 pass on the changed Python files. The UI was checked
   through the test client, not in a browser.
 - Active agents: none. Blockers: none. This is not approval.
-- Next action: GitHub Actions on the new head, then review round 2
-  (`/review-pr 131`) or Przemek's merge decision.
+- Next action: Przemek's merge decision ("Rebase and merge").
 
 ## Real stock metrics from Yahoo, TTM snapshot: 2026-11-27, merged
 
