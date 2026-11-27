@@ -9,6 +9,7 @@ JSON API and they do not read the demo-seed header. A form body
 cannot set ``source`` or ``is_synthetic``.
 """
 
+import math
 from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
@@ -1198,3 +1199,51 @@ async def test_more_than_one_aum_separator_is_422(client, aum):
     assert 'id="field-aum-error"' in response.text
     assert aum in response.text
     assert _row(client, company_id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("aum", ["0_07", "1,0_0", "250,000", "1,500"])
+async def test_an_aum_the_form_cannot_read_safely_is_422(client, aum):
+    # Pydantic reads "0_07" as 7. "250,000" may be a thousands
+    # separator, and reading it as 250 would lose three zeros.
+    company_id = await _company(
+        client,
+        ticker="AUMODD" + str(len(aum)) + aum[0],
+        instrument_type="ETF",
+        name="Odd AUM",
+    )
+    response = await _post(client, _new(company_id), _form(aum=aum))
+    assert response.status_code == 422, response.text
+    assert _sentence("pl", "error.number") in response.text
+    assert 'id="field-aum-error"' in response.text
+    assert aum in response.text
+    assert _row(client, company_id) is None
+
+
+def test_a_minus_zero_aum_is_a_plain_zero():
+    model, errors, _form_key = validate_fund(
+        {
+            "as_of": "2026-09-30",
+            "aum": "-0",
+            "aum_currency": "EUR",
+            "aum_as_of": "2026-09-30",
+        },
+        update=False,
+    )
+    assert errors == {}
+    assert model.aum == 0
+    assert math.copysign(1, model.aum) == 1
+
+
+def test_an_aum_comma_with_more_than_three_integer_digits_is_a_decimal():
+    model, errors, _form_key = validate_fund(
+        {
+            "as_of": "2026-09-30",
+            "aum": "1234,567",
+            "aum_currency": "EUR",
+            "aum_as_of": "2026-09-30",
+        },
+        update=False,
+    )
+    assert errors == {}
+    assert model.aum == 1234.567

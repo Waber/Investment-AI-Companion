@@ -28,6 +28,7 @@ raw strings are returned unchanged for the inputs.
 """
 
 import math
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -122,6 +123,11 @@ _HUNDRED = Decimal("100")
 _AUM_NEEDS = "aum requires a currency and an as-of date"
 _AUM_EXTRA = "aum currency and aum_as_of require aum"
 _FUND_EXISTS = "Fund attributes for this instrument already exist"
+
+
+# A comma after one to three digits and before exactly three may be a
+# thousands separator ("250,000"), so the AUM field refuses it.
+_AMBIGUOUS_COMMA = re.compile(r"[+-]?\d{1,3},\d{3}")
 
 
 class TerPercentOutOfRange(ValueError):
@@ -683,52 +689,75 @@ def _raw_field(values, field):
     return raw
 
 
-def fund_payload(values, *, update):
-    """Map posted strings onto a fund create or update model.
+def aum_text(value):
+    """AUM text the write model can read, or ``ValueError``.
 
-    TER is converted from a percent to a fraction before the model
-    sees it. A percent the form cannot read, or one above 100, is
-    sent as None and ``validate_fund`` reports it. Passing the text
-    on would not work: Pydantic reads "0_07" as the float 7.0. AUM
-    takes one decimal comma, like TER. Text fields are not stripped here:
-    ``clean_text`` on the model rejects a newline, and stripping
-    first would hide one that sits at the end.
+    One comma is the decimal mark, as for TER, except ``250,000``,
+    which may mean 250 thousand (see ``_AMBIGUOUS_COMMA``).
+    Underscores are refused because Pydantic reads ``0_07`` as 7.
+    ``-0`` becomes ``0``. The write model still checks the sign and
+    the cap, so the text goes on to it.
+    """
+    if "_" in value or _AMBIGUOUS_COMMA.fullmatch(value):
+        raise ValueError("aum is not a number")
+    text = _decimal_comma(value)
+    try:
+        number = Decimal(text)
+    except InvalidOperation as exc:
+        raise ValueError("aum is not a number") from exc
+    if not number.is_finite():
+        raise ValueError("aum is not a number")
+    if number.is_zero():
+        return "0"
+    return text
 
-    A blank ``as_of`` is left out, on create and on update.
-    ``validate_fund`` reports it as required.
-    ``source`` and ``is_synthetic`` are not copied, even when the
-    posted dict has them.
+
+def fund_payload(values):
+    """Map posted strings onto a fund model: ``(payload, field_errors)``.
+
+    TER is converted from a percent to a fraction, and AUM goes
+    through ``aum_text``. A value the form cannot read is sent as
+    None with its error in ``field_errors``. Passing the text on
+    would not work: Pydantic reads "0_07" as the float 7.0.
+
+    A blank ``as_of`` is left out and reported as required, on
+    update too: ``FundAttributesUpdate`` would treat a missing field
+    as unchanged, but the repository refuses to clear ``as_of``.
+
+    Text fields are not stripped here: ``clean_text`` on the model
+    rejects a newline, and stripping first would hide one that sits
+    at the end. ``source`` and ``is_synthetic`` are not copied, even
+    when the posted dict has them.
     """
     payload = {}
+    errors = {}
     for field in _FUND_TEXT:
         payload[field] = _raw_field(values, field)
-    ter_raw = _raw_field(values, "ter")
-    if ter_raw.strip() == "":
+    try:
+        payload["ter"] = ter_percent_to_fraction(_raw_field(values, "ter"))
+    except TerPercentOutOfRange:
         payload["ter"] = None
-    else:
-        try:
-            payload["ter"] = ter_percent_to_fraction(ter_raw)
-        except ValueError:
-            payload["ter"] = None
+        errors["ter"] = "error.ter_percent"
+    except ValueError:
+        payload["ter"] = None
+        errors["ter"] = "error.number"
     aum_raw = _raw_field(values, "aum").strip()
-    if aum_raw == "":
-        payload["aum"] = None
-    else:
+    payload["aum"] = None
+    if aum_raw != "":
         try:
-            payload["aum"] = _decimal_comma(aum_raw)
+            payload["aum"] = aum_text(aum_raw)
         except ValueError:
-            payload["aum"] = aum_raw
+            errors["aum"] = "error.number"
     currency = _raw_field(values, "aum_currency").strip()
     payload["aum_currency"] = None if currency == "" else currency
-    for field in ("aum_as_of", "as_of"):
-        raw = _raw_field(values, field).strip()
-        if raw == "":
-            if field == "as_of":
-                continue
-            payload[field] = None
-        else:
-            payload[field] = raw
-    return payload
+    aum_as_of = _raw_field(values, "aum_as_of").strip()
+    payload["aum_as_of"] = None if aum_as_of == "" else aum_as_of
+    as_of = _raw_field(values, "as_of").strip()
+    if as_of == "":
+        errors["as_of"] = "error.required"
+    else:
+        payload["as_of"] = as_of
+    return payload, errors
 
 
 def fund_catalog_key(field, kind, message):
@@ -813,26 +842,6 @@ def _in_form_order(errors):
     return ordered
 
 
-def _fund_form_errors(values, payload):
-    """Field errors the write model cannot see in ``payload``.
-
-    ``FundAttributesUpdate`` treats a missing ``as_of`` as unchanged,
-    but the repository refuses to clear it, so a blank is reported
-    here on update too. A TER the form could not convert was sent to
-    the model as None, see ``fund_payload``.
-    """
-    errors = {}
-    if "as_of" not in payload:
-        errors["as_of"] = "error.required"
-    try:
-        ter_percent_to_fraction(_raw_field(values, "ter"))
-    except TerPercentOutOfRange:
-        errors["ter"] = "error.ter_percent"
-    except ValueError:
-        errors["ter"] = "error.number"
-    return errors
-
-
 def validate_fund(values, *, update):
     """Return ``(model, field_errors, form_error_key)``.
 
@@ -842,16 +851,15 @@ def validate_fund(values, *, update):
     a blank optional fact clears the stored value.
     """
     model_type = FundAttributesUpdate if update else FundAttributesCreate
-    payload = fund_payload(values, update=update)
+    payload, form_errors = fund_payload(values)
     try:
         model = model_type.model_validate(payload)
         errors, form_key = {}, None
     except ValidationError as exc:
         model = None
         errors, form_key = fund_validation_errors(exc)
-    extra = _fund_form_errors(values, payload)
-    if extra:
-        return None, _in_form_order({**errors, **extra}), form_key
+    if form_errors:
+        return None, _in_form_order({**errors, **form_errors}), form_key
     return model, errors, form_key
 
 
