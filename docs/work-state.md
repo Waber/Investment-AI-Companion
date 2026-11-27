@@ -1,72 +1,58 @@
 # Current Work State
 
-## Fund attribute forms (#28, #34): 2026-11-12
+## Fund attribute forms (#28, #34): 2026-11-27, in review
 
-- Branch `cursor/ui-fund-attributes-forms-98e5`, from
-  `origin/master` `1dab8fc` (pull request #128 is merged).
-  One pull request to master. Refs #34 and Refs #28. Both
-  issues stay open. The agent does not merge. No Alembic
-  revision. `0009` and `0010` were not edited. Models, the
-  schema, collectors, scoring, AI adapters, and the Yahoo
-  collector were not edited. Pull request #130 on master
-  adds `FundAttributesRepository.delete` and the JSON
-  DELETE. This branch includes that method because it was
-  rebased onto `1db5931`. The UI delete form is the commit
-  on top of `f5e0964`.
-- Completed: `GET` and `POST /ui/companies/{id}/fund-attributes/new`
-  and `.../edit`. The forms validate with
+- Branch `cursor/ui-fund-attributes-forms-98e5`, pull request #131.
+  Refs #34 and Refs #28; both issues stay open. Written by a Cursor
+  agent on 2026-11-12 and 2026-11-18. Rebased by Claude on
+  2026-11-27, at Przemek's request, onto `origin/master` `9e114a6`
+  (after #141, #144, #145, and #151). Only the journal and this file
+  conflicted; both sides were kept. No Alembic revision.
+- Completed: `GET` and `POST /ui/companies/{id}/fund-attributes/new`,
+  `.../edit`, and `.../delete`. Create and edit validate with
   `FundAttributesCreate` and `FundAttributesUpdate` and write
-  through `FundAttributesRepository`. They do not call the
-  JSON API and they do not read the demo-seed header. Create
-  stores `manual` and `is_synthetic` false. Update stores
+  through `FundAttributesRepository`; delete calls
+  `FundAttributesRepository.delete` and reuses `confirm_delete.html`.
+  None of them call the JSON API or read the demo-seed header.
+  Create stores `manual` and `is_synthetic` false; update stores
   `manual` and keeps `is_synthetic`. Posted `source` and
-  `is_synthetic` are ignored. `as_of` is required on create.
-  The edit page shows `updated_at`.
-- TER is a percent on the form (0 to 100; `0.07` means 0.07%)
-  and a fraction in the row. One comma is a decimal mark, so
-  `1,5` is 1.5 percent. Two separators are a 422. The
-  conversion uses `Decimal` both ways, including the bounds
-  and a null TER. The edit field still shows a period. The
-  `Float` column is unchanged, so the stored value is still
-  a float after the model accepts the fraction.
-- Detail links: add when an ETF or ETC has no row, edit and
-  delete when it has one, nothing for a stock. Invalid input
-  is 422. A repository `ValueError` is 400. A bad id, an
-  unknown id, or a stock is the HTML 404. CSRF is
-  `require_same_origin`. Redirects use `safe_next`.
-- The UI delete form is `GET` and `POST
-  /ui/companies/{id}/fund-attributes/delete`. It reuses
-  `confirm_delete.html` and calls
-  `FundAttributesRepository.delete`. A missing row is 404.
-  `FundAttributesDeleteError`, `IntegrityError`, and
-  `ValueError` are 400 after rollback. The company, prices,
-  notes, and theses stay.
-- Leftover: an ETF or ETC changed to STOCK while a row
-  exists keeps the row. The detail page still shows it and
-  has no form link. The form routes, including delete, answer
-  404. `GET /new` when a row already exists redirects to the
-  edit form. `POST /new` in that case is still 400. The
-  detail page formats TER with `Decimal` so 0.00001 percent
-  is not shown as 0. Yahoo still does not implement
-  `FundAttributes`.
-- Tests: no `.env`. `DATABASE_URL` was not a personal
-  database. SQLite 3.45.1, CI pytest command: 2282 passed,
-  256 deselected, coverage 96.93%. PostgreSQL 16.15,
-  `REQUIRE_POSTGRES=1`, DSN
-  `postgresql://postgres:postgres@127.0.0.1:5432/investment_test`:
-  256 passed, 2282 deselected. black, isort, and flake8 passed
-  on the Python files this change touches. No live market-data
-  calls. The HTML was checked through the test client. A
-  desktop browser was not driven.
-- Account usage: this session cannot read the meter. No
-  percentage is recorded. No reset was redeemed.
-- Active agents: none. Blockers: none for this slice. This
-  note is not approval and not a merge.
-- Next action: GitHub Actions on the delete-form commit,
-  then review. Do not merge. Do not rebase onto `7402df2`
-  until the owner agrees. The published rebase is `f5e0964`
-  on `1db5931`. GitHub Actions run 44348789397 on that SHA
-  passed both jobs, including SQLite.
+  `is_synthetic` are ignored.
+- TER is a percent on the form (0 to 100; `0.07` means 0.07%) and a
+  fraction in the row, converted with `Decimal`. TER and AUM take
+  one decimal comma; two separators are 422. `as_of` is required on
+  create and on edit.
+- Review round 1 (code-reviewer, terminal only, on `4cabd87`):
+  2 Critical, 3 Important, 2 Minor, all fixed:
+  - a blank `as_of` on edit was a 400 that blamed uniqueness (the
+    repository refuses to clear `as_of` since #139); now 422
+    "required";
+  - TER `1e1000002` was a 500, `100.00000000000000001` was stored
+    as 100%, `0_07` as 7%, `-0` as -0; now 422 or 0;
+  - the edit form rounded AUM to 12 significant digits, so any save
+    rewrote the amount; now the shortest exact text;
+  - this file and the PR body described the branch before the
+    rebase; three lines of the #130 journal entry were lost in a
+    rebase resolution and are restored;
+  - three identical `except` blocks in the delete handler.
+- Przemek's answers (2026-11-27): AUM accepts a decimal comma like
+  TER (done here); #142 (AUM as `Decimal`) covers the `/ui` form
+  path too; the source of a company's price is never `manual`, it is
+  always fetched from the network. The fund block on the detail page
+  still shows no source for a manual row; not changed here.
+- Known gap: the metrics edit form shows monetary fields with the
+  same 12-digit rounding the AUM field had (pre-existing).
+- Leftover: an ETF or ETC changed to STOCK keeps its row; the form
+  routes answer 404 then. `GET /new` with a row redirects to edit;
+  `POST /new` with a row is 400. Yahoo still does not collect fund
+  attributes.
+- Tests: the full suite with `-W error::DeprecationWarning` gave
+  2525 passed and 3 failed, the known local ones (two 0006 float
+  tests, #122, and the `run_demo` `.env` test). black, isort, and
+  flake8 pass on the changed Python files. The UI was checked
+  through the test client, not in a browser.
+- Active agents: none. Blockers: none. This is not approval.
+- Next action: GitHub Actions on the new head, then review round 2
+  (`/review-pr 131`) or Przemek's merge decision.
 
 ## Real stock metrics from Yahoo, TTM snapshot: 2026-11-27, merged
 
@@ -108,8 +94,7 @@
   (approach B); ETF typing and fund attributes from Yahoo.
 - Active agents: none. Blockers: none (#144 is merged, so real
   fetches work on this branch). This is not approval.
-- Next action: Przemek reviews and merges this pull request. Then
-  ETF typing and fund attributes from Yahoo.
+- Next action: ETF typing and fund attributes from Yahoo.
 
 ## Real Yahoo calls failed on a positional timeout: 2026-11-26, merged
 
@@ -236,8 +221,8 @@
   (the #135 draft was deleted, not submitted); no GitHub Actions
   trigger; no thread replies; no CODEOWNERS entry for
   `.agents/review/`.
-- PR #131 (fund-attribute forms) conflicts with master and waits
-  for the owner's rebase. It was not reviewed.
+- PR #131 (fund-attribute forms) was rebased on 2026-11-27 and had
+  its review round 1 the same day; see its section.
 - Active agents: none. Blockers: none. Account usage was not
   available in this session.
 - Next action: run `/review-pr <N>` on the next pull request, and
