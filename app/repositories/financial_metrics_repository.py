@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.collected_metrics import COLLECTED_METRIC_COLUMNS
 from app.core.utc_datetime import as_utc
 from app.models.database_models import (
     RECORD_SOURCE_MANUAL,
@@ -19,6 +20,14 @@ _UNIQUE_PERIOD = (
     "Financial metrics for this company, period end, "
     "and period type must be unique"
 )
+
+
+class CollectedRowConflict(Exception):
+    """A row with this key exists but a collector did not write it.
+
+    A collector refresh must never overwrite a manual, demo, or fixture
+    row, so the caller gets this exception instead of a silent update.
+    """
 
 
 class FinancialMetricsRepository:
@@ -99,6 +108,73 @@ class FinancialMetricsRepository:
             # Rollback on error
             self.db.rollback()
             raise ValueError("Failed to create financial metrics")
+
+    def upsert_collected(
+        self,
+        company_id: int,
+        period_end: datetime,
+        period_type: str,
+        values: dict,
+        *,
+        record_source: str,
+    ) -> tuple[FinancialMetricsDB, bool]:
+        """
+        Insert or refresh the row a collector owns for one period.
+
+        ``values`` holds only columns from COLLECTED_METRIC_COLUMNS.
+        Every one of those columns is written: a key missing from
+        ``values`` becomes None, so a refresh cannot keep a stale ratio
+        the provider no longer reports.
+
+        Returns:
+            (row, created): created is True for a new row.
+
+        Raises:
+            ValueError: Unknown record_source, or the database refused.
+            CollectedRowConflict: The key holds a row whose source is
+                not ``record_source`` (for example a manual row).
+        """
+        # Validate first so a bad source never touches the database.
+        source = require_record_source(record_source)
+        period_end = as_utc(period_end)
+
+        row = (
+            self.db.query(FinancialMetricsDB)
+            .filter(
+                FinancialMetricsDB.company_id == company_id,
+                FinancialMetricsDB.period_end == period_end,
+                FinancialMetricsDB.period_type == period_type,
+            )
+            .first()
+        )
+        created = row is None
+        if created:
+            row = FinancialMetricsDB(
+                company_id=company_id,
+                period_end=period_end,
+                period_type=period_type,
+                source=source,
+            )
+            self.db.add(row)
+        elif row.source != source:
+            raise CollectedRowConflict(
+                f"A {row.source} row already exists for this period"
+            )
+        else:
+            row.updated_at = datetime.now(timezone.utc)
+
+        # setattr(obj, name, value) is Python's dynamic field write,
+        # like calling a setter whose name is only known at runtime.
+        for column in COLLECTED_METRIC_COLUMNS:
+            setattr(row, column, values.get(column))
+
+        try:
+            self.db.commit()
+            self.db.refresh(row)
+            return row, created
+        except IntegrityError:
+            self.db.rollback()
+            raise ValueError("Failed to save collected financial metrics")
 
     def get_by_id(self, metrics_id: int) -> Optional[FinancialMetricsDB]:
         """

@@ -39,24 +39,33 @@ from app.models.watchlist import WATCHLIST_LABEL_MAX_LENGTH
 RECORD_SOURCE_MANUAL = "manual"
 RECORD_SOURCE_DEMO = "demo"
 RECORD_SOURCE_FIXTURE = "fixture"
+# A row written by the Yahoo Finance collector, and the same collector
+# run against the deterministic fake provider (tests and offline demo).
+RECORD_SOURCE_YAHOO = "yahoo_finance"
+RECORD_SOURCE_FAKE = "fake"
 RECORD_SOURCES = frozenset(
     {
         RECORD_SOURCE_MANUAL,
         RECORD_SOURCE_DEMO,
         RECORD_SOURCE_FIXTURE,
+        RECORD_SOURCE_YAHOO,
+        RECORD_SOURCE_FAKE,
     }
 )
 
 
 def require_record_source(value):
-    """Return ``value`` when it is one of the three allowed sources.
+    """Return ``value`` when it is one of the allowed sources.
 
     ``None``, a blank, a different case, and any other value raise
     ``ValueError``. The comparison is exact: ``demo-v1`` is not
     ``demo``. The database does not repeat this check.
     """
     if not isinstance(value, str) or value not in RECORD_SOURCES:
-        raise ValueError("source must be one of: manual, demo, or fixture")
+        raise ValueError(
+            "source must be one of: manual, demo, fixture, "
+            "yahoo_finance, or fake"
+        )
     return value
 
 
