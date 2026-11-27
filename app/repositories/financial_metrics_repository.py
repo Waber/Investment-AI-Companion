@@ -159,6 +159,9 @@ class FinancialMetricsRepository:
                 func.lower(func.trim(FinancialMetricsDB.period_type))
                 == period_type.strip().lower(),
             )
+            # Oldest first, so the 409 message and the row a refresh
+            # updates are the same on every database.
+            .order_by(FinancialMetricsDB.id)
             .all()
         )
         foreign = [match for match in matches if match.source != source]

@@ -175,6 +175,31 @@ def test_a_manual_row_added_after_the_collector_row_still_conflicts(
     assert values == [11.0, 20.0]
 
 
+def test_the_conflict_names_the_oldest_foreign_row(session, company):
+    # Two foreign rows match: a manual "ttm " (older) and a demo "TTM".
+    # "TTM" sorts first in the unique index, so without ORDER BY SQLite
+    # would name the demo row. The message must not depend on that.
+    repo = FinancialMetricsRepository(session)
+    for typed, source in (("ttm ", RECORD_SOURCE_MANUAL), ("TTM", "demo")):
+        repo.create(
+            FinancialMetricsCreate(
+                company_id=company.id,
+                period_end=PERIOD_END,
+                period_type=typed,
+                pe_ratio=11.0,
+            ),
+            record_source=source,
+        )
+    with pytest.raises(CollectedRowConflict, match="A manual row"):
+        repo.upsert_collected(
+            company.id,
+            PERIOD_END,
+            TTM_PERIOD,
+            {"pe_ratio": 99.0},
+            record_source="yahoo_finance",
+        )
+
+
 def test_collected_columns_exist_on_the_table():
     assert set(COLLECTED_METRIC_COLUMNS) <= set(
         FinancialMetricsDB.__table__.columns.keys()
