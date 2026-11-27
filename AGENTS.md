@@ -87,6 +87,7 @@ The `code-reviewer` agent (`.claude/agents/code-reviewer.md`) is the Code Review
 
 - Add or update tests for behavior changes.
 - Do not call live market-data providers in automated tests.
+- Do not add comments unless it's necessary to explain a non-obvious design decision, a workaround, or a known limitation. Avoid comments that restate the code.
 - Use deterministic fakes for external providers.
 - Run the relevant pytest suite before claiming completion.
 - Read `REVIEW.md` before you review a pull request or ask for a review. It says what failure looks like in this repository, which severity labels to use, and how to write the summary.
