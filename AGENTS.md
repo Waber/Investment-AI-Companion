@@ -64,14 +64,36 @@ The Cloudflare `security-audit` skill in this repository is guidance unless the 
 - On Windows, a real symlink still needs symlink support enabled and the right to create one: Developer Mode on a recent Windows 10, or `SeCreateSymbolicLinkPrivilege`. `core.symlinks=true` without that right does not create the link. See https://gitforwindows.org/symbolic-links.
 - Where the checkout is a plain text file, there is no `SKILL.md` inside a directory at `.claude/skills/security-audit`, so Claude Code does not discover the skill there. Agents that read `.agents/skills/security-audit/` still do. Keep the one symlink. A second copy of the files can diverge from the installed copy. Do not treat `computedHash` as a check that either copy matches the hash.
 
+## Team agents
+
+Each Grok Bot team role has a Claude Code subagent in `.claude/agents/<name>/<name>.md` (issue #143). Claude Code finds them by scanning `.claude/agents/` recursively and calls them by the `name` in the frontmatter. Subagents load this file too, so a rule here applies to all of them.
+
+| Agent | Role | Edits files |
+| --- | --- | --- |
+| `developer` | Backend: models, repositories, API routes, domain modules, Alembic, scripts, fixtures, backend tests. | yes |
+| `frontend-developer` | `/ui`: Jinja2 templates, HTMX, CSS, PL/EN catalog, UI tests. | yes |
+| `qa-engineer` | Verifies a pull-request head with tests: gaps, regressions, CI gate commands. | tests |
+| `security-engineer` | Read-only security review of a change or plan. | no |
+| `code-reviewer` | Read-only pull-request review through `/review-pr`. | no |
+| `project-manager` | Status, backlog, next steps; writes an issue only when Przemek asks. | no |
+| `researcher` | Not added yet. | |
+
+Review order for each new pull-request head, the order the Grok Bot team used:
+
+1. The QA Engineer verifies the head with tests. When the change is security-relevant (write paths, input handling, forms, escaping, error handling, configuration, auth, dependencies, data collectors, fetched or AI content), the Security Engineer reviews the same head in parallel.
+2. The Code Reviewer reviews that head (`/review-pr <N>`) after QA and Security.
+3. Przemek decides the merge. A push after a review starts again at step 1 for the new delta.
+
+An agent definition points to this section and does not restate the order.
+
 ## Code Reviewer Agent
 
-The `code-reviewer` agent (`.claude/agents/code-reviewer.md`) is the Code Reviewer role from issue #102. It follows `REVIEW.md` and the path rules in `.agents/review/instructions.toml`, the way GitLab Duo follows `.gitlab/duo/mr-review-instructions.yaml`.
+The `code-reviewer` agent (`.claude/agents/code-reviewer/code-reviewer.md`) is the Code Reviewer role from issue #102. It follows `REVIEW.md` and the path rules in `.agents/review/instructions.toml`, the way GitLab Duo follows `.gitlab/duo/mr-review-instructions.yaml`.
 
 - When: on every pull request before asking Przemek to merge it, and again after new pushes. A later round reviews only what changed since the last reviewed head and does not repeat earlier findings.
 - How: `/review-pr <N>` in Claude Code. It returns the review in the terminal. `/review-pr <N> --post` also creates a PENDING GitHub review: inline comments plus the summary, visible only to Przemek until he submits it.
 - The agent is read-only and never posts. Only the skill posts, and only with `--post`. Nothing approves, submits a review, resolves a thread, or merges. These are instructions, not an enforced sandbox.
-- Other agents (Cursor, Codex, Grok) can follow the same files: `REVIEW.md`, `.agents/review/instructions.toml`, and the output format in `.claude/agents/code-reviewer.md`.
+- Other agents (Cursor, Codex, Grok) can follow the same files: `REVIEW.md`, `.agents/review/instructions.toml`, and the output format in `.claude/agents/code-reviewer/code-reviewer.md`.
 - A new `.claude/agents/` directory is picked up after Claude Code restarts. Changes to an existing file apply to the next delegation.
 
 ## Investment Domain Rules

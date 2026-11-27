@@ -1,5 +1,41 @@
 # Development Journal
 
+## 2026-11-27 - Team agent subagents: review and index (Refs #143)
+
+- Scope: Przemek asked to check that pull requests #146 to #150 make
+  Claude Code subagents that match the Grok Bot team roles, and to
+  file the next backend tasks. Docs and agent definitions only.
+- Review of the five agent files against `AGENTS.md`, the code, and
+  each other. Paths and facts in the files match `master` (for
+  example `safe_next`, `EXTERNAL_LINK_REL`, the demo-seed HMAC, the
+  CI PostgreSQL DSN). Three inconsistencies:
+  - review order: #147 and #148 said Code Reviewer, then QA; #149
+    said QA, Security, then Code Review; #146 pointed to a section
+    that has no order. The Grok Bot team ran QA and Security, then
+    Code Reviewer (journal 2026-10-08). The order now lives once in
+    the new `AGENTS.md` "Team agents" section, and the agents point
+    to it;
+  - #148 and #149 carried the 80% usage stop, which `AGENTS.md`
+    limits to the Grok bot (decision of 2026-11-26). Removed;
+  - #146 and #147 required owner approval for `--force-with-lease`
+    on an agent's own branch, which `AGENTS.md` allows. Aligned.
+- Fix commits: `381a2f3` (#146), `21b1063` (#147), `000389b` (#148),
+  `b6c7da7` (#149), pushed without force. #150 unchanged.
+- This branch: the "Team agents" section and table in `AGENTS.md`,
+  and `git mv` of the code-reviewer definition into
+  `.claude/agents/code-reviewer/`. The `researcher` agent is not
+  added: its Grok prompt is not in the repository.
+- Verification: the Claude Code subagent docs confirm recursive
+  discovery of `.claude/agents/`, the `effort` and `model` fields,
+  and that subagents load `AGENTS.md`. `grep` found no code or test
+  that reads the old code-reviewer path. Tests not run (docs only).
+- Issues filed from the 2026-11-27 proposals: #153 ETF and ETC
+  typing and fund attributes from Yahoo, #154 three years of daily
+  prices for `return_3y`, #155 `source` on the `FinancialMetrics`
+  response, #156 P/E rule when the latest quarter is a loss.
+- AI model: Claude Opus 5.5.
+- Time: about 16:00 to 17:00 CET on 2026-11-27.
+
 ## 2026-11-27 - Rebase of #131 and its review round 1 (Refs #34, Refs #28)
 
 - Scope: at Przemek's request, rebase pull request #131 (the `/ui`

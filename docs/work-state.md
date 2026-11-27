@@ -1,6 +1,46 @@
 # Current Work State
 
-## Fund attribute forms (#28, #34): 2026-11-27, in review
+## Team agent subagents (#143): 2026-11-27, in review
+
+- Branch `docs/143-agents-index`, from `origin/master` `c94c54e`.
+  Refs #143. Docs only: `AGENTS.md` gets a "Team agents" section
+  (table of agents and the single review order) and the new
+  `code-reviewer` path. `.claude/agents/code-reviewer.md` moved to
+  `.claude/agents/code-reviewer/code-reviewer.md` with `git mv`; no
+  code or test refers to that path, and `/review-pr` calls the agent
+  by name.
+- Agent pull requests, written by the Grok Bot team on Cursor:
+  #146 project-manager, #147 frontend-developer, #148 developer,
+  #149 qa-engineer, #150 security-engineer. Claude added one commit
+  to #146 to #149 (no force-push): the review order now points to
+  the "Team agents" section, because #147 and #148 said Code
+  Reviewer before QA while #149 said QA first; #148 and #149 dropped
+  the 80% usage stop, which applies to the Grok bot only; #146 and
+  #147 follow `AGENTS.md` on `--force-with-lease`. #150 unchanged.
+- Order source: the journal shows the Grok Bot team ran QA and
+  Security first, then Code Reviewer (2026-10-08 "QA approved
+  `5aa1ccf` and sent it to Code Reviewer"; "Security and QA approved
+  at `f1072cc`").
+- Checked against the Claude Code docs: recursive discovery of
+  `.claude/agents/`, `effort` and `model: inherit` are valid fields,
+  subagents load `AGENTS.md`.
+- Not done: the `researcher` agent has no pull request. Its Grok
+  prompt is not in the repository, so it is left to the Researcher
+  bot (or Przemek pastes the prompt).
+- Merge order: #146 to #150 in any order, then this branch. Before
+  that, the pointer in the agents names a section only this branch
+  adds.
+- Tests: docs only; the suite was not run.
+- Active agents: none. Blockers: none.
+- Next action: Przemek's merge decision. After that, issue #153
+  (ETF typing and fund attributes from Yahoo), then #154 (three
+  years of prices).
+
+## Fund attribute forms (#28, #34): 2026-11-27, merged
+
+- Pull request #131 was merged by Przemek on 2026-11-27 with
+  "Rebase and merge" (`c94c54e` is the master head after it). The
+  lines below describe the branch before the merge.
 
 - Branch `cursor/ui-fund-attributes-forms-98e5`, pull request #131.
   Refs #34 and Refs #28; both issues stay open. Written by a Cursor
@@ -55,9 +95,6 @@
   tests, #122, and the `run_demo` `.env` test). black, isort, and
   flake8 pass on the changed Python files. The UI was checked
   through the test client, not in a browser.
-- Active agents: none. Blockers: none. This is not approval.
-- Next action: Przemek's merge decision ("Rebase and merge").
-
 ## Real stock metrics from Yahoo, TTM snapshot: 2026-11-27, merged
 
 - Pull request #151 was merged by Przemek on 2026-11-27 with
