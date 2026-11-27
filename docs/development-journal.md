@@ -28,9 +28,24 @@
 - Verification:
   - Each behavior change had a failing test first (recorded in the
     task reports).
-  - Full suite with `-W error::DeprecationWarning`: 2452 passed and
-    3 failed, the known local ones (two 0006 float tests, #122, and
-    the `run_demo` `.env` test).
+  - Full suite with `-W error::DeprecationWarning`, after the
+    pull-request review fixes below: 2459 passed and 3 failed, the
+    known local ones (two 0006 float tests, #122, and the `run_demo`
+    `.env` test, which passes in a clean checkout).
+- Pull request #151, review round 1 (code-reviewer, terminal only, on
+  `0ef88d7`): 1 Critical, docs that did not match the code. The API
+  guide tied P/E and P/B to `updated_at`, but a repeat fetch within
+  the key-metrics cache time reuses the snapshot, and EV/EBITDA also
+  uses the price; the module docstring said one TTM row per company
+  (it is per quarter); the work state had the old base commit and the
+  pre-fix test count. 3 Minor: `10**400` in one ratio failed the
+  whole fetch with 502 (now `None` for that field); the collected-row
+  lookup used `.first()` without ORDER BY, so a collector `ttm` row
+  plus a later manual `ttm ` row gave a database-dependent answer
+  (now every match is checked and any foreign row is a conflict);
+  the 404 and 400 details and the `updated_at` move were not asserted.
+  The two code fixes have tests that failed first (502 and no
+  conflict for `ttm `).
   - black and isort clean; flake8 clean on the changed files.
   - Live probe against real Yahoo on a temporary copy with #144's
     fix (this branch alone still has the timeout bug): AAPL 54.68,

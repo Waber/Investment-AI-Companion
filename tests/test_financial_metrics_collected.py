@@ -136,6 +136,45 @@ def test_a_manual_row_typed_with_other_case_or_spaces_conflicts(
     assert session.query(FinancialMetricsDB).count() == 1
 
 
+@pytest.mark.parametrize("typed", ["TTM", "ttm "])
+def test_a_manual_row_added_after_the_collector_row_still_conflicts(
+    session, company, typed
+):
+    # The manual create checks uniqueness with the exact text, so a
+    # manual "ttm " can sit next to the collector's "ttm" on the same
+    # date. Both rows match the lookup. The answer must not depend on
+    # which row the database happens to return first: "ttm " sorts
+    # after "ttm" in the unique index, so SQLite returns the collector
+    # row first for that case.
+    repo = FinancialMetricsRepository(session)
+    repo.upsert_collected(
+        company.id,
+        PERIOD_END,
+        TTM_PERIOD,
+        {"pe_ratio": 20.0},
+        record_source="yahoo_finance",
+    )
+    repo.create(
+        FinancialMetricsCreate(
+            company_id=company.id,
+            period_end=PERIOD_END,
+            period_type=typed,
+            pe_ratio=11.0,
+        ),
+        record_source=RECORD_SOURCE_MANUAL,
+    )
+    with pytest.raises(CollectedRowConflict):
+        repo.upsert_collected(
+            company.id,
+            PERIOD_END,
+            TTM_PERIOD,
+            {"pe_ratio": 99.0},
+            record_source="yahoo_finance",
+        )
+    values = sorted(row.pe_ratio for row in session.query(FinancialMetricsDB))
+    assert values == [11.0, 20.0]
+
+
 def test_collected_columns_exist_on_the_table():
     assert set(COLLECTED_METRIC_COLUMNS) <= set(
         FinancialMetricsDB.__table__.columns.keys()

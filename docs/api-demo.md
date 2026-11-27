@@ -411,9 +411,12 @@ trailing slash.
   `net_margin` holds Yahoo's profit margin. The row is stored with source
   `yahoo_finance` (or `fake`); the response object does not show the source.
   Fetching again in the same quarter replaces that row's values; a new
-  quarter adds a second row. P/E and P/B use Yahoo's price at fetch time
-  (the row's `updated_at`), while the other ratios are as of `period_end`
-  (the most recent quarter).
+  quarter adds a second row. P/E, P/B, and EV/EBITDA use Yahoo's price at
+  the time the collector retrieved the snapshot. A repeat fetch within the
+  key-metrics cache time (`COLLECTOR_CACHE_TTL_KEY_METRICS_SECONDS`,
+  default one hour) reuses that snapshot, so the price can be up to that
+  long before the row's `updated_at`. The other ratios come from the
+  latest reported statements, dated by `period_end`.
 - HTTP 404: the company is not in the database ("Fetch the company first."), or
   the provider returned no data, no quarter date, or none of the seven score
   figures. Nothing is stored.
