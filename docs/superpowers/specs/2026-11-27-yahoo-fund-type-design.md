@@ -58,8 +58,16 @@ score from fetched data.
   AUM included, and the response says `unavailable`. The collector
   does not clean provider text itself; one set of checks stays at the
   boundary.
-- `financialCurrency` in a minor unit (`GBp`, `ZAc`) drops the AUM:
-  the page would show the fund 100 times too small.
+- Code review round 1 (F2), Przemek's decision: Yahoo gives no AUM at
+  all. `totalAssets` has no date, and the score treats an undated AUM
+  as no data (`app/instrument_score.py`). This replaces decision 4's
+  AUM rule and the `GBp` check. `provenance.as_of` is None; the row's
+  `as_of` falls back to the retrieval date, which says when the row
+  was checked.
+- Code review round 1 (F3): `provider_error` is its own status, and a
+  row from another source answers `kept` without asking the provider.
+- Code review round 1 (F1): the instrument page shows a collector
+  row's source (`yahoo_finance`) instead of "no data".
 - A refresh turns any stored `STOCK` into a fund type, including a
   `STOCK` the owner chose. The app cannot tell the two apart, and an
   ETF stored as a stock is the common case.

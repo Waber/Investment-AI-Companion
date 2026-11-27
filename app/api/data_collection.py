@@ -39,6 +39,7 @@ from app.models.company import (
     TICKER_PATTERN,
     normalize_ticker,
 )
+from app.models.database_models import RECORD_SOURCE_FAKE, RECORD_SOURCE_YAHOO
 from app.models.financial_metrics import FinancialMetrics
 from app.models.fund_attributes import FundAttributesCreate
 from app.repositories.company_repository import CompanyRepository
@@ -179,7 +180,12 @@ def _provider_description(company_info: dict) -> object:
 
 INSTRUMENT_TYPES = ("STOCK", "ETF", "ETC")
 FUND_TYPES = ("ETF", "ETC")
-FundFactsStatus = Literal["created", "updated", "kept", "unavailable"]
+FundFactsStatus = Literal[
+    "created", "updated", "kept", "unavailable", "provider_error"
+]
+# Sources a collector writes. A row from any other source belongs to a
+# person or the seeder and is never refreshed.
+_COLLECTOR_SOURCES = frozenset({RECORD_SOURCE_YAHOO, RECORD_SOURCE_FAKE})
 
 
 class FetchCompanyResponse(BaseModel):
@@ -188,8 +194,10 @@ class FetchCompanyResponse(BaseModel):
     ``fund_attributes`` is null for a stock. For an ETF or an ETC it
     says what happened to the collector's fund-attribute row:
     ``created``, ``updated``, ``kept`` (a manual, demo, or fixture row
-    is there and stays), or ``unavailable`` (no facts, bad facts, or a
-    provider error; the company is still saved).
+    is there and stays; the provider is not asked), ``unavailable``
+    (the provider has no usable facts; enter them by hand), or
+    ``provider_error`` (the provider failed; try again later). The
+    company is saved in every case.
     """
 
     success: bool
@@ -226,6 +234,10 @@ def _collect_fund_facts(db, collector, company, ticker) -> FundFactsStatus:
     same checks a person's input gets. Only the error class is logged:
     a validation message would repeat provider text.
     """
+    repository = FundAttributesRepository(db)
+    stored = repository.get_by_company(company.id)
+    if stored is not None and stored.source not in _COLLECTOR_SOURCES:
+        return "kept"
     if not isinstance(collector, FundFactsSource):
         return "unavailable"
     try:
@@ -244,7 +256,7 @@ def _collect_fund_facts(db, collector, company, ticker) -> FundFactsStatus:
             **facts,
             as_of=provenance.as_of or provenance.retrieved_at.date(),
         )
-        _row, created = FundAttributesRepository(db).upsert_collected(
+        _row, created = repository.upsert_collected(
             company.id,
             attributes,
             record_source=provenance.source,
@@ -252,6 +264,10 @@ def _collect_fund_facts(db, collector, company, ticker) -> FundFactsStatus:
         )
     except CollectedRowConflict:
         return "kept"
+    except ProviderError:
+        # The collector already logged the cause.
+        logger.error("Data provider error for ticker %r", ticker)
+        return "provider_error"
     except Exception as exc:
         db.rollback()
         logger.error(

@@ -9,7 +9,12 @@ from datetime import date, datetime, timezone
 import pytest
 
 from app.api.data_collection import get_collector
-from app.data_collectors.base import Provenance, ProviderError, Sourced
+from app.data_collectors.base import (
+    Provenance,
+    ProviderError,
+    Sourced,
+    TransientProviderError,
+)
 
 URL = "/api/v1/data-collection/fetch-company"
 RETRIEVED = datetime(2026, 11, 27, 9, 0, tzinfo=timezone.utc)
@@ -48,6 +53,7 @@ class StubCollector:
         self.facts = facts
         self.error = error
         self.provenance = provenance or _provenance()
+        self.fund_calls = 0
 
     def fetch_company_info(self, ticker):
         return Sourced(
@@ -60,6 +66,7 @@ class StubCollector:
         )
 
     def fetch_fund_attributes(self, ticker):
+        self.fund_calls += 1
         if self.error is not None:
             raise self.error
         if self.facts is None:
@@ -200,17 +207,26 @@ async def test_a_refresh_keeps_an_etc_set_by_hand(client, provider_type):
 
 
 @pytest.mark.parametrize(
-    "error", [ProviderError("down"), RuntimeError("bug in adapter")]
+    ("error", "status"),
+    [
+        # Try again later: the provider failed (rate limit, timeout, ...).
+        (ProviderError("down"), "provider_error"),
+        (TransientProviderError("rate limited"), "provider_error"),
+        # A bug in the adapter is not the provider's failure.
+        (RuntimeError("bug in adapter"), "unavailable"),
+    ],
 )
 @pytest.mark.asyncio
-async def test_a_fund_fact_failure_keeps_the_saved_company(client, error):
+async def test_a_fund_fact_failure_keeps_the_saved_company(
+    client, error, status
+):
     _use(client, StubCollector(error=error))
 
     payload = await _fetch(client)
 
     assert payload["success"] is True
     assert payload["instrument_type"] == "ETF"
-    assert payload["fund_attributes"] == "unavailable"
+    assert payload["fund_attributes"] == status
     assert await _attributes(client, payload["company_id"]) is None
 
 
@@ -295,17 +311,24 @@ async def test_a_refresh_never_changes_a_stored_etf(client, provider_type):
 
 
 @pytest.mark.parametrize(
-    "later",
+    ("later", "status"),
     [
-        StubCollector(facts=None),
-        StubCollector(facts={**dict.fromkeys(ETF_FACTS), "fund_type": "ETF"}),
-        StubCollector(facts={**ETF_FACTS, "ter": 5.0}),
-        StubCollector(error=ProviderError("down")),
+        (StubCollector(facts=None), "unavailable"),
+        (
+            StubCollector(
+                facts={**dict.fromkeys(ETF_FACTS), "fund_type": "ETF"}
+            ),
+            "unavailable",
+        ),
+        (StubCollector(facts={**ETF_FACTS, "ter": 5.0}), "unavailable"),
+        (StubCollector(error=ProviderError("down")), "provider_error"),
     ],
     ids=["no-data", "no-facts", "bad-facts", "provider-error"],
 )
 @pytest.mark.asyncio
-async def test_an_unavailable_refresh_keeps_the_earlier_row(client, later):
+async def test_an_unavailable_refresh_keeps_the_earlier_row(
+    client, later, status
+):
     _use(client, StubCollector())
     company_id = (await _fetch(client))["company_id"]
     before = await _attributes(client, company_id)
@@ -313,7 +336,7 @@ async def test_an_unavailable_refresh_keeps_the_earlier_row(client, later):
 
     payload = await _fetch(client)
 
-    assert payload["fund_attributes"] == "unavailable"
+    assert payload["fund_attributes"] == status
     assert await _attributes(client, company_id) == before
 
 
@@ -335,3 +358,40 @@ async def test_the_row_is_dated_by_the_provider_then_by_retrieval(
     assert (await _attributes(client, payload["company_id"]))[
         "as_of"
     ] == stored
+
+
+@pytest.mark.parametrize("provider_type", ["STOCK", "ETF"])
+@pytest.mark.asyncio
+async def test_a_manual_row_is_kept_without_asking_the_provider(
+    client, provider_type
+):
+    # An ETC set by hand with a TER typed in: Yahoo says EQUITY and has
+    # no fund facts, and the answer is still "kept", not "unavailable".
+    _use(client, StubCollector(instrument_type="STOCK"))
+    company_id = (await _fetch(client, "4GLD.DE"))["company_id"]
+    await client.put(
+        f"/api/v1/companies/{company_id}", json={"instrument_type": "ETC"}
+    )
+    created = await client.post(
+        f"/api/v1/instruments/{company_id}/fund-attributes",
+        json={"ter": 0.0036, "as_of": "2026-11-01"},
+    )
+    assert created.status_code == 201
+    later = StubCollector(instrument_type=provider_type, facts=None)
+    _use(client, later)
+
+    payload = await _fetch(client, "4GLD.DE")
+
+    assert payload["fund_attributes"] == "kept"
+    assert later.fund_calls == 0
+    assert (await _attributes(client, company_id))["ter"] == 0.0036
+
+
+@pytest.mark.asyncio
+async def test_the_fake_collector_refreshes_its_own_row(client):
+    first = await _fetch(client, "DEMO_ETF_WORLD")
+
+    second = await _fetch(client, "DEMO_ETF_WORLD")
+
+    assert first["fund_attributes"] == "created"
+    assert second["fund_attributes"] == "updated"

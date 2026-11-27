@@ -44,8 +44,23 @@
   changes, test gaps only; all seven gaps got tests, and every
   surviving mutant QA named, plus a missing-rollback mutant, is now
   killed. After the fixes: 2608 passed and the 3 known local failures.
-- AI model: Claude Opus 5.5; QA and Security reviews on Opus 5.5.
-- Time: about 17:05 to 18:40 CET on 2026-11-27.
+- Code review round 1 on `676c354` (code-reviewer, terminal only):
+  2 Critical, 3 Minor. F1: the instrument page showed "no data" as the
+  source of a `yahoo_finance` row, because the view treated every
+  non-synthetic row as manual; it now shows the stored source and
+  hides only `manual`. F2: the AUM was dated by the fetch day, against
+  the rule that an undated AUM is no data; Przemek chose not to store
+  Yahoo's AUM at all, so `provenance.as_of` is None too and the `GBp`
+  check is gone. F3: `provider_error` is its own status, and a row
+  from another source answers `kept` without a provider call. F4: the
+  two Yahoo calls per ETF are documented. F5: the PR body now has the
+  command, current counts, and an undo note. Each fix had a failing
+  test; four mutants of the new rules were killed (one survivor got a
+  test for the fake collector refreshing its own row).
+- Live re-check: SPY scored 90.55 from cost alone, page source
+  `yahoo_finance`. Full suite: 2606 passed, the 3 known local failures.
+- AI model: Claude Opus 5.5; QA, Security, and code review on Opus 5.5.
+- Time: about 17:05 to 18:35 CET on 2026-11-27.
 
 ## 2026-11-27 - Team agent subagents: review and index (Refs #143)
 

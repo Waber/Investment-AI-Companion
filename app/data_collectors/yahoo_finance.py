@@ -12,7 +12,6 @@ import numbers
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional
@@ -34,12 +33,8 @@ from app.data_collectors.call_budget import (
     push_budget,
     remaining,
 )
-from app.models.company import (
-    MINOR_UNIT_CURRENCIES,
-    normalize_currency,
-    normalize_ticker,
-)
-from app.models.fund_attributes import AUM_MAX, TER_MAX
+from app.models.company import normalize_ticker
+from app.models.fund_attributes import TER_MAX
 
 logger = logging.getLogger(__name__)
 
@@ -313,21 +308,6 @@ def _ter_fraction(info: Dict[str, Any]) -> Optional[float]:
     if percent is None:
         return None
     return float(percent / 100)
-
-
-def _reporting_currency(info: Dict[str, Any]) -> Optional[str]:
-    """An ISO code for the fund's AUM, or None.
-
-    A minor unit such as ``GBp`` is a price unit. An AUM stored in it
-    would show the fund 100 times too small.
-    """
-    try:
-        currency = normalize_currency(info.get("financialCurrency"))
-    except ValueError:
-        return None
-    if not isinstance(currency, str) or currency in MINOR_UNIT_CURRENCIES:
-        return None
-    return currency
 
 
 def _utc_now() -> datetime:
@@ -796,18 +776,14 @@ class YahooFinanceCollector:
     ) -> Optional[Sourced[Dict[str, Any]]]:
         """ETF facts from ``info``, or None when Yahoo does not say ETF.
 
-        Yahoo gives TER (``netExpenseRatio``), assets under management
-        (``totalAssets``), and the issuer (``fundFamily``). It has no
-        field for the underlying, domicile, replication, or
-        distribution policy, so those are None.
+        Yahoo gives TER (``netExpenseRatio``) and the issuer
+        (``fundFamily``). It has no field for the underlying, domicile,
+        replication, or distribution policy, so those are None.
 
-        ``totalAssets`` is kept only with ``financialCurrency``. Without
-        it the reporting currency is unknown: the listing currency of
-        VWCE.DE is EUR while the fund reports in USD. A guessed currency
-        would be wrong data, so the amount is dropped.
-
-        Yahoo does not date these values. ``as_of`` and ``aum_as_of``
-        are the UTC date they were retrieved.
+        AUM stays None. Yahoo's ``totalAssets`` has no date, and the
+        score treats an undated AUM as no data (Przemek's decision on
+        the #160 review, 2026-11-27). Yahoo does not date the other
+        values either, so ``provenance.as_of`` is None.
 
         Raises:
             ProviderError: when yfinance fails.
@@ -822,16 +798,10 @@ class YahooFinanceCollector:
             info = _open_ticker(symbol).info
             is_etf = not _has_no_data(info) and info.get("quoteType") == "ETF"
             if is_etf:
-                currency = _reporting_currency(info)
-                aum = _bounded(info.get("totalAssets"), AUM_MAX)
-                if currency is None or aum is None:
-                    currency = aum = None
                 issuer = info.get("fundFamily")
                 attributes = {
                     "fund_type": "ETF",
                     "ter": _ter_fraction(info),
-                    "aum": None if aum is None else float(aum),
-                    "aum_currency": currency,
                     "issuer": issuer if isinstance(issuer, str) else None,
                 }
         except Exception as e:
@@ -845,12 +815,9 @@ class YahooFinanceCollector:
             logger.warning("No fund attributes found for %r", symbol)
             _raise_if_deadline_hid_the_result(None)
             return None
-        provenance = self._provenance()
-        day = provenance.retrieved_at.date()
         return Sourced(
-            {field: attributes.get(field) for field in FUND_ATTRIBUTE_FIELDS}
-            | {"aum_as_of": day if attributes["aum"] is not None else None},
-            replace(provenance, as_of=day),
+            {field: attributes.get(field) for field in FUND_ATTRIBUTE_FIELDS},
+            self._provenance(),
         )
 
     def fetch_news(self, ticker: str, limit: int = 10) -> Optional[list]:

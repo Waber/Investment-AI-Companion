@@ -18,6 +18,7 @@ from datetime import date, datetime, timezone
 from urllib.parse import urlsplit
 
 from app.core.utc_datetime import as_utc
+from app.models.database_models import RECORD_SOURCE_MANUAL
 
 # One runtime label for every synthetic company. The owner chose this
 # on 2026-11-08 instead of ``demo-v1`` and ``demo-v2``. It is not
@@ -97,8 +98,9 @@ class PeriodView:
 class FundAttributesView:
     """ETF or ETC facts. A missing value is None, never zero.
 
-    ``source`` is the word ``demo`` when the row is synthetic, and
-    None for a manual row, matching the company badge. ``ter`` is
+    ``source`` is the word ``demo`` when the row is synthetic, None
+    for a manual row (matching the company badge), and the stored
+    source for a collector row such as ``yahoo_finance``. ``ter`` is
     the stored fraction (0.0022 means 0.22 percent).
     """
 
@@ -316,9 +318,16 @@ def _fund_view(row):
         aum_currency=_text(row.aum_currency),
         aum_as_of=_midnight(row.aum_as_of),
         as_of=_midnight(row.as_of),
-        source=DEMO_SOURCE if synthetic else None,
+        source=_fund_source(row, synthetic),
         is_synthetic=synthetic,
     )
+
+
+def _fund_source(row, synthetic):
+    if synthetic:
+        return DEMO_SOURCE
+    source = _text(getattr(row, "source", None))
+    return None if source == RECORD_SOURCE_MANUAL else source
 
 
 def _metric_view(metric):

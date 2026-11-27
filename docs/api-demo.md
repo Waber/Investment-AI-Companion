@@ -411,16 +411,21 @@ fetch-company also sets the instrument type and, for a fund, its attributes
   so. It never changes a stored `ETF` or `ETC`.
 - For an `ETF` or `ETC`, the route fetches fund attributes and stores them
   with source `yahoo_finance` (or `fake`, marked synthetic). From Yahoo: TER
-  from `netExpenseRatio` (a percent, stored as a fraction), AUM from
-  `totalAssets` only when `financialCurrency` gives its currency, and the
-  issuer from `fundFamily`. Yahoo has no underlying, domicile, replication,
-  or distribution policy. `as_of` and `aum_as_of` are the retrieval date.
+  from `netExpenseRatio` (a percent, stored as a fraction) and the issuer
+  from `fundFamily`. Yahoo's `totalAssets` has no date, and the score treats
+  an undated AUM as no data, so Yahoo gives no AUM; enter it by hand. Yahoo
+  has no underlying, domicile, replication, or distribution policy either.
+  The row's `as_of` is the retrieval date: it says when the row was checked.
   A refresh rewrites every fact of the collector's row. A `manual`, `demo`,
-  or `fixture` row is never overwritten.
+  or `fixture` row is never overwritten, and the provider is not asked.
 - The response adds `instrument_type` and `fund_attributes`: `created`,
-  `updated`, `kept` (another source's row stays), `unavailable` (no facts,
-  bad facts, or a provider error; the company is still saved), or null for a
-  stock.
+  `updated`, `kept` (another source's row stays), `unavailable` (the
+  provider has no usable facts), `provider_error` (the provider failed; try
+  again later), or null for a stock. The company is saved in every case.
+- An ETF or ETC costs two guarded Yahoo calls (company info, then fund
+  attributes). Each takes a rate-limit token and has its own
+  `COLLECTOR_TOTAL_DEADLINE_SECONDS`, so one request can wait up to twice
+  that time.
 
 `POST /api/v1/data-collection/fetch-financial-metrics` takes the same body
 (`{"ticker":"AAPL"}`) and stores the latest Yahoo ratios of an existing stock as

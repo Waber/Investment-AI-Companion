@@ -2,55 +2,43 @@
 
 ## Yahoo instrument type and fund attributes (#153): 2026-11-27, in review
 
-- Branch `feat/153-yahoo-fund-type`, from `origin/master` `51eb7c4`.
-  Refs #153, Refs #54, Refs #28. Design
+- Branch `feat/153-yahoo-fund-type`, pull request #160, from
+  `origin/master` `51eb7c4`. Refs #153, Refs #54, Refs #28. Design
   `docs/superpowers/specs/2026-11-27-yahoo-fund-type-design.md`. No
-  Alembic revision: `yahoo_finance` and `fake` were already allowed
-  sources.
+  Alembic revision.
 - Completed: the company dict has `instrument_type` (Yahoo `EQUITY`
-  is `STOCK`, `ETF` is `ETF`, other types None; the fake names
-  `STOCK`, `ETF`, or `ETC`). `fetch-company` creates with that type
-  (None stays `STOCK`), and a refresh turns a stored `STOCK` into a
-  fund type but never changes an `ETF` or `ETC`.
-  `YahooFinanceCollector.fetch_fund_attributes` reads TER
-  (`netExpenseRatio / 100`), AUM (`totalAssets`, only with
-  `financialCurrency`), and the issuer (`fundFamily`).
-  `FundAttributesRepository.upsert_collected` writes the collector's
-  row and never overwrites another source. The response adds
-  `instrument_type` and `fund_attributes`.
-- Live check against real Yahoo on a temporary database (2026-11-27):
-  VWCE.DE `ETF`, issuer only (no TER, AUM without a currency); SPY
-  `ETF`, TER 0.0945%, AUM 796.9e9 USD, fund score 95.28 from cost and
-  size; IWDA.AS `ETF`, TER 0.20%; ETFBW20TR.WA `ETF`, no facts
-  (`unavailable`); 4GLD.DE (an ETC) and AAPL `STOCK`; a second SPY
-  fetch answered `updated`.
-- Known gaps: an ETC arrives as `STOCK` and is set by hand; VWCE.DE
-  gets no TER or AUM from Yahoo, so its fund score needs a manual TER
-  (a manual row is then kept on refresh); fund prices for volatility
-  and drawdown are #154.
-- Tests: the full suite with `-W error::DeprecationWarning` and
-  coverage: 2586 passed and 3 failed, the known local ones (two 0006
-  float tests, #122, and the `run_demo` `.env` test); coverage 97%.
-  `test_collector_guard` and `test_collector_selection` pinned the old
-  "Yahoo has no fund attributes" rule and now assert the new one.
-  Five mutants of the new rules were each killed. black, isort,
-  and flake8 pass on the changed Python files.
-- Review, head `5f54049`: QA (request changes, test gaps only, no
-  product bug) and Security (approve with nits), run as general
-  agents from the new role files. Fixed in the next commit: AUM in a
-  minor-unit currency (`GBp`) is dropped; tests for TER above 1%, a
-  stored ETF that never changes, an `unavailable` refresh that keeps
-  the earlier row, the spent deadline on the fund call, a non-text
-  issuer, the `as_of` order, `updated_at`, and the rollback. QA's ten
-  surviving mutants and the rollback mutant are now killed. Accepted
-  as designed: a refresh turns an owner-chosen `STOCK` into a fund
-  type; a bad text fact drops the whole snapshot. Deferred: the
-  non-atomic source check, #161 (server phase).
-- After the fixes: 2608 passed and the same 3 known local failures;
-  coverage 97%.
+  is `STOCK`, `ETF` is `ETF`; the fake names `STOCK`, `ETF`, `ETC`).
+  `fetch-company` creates with that type (None stays `STOCK`); a
+  refresh turns a stored `STOCK` into a fund type and never changes an
+  `ETF` or `ETC`. Yahoo fund attributes: TER (`netExpenseRatio / 100`)
+  and issuer (`fundFamily`); no AUM (undated, Przemek's decision on
+  review F2). `upsert_collected` never overwrites another source; a
+  row from another source answers `kept` without a provider call. The
+  response adds `instrument_type` and `fund_attributes` (`created`,
+  `updated`, `kept`, `unavailable`, `provider_error`). The instrument
+  page shows `yahoo_finance` as a collector row's source.
+- Reviews: QA and Security on `5f54049` (fixed in `676c354`; QA
+  re-check approved). Code review round 1 on `676c354`, terminal only:
+  2 Critical (the page showed "no data" as the source of a Yahoo row;
+  the AUM was dated by the fetch day), 3 Minor (one status for three
+  cases, two Yahoo calls per ETF, stale PR body). All fixed in the
+  next commit; F2 by Przemek's choice not to store Yahoo AUM.
+- Live check after the fixes (real Yahoo, temporary database): SPY
+  `ETF`, TER 0.0945%, no AUM, fund score 90.55 from cost alone, page
+  source `yahoo_finance`; VWCE.DE `ETF`, issuer only, no score.
+- Known gaps: an ETC is set by hand; AUM and, for VWCE.DE, TER need a
+  manual entry (kept on refresh); fund prices for volatility and
+  drawdown are #154; the non-atomic source check is #161.
+- Tests: full suite with `-W error::DeprecationWarning` and coverage:
+  2606 passed, 3 failed (the known local ones: two 0006 float tests,
+  #122, and the `run_demo` `.env` test, which passes in a clean
+  checkout); coverage 97%. black, isort, flake8 clean.
+- Undo: reverting the code leaves the data. Instruments a refresh
+  turned into `ETF` stay `ETF`, and `yahoo_finance` fund rows stay;
+  change the type on the edit form and delete the fund row there.
 - Active agents: none. Blockers: none.
-- Next action: QA on the delta, then Code Review (`/review-pr 160`),
-  then Przemek's merge decision. Then #154.
+- Next action: code review round 2 on the new head, then Przemek's
+  merge decision. Then #154.
 
 ## Team agent subagents (#143): 2026-11-27, merged
 

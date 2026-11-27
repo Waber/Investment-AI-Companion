@@ -956,9 +956,10 @@ def test_fund_attributes_map_an_etf(install_ticker, collector):
         "fund_type": "ETF",
         # netExpenseRatio is a percent; the app stores a fraction.
         "ter": 0.000945,
-        "aum": 796865200128.0,
-        "aum_currency": "USD",
-        "aum_as_of": NOW.date(),
+        # totalAssets has no date, and an undated AUM is no data.
+        "aum": None,
+        "aum_currency": None,
+        "aum_as_of": None,
         "issuer": "State Street Investment Management",
         "underlying": None,
         "domicile": None,
@@ -966,31 +967,10 @@ def test_fund_attributes_map_an_etf(install_ticker, collector):
         "distribution_policy": None,
     }
     assert result.provenance.source == "yahoo_finance"
-    assert result.provenance.as_of == NOW.date()
+    # Yahoo does not date these values.
+    assert result.provenance.as_of is None
+    assert result.provenance.retrieved_at == NOW
     assert result.provenance.synthetic is False
-
-
-def test_fund_attributes_drop_aum_without_a_financial_currency(
-    install_ticker, collector
-):
-    # VWCE.DE on 2026-11-27: totalAssets without financialCurrency. The
-    # listing currency (EUR) is not the fund's reporting currency.
-    install_ticker(
-        info={
-            "quoteType": "ETF",
-            "longName": "Vanguard FTSE All-World UCITS ETF",
-            "totalAssets": 88843730944,
-            "currency": "EUR",
-        }
-    )
-
-    value = collector.fetch_fund_attributes("VWCE.DE").value
-
-    assert value["aum"] is None
-    assert value["aum_currency"] is None
-    assert value["aum_as_of"] is None
-    assert value["ter"] is None
-    assert value["issuer"] is None
 
 
 @pytest.mark.parametrize("bad", [float("nan"), "0.2", True])
@@ -1013,32 +993,6 @@ def test_fund_attributes_are_none_unless_yahoo_says_etf(
 
 def test_fund_attributes_raise_provider_error(exploding_ticker, collector):
     assert_provider_error(lambda: collector.fetch_fund_attributes("SPY"))
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        {"financialCurrency": "US Dollar"},
-        {"financialCurrency": 840},
-        # Pence and cents would show the fund 100 times too small.
-        {"financialCurrency": "GBp"},
-        {"financialCurrency": "ZAc"},
-        {"totalAssets": 10**400},
-        {"totalAssets": -1},
-        {"totalAssets": float("inf")},
-    ],
-)
-def test_fund_attributes_drop_an_unusable_aum(
-    install_ticker, collector, overrides
-):
-    install_ticker(info={**SPY_INFO, **overrides})
-
-    value = collector.fetch_fund_attributes("SPY").value
-
-    assert value["aum"] is None
-    assert value["aum_currency"] is None
-    assert value["aum_as_of"] is None
-    assert value["ter"] == 0.000945
 
 
 @pytest.mark.parametrize(
