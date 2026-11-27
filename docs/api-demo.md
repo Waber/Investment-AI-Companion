@@ -409,8 +409,11 @@ trailing slash.
 - HTTP 200: the stored row as a financial-metrics object. `period_type` is
   `ttm`, `period_end` is the provider's most recent quarter at 00:00 UTC, and
   `net_margin` holds Yahoo's profit margin. The row is stored with source
-  `yahoo_finance` (or `fake`); the response object does not show the source. Fetching again in the same quarter replaces that row's values; a new
-  quarter adds a second row.
+  `yahoo_finance` (or `fake`); the response object does not show the source.
+  Fetching again in the same quarter replaces that row's values; a new
+  quarter adds a second row. P/E and P/B use Yahoo's price at fetch time
+  (the row's `updated_at`), while the other ratios are as of `period_end`
+  (the most recent quarter).
 - HTTP 404: the company is not in the database ("Fetch the company first."), or
   the provider returned no data, no quarter date, or none of the seven score
   figures. Nothing is stored.

@@ -888,7 +888,18 @@ def test_key_metrics_are_dated_by_the_most_recent_quarter(
 
 
 @pytest.mark.parametrize(
-    "raw", [None, "1790726400", 0, -5, True, float("nan"), 10**20]
+    "raw",
+    [
+        None,
+        "1790726400",
+        0,
+        -5,
+        True,
+        float("nan"),
+        float("inf"),
+        10**20,
+        10**400,
+    ],
 )
 def test_an_unreadable_most_recent_quarter_leaves_as_of_empty(
     install_ticker, collector, raw

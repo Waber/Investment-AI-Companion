@@ -313,9 +313,14 @@ def _quarter_date(value: Any) -> Optional[date]:
     ``OverflowError``, ``OSError`` or ``ValueError`` for timestamps that
     are too large for a date, and those also give ``None``.
     """
-    if not _is_real_number(value) or not math.isfinite(value) or value <= 0:
+    if not _is_real_number(value):
         return None
     try:
+        # math.isfinite converts an int to a float first, so a huge int
+        # (10**400) raises OverflowError here. It must stay inside the
+        # try so that value also gives None.
+        if not math.isfinite(value) or value <= 0:
+            return None
         return datetime.fromtimestamp(value, timezone.utc).date()
     except (OverflowError, OSError, ValueError):
         return None

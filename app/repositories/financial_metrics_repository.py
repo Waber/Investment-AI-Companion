@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -138,12 +139,18 @@ class FinancialMetricsRepository:
         source = require_record_source(record_source)
         period_end = as_utc(period_end)
 
+        # Match period_type ignoring case and surrounding spaces. The
+        # forms store period_type exactly as typed, but scoring
+        # casefolds it, so a manual "TTM" or " ttm " is the same period
+        # as the collector's "ttm" and must raise a conflict instead of
+        # slipping past an exact-match lookup.
         row = (
             self.db.query(FinancialMetricsDB)
             .filter(
                 FinancialMetricsDB.company_id == company_id,
                 FinancialMetricsDB.period_end == period_end,
-                FinancialMetricsDB.period_type == period_type,
+                func.lower(func.trim(FinancialMetricsDB.period_type))
+                == period_type.strip().lower(),
             )
             .first()
         )

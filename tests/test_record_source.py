@@ -57,7 +57,7 @@ def test_require_record_source_accepts_the_allowed_values(value):
 def test_require_record_source_rejects_missing_and_unknown_values(value):
     """Missing, blank, wrong case, and unknown sources are one error.
 
-    The message names the three allowed values. ``demo-v1`` is not a
+    The message names the five allowed values. ``demo-v1`` is not a
     source: the owner label is the single word ``demo``.
     """
     with pytest.raises(ValueError, match="yahoo_finance, or fake"):
