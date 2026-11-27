@@ -35,8 +35,17 @@
   - Live: `fetch-company` with `DATA_COLLECTOR=yahoo` on a temporary
     SQLite database for VWCE.DE, SPY, IWDA.AS, ETFBW20TR.WA, 4GLD.DE,
     and AAPL (results in the work state). SPY's fund score: 95.28.
-- AI model: Claude Opus 5.5.
-- Time: about 17:05 to 18:00 CET on 2026-11-27.
+- Review of `5f54049`, in the order of the AGENTS.md "Team agents"
+  section: QA and Security in parallel (general agents reading the new
+  role files, since Claude Code loads new agents only after a restart).
+  Security: approve with nits; a `GBp` AUM would show the fund 100
+  times too small (fixed), the docstring (fixed), the owner-chosen
+  `STOCK` (accepted), the non-atomic check (#161). QA: request
+  changes, test gaps only; all seven gaps got tests, and every
+  surviving mutant QA named, plus a missing-rollback mutant, is now
+  killed. After the fixes: 2608 passed and the 3 known local failures.
+- AI model: Claude Opus 5.5; QA and Security reviews on Opus 5.5.
+- Time: about 17:05 to 18:40 CET on 2026-11-27.
 
 ## 2026-11-27 - Team agent subagents: review and index (Refs #143)
 

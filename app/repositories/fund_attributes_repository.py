@@ -2,8 +2,9 @@
 
 Only an ETF or an ETC may have that row. A stock is rejected. The
 public write payload cannot carry ``source`` or ``is_synthetic``.
-Those are arguments of ``create``, and an update always records
-``manual`` without changing the synthetic flag. ``delete`` removes
+Those are arguments of ``create`` and ``upsert_collected`` (the
+collector's row), and an update always records ``manual`` without
+changing the synthetic flag. ``delete`` removes
 the row and does not take a source: the company, its prices, and
 its notes stay.
 """

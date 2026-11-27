@@ -35,9 +35,22 @@
   "Yahoo has no fund attributes" rule and now assert the new one.
   Five mutants of the new rules were each killed. black, isort,
   and flake8 pass on the changed Python files.
+- Review, head `5f54049`: QA (request changes, test gaps only, no
+  product bug) and Security (approve with nits), run as general
+  agents from the new role files. Fixed in the next commit: AUM in a
+  minor-unit currency (`GBp`) is dropped; tests for TER above 1%, a
+  stored ETF that never changes, an `unavailable` refresh that keeps
+  the earlier row, the spent deadline on the fund call, a non-text
+  issuer, the `as_of` order, `updated_at`, and the rollback. QA's ten
+  surviving mutants and the rollback mutant are now killed. Accepted
+  as designed: a refresh turns an owner-chosen `STOCK` into a fund
+  type; a bad text fact drops the whole snapshot. Deferred: the
+  non-atomic source check, #161 (server phase).
+- After the fixes: 2608 passed and the same 3 known local failures;
+  coverage 97%.
 - Active agents: none. Blockers: none.
-- Next action: review round 1 (`/review-pr`), then Przemek's merge
-  decision. Then #154.
+- Next action: QA on the delta, then Code Review (`/review-pr 160`),
+  then Przemek's merge decision. Then #154.
 
 ## Team agent subagents (#143): 2026-11-27, merged
 

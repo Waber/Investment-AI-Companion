@@ -4,9 +4,10 @@ A collector may only replace a row it wrote. A manual, demo, or fixture
 row on the same instrument stays untouched.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base, create_db_engine
@@ -182,3 +183,36 @@ def test_a_mapping_without_as_of_is_rejected(session):
             record_source="yahoo_finance",
             is_synthetic=False,
         )
+
+
+def test_refresh_moves_updated_at(session):
+    fund = _company(session)
+    row, _created = _upsert(session, fund.id, _snapshot())
+    old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    row.updated_at = old
+    session.commit()
+
+    row, _created = _upsert(session, fund.id, _snapshot(ter=0.0009))
+
+    stored = row.updated_at
+    if stored.tzinfo is None:
+        stored = stored.replace(tzinfo=timezone.utc)
+    assert stored > old
+
+
+def test_a_failed_commit_is_rolled_back_and_reported(session, monkeypatch):
+    fund = _company(session)
+
+    def refuse():
+        raise IntegrityError("INSERT", {}, Exception("duplicate"))
+
+    monkeypatch.setattr(session, "commit", refuse)
+
+    with pytest.raises(ValueError, match="collected fund attributes"):
+        _upsert(session, fund.id, _snapshot())
+
+    monkeypatch.undo()
+    # Without the rollback the pending row would be written by the
+    # session's next commit.
+    session.commit()
+    assert FundAttributesRepository(session).get_by_company(fund.id) is None

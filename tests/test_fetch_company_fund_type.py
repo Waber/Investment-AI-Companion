@@ -37,10 +37,17 @@ def _provenance():
 class StubCollector:
     """A provider that names a type and serves fund facts or fails."""
 
-    def __init__(self, instrument_type="ETF", facts=ETF_FACTS, error=None):
+    def __init__(
+        self,
+        instrument_type="ETF",
+        facts=ETF_FACTS,
+        error=None,
+        provenance=None,
+    ):
         self.instrument_type = instrument_type
         self.facts = facts
         self.error = error
+        self.provenance = provenance or _provenance()
 
     def fetch_company_info(self, ticker):
         return Sourced(
@@ -57,7 +64,7 @@ class StubCollector:
             raise self.error
         if self.facts is None:
             return None
-        return Sourced(dict(self.facts), _provenance())
+        return Sourced(dict(self.facts), self.provenance)
 
 
 def _use(client, collector):
@@ -272,3 +279,59 @@ async def test_the_fake_collector_stores_synthetic_fund_rows(
     assert row["source"] == "fake"
     assert row["is_synthetic"] is True
     assert row["as_of"] == date(2026, 9, 30).isoformat()
+
+
+@pytest.mark.parametrize("provider_type", ["ETC", "STOCK", None])
+@pytest.mark.asyncio
+async def test_a_refresh_never_changes_a_stored_etf(client, provider_type):
+    _use(client, StubCollector(instrument_type="ETF"))
+    company_id = (await _fetch(client))["company_id"]
+    _use(client, StubCollector(instrument_type=provider_type))
+
+    payload = await _fetch(client)
+
+    assert payload["instrument_type"] == "ETF"
+    assert (await _instrument(client, company_id))["instrument_type"] == "ETF"
+
+
+@pytest.mark.parametrize(
+    "later",
+    [
+        StubCollector(facts=None),
+        StubCollector(facts={**dict.fromkeys(ETF_FACTS), "fund_type": "ETF"}),
+        StubCollector(facts={**ETF_FACTS, "ter": 5.0}),
+        StubCollector(error=ProviderError("down")),
+    ],
+    ids=["no-data", "no-facts", "bad-facts", "provider-error"],
+)
+@pytest.mark.asyncio
+async def test_an_unavailable_refresh_keeps_the_earlier_row(client, later):
+    _use(client, StubCollector())
+    company_id = (await _fetch(client))["company_id"]
+    before = await _attributes(client, company_id)
+    _use(client, later)
+
+    payload = await _fetch(client)
+
+    assert payload["fund_attributes"] == "unavailable"
+    assert await _attributes(client, company_id) == before
+
+
+@pytest.mark.parametrize(
+    ("as_of", "stored"),
+    [(date(2026, 11, 20), "2026-11-20"), (None, DAY.isoformat())],
+)
+@pytest.mark.asyncio
+async def test_the_row_is_dated_by_the_provider_then_by_retrieval(
+    client, as_of, stored
+):
+    provenance = Provenance(
+        source="yahoo_finance", retrieved_at=RETRIEVED, as_of=as_of
+    )
+    _use(client, StubCollector(provenance=provenance))
+
+    payload = await _fetch(client)
+
+    assert (await _attributes(client, payload["company_id"]))[
+        "as_of"
+    ] == stored

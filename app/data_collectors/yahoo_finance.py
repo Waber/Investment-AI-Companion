@@ -34,7 +34,11 @@ from app.data_collectors.call_budget import (
     push_budget,
     remaining,
 )
-from app.models.company import normalize_currency, normalize_ticker
+from app.models.company import (
+    MINOR_UNIT_CURRENCIES,
+    normalize_currency,
+    normalize_ticker,
+)
 from app.models.fund_attributes import AUM_MAX, TER_MAX
 
 logger = logging.getLogger(__name__)
@@ -312,11 +316,18 @@ def _ter_fraction(info: Dict[str, Any]) -> Optional[float]:
 
 
 def _reporting_currency(info: Dict[str, Any]) -> Optional[str]:
+    """An ISO code for the fund's AUM, or None.
+
+    A minor unit such as ``GBp`` is a price unit. An AUM stored in it
+    would show the fund 100 times too small.
+    """
     try:
         currency = normalize_currency(info.get("financialCurrency"))
     except ValueError:
         return None
-    return currency if isinstance(currency, str) else None
+    if not isinstance(currency, str) or currency in MINOR_UNIT_CURRENCIES:
+        return None
+    return currency
 
 
 def _utc_now() -> datetime:

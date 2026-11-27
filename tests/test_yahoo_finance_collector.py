@@ -1020,6 +1020,9 @@ def test_fund_attributes_raise_provider_error(exploding_ticker, collector):
     [
         {"financialCurrency": "US Dollar"},
         {"financialCurrency": 840},
+        # Pence and cents would show the fund 100 times too small.
+        {"financialCurrency": "GBp"},
+        {"financialCurrency": "ZAc"},
         {"totalAssets": 10**400},
         {"totalAssets": -1},
         {"totalAssets": float("inf")},
@@ -1036,3 +1039,60 @@ def test_fund_attributes_drop_an_unusable_aum(
     assert value["aum_currency"] is None
     assert value["aum_as_of"] is None
     assert value["ter"] == 0.000945
+
+
+@pytest.mark.parametrize(
+    ("percent", "fraction"),
+    [(1.5, 0.015), (100, 1.0), (100.01, None), (-0.1, None), (0, 0.0)],
+)
+def test_fund_attributes_keep_a_ter_up_to_one_hundred_percent(
+    install_ticker, collector, percent, fraction
+):
+    # Leveraged and thematic ETFs charge more than 1%.
+    install_ticker(info={**SPY_INFO, "netExpenseRatio": percent})
+
+    assert collector.fetch_fund_attributes("SPY").value["ter"] == fraction
+
+
+@pytest.mark.parametrize("family", [123, {}, ["Vanguard"]])
+def test_fund_attributes_ignore_an_issuer_that_is_not_text(
+    install_ticker, collector, family
+):
+    install_ticker(info={**SPY_INFO, "fundFamily": family})
+
+    value = collector.fetch_fund_attributes("SPY").value
+
+    assert value["issuer"] is None
+    assert value["ter"] == 0.000945
+
+
+def test_spent_deadline_empty_fund_result_is_not_cached(monkeypatch):
+    """A swallowed timeout on the fund call must not be cached as no data."""
+    clock = FakeClock()
+    built = []
+
+    class Spending:
+        def __init__(self, symbol):
+            built.append(symbol)
+            self.symbol = symbol
+
+        @property
+        def info(self):
+            clock.advance(100)
+            return {}
+
+    monkeypatch.setattr(yahoo_finance.yf, "Ticker", Spending)
+    guarded = guard_collector(
+        YahooFinanceCollector(),
+        GuardPolicy(max_retries=0, total_deadline=15),
+        clock=clock,
+        sleep=clock.sleep,
+        rand=lambda: 0.0,
+    )
+
+    with pytest.raises(TransientProviderError, match="deadline"):
+        guarded.fetch_fund_attributes("SPY")
+    with pytest.raises(TransientProviderError, match="deadline"):
+        guarded.fetch_fund_attributes("SPY")
+
+    assert built == ["SPY", "SPY"]

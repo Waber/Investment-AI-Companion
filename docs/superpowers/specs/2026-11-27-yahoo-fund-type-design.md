@@ -51,6 +51,22 @@ score from fetched data.
    `created`, `updated`, `kept`, `unavailable`, or null (not a fund).
    It also returns `instrument_type`.
 
+## Review decisions (2026-11-27)
+
+- A fact that fails `FundAttributesCreate` (for example an issuer with
+  a newline or over 255 characters) drops the whole snapshot, TER and
+  AUM included, and the response says `unavailable`. The collector
+  does not clean provider text itself; one set of checks stays at the
+  boundary.
+- `financialCurrency` in a minor unit (`GBp`, `ZAc`) drops the AUM:
+  the page would show the fund 100 times too small.
+- A refresh turns any stored `STOCK` into a fund type, including a
+  `STOCK` the owner chose. The app cannot tell the two apart, and an
+  ETF stored as a stock is the common case.
+- The source check and the write in `upsert_collected` are not atomic.
+  That matters only with concurrent writers (server phase), tracked
+  in #161.
+
 ## Not in this change
 
 - Telling an ETC from a stock automatically.
