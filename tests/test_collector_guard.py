@@ -49,15 +49,11 @@ def test_guarded_fake_has_every_capability():
     assert all(isinstance(guarded, protocol) for protocol in PROTOCOLS)
 
 
-def test_guarded_yahoo_has_no_fund_attributes():
+def test_guarded_yahoo_has_every_capability():
     # Building the Yahoo collector makes no network call.
     guarded = make(YahooFinanceCollector(), FakeClock())
 
-    assert isinstance(guarded, InstrumentLookup)
-    assert isinstance(guarded, PriceHistory)
-    assert isinstance(guarded, Fundamentals)
-    assert not isinstance(guarded, FundAttributes)
-    assert not hasattr(guarded, "fetch_fund_attributes")
+    assert all(isinstance(guarded, protocol) for protocol in PROTOCOLS)
 
 
 def test_guarded_lookup_has_only_instrument_lookup():

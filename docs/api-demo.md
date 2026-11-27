@@ -400,6 +400,28 @@ the offline synthetic collector instead (see [Demo data](demo-data.md)).
 It is **UNVERIFIED and was not run** for this demo; do not include it in smoke
 tests. It is not covered by the synthetic-record cleanup above.
 
+fetch-company also sets the instrument type and, for a fund, its attributes
+(issue #153):
+
+- A new instrument takes the provider's type. Yahoo `quoteType` `EQUITY` is
+  `STOCK` and `ETF` is `ETF`. Any other quote type is stored as `STOCK`, as
+  before. Yahoo labels an ETC `EQUITY`, so an ETC arrives as `STOCK`; set
+  `ETC` on the edit form.
+- A refresh changes a stored `STOCK` to `ETF` or `ETC` when the provider says
+  so. It never changes a stored `ETF` or `ETC`.
+- For an `ETF` or `ETC`, the route fetches fund attributes and stores them
+  with source `yahoo_finance` (or `fake`, marked synthetic). From Yahoo: TER
+  from `netExpenseRatio` (a percent, stored as a fraction), AUM from
+  `totalAssets` only when `financialCurrency` gives its currency, and the
+  issuer from `fundFamily`. Yahoo has no underlying, domicile, replication,
+  or distribution policy. `as_of` and `aum_as_of` are the retrieval date.
+  A refresh rewrites every fact of the collector's row. A `manual`, `demo`,
+  or `fixture` row is never overwritten.
+- The response adds `instrument_type` and `fund_attributes`: `created`,
+  `updated`, `kept` (another source's row stays), `unavailable` (no facts,
+  bad facts, or a provider error; the company is still saved), or null for a
+  stock.
+
 `POST /api/v1/data-collection/fetch-financial-metrics` takes the same body
 (`{"ticker":"AAPL"}`) and stores the latest Yahoo ratios of an existing stock as
 one TTM row. It also calls Yahoo (with `DATA_COLLECTOR=yahoo`), so it is

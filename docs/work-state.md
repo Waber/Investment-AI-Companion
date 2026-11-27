@@ -1,40 +1,49 @@
 # Current Work State
 
-## Team agent subagents (#143): 2026-11-27, in review
+## Yahoo instrument type and fund attributes (#153): 2026-11-27, in review
 
-- Branch `docs/143-agents-index`, from `origin/master` `c94c54e`.
-  Refs #143. Docs only: `AGENTS.md` gets a "Team agents" section
-  (table of agents and the single review order) and the new
-  `code-reviewer` path. `.claude/agents/code-reviewer.md` moved to
-  `.claude/agents/code-reviewer/code-reviewer.md` with `git mv`; no
-  code or test refers to that path, and `/review-pr` calls the agent
-  by name.
-- Agent pull requests, written by the Grok Bot team on Cursor:
-  #146 project-manager, #147 frontend-developer, #148 developer,
-  #149 qa-engineer, #150 security-engineer. Claude added one commit
-  to #146 to #149 (no force-push): the review order now points to
-  the "Team agents" section, because #147 and #148 said Code
-  Reviewer before QA while #149 said QA first; #148 and #149 dropped
-  the 80% usage stop, which applies to the Grok bot only; #146 and
-  #147 follow `AGENTS.md` on `--force-with-lease`. #150 unchanged.
-- Order source: the journal shows the Grok Bot team ran QA and
-  Security first, then Code Reviewer (2026-10-08 "QA approved
-  `5aa1ccf` and sent it to Code Reviewer"; "Security and QA approved
-  at `f1072cc`").
-- Checked against the Claude Code docs: recursive discovery of
-  `.claude/agents/`, `effort` and `model: inherit` are valid fields,
-  subagents load `AGENTS.md`.
-- Not done: the `researcher` agent has no pull request. Its Grok
-  prompt is not in the repository, so it is left to the Researcher
-  bot (or Przemek pastes the prompt).
-- Merge order: #146 to #150 in any order, then this branch. Before
-  that, the pointer in the agents names a section only this branch
-  adds.
-- Tests: docs only; the suite was not run.
+- Branch `feat/153-yahoo-fund-type`, from `origin/master` `51eb7c4`.
+  Refs #153, Refs #54, Refs #28. Design
+  `docs/superpowers/specs/2026-11-27-yahoo-fund-type-design.md`. No
+  Alembic revision: `yahoo_finance` and `fake` were already allowed
+  sources.
+- Completed: the company dict has `instrument_type` (Yahoo `EQUITY`
+  is `STOCK`, `ETF` is `ETF`, other types None; the fake names
+  `STOCK`, `ETF`, or `ETC`). `fetch-company` creates with that type
+  (None stays `STOCK`), and a refresh turns a stored `STOCK` into a
+  fund type but never changes an `ETF` or `ETC`.
+  `YahooFinanceCollector.fetch_fund_attributes` reads TER
+  (`netExpenseRatio / 100`), AUM (`totalAssets`, only with
+  `financialCurrency`), and the issuer (`fundFamily`).
+  `FundAttributesRepository.upsert_collected` writes the collector's
+  row and never overwrites another source. The response adds
+  `instrument_type` and `fund_attributes`.
+- Live check against real Yahoo on a temporary database (2026-11-27):
+  VWCE.DE `ETF`, issuer only (no TER, AUM without a currency); SPY
+  `ETF`, TER 0.0945%, AUM 796.9e9 USD, fund score 95.28 from cost and
+  size; IWDA.AS `ETF`, TER 0.20%; ETFBW20TR.WA `ETF`, no facts
+  (`unavailable`); 4GLD.DE (an ETC) and AAPL `STOCK`; a second SPY
+  fetch answered `updated`.
+- Known gaps: an ETC arrives as `STOCK` and is set by hand; VWCE.DE
+  gets no TER or AUM from Yahoo, so its fund score needs a manual TER
+  (a manual row is then kept on refresh); fund prices for volatility
+  and drawdown are #154.
+- Tests: the full suite with `-W error::DeprecationWarning` and
+  coverage: 2586 passed and 3 failed, the known local ones (two 0006
+  float tests, #122, and the `run_demo` `.env` test); coverage 97%.
+  `test_collector_guard` and `test_collector_selection` pinned the old
+  "Yahoo has no fund attributes" rule and now assert the new one.
+  Five mutants of the new rules were each killed. black, isort,
+  and flake8 pass on the changed Python files.
 - Active agents: none. Blockers: none.
-- Next action: Przemek's merge decision. After that, issue #153
-  (ETF typing and fund attributes from Yahoo), then #154 (three
-  years of prices).
+- Next action: review round 1 (`/review-pr`), then Przemek's merge
+  decision. Then #154.
+
+## Team agent subagents (#143): 2026-11-27, merged
+
+- #146 to #150 and #157 were merged by Przemek on 2026-11-27. The
+  `researcher` agent is still missing: its Grok prompt is not in the
+  repository.
 
 ## Fund attribute forms (#28, #34): 2026-11-27, merged
 

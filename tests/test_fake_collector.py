@@ -142,6 +142,30 @@ def test_fund_profiles():
         assert "not market data" in info["description"].lower()
 
 
+@pytest.mark.parametrize(
+    ("ticker", "expected"),
+    [
+        ("DEMO_ETF_WORLD", "ETF"),
+        ("DEMO_ETF_GPW", "ETF"),
+        ("DEMO_ETC_GOLD", "ETC"),
+        ("DEMO_PL_EMPTY", "STOCK"),
+    ],
+)
+def test_company_info_names_the_instrument_type(ticker, expected):
+    info = FakeCollector().fetch_company_info(ticker).value
+
+    assert info["instrument_type"] == expected
+
+
+def test_every_fixture_company_is_a_stock():
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    collector = FakeCollector()
+    for entry in fixture["companies"]:
+        ticker = entry["company"]["ticker"]
+        info = collector.fetch_company_info(ticker).value
+        assert info["instrument_type"] == "STOCK"
+
+
 def test_required_coverage_exchanges():
     collector = FakeCollector()
     assert (

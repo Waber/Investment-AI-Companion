@@ -22,6 +22,7 @@ from app.models.database_models import (
 )
 from app.models.fund_attributes import AUM_MAX, TER_MAX
 from app.repositories.company_errors import CompanyNotFoundError
+from app.repositories.financial_metrics_repository import CollectedRowConflict
 
 _FUND_TYPES = frozenset({"ETF", "ETC"})
 _TEXT_FIELDS = (
@@ -32,6 +33,7 @@ _TEXT_FIELDS = (
     "distribution_policy",
 )
 _DATE_FIELDS = ("aum_as_of", "as_of")
+_FACT_FIELDS = _TEXT_FIELDS + ("ter", "aum", "aum_currency") + _DATE_FIELDS
 _AUM_NEEDS = "aum requires a currency and an as-of date"
 _AUM_EXTRA = "aum currency and aum_as_of require aum"
 _DELETE_CONSTRAINT = "Delete failed due to constraint violation"
@@ -107,6 +109,52 @@ class FundAttributesRepository:
             raise ValueError("Failed to create fund attributes")
         self.db.refresh(row)
         return row
+
+    def upsert_collected(
+        self, company_id, attributes, *, record_source, is_synthetic
+    ):
+        """Insert or refresh the row a collector owns.
+
+        Every fact column is written. A fact missing from
+        ``attributes`` becomes None, so a refresh cannot keep a value
+        the provider no longer reports. A row from another source (for
+        example ``manual``) raises ``CollectedRowConflict`` and is left
+        as it is.
+
+        Returns:
+            (row, created): created is True for a new row.
+        """
+        source = require_record_source(record_source)
+        if not isinstance(is_synthetic, bool):
+            raise ValueError("is_synthetic must be true or false")
+        self._require_fund(self._company(company_id))
+        data = dict.fromkeys(_FACT_FIELDS)
+        data.update(_fields(attributes))
+        if data["as_of"] is None:
+            raise ValueError("as_of is required")
+        _check_numbers(data)
+        _check_aum(data)
+        row = self.get_by_company(company_id)
+        if row is not None and row.source != source:
+            raise CollectedRowConflict(
+                f"A {row.source} row already exists for this instrument"
+            )
+        created = row is None
+        if created:
+            row = FundAttributesDB(company_id=company_id, source=source)
+            self.db.add(row)
+        else:
+            row.updated_at = datetime.now(timezone.utc)
+        row.is_synthetic = is_synthetic
+        for field, value in data.items():
+            setattr(row, field, value)
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise ValueError("Failed to save collected fund attributes")
+        self.db.refresh(row)
+        return row, created
 
     def update(self, company_id, attributes):
         """Change the fields that were sent.

@@ -1,5 +1,43 @@
 # Development Journal
 
+## 2026-11-27 - Yahoo instrument type and fund attributes (Refs #153)
+
+- Scope: an ETF fetched from Yahoo is stored as `ETF` with its fund
+  attributes, so it gets the fund score. Issue #153. Design
+  `docs/superpowers/specs/2026-11-27-yahoo-fund-type-design.md`.
+- Probe first (manual, real Yahoo, not a test): `quoteType` is `ETF`
+  for VWCE.DE, IWDA.AS, EUNL.DE, SPY, and ETFBW20TR.WA, and `EQUITY`
+  for the ETCs 4GLD.DE, PHAU.L, and SGLN.L, with no field that tells
+  an ETC from a share. `netExpenseRatio` is a percent. Yahoo has no
+  distribution policy, domicile, replication, or underlying.
+- Decisions (Claude's calls, in the design): an ETC is set by hand and
+  a refresh never changes a stored `ETF` or `ETC`; a refresh may turn
+  a stored `STOCK` into a fund type (fixes VWCE.DE stored as `STOCK`);
+  AUM is stored only with `financialCurrency`, because the score reads
+  AUM in EUR or USD and VWCE.DE's listing currency (EUR) is not the
+  fund's reporting currency; the retrieval date is `as_of`; provider
+  facts pass through `FundAttributesCreate` like a person's input; a
+  fund-fact failure after the company is saved answers 200 with
+  `fund_attributes: "unavailable"`.
+- Not done: refusing a fund in `fetch-financial-metrics` from the
+  provider's own `quoteType` (the stored type now comes from Yahoo and
+  a refresh fixes a mistyped ETF); other quote types still become
+  `STOCK`.
+- Verification:
+  - Each behavior had a failing test first (Yahoo mapping, fake type,
+    repository upsert, API).
+  - Five mutants (ETC demoted on refresh, manual row overwritten, TER
+    left as a percent, AUM kept without a currency, empty snapshot
+    stored) were each killed, then reverted.
+  - Full suite with `-W error::DeprecationWarning` and coverage: see
+    the work state for the counts. black, isort, flake8 clean on the
+    changed files.
+  - Live: `fetch-company` with `DATA_COLLECTOR=yahoo` on a temporary
+    SQLite database for VWCE.DE, SPY, IWDA.AS, ETFBW20TR.WA, 4GLD.DE,
+    and AAPL (results in the work state). SPY's fund score: 95.28.
+- AI model: Claude Opus 5.5.
+- Time: about 17:05 to 18:00 CET on 2026-11-27.
+
 ## 2026-11-27 - Team agent subagents: review and index (Refs #143)
 
 - Scope: Przemek asked to check that pull requests #146 to #150 make

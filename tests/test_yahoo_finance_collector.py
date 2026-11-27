@@ -13,6 +13,7 @@ import pytest
 from app.data_collectors import yahoo_finance
 from app.data_collectors.base import (
     COMPANY_INFO_FIELDS,
+    FUND_ATTRIBUTE_FIELDS,
     KEY_METRIC_FIELDS,
     Fundamentals,
     FundAttributes,
@@ -106,7 +107,7 @@ def test_collector_implements_the_capabilities_yahoo_can_serve(collector):
     assert isinstance(collector, InstrumentLookup)
     assert isinstance(collector, PriceHistory)
     assert isinstance(collector, Fundamentals)
-    assert not isinstance(collector, FundAttributes)
+    assert isinstance(collector, FundAttributes)
 
 
 def test_default_clock_is_timezone_aware_utc(install_ticker):
@@ -178,6 +179,26 @@ def test_company_info_carries_provenance_and_the_shared_keys(
     assert result.provenance.as_of is None
     assert result.provenance.retrieved_at == NOW
     assert result.provenance.synthetic is False
+
+
+@pytest.mark.parametrize(
+    ("quote_type", "expected"),
+    [
+        ("EQUITY", "STOCK"),
+        ("ETF", "ETF"),
+        ("MUTUALFUND", None),
+        ("INDEX", None),
+        (None, None),
+    ],
+)
+def test_company_info_maps_quote_type_to_instrument_type(
+    install_ticker, collector, quote_type, expected
+):
+    install_ticker(info={"longName": "Some Name", "quoteType": quote_type})
+
+    info = collector.fetch_company_info("SOME").value
+
+    assert info["instrument_type"] == expected
 
 
 def test_company_info_raises_provider_error_and_logs(
@@ -912,3 +933,106 @@ def test_an_unreadable_most_recent_quarter_leaves_as_of_empty(
         }
     )
     assert collector.fetch_key_metrics("AAPL").provenance.as_of is None
+
+
+SPY_INFO = {
+    "quoteType": "ETF",
+    "longName": "SPDR S&P 500 ETF Trust",
+    "fundFamily": "State Street Investment Management",
+    "netExpenseRatio": 0.0945,
+    "totalAssets": 796865200128,
+    "financialCurrency": "USD",
+    "currency": "USD",
+}
+
+
+def test_fund_attributes_map_an_etf(install_ticker, collector):
+    install_ticker(info=SPY_INFO)
+
+    result = collector.fetch_fund_attributes("spy")
+
+    assert tuple(result.value) == FUND_ATTRIBUTE_FIELDS
+    assert result.value == {
+        "fund_type": "ETF",
+        # netExpenseRatio is a percent; the app stores a fraction.
+        "ter": 0.000945,
+        "aum": 796865200128.0,
+        "aum_currency": "USD",
+        "aum_as_of": NOW.date(),
+        "issuer": "State Street Investment Management",
+        "underlying": None,
+        "domicile": None,
+        "replication_method": None,
+        "distribution_policy": None,
+    }
+    assert result.provenance.source == "yahoo_finance"
+    assert result.provenance.as_of == NOW.date()
+    assert result.provenance.synthetic is False
+
+
+def test_fund_attributes_drop_aum_without_a_financial_currency(
+    install_ticker, collector
+):
+    # VWCE.DE on 2026-11-27: totalAssets without financialCurrency. The
+    # listing currency (EUR) is not the fund's reporting currency.
+    install_ticker(
+        info={
+            "quoteType": "ETF",
+            "longName": "Vanguard FTSE All-World UCITS ETF",
+            "totalAssets": 88843730944,
+            "currency": "EUR",
+        }
+    )
+
+    value = collector.fetch_fund_attributes("VWCE.DE").value
+
+    assert value["aum"] is None
+    assert value["aum_currency"] is None
+    assert value["aum_as_of"] is None
+    assert value["ter"] is None
+    assert value["issuer"] is None
+
+
+@pytest.mark.parametrize("bad", [float("nan"), "0.2", True])
+def test_fund_attributes_treat_an_unusable_ter_as_missing(
+    install_ticker, collector, bad
+):
+    install_ticker(info={**SPY_INFO, "netExpenseRatio": bad})
+
+    assert collector.fetch_fund_attributes("SPY").value["ter"] is None
+
+
+@pytest.mark.parametrize("quote_type", ["EQUITY", "MUTUALFUND", None])
+def test_fund_attributes_are_none_unless_yahoo_says_etf(
+    install_ticker, collector, quote_type
+):
+    install_ticker(info={**SPY_INFO, "quoteType": quote_type})
+
+    assert collector.fetch_fund_attributes("SPY") is None
+
+
+def test_fund_attributes_raise_provider_error(exploding_ticker, collector):
+    assert_provider_error(lambda: collector.fetch_fund_attributes("SPY"))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"financialCurrency": "US Dollar"},
+        {"financialCurrency": 840},
+        {"totalAssets": 10**400},
+        {"totalAssets": -1},
+        {"totalAssets": float("inf")},
+    ],
+)
+def test_fund_attributes_drop_an_unusable_aum(
+    install_ticker, collector, overrides
+):
+    install_ticker(info={**SPY_INFO, **overrides})
+
+    value = collector.fetch_fund_attributes("SPY").value
+
+    assert value["aum"] is None
+    assert value["aum_currency"] is None
+    assert value["aum_as_of"] is None
+    assert value["ter"] == 0.000945

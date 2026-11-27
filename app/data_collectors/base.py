@@ -49,6 +49,9 @@ COMPANY_INFO_FIELDS = (
     "employees",
     "founded",
     "logo_url",
+    # The app's type for this ticker ("STOCK", "ETF", "ETC"), or None
+    # when the provider does not say or uses a type the app lacks.
+    "instrument_type",
 )
 
 KEY_METRIC_FIELDS = (

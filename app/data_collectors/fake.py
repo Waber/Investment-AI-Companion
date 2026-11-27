@@ -310,13 +310,16 @@ class FakeCollector:
         key = ticker.upper()
         if key in self._stock_profiles:
             profile = self._stock_profiles[key]
+            instrument_type = "STOCK"
         elif key in FUNDS:
             profile = FUNDS[key]["profile"]
+            instrument_type = FUNDS[key]["attributes"]["fund_type"]
         else:
             return None
         info: Dict[str, Any] = {field: None for field in COMPANY_INFO_FIELDS}
         info.update(profile)
         info["ticker"] = key
+        info["instrument_type"] = instrument_type
         return Sourced(info, self._provenance())
 
     def fetch_key_metrics(
