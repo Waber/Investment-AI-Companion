@@ -37,22 +37,23 @@ score from fetched data.
    cut also turned a stored `STOCK` into `ETF` on refresh.)
 4. `YahooFinanceCollector.fetch_fund_attributes` returns `None` unless
    `quoteType` is `ETF`. TER is `netExpenseRatio / 100` (a fraction,
-   as stored). AUM is `totalAssets` only when `financialCurrency` is
-   present. Without a currency the amount is dropped, because the
-   score reads AUM only in EUR or USD and a guessed currency would be
-   wrong data. Issuer is `fundFamily`. The other facts are null.
-   `as_of` and `aum_as_of` are the retrieval date: Yahoo gives the
-   current value without a date.
+   as stored). Issuer is `fundFamily`. AUM is not taken from Yahoo:
+   `totalAssets` has no date, and an undated AUM is no data (Przemek's
+   decision on code review round 1; the first cut kept it with
+   `financialCurrency` and dated it by the fetch day). The other facts
+   are null. `provenance.as_of` is None; the row's `as_of` falls back
+   to the retrieval date, which says when the row was checked.
 5. `fetch-company` fetches fund attributes for an ETF or an ETC and
    upserts the collector's row (`FundAttributesRepository.
-   upsert_collected`). A manual, demo, or fixture row is kept. Every
+   upsert_collected`). A manual, demo, or fixture row is kept, and
+   the provider is not asked. Every
    fact column is rewritten on refresh, like the TTM metrics row. A
    snapshot with no facts stores nothing.
 6. The company is already saved when attributes are fetched. A
    provider error or bad provider data there does not fail the
    request. The response says what happened in `fund_attributes`:
-   `created`, `updated`, `kept`, `unavailable`, or null (not a fund).
-   It also returns `instrument_type`.
+   `created`, `updated`, `kept`, `unavailable`, `provider_error`, or
+   null (not a fund). It also returns `instrument_type`.
 
 ## Review decisions (2026-11-27)
 
@@ -81,8 +82,9 @@ score from fetched data.
 
 - Telling an ETC from a stock automatically.
 - Refusing a fund in `fetch-financial-metrics` from the provider's own
-  `quoteType`. The stored type now comes from Yahoo, and a refresh
-  fixes a mistyped ETF, so the stored-type check covers it.
+  `quoteType`. A new instrument now takes its type from Yahoo, so the
+  stored-type check covers new funds. An instrument stored as `STOCK`
+  before this change is fixed on the edit form, not by a refresh.
 - Mutual funds, indices, and other quote types stay `STOCK` on create,
   as today.
 - AUM as `Decimal` (#142).

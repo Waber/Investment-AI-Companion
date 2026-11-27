@@ -417,3 +417,50 @@ async def test_the_fake_collector_refreshes_its_own_row(client):
 
     assert first["fund_attributes"] == "created"
     assert second["fund_attributes"] == "updated"
+
+
+@pytest.mark.parametrize("source", ["demo", "fixture"])
+@pytest.mark.asyncio
+async def test_a_seeded_row_is_kept_without_asking_the_provider(
+    client, source
+):
+    from app.models.fund_attributes import FundAttributesCreate
+    from app.repositories.fund_attributes_repository import (
+        FundAttributesRepository,
+    )
+
+    _use(client, StubCollector(facts=None))
+    company_id = (await _fetch(client))["company_id"]
+    session = client.app.state.testing_session_local()
+    try:
+        FundAttributesRepository(session).create(
+            company_id,
+            FundAttributesCreate(ter=0.002, as_of="2026-09-30"),
+            record_source=source,
+            is_synthetic=True,
+        )
+    finally:
+        session.close()
+    later = StubCollector(error=ProviderError("down"))
+    _use(client, later)
+
+    payload = await _fetch(client)
+
+    assert payload["fund_attributes"] == "kept"
+    assert later.fund_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_another_collectors_row_is_kept(client):
+    fake = Provenance(
+        source="fake", retrieved_at=RETRIEVED, as_of=DAY, synthetic=True
+    )
+    _use(client, StubCollector(provenance=fake))
+    company_id = (await _fetch(client))["company_id"]
+    before = await _attributes(client, company_id)
+    _use(client, StubCollector(facts={**ETF_FACTS, "ter": 0.0009}))
+
+    payload = await _fetch(client)
+
+    assert payload["fund_attributes"] == "kept"
+    assert await _attributes(client, company_id) == before

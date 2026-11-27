@@ -66,7 +66,7 @@
   removed, the requirements doc updated, and #26 and #54 have a
   comment.
 - Live re-check: SPY scored 90.55 from cost alone, page source
-  `yahoo_finance`. Full suite: 2606 passed, the 3 known local failures.
+  `yahoo_finance`. Full suite: 2607 passed, the 3 known local failures.
 - AI model: Claude Opus 5.5; QA, Security, and code review on Opus 5.5.
 - Time: about 17:05 to 18:50 CET on 2026-11-27.
 
